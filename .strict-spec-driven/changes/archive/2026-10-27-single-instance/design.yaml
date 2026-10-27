@@ -1,0 +1,41 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: single-instance
+approach:
+  - 在 internal/appinfo 增加唯一标识常量，application.Options.SingleInstance 使用该常量作为 UniqueID，并由 OnSecondInstanceLaunch 调用新的 internal/singleinstance.Activator。Activator 通过注入的窗口操作完成激活：最小化时先 UnMinimise，再 Show、Focus。Wails 在 application.New 内就启用单实例监听，而 app.Run 与窗口就绪都更晚，因此 Activator 在 Start 之前只记录待激活状态，在第一个 WindowRuntimeReady 事件中补做，避免在 app.Run 之前调用窗口方法。main.go 只负责装配。
+decisions:
+  go-identifier-constant:
+    decision: 在 internal/appinfo 定义 Identifier = work.keepwriting.dsh-anywhere，main.go 引用它作为单实例锁 UniqueID。
+    rationale: 计划变更已确认该 bundle identifier；app-identity 之前先在 Go 侧保持单一来源，避免 main.go 与测试各写一份字面量，也避免 Windows 锁名、macOS 锁文件名与 Linux D-Bus 名称不一致。
+  injected-window-activation:
+    decision: 新增 internal/singleinstance.Activator，以 func 字段注入 IsMinimised/UnMinimise/Show/Focus，main.go 只提供窗口方法闭包。
+    rationale: Wails 窗口无法在单元测试中创建；go-package-layout 要求窗口副作用逻辑放在 internal 包并由测试断言调用顺序和次数，main.go 保持装配。
+  restore-only-minimised-then-focus:
+    decision: 激活时仅当窗口处于最小化状态才取消最小化，随后显示并聚焦；不使用 Wails 的 Restore。
+    rationale: Wails Restore 在窗口最大化时会取消最大化，而重复启动不应改变用户的窗口状态；最小化窗口必须先恢复才能成为前台窗口。
+  defer-activation-until-window-ready:
+    decision: Start 之前收到的激活请求只记录为待处理，在第一个 WindowRuntimeReady 事件中执行；Start 之后再收到请求立即执行。
+    rationale: Wails 在 application.New 内启用单实例监听，早于 app.Run；在 app.Run 之前调用窗口方法会因平台实现尚未初始化而 panic，启动早期重复启动的通知必须延后。
+  second-instance-exits-zero:
+    decision: 第二个实例沿用 Wails 默认退出码 0 退出，不自定义 ExitCode，也不向已运行实例传递地址或参数。
+    rationale: 重复启动不是错误，桌面上双击图标得到成功退出码更符合预期；本变更没有需要转交的命令行输入，传参只会增加未定义的导航副作用。
+  cross-platform-evidence:
+    decision: 本变更以 Linux 实机端到端验证加 Wails v3.0.0 源码核对作为单实例证据；Windows/macOS 实机验证不作为归档条件，记录为发布前风险。
+    rationale: 本环境没有 Windows/macOS 桌面；单实例行为依赖 Wails 各平台实现，不能仅凭文档假设，因此按 wails-webkitgtk 教训区分“可实测的 Linux”和“只核对源码的平台”，把未实测部分显式交给后续发布里程碑的 CI 或真机验证。
+alternatives:
+  - option: 用文件锁或本地 socket 自行实现单实例
+    reason: 三平台解锁语义（D-Bus、命名互斥量、分布式通知）需要自己维护，Wails 已内建并处理平台差异，自实现只会增加跨平台缺陷面。
+  - option: 在第二个实例中把命令行地址转交给已运行实例并重新导航
+    reason: 本变更不接收地址参数，重新导航会打断当前 harness 会话；计划变更只要求激活已有窗口。
+  - option: 用 Wails 窗口的 Restore() 恢复窗口
+    reason: Restore 在最大化窗口上会取消最大化，改变用户窗口状态，违背只恢复最小化的要求。
+risks:
+  - Wails v3.0.0 单实例机制在 Linux（D-Bus 会话总线）、Windows（命名互斥量与 WM_COPYDATA）、macOS（锁文件与 NSDistributedNotificationCenter）上的行为不同；本环境只能做 Linux 实机验证，Windows/macOS 需要实机或 CI runner 证据。
+  - 启动早期（application.New 之后、WindowRuntimeReady 之前）的重复启动依赖延后激活；若窗口创建失败，该通知被丢弃且不会有窗口被聚焦。
+  - 不同用户或不同桌面/D-Bus 会话启动的实例不共享同一把锁，可能同时运行两个实例（已列为范围外）。
+  - WSLg 的 Weston 不支持最小化（_NET_SUPPORTED 中没有隐藏/最小化状态）：实机调用 Minimise() 后 is-minimised 仍为 false、窗口保持可见，最小化恢复分支只有单元测试与 Wails 源码依据，需在支持最小化的桌面环境复验。
+  - 首个实例启动早期、Wails 注册平台监听之前到达的第二个实例通知可能丢失（macOS 在 app.Run 内才注册 NSDistributedNotificationCenter 监听）；此时仍只会有一个主窗口，焦点由首次启动自身保证。
+  - Linux 上没有可用的 D-Bus 会话总线且无法通过 dbus-launch 启动时，Wails v3.0.0 的单实例初始化失败，应用以 fatal 退出（实测 exit 1）；桌面会话通常总有会话总线，发布说明需记录该前置条件，后续如需支持无总线环境应另立变更做门禁或回退。
+  - build/config.yml 的 productIdentifier 仍是脚手架值，而单实例锁使用 appinfo.Identifier；Flatpak 等沙箱要求 D-Bus 名称以前缀应用 id 开头，需在 app-identity 与打包前统一，否则沙箱环境可能拒绝锁名并启动失败。

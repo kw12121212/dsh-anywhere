@@ -19,6 +19,12 @@ func TestNameIsDshAnywhere(t *testing.T) {
 	}
 }
 
+func TestIdentifierIsBundleIdentifier(t *testing.T) {
+	if Identifier != "work.keepwriting.dsh-anywhere" {
+		t.Errorf("Identifier = %q, want %q", Identifier, "work.keepwriting.dsh-anywhere")
+	}
+}
+
 func TestConfigDirJoinsAppNameToUserConfigDir(t *testing.T) {
 	base := t.TempDir()
 	stubUserConfigDir(t, base, nil)

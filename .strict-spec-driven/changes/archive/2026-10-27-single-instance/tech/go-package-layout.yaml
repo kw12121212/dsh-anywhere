@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+operations:
+  ADDED:
+    defer-window-effects-until-ready:
+      strength: MUST
+      statement: 不得在 app.Run 启动之前调用会触达平台实现的窗口方法（SetURL、Show、Hide、Focus、Minimise、UnMinimise、IsMinimised 等）；窗口事件注册与选项设置不受此限。早于窗口就绪到达的外部事件（单实例通知、深链、托盘或快捷键激活、macOS reopen）只能记录为待处理状态，并在窗口的第一个 WindowRuntimeReady 事件中补做一次；窗口副作用仍以 func 参数注入 internal 包，便于用记录器测试就绪前零调用、就绪后只补做一次。
+      rationale: Wails v3.0.0 在 application.New 内就注册单实例监听，早于 app.Run；Run 之前 SetURL 会被原生窗口创建时的初始 URL 覆盖，其他窗口方法的 InvokeSync 会因 globalApplication.impl 为空而 panic。现有 first-navigation-after-window-ready 只约束 SetURL，覆盖不了单实例、深链等窗口激活路径。
+      enforcement:
+        method: review
+        detail: 审查 main.go 与 internal 包在 app.Run 之前是否可能调用窗口方法；早到事件是否先挂起并在首个 WindowRuntimeReady 中补做；对应单元测试是否断言就绪前零调用、Start 后只补做一次（参考 internal/singleinstance）。
+      examples:
+        good:
+          - internal/singleinstance.Activator 在 Start 前只记录 pending，由第一个 WindowRuntimeReady 调用 Start 补做
+        bad:
+          - 在 OnSecondInstanceLaunch 回调中直接调用 mainWindow.Show() 与 mainWindow.Focus()
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: wslg-weston-7217b7
+  title: WSLg 的 Weston 不支持窗口最小化，不能用它验证最小化/恢复
+category: tooling
+status: active
+created_at: '2026-10-27T14:52:53.385Z'
+updated_at: '2026-10-27T14:52:53.385Z'
+context: single-instance 验证需要在 WSLg 下最小化主窗口、再次启动应用，确认窗口恢复并聚焦。
+observation: WSLg Weston 的 xprop -root _NET_SUPPORTED 只列出移动、最大化、全屏和 _NET_ACTIVE_WINDOW，没有隐藏或最小化状态；对 GTK4 窗口调用 Wails Minimise() 后 is-minimised 仍为 false，窗口保持 viewable，XIconifyWindow 发送 WM_CHANGE_STATE 也没有效果。
+takeaway: 在 WSLg 上做窗口最小化、恢复或窗口状态持久化的端到端验证前，先检查 _NET_SUPPORTED 是否声明最小化/隐藏状态；不支持时改用单元测试加 Wails 源码依据覆盖分支，并在真实桌面或带窗口管理器的 CI runner 复验，不要把“未能最小化”当成实现缺陷。
+applies_when: 在 Linux/WSLg 下端到端验证窗口最小化、恢复、最大化或窗口状态持久化，或依赖 GTK/Weston 窗口状态 API 时。
+occurrences:
+  - origin: single-instance
+    date: '2026-10-27'
+    evidence: _NET_SUPPORTED 无最小化项；临时构建调用 Minimise() 后记录 is-minimised=false、map_state=viewable；生产构建第二次启动 42ms 退出、窗口与配置不变。

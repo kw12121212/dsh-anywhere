@@ -10,6 +10,10 @@ import (
 // Name 是应用名称，同时用作用户配置目录下的子目录名。
 const Name = "dsh-anywhere"
 
+// Identifier 是应用的唯一标识，用于单实例锁等需要稳定标识的场合。
+// app-identity 落地后与 build/config.yml 的 productIdentifier 保持同源。
+const Identifier = "work.keepwriting.dsh-anywhere"
+
 // userConfigDir 可在测试中替换，用于模拟系统配置目录不可用。
 var userConfigDir = os.UserConfigDir
 

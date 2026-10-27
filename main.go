@@ -15,6 +15,7 @@ import (
 	"dsh-anywhere/internal/session"
 	"dsh-anywhere/internal/settings"
 	"dsh-anywhere/internal/setup"
+	"dsh-anywhere/internal/singleinstance"
 	"dsh-anywhere/internal/webviewdata"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -36,6 +37,7 @@ func main() {
 		ID:     func() uint { return mainWindow.ID() },
 		SetURL: func(url string) { mainWindow.SetURL(url) },
 	}, probe.New(probe.DefaultTimeout).Check, func(task func()) { go task() })
+	activator := singleinstance.New()
 
 	var app *application.App
 	settingsWindow := settings.ByName(func(name string) (application.Window, bool) { return app.Window.GetByName(name) })
@@ -59,6 +61,13 @@ func main() {
 
 	app = application.New(application.Options{
 		Name: appinfo.Name,
+		// 同一用户会话内只保留一个实例：再次启动时由已运行实例激活主窗口，新进程退出。
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: appinfo.Identifier,
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				activator.Request()
+			},
+		},
 		Services: []application.Service{
 			application.NewService(config.NewService(store)),
 			application.NewService(setup.NewService(store, navigator.OpenRemote)),
@@ -88,9 +97,19 @@ func main() {
 		UseApplicationMenu: true,
 		JS:                 navigation.Script + session.Script(sessionNonce),
 	})
+	activator.Bind(singleinstance.Window{
+		IsMinimised: mainWindow.IsMinimised,
+		UnMinimise:  mainWindow.UnMinimise,
+		Show:        func() { mainWindow.Show() },
+		Focus:       mainWindow.Focus,
+	})
 	// 主窗口总是先加载本地页面（正在连接页或初始化界面）；该页面就绪时窗口已经创建，
-	// 此时由 Start 探测并打开 harness（只在第一次生效）。
-	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { navigator.Start() })
+	// 此时由 Start 探测并打开 harness（只在第一次生效）。单实例激活同样等到此时：
+	// app.Run 之前 Wails 的平台实现尚未初始化，不能调用窗口方法。
+	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		navigator.Start()
+		activator.Start()
+	})
 	app.Menu.Set(appmenu.Build(navigator.Reload, openSettings))
 	// 关闭主窗口即退出应用：否则 Linux/Windows 上设置窗口会让进程继续运行，
 	// 之后保存会对已销毁的主窗口导航。

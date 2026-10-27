@@ -24,3 +24,6 @@ specs:
   - id: settings-window
     title: 设置窗口
     path: .strict-spec-driven/specs/settings-window.yaml
+  - id: single-instance
+    title: 单实例运行
+    path: .strict-spec-driven/specs/single-instance.yaml

@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: single-instance
+sections:
+  Implementation:
+    identifier-constant:
+      text: 在 internal/appinfo 增加 Identifier = work.keepwriting.dsh-anywhere，注释说明 app-identity 落地后与 build/config.yml 的 productIdentifier 同源
+      status: complete
+    activator:
+      text: 新增 internal/singleinstance：Window 注入 IsMinimised/UnMinimise/Show/Focus；Activator.Bind/Start/Request；最小化时先取消最小化再显示并聚焦；Start 前的请求延迟到 Start 执行，Start 后的请求立即执行；包注释说明为何不能在 app.Run 之前调用窗口方法
+      status: complete
+    wire-single-instance:
+      text: main.go 只做装配：application.Options.SingleInstance 使用 appinfo.Identifier 与 OnSecondInstanceLaunch 回调；主窗口创建后 Bind 窗口方法；第一个 WindowRuntimeReady 事件中启动 Activator，并保留 navigator.Start
+      status: complete
+  Testing:
+    unit-tests:
+      text: 单元测试：appinfo.Identifier 值；Activator 在可见窗口上只 Show+Focus；最小化时先 UnMinimise；Start 前的请求延后且只执行一次；Start 后每次请求都激活；Bind 前请求不调用窗口方法；并发 Request/Start 在 -race 下不丢失激活
+      status: complete
+      command: go test -race -cover ./internal/...
+    lint:
+      text: 运行 gofmt 与 go vet，确认没有格式或静态检查问题
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-wslg:
+      text: 在 WSLg 下构建并运行真实应用：连续启动两个进程，确认第二个进程 42ms 内以 0 退出、没有第二个主窗口、进程与窗口数不变、页面请求与配置未变；用临时记录构建确认首实例收到通知并依次调用 show、focus（is-minimised=false）。WSLg 的 Weston 不支持最小化，恢复分支由单元测试覆盖并记录为环境限制
+      status: complete
+    platform-source-review:
+      text: 核对 Wails v3.0.0 在 Windows（命名互斥量与 WM_COPYDATA）与 macOS（锁文件、NSDistributedNotificationCenter 与监听注册时机）上的单实例实现，确认与本项目装配一致；已确认 Windows/macOS 实机验证不在本变更完成，作为发布前风险由 cross-platform-release 补齐
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与端到端结果一致，并确认 proposal 的 unchanged_behavior 未被改变；最小化场景的 WSLg 限制已在 design 风险与 e2e 证据中记录
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify single-instance 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify single-instance
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

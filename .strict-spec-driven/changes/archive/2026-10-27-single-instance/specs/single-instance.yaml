@@ -1,0 +1,32 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: single-instance
+spec:
+  title: 单实例运行
+  path: .strict-spec-driven/specs/single-instance.yaml
+operations:
+  ADDED:
+    second-launch-activates-running-window:
+      strength: MUST
+      statement: 应用已运行时再次启动，不出现第二个主窗口；已运行实例的主窗口被带到前台并获得焦点，处于最小化状态时先取消最小化；主窗口显示的页面与已保存的 harness 配置保持不变；新启动的进程随即退出。
+      scenarios:
+        second-launch-focuses-window:
+          - GIVEN: 应用已在运行，主窗口可见并显示 harness 页面
+          - WHEN: 用户再次启动应用
+          - THEN: 不出现第二个主窗口，已有主窗口被带到前台并获得焦点，新启动的进程以成功状态退出
+        second-launch-restores-minimised-window:
+          - GIVEN: 应用已在运行，主窗口已最小化
+          - WHEN: 用户再次启动应用
+          - THEN: 已有主窗口取消最小化并被带到前台获得焦点，不出现第二个主窗口
+        second-launch-keeps-current-page:
+          - GIVEN: 应用已在运行，主窗口显示 harness 页面且配置中保存了该地址
+          - WHEN: 用户再次启动应用
+          - THEN: 主窗口仍显示同一地址，不重新加载页面、不显示初始化界面，配置文件内容不变
+        second-launch-during-startup:
+          - GIVEN: 应用正在启动，主窗口尚未就绪
+          - WHEN: 用户在启动完成前再次启动应用
+          - THEN: 启动完成后只有一个主窗口，且该窗口获得焦点
+  MODIFIED: {}
+  REMOVED: {}

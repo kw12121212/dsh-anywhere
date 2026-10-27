@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: single-instance
+  status: proposed
+summary:
+  what:
+    - 在 internal/appinfo 增加应用唯一标识常量 work.keepwriting.dsh-anywhere，并在 application.Options 中启用 Wails 3 SingleInstance 单实例锁
+    - 新增 internal/singleinstance.Activator：收到第二个实例启动的通知后，恢复已最小化的主窗口（如适用）并显示、聚焦它；窗口就绪之前收到的通知先挂起，待 app.Run 开始后补做
+    - main.go 只做装配：把 SingleInstance.UniqueID 设为 appinfo.Identifier，把 OnSecondInstanceLaunch 接到 Activator，并在第一个 WindowRuntimeReady 事件中启动 Activator
+  why:
+    - 应用已运行时再次启动会创建第二个主窗口和第二份 webview 会话：用户看到重复窗口，两个进程还可能同时写同一份配置
+    - 里程碑 desktop-experience 要求重复启动时聚焦已有窗口而不是开第二个实例；这是常驻桌面应用的常见预期
+scope:
+  in:
+    - internal/appinfo.Identifier 常量及单实例锁 UniqueID 的装配
+    - internal/singleinstance.Activator：最小化时先恢复，再显示并聚焦；Start 之前收到的激活请求延后执行
+    - 单元测试覆盖激活顺序、延后激活与并发请求；在 WSLg 下用真实两个进程做端到端验证
+    - 核对 Wails v3.0.0 在 Windows（命名互斥量与 WM_COPYDATA）与 macOS（锁文件与 NSDistributedNotificationCenter）上的单实例实现与本项目装配一致
+  out:
+    - 窗口位置、尺寸与最大化状态的持久化（同里程碑的 window-state-persistence）
+    - 托盘图标、全局快捷键、开机自启
+    - 多窗口或多 harness 地址同时打开
+    - 不同用户或不同桌面/D-Bus 会话之间的实例互斥
+    - build/config.yml 中应用标识与版本号的统一（app-identity）
+unchanged_behavior:
+  - 首次启动、配置读取、harness 地址探测与页面导航行为不变
+  - 关闭主窗口仍退出应用
+  - 单实例激活不重新加载页面、不改变已保存的 harness URL，也不改写配置文件
+  - 远程页面仍不能调用任何本地服务
+roadmap:
+  milestone: desktop-experience
+  planned_change: single-instance
