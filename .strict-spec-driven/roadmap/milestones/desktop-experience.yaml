@@ -30,7 +30,7 @@ dependencies:
   - harness-web-shell 里程碑完成（配置目录与主窗口已存在）
 risks:
   - Wails 3 单实例与窗口状态 API 在 Linux 不同桌面环境（X11 / Wayland）下行为可能不同，Wayland 下可能无法设置窗口位置
-status: proposed
+status: complete
 notes:
   - 本里程碑为体验增强，可在发布前按需裁剪
 details: 窗口状态与 harness URL 存于同一配置目录，但使用独立字段，写入采用原子替换避免损坏。单实例使用 Wails 3 的 SingleInstance 选项，唯一标识与应用 bundle identifier 保持一致。

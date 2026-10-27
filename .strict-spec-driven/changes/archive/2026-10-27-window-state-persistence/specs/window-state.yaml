@@ -1,0 +1,88 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: window-state
+spec:
+  title: 窗口状态记忆
+  path: .strict-spec-driven/specs/window-state.yaml
+operations:
+  ADDED:
+    restore-saved-geometry:
+      strength: MUST
+      statement: 启动时如果配置目录中保存了有效的窗口状态，且保存的位置与当前任一显示器相交，主窗口以保存的位置与尺寸显示；保存时处于最大化状态时同样以最大化状态显示。
+      scenarios:
+        restore-position-and-size:
+          - GIVEN: 用户把主窗口移到 (200,120) 并调整为 1200x800
+          - WHEN: 关闭应用后重新启动
+          - THEN: 主窗口出现在 (200,120)，大小为 1200x800
+        restore-maximised:
+          - GIVEN: 用户把主窗口最大化后关闭应用
+          - WHEN: 重新启动应用
+          - THEN: 主窗口以最大化状态显示
+        partially-visible-kept:
+          - GIVEN: 保存的窗口矩形与主显示器只有部分重叠，例如左上角在屏幕内
+          - WHEN: 启动应用
+          - THEN: 主窗口仍使用保存的位置与尺寸，不被重新居中
+        no-saved-state:
+          - GIVEN: 配置目录中没有窗口状态文件
+          - WHEN: 启动应用
+          - THEN: 主窗口以默认尺寸 1000x618 居中显示在主显示器上
+    offscreen-fallback:
+      strength: MUST
+      statement: 保存的位置与当前任何显示器都不相交时，例如保存后拔掉了外接显示器，主窗口改为默认尺寸并居中显示在主显示器上，不会出现在任何显示器之外。
+      scenarios:
+        disconnected-display:
+          - GIVEN: 保存的窗口位置为 (5000,3000)，当前只有一台 1920x1080 的主显示器
+          - WHEN: 启动应用
+          - THEN: 主窗口以默认尺寸 1000x618 居中显示在主显示器上
+        maximised-offscreen:
+          - GIVEN: 保存的状态为最大化，且保存位置在当前任何显示器之外
+          - WHEN: 启动应用
+          - THEN: 主窗口在主显示器上以最大化状态显示
+    persist-on-exit:
+      strength: MUST
+      statement: 关闭主窗口或退出应用时，应用把主窗口当前的位置、尺寸与最大化状态保存到配置目录，覆盖上一次保存的状态；配置目录中保存的 harness 地址内容不变。
+      scenarios:
+        save-on-exit:
+          - GIVEN: 用户把主窗口移到 (300,200) 并调整为 1100x700，配置中已保存 harness 地址
+          - WHEN: 关闭应用
+          - THEN: 配置目录中保存的窗口状态为 (300,200) 与 1100x700 且未标记最大化，harness 配置内容不变
+        overwrite-previous-state:
+          - GIVEN: 已保存的窗口状态为 1200x800
+          - WHEN: 用户把窗口调整为 900x600 后退出
+          - THEN: 保存的窗口状态为 900x600，配置目录中没有残留的临时文件
+        save-maximised-flag:
+          - GIVEN: 用户把主窗口最大化后退出
+          - WHEN: 读取配置目录中保存的窗口状态
+          - THEN: 保存的状态标记为最大化
+    corrupt-state-ignored:
+      strength: MUST
+      statement: 窗口状态文件缺失、内容损坏或数值无效时，应用按没有保存状态处理，使用默认尺寸与位置启动；已保存的 harness 地址仍被读取并打开，界面不提示已有配置无效。
+      scenarios:
+        corrupt-window-state:
+          - GIVEN: 窗口状态文件内容不是合法的状态数据，且已保存有效的 harness 地址
+          - WHEN: 启动应用
+          - THEN: 主窗口以默认尺寸显示并打开 harness 地址，不显示已有配置无效提示
+        invalid-width:
+          - GIVEN: 窗口状态文件中的宽度为 0 或负数
+          - WHEN: 启动应用
+          - THEN: 主窗口以默认尺寸 1000x618 显示
+        saving-url-keeps-window-state:
+          - GIVEN: 已保存窗口状态，窗口处于某个位置与尺寸
+          - WHEN: 用户在设置窗口保存新的 harness 地址
+          - THEN: 窗口状态文件内容不变
+    wayland-size-only:
+      strength: MUST
+      statement: 在窗口位置由合成器决定的 Wayland 会话下，应用仍恢复保存的尺寸与最大化状态，但不保证恢复位置。
+      scenarios:
+        wayland-restores-size:
+          - GIVEN: 应用在 Wayland 会话下运行，用户把窗口调整为 1200x800 后退出
+          - WHEN: 重新启动应用
+          - THEN: 主窗口大小为 1200x800，位置由合成器决定
+        wayland-restores-maximised:
+          - GIVEN: 用户在 Wayland 会话下把窗口最大化后退出
+          - WHEN: 重新启动应用
+          - THEN: 主窗口以最大化状态显示
+  MODIFIED: {}
+  REMOVED: {}

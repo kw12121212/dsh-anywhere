@@ -15,6 +15,10 @@ standards:
     title: 凭据与敏感输入保护
     category: security
     path: .strict-spec-driven/tech/security-secrets.yaml
+  - id: state-persistence
+    title: 应用状态持久化
+    category: architecture
+    path: .strict-spec-driven/tech/state-persistence.yaml
   - id: webview-isolation
     title: webview 远程内容隔离
     category: security

@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: window-state-persistence
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图 desktop-experience 的目标是让客户端像常驻桌面应用一样使用；其中计划变更 window-state-persistence 要求持久化并恢复主窗口位置、尺寸和最大化状态，恢复时保证窗口可见。常驻桌面应用的用户预期是窗口摆放能被记住，而当前行为没有满足这一预期。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 路线图 done 标准：调整窗口位置与大小后退出，再次启动窗口恢复到相同位置与大小，最大化状态同样被恢复；保存的位置在当前任何显示器之外时窗口居中显示在主显示器上；Wayland 会话下只要求恢复尺寸与最大化状态；完整回归命令通过且覆盖率不低于 80%。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 依赖的 remote-page-window 与同里程碑的 single-instance 均已归档，window-state-persistence 是 desktop-experience 唯一剩余的计划变更；该里程碑排在 cross-platform-release 之前，intake 已确认（2026-10-27）在发布前保留本里程碑，因此现在补齐它。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 路线图 scope.out：托盘图标、全局快捷键、开机自启；多窗口或多 harness 地址同时打开。本计划变更只涉及主窗口几何，设置窗口与其他窗口的位置记忆不在范围内。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 路线图 details：窗口状态与 harness URL 存于同一配置目录但使用独立字段，写入采用原子替换避免损坏；窗口关闭时保存位置、尺寸与最大化状态，启动时恢复，若保存的矩形与当前任何显示器都不相交，则在主显示器居中并使用默认尺寸；可见性判定抽成纯函数并做单元测试；Wayland 下无法设置窗口位置时只恢复尺寸。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: cross-platform-manual-evidence
+    question: 本机只有 Linux（WSLg），Windows 与 macOS 的窗口恢复实机验证如何处理？
+    context: 影响验证任务与归档证据。计划要求三个平台都能恢复窗口几何，但本环境无法运行 Windows 或 macOS 桌面应用；WSLg 的 Weston 没有窗口管理器，窗口位置与最大化在实机上无法验证（Xvfb 可验证位置与尺寸，但无窗口管理器因此没有最大化）。选项：A（推荐）以单元测试、Linux 实机（Xvfb 的位置与尺寸、WSLg 的启动与状态文件）加 Wails v3.0.0 三平台源码核对作为本变更证据，Windows 与 macOS 实机验证记录为发布前风险，由 cross-platform-release 的 CI 或真机验证补齐；B 保持 Windows 与 macOS 验证任务未完成，等待人工实机执行后再归档，会阻塞本变更完成；C 把 spec 缩小为仅 Linux 生效、其他平台不恢复窗口状态，与里程碑 done 标准冲突。
+    answer: 选 A：接受单元测试、Linux 实机（Xvfb 验证位置与尺寸，WSLg 验证状态文件写入与尺寸恢复）加 Wails v3.0.0 三平台源码核对作为本变更证据；Windows 与 macOS 实机验证记录为本变更的发布前风险，由 cross-platform-release 的 CI runner 或真机验证补齐。
+    status: resolved
+    answered_by: human

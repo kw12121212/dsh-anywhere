@@ -1,0 +1,50 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: window-state-persistence
+sections:
+  Implementation:
+    windowstate-package:
+      text: 新增 internal/windowstate：State（x、y、宽、高、最大化）、Rect、Screen（Bounds、WorkArea、IsPrimary）、Placement，以及纯函数 Resolve：保存状态有效且矩形与任一显示器相交时沿用保存几何；不相交或没有保存状态时用默认尺寸在主显示器工作区居中；显示器列表为空时不移动窗口、只决定尺寸；导出 DefaultWidth=1000 与 DefaultHeight=618
+      status: complete
+    windowstate-store:
+      text: 在 internal/windowstate 实现 Store：DefaultStore 使用 appinfo.ConfigDir 下的 window-state.json；Save 创建目录并以临时文件加 os.Rename 原子替换；Load 把文件缺失、JSON 损坏、非正宽高都当作没有保存状态，不把错误抛给启动流程；rename 保留为测试钩子以模拟写入中断
+      status: complete
+    windowstate-manager:
+      text: 在 internal/windowstate 实现 Manager：注入 Position、Size、IsMaximised、SetPosition、SetSize、Maximise、Show、显示器列表与 Store；Restore 以 sync.Once 只执行一次，顺序为 SetSize、Show、SetPosition（需要移动时）、Maximise；Save 在 Restore 之前或宽高不为正时跳过写入并返回 nil，否则保存当前位置、尺寸与最大化状态
+      status: complete
+    main-wire-window-state:
+      text: main.go 装配：窗口选项改为 Hidden 与 windowstate 默认尺寸常量；用 app.Screen.GetAll 适配为 windowstate.Screen 列表构建 Manager；首个 WindowRuntimeReady 中先 windowState.Restore() 再 navigator.Start() 与 activator.Start()；application.Options 增加 OnShutdown 调用 windowState.Save() 并记录保存错误；保留 WindowClosing 调用 app.Quit()
+      status: complete
+  Testing:
+    windowstate-unit:
+      text: 单元测试：Resolve 在保存矩形与显示器相交、部分重叠、完全越界、没有保存状态、显示器列表为空时的落点；Store 在文件缺失、JSON 损坏、非正尺寸、写入后读取一致、重命名失败不破坏原文件时的行为；Manager 的 Restore 只执行一次、几何与最大化在 Show 之前设置、Save 跳过不可读几何并保存有效几何
+      status: complete
+      command: go test -race -cover ./internal/...
+    lint:
+      text: 运行 gofmt 与 go vet，确认没有格式或静态检查问题
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-linux:
+      text: 在 Linux 上运行真实构建产物。Xvfb（1920x1080，无窗口管理器）配合临时 XDG_CONFIG_HOME：首启窗口 1000x618 居中于 (460,231)；用外部 X 请求把窗口移到 (333,222)、改为 1180x690 后发送 WM_DELETE_WINDOW 关闭，window-state.json 记录同一几何，config.json 逐字节不变且没有残留临时文件；分别写入手工状态文件后重启：(700,150)/1150x700 恢复为 1150x700+700+150，越界 (5000,3000) 回退为 1000x618 居中，损坏 JSON 与宽度 0 均回退默认几何。原生 Wayland（GDK_BACKEND=wayland，WSLg Weston 的 wayland-0）下探针构建报告 size=1150,700、position=0,0，确认只恢复尺寸；该会话没有窗口管理器，最大化状态无法实机验证，由单元测试与源码核对覆盖。
+      status: complete
+      command: go build -o /tmp/dsh-anywhere . && DISPLAY=:99 XDG_CONFIG_HOME=$(mktemp -d) /tmp/dsh-anywhere
+    platform-source-review:
+      text: 核对 Wails v3.0.0 源码：Hidden 在三个平台都受支持（webview_window_linux.go 仅在非 Hidden 时 show+applyScreenPlacement）；Linux 的 window_move_x11 要求 GDK_IS_X11_DISPLAY 与已映射的 native surface，隐藏阶段 SetPosition 无效，故恢复顺序为尺寸、Show、位置、最大化；窗口 position/size 在 Linux 为 GTK 逻辑像素、Windows 经 PhysicalToDipRect 换算、macOS 为 NSWindow frame 点，三者都是 DIP；cleanup 在关闭窗口之前执行 shutdown 任务，macOS applicationShouldTerminate 直接调用 cleanup 不发送窗口关闭事件，因此用 OnShutdown 保存；Windows 的 maximise 是 ShowWindow(SW_MAXIMIZE)，隐藏窗口提前显示的顺序需实机复核。无法实机验证的 Windows 与 macOS 行为记录为发布前风险。
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景核对证据：X11 实机覆盖 (700,150)/1150x700 恢复、部分可见保留、越界回退 460,231/1000x618、损坏 JSON 与宽度 0 回退、关闭时保存移动后的 (333,222)/1180x690 且 config.json 不变；原生 Wayland 覆盖只恢复尺寸（position=0,0）；单元测试覆盖相交判定、最大化标记、越界回退与恢复顺序、Save 跳过条件；损坏窗口状态下本地 harness 服务仍收到 2 次 GET /，证明 harness 配置未被判定无效。saving-url-keeps-window-state 由两个 Store 只写各自文件的结构和单元测试保证。proposal 的 unchanged_behavior 逐项确认未改变：导航、菜单、单实例、关闭退出、配置校验与 token 处理均未改动。最大化状态在无窗口管理器的环境中无法实机验证，记录为环境限制与发布前风险。
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify window-state-persistence 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify window-state-persistence
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: windowstate-unit

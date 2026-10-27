@@ -10,7 +10,7 @@ milestones:
   desktop-experience:
     title: 桌面使用体验
     path: roadmap/milestones/desktop-experience.yaml
-    status: proposed
+    status: complete
   cross-platform-release:
     title: 三平台打包与发布
     path: roadmap/milestones/cross-platform-release.yaml

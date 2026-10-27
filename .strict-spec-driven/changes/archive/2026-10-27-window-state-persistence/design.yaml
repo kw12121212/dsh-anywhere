@@ -1,0 +1,54 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: window-state-persistence
+approach:
+  - 新增 internal/windowstate 承载全部可测逻辑：State 记录 x、y、宽、高与最大化标记，Screen 描述显示器边界、工作区与主屏标记，纯函数 Resolve 把保存状态与当前显示器列表换算成落点（位置、尺寸、是否移动、是否最大化）。Store 读写配置目录下的 window-state.json 并采用临时文件加重命名的原子替换，读取端把缺失、JSON 损坏与非正尺寸都当作没有保存状态。Manager 以注入的窗口操作读取位置与尺寸、设置位置与尺寸、最大化并显示窗口：Restore 在首个 WindowRuntimeReady 事件中执行一次，Save 在应用退出时执行一次；main.go 只做装配。
+  - 主窗口以 Hidden 选项创建并用 windowstate 的默认尺寸；第一个 WindowRuntimeReady 事件中调用 Manager.Restore，顺序固定为设置尺寸、Show、设置位置（需要移动时）、最大化。先设尺寸可以在窗口映射前确定大小，避免大小跳动；位置必须等窗口映射之后才生效，因为 Linux 的 GTK 只有在映射后才存在可移动的 native surface。application.Options.OnShutdown 调用 Manager.Save：读取当前位置、尺寸与最大化状态；窗口尚未恢复、宽度或高度不为正时跳过写入。Resolve 在保存矩形与任一显示器不相交时改用默认尺寸在主显示器工作区居中，显示器列表为空时只设置尺寸、不移动窗口，在 Wayland 下即退化为只恢复尺寸与最大化。
+decisions:
+  separate-state-file:
+    decision: 窗口状态写入配置目录下独立的 window-state.json，而不是在 config.json 中新增字段。
+    rationale: config.json 的保存语义是写入完整文件，把窗口状态放进同一文件就必须在读改写之间保持两个字段都不被覆盖，设置窗口保存地址时还会清掉窗口状态；独立文件的写入与损坏互不影响，窗口状态解析失败也不会牵连 harness 配置的有效性判定。
+  pure-placement-resolution:
+    decision: 相交判定与落点计算实现为不依赖 Wails 的纯函数 Resolve，输入保存状态与显示器列表，输出位置、尺寸、是否移动与是否最大化。
+    rationale: 这是本变更有分支的核心逻辑，必须能在单元测试中枚举显示器布局与保存状态；Wails 窗口无法在测试中创建，把逻辑留在 main.go 既无法测试也不计入覆盖率门槛。
+  hidden-create-restore-then-show:
+    decision: 主窗口以 Hidden 选项创建，恢复在第一个 WindowRuntimeReady 事件中完成：先设置尺寸，随后 Show，再设置位置并最大化。
+    rationale: 显示器列表在 app.Run 内才可用，创建窗口时无法判断保存的位置是否还在屏幕上；窗口在隐藏阶段不能移动（Linux GTK 的 native surface 只在映射后存在，实测隐藏时 SetPosition 不生效），因此位置必须放在 Show 之后，而尺寸可以在隐藏阶段通过默认尺寸生效，避免窗口先按默认尺寸出现再跳动。
+  save-on-app-shutdown:
+    decision: 通过 application.Options.OnShutdown 保存窗口状态，而不是只在 WindowClosing 事件中保存。
+    rationale: Wails v3.0.0 的 cleanup 在关闭窗口之前依次执行 shutdown 任务，因此 OnShutdown 同时覆盖关闭主窗口、菜单退出与 macOS Cmd+Q；macOS 的 applicationShouldTerminate 直接调用 cleanup，不发送窗口关闭事件，只靠 WindowClosing 会漏掉 Cmd+Q 这条路径。
+  skip-unreadable-geometry:
+    decision: Save 在宽度或高度不为正时跳过写入并返回 nil，不把不可读几何当作错误。
+    rationale: 窗口已销毁时 Wails 的 Position 与 Size 返回 0,0；写入会覆盖上一次的有效状态，使下次启动退化为默认几何。该条件只在退出流程的极端时序下出现，属于预期情况而非操作失败，因此不产生错误日志。
+  wayland-size-only:
+    decision: 不显式检测 Wayland，正常调用 SetPosition 由合成器忽略；只保证尺寸与最大化状态恢复。
+    rationale: 环境变量启发式在自启动、Flatpak 等启动路径下不可靠，而 GTK 在非 X11 显示上本身不执行移动、position 返回 0,0；里程碑 done 标准对 Wayland 只要求恢复尺寸与最大化状态，因此不引入不可测的平台分支。
+  shared-default-size:
+    decision: 默认尺寸 1000x618 从 main.go 的窗口选项移到 windowstate 常量，创建窗口与回退落点共用同一来源。
+    rationale: 越界回退必须使用与首次启动相同的默认尺寸，两处字面量在调整尺寸时会悄悄分叉，导致回退后的窗口与首启窗口大小不一致。
+  store-writes-atomically:
+    decision: windowstate.Store 采用与 config.Store 相同的临时文件加重命名写入，并在本包内实现同样的小段写入逻辑。
+    rationale: 写入中断不能留下半截 JSON，否则下次启动只能回退默认值；为两个调用点从 config 导出内部写工具会扩大该包的公开接口，独立实现保持两个存储的失败注入与测试互不依赖。
+alternatives:
+  - option: 在 config.json 中增加 window 字段，与 harness 地址保存在同一文件
+    reason: 两种保存需要读改写并保留未知字段，设置窗口保存地址会覆盖窗口状态；窗口状态损坏还会影响 harness 配置的有效性判定。
+  - option: 用窗口创建选项 X、Y、Width、Height、StartState 直接恢复几何
+    reason: app.Run 之前拿不到显示器列表，无法判断保存的位置是否仍在屏幕上；越界回退只能在窗口创建后补做，反而多出一条恢复路径。
+  - option: 只在 WindowClosing 事件中保存窗口状态
+    reason: macOS 的 Cmd+Q 走 applicationShouldTerminate 直接调用 cleanup，不发送窗口关闭事件，这条最常用的退出路径会丢失最后一次窗口状态。
+  - option: 监听窗口移动与缩放事件持续写盘
+    reason: 写盘频率高且每次启动仍以关闭时的几何为准，收益只是崩溃时状态更新；事件回调和磁盘写入的成本与风险都更高。
+  - option: 显式检测 Wayland 并跳过 SetPosition 调用
+    reason: 需要不可靠的环境变量启发式且无法单元测试，而 SetPosition 在 Wayland 下本来就是无操作，跳过与否对观测结果没有区别。
+risks:
+  - WSLg 的 Weston 没有 X11 窗口管理器：窗口 position 返回 0,0，最大化可能不生效；位置与最大化恢复只能在 Xvfb（无窗口管理器但支持直接定位）、单元测试与 Wails 源码核对层面验证，真实 X11 与 Wayland 桌面仍建议人工复验。
+  - 以 Hidden 创建再 Show 使 WindowRuntimeReady 事件成为窗口可见的前提；该事件由本地页面的 JS 运行时发出，若页面加载始终失败，窗口不会出现。这与现有必须依赖该事件发起导航的风险同源，但后果更明显。
+  - macOS 上以隐藏窗口启动再 Show 可能影响应用激活与首帧焦点，本环境无法实机验证。
+  - Windows 上 Maximise 通过 ShowWindow 的 SW_MAXIMIZE 实现，可能使隐藏窗口提前显示；恢复顺序需要在 Windows 上复核。
+  - 最大化时保存的是最大化矩形，Wails v3.0.0 未暴露恢复尺寸；用户取消最大化后窗口大小可能接近屏幕大小。
+  - OnShutdown 在进程被强制杀死或崩溃时不执行，最后一次窗口状态会丢失，配置文件本身不会损坏。
+  - 保存的尺寸可能大于当前显示器：位置仍在屏幕内时不做缩放，窗口可能超出屏幕边缘（里程碑只要求位置越界时回退，未要求缩放尺寸）。
+  - 窗口在设置位置之前已经显示：Linux 上位置请求晚于映射，可能有一帧出现在系统默认位置后再移动到保存位置。尺寸与最大化不受影响。
+  - 窗口位置与显示器坐标在三个平台上都是 DIP/点：Linux 为 GTK 逻辑像素，Windows 的 bounds 经 PhysicalToDipRect 换算，macOS 为 NSWindow frame 点并按主屏高度翻转 Y。跨 DPI 显示器迁移时的坐标仍是 Wails 自己计算的 DIP，混合 DPI 场景需在 Windows 实机复核。

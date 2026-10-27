@@ -17,6 +17,7 @@ import (
 	"dsh-anywhere/internal/setup"
 	"dsh-anywhere/internal/singleinstance"
 	"dsh-anywhere/internal/webviewdata"
+	"dsh-anywhere/internal/windowstate"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -30,6 +31,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	windowStore, err := windowstate.DefaultStore()
+	if err != nil {
+		log.Fatal(err)
+	}
 	runtimeGuard := guard.New()
 
 	var mainWindow *application.WebviewWindow
@@ -40,6 +45,16 @@ func main() {
 	activator := singleinstance.New()
 
 	var app *application.App
+	// 窗口方法在调用时才解引用 mainWindow，创建窗口之前仍是 nil。
+	windowState := windowstate.New(windowStore, windowstate.WindowOps{
+		Position:    func() (int, int) { return mainWindow.Position() },
+		Size:        func() (int, int) { return mainWindow.Size() },
+		IsMaximised: func() bool { return mainWindow.IsMaximised() },
+		SetPosition: func(x, y int) { mainWindow.SetPosition(x, y) },
+		SetSize:     func(width, height int) { mainWindow.SetSize(width, height) },
+		Maximise:    func() { mainWindow.Maximise() },
+		Show:        func() { mainWindow.Show() },
+	}, func() []windowstate.Screen { return windowstate.FromWails(app.Screen.GetAll()) })
 	settingsWindow := settings.ByName(func(name string) (application.Window, bool) { return app.Window.GetByName(name) })
 	closeSettings := func() { settings.Close(settingsWindow) }
 	openSettings := func() {
@@ -87,12 +102,22 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+		// Wails 在关闭窗口之前依次执行 shutdown 任务，因此这里能读到有效几何，
+		// 且覆盖关闭窗口、菜单退出与 macOS Cmd+Q 三条退出路径。
+		OnShutdown: func() {
+			if err := windowState.Save(); err != nil {
+				log.Printf("保存窗口状态失败：%v", err)
+			}
+		},
 	})
 
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:              appinfo.Name,
-		Width:              1000,
-		Height:             618,
+		Title:  appinfo.Name,
+		Width:  windowstate.DefaultWidth,
+		Height: windowstate.DefaultHeight,
+		// 先隐藏创建：由 windowState.Restore 在映射前设好尺寸再显示，避免窗口先按默认
+		// 尺寸出现；位置要到显示之后才设置，因为 Linux GTK 的窗口只有映射后才能移动。
+		Hidden:             true,
 		URL:                navigator.InitialURL(),
 		UseApplicationMenu: true,
 		JS:                 navigation.Script + session.Script(sessionNonce),
@@ -107,6 +132,8 @@ func main() {
 	// 此时由 Start 探测并打开 harness（只在第一次生效）。单实例激活同样等到此时：
 	// app.Run 之前 Wails 的平台实现尚未初始化，不能调用窗口方法。
 	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		// 恢复必须在窗口创建之后、页面导航之前完成：显示器列表在 app.Run 内才可用。
+		windowState.Restore()
 		navigator.Start()
 		activator.Start()
 	})

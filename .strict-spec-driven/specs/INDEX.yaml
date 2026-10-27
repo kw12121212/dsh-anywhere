@@ -27,3 +27,6 @@ specs:
   - id: single-instance
     title: 单实例运行
     path: .strict-spec-driven/specs/single-instance.yaml
+  - id: window-state
+    title: 窗口状态记忆
+    path: .strict-spec-driven/specs/window-state.yaml

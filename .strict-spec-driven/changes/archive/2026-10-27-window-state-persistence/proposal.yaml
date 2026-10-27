@@ -1,0 +1,44 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: window-state-persistence
+  status: proposed
+summary:
+  what:
+    - 新增 internal/windowstate 包：以配置目录下的 window-state.json 保存主窗口位置、尺寸与最大化状态，并在启动时按当前显示器布局恢复
+    - 主窗口改为以 Hidden 选项创建，在第一个 WindowRuntimeReady 事件中先应用恢复的几何再显示窗口，避免窗口先按默认尺寸出现再跳动
+    - 关闭窗口或退出应用时通过 application.Options.OnShutdown 读取当前几何并原子写入状态文件；窗口已销毁或尺寸不可读时跳过写入
+    - 新增不依赖 Wails 的纯函数判定保存矩形是否与任一当前显示器相交；不相交时改用默认尺寸居中显示在主显示器
+    - 单元测试覆盖落点计算、状态文件容错读写与恢复/保存时序，并在 Linux 上用 Xvfb 与 WSLg 运行真实应用验证
+  why:
+    - 里程碑 desktop-experience 的 done 标准：调整窗口位置与大小后退出，再次启动窗口恢复到相同位置与大小，最大化状态同样被恢复；Wayland 下只要求恢复尺寸与最大化状态
+    - 目前每次启动主窗口都是固定的 1000x618 默认窗口，用户摆放的位置在重启后丢失
+    - 保存的几何可能落在已拔掉的外接屏上，必须有可见性回退，否则重启后窗口出现在屏幕外无法操作
+    - 依赖的 remote-page-window 已归档，本计划变更是该里程碑尚未完成的剩余项
+scope:
+  in:
+    - internal/windowstate：State、Screen、Placement 与纯函数 Resolve（相交判定、默认尺寸在主显示器工作区居中、显示器列表为空时只决定尺寸）
+    - internal/windowstate：Store 读写配置目录下的 window-state.json，采用临时文件加重命名的原子写入，缺失、损坏或数值无效时回退为没有保存状态
+    - internal/windowstate：Manager 通过注入的窗口操作完成 Restore（只执行一次，应用几何后再显示窗口）与 Save（几何不可读时跳过）
+    - main.go 装配：默认尺寸改为引用 windowstate 常量，主窗口以 Hidden 创建，首个 WindowRuntimeReady 中先 Restore 再 navigator.Start 与 activator.Start，注册 app.OnShutdown 保存窗口状态
+    - 单元测试覆盖 Resolve 的全部落点分支、状态文件读取容错与原子写入、恢复与保存时序（显示在几何之后、Restore 只生效一次、Save 跳过无效几何）
+    - Linux 上真实应用验证：用 Xvfb 验证位置与尺寸恢复，用 WSLg 验证状态文件写入、尺寸恢复与重启一致性
+    - 核对 Wails v3.0.0 在 Windows 与 macOS 上的 Hidden 创建、窗口几何接口与 OnShutdown 执行时机，确认装配可移植
+  out:
+    - 设置窗口或将来其他窗口的位置记忆
+    - 窗口最小化状态与全屏状态的记忆
+    - 托盘图标、全局快捷键、开机自启
+    - 单实例行为（已在 single-instance 变更中完成）
+    - 跨 DPI 显示器的坐标换算与像素级校正
+    - 跟踪并保存取消最大化后应恢复的尺寸（Wails v3.0.0 未暴露该几何）
+unchanged_behavior:
+  - harness URL 的校验、token 剥离、保存内容与配置文件位置不变；保存地址不改写窗口状态，保存窗口状态不改写地址
+  - 启动导航不变：无配置显示初始化界面，有配置先显示正在连接页再打开 harness，不可达显示本地错误页
+  - 应用菜单的重新加载、设置窗口、单实例激活与远程页面隔离行为不变
+  - 关闭主窗口仍然退出应用
+  - 窗口状态文件损坏或缺失时，已保存的 harness 地址仍按原样读取并打开，不被判定为配置无效
+roadmap:
+  milestone: desktop-experience
+  planned_change: window-state-persistence

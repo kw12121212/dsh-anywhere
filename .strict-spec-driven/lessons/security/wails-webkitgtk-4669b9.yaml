@@ -8,7 +8,7 @@ lesson:
 category: security
 status: active
 created_at: '2026-10-27T10:36:38.763Z'
-updated_at: '2026-10-27T14:25:15.026Z'
+updated_at: '2026-10-27T15:58:07.134Z'
 context: remote-page-window 设计假设 WebviewWindow.Reload 会重新加载当前页，并把“跨源 JSON 请求必须预检”当作 /wails/runtime 的第二道防线。
 observation: Wails v3.0.0 的 Linux reload 实际加载 wails:// 本地首页（macOS/Windows 才是真正重新加载）；WebKitGTK 2.52.6 对 wails:// 的跨源 JSON POST 不发预检直接送达，no-cors POST 与 img GET 也能到达 Go；不加 guard 时远程页面实测改写了配置。
 takeaway: 依赖 Wails 窗口方法或 webview 跨源策略之前，先按平台核对 Wails 源码，再在 WSLg 下用真实桌面构建做端到端实测；为每一层防护准备单独去掉其他层的对照构建，证明各层各自有效。
@@ -26,3 +26,6 @@ occurrences:
   - origin: load-failure-page
     date: '2026-10-27'
     evidence: 在 app.Run 之前调用的程序化 SetURL 会被原生窗口创建时的初始 URL 覆盖：探测很快失败时错误页丢失；改在第一个 WindowRuntimeReady 中调用后恢复（/tmp/dshe2e/app-dbg.log）。
+  - origin: window-state-persistence
+    date: '2026-10-27'
+    evidence: 隐藏创建的窗口在 Linux GTK 上没有 native surface（gtk_native_get_surface 为 NULL），windowstate 实测隐藏阶段 SetPosition 无效：1243 状态设置尺寸生效但窗口停在 0,0；Wails 在 Hidden 选项下跳过 show+applyScreenPlacement，因此窗口位置必须在 Show 之后设置
