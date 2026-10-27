@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: remote-page-window
+  milestone: harness-web-shell
+status: complete
+summary: 已有有效配置时主窗口直接加载 harness URL，应用菜单提供“重新加载”
+details: 启动决策：配置中存在合法 URL 时主窗口 SetURL 指向该干净地址，否则交给初始化界面（first-run-setup）。应用菜单增加“重新加载”（Ctrl/Cmd+R），重新加载当前 harness 页面。所有进入 harness 的导航都由 Go 侧 SetURL 发起，不得由本地页面用 JS 跳转：dsh 会话 cookie 为 SameSite=Strict，从本地页面跨站跳转时 cookie 不会随请求发送。启动决策逻辑抽成可测函数，main.go 只做装配。实现前需确认 Wails 3 是否向远程源页面注入 runtime 与 bindings；若会注入，则必须确保远程页面无法调用任何本地服务（例如限制调用来源，或只在本地窗口中注册服务），并以测试或手工步骤验证远程页面调用保存地址接口失败。
+depends_on:
+  - first-run-setup

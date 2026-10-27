@@ -1,0 +1,64 @@
+schema: strict-spec-driven/main-spec/v1
+schema_version: 1
+artifact_type: main_spec
+schema_file: templates/strict-spec-driven/schemas/main-spec.yaml
+spec:
+  id: first-run-setup
+  title: 首次启动初始化
+requirements:
+  setup-when-unconfigured:
+    strength: MUST
+    statement: 启动时如果从未保存过 harness URL，主窗口显示初始化界面，包含欢迎说明、提示文字为“粘贴 dsh-url 或 dsh web 输出的地址”的地址输入框和“开始使用”按钮，且不显示配置无效提示。
+    scenarios:
+      fresh-config-dir:
+        - GIVEN: 用户配置目录中没有 dsh-anywhere 配置
+        - WHEN: 启动应用
+        - THEN: 主窗口显示初始化界面，输入框为空，没有“已有配置无效”提示
+  setup-when-config-invalid:
+    strength: MUST
+    statement: 启动时如果已有配置损坏或其中地址无效，主窗口同样显示初始化界面，并提示已有配置无效、需要重新填写。
+    scenarios:
+      corrupt-config:
+        - GIVEN: 配置文件内容不是合法的配置数据
+        - WHEN: 启动应用
+        - THEN: 主窗口显示初始化界面和“已有配置无效”提示
+      invalid-saved-url:
+        - GIVEN: 配置文件中保存的地址为 ftp://dsh.example.test/
+        - WHEN: 启动应用
+        - THEN: 主窗口显示初始化界面和“已有配置无效”提示
+  live-validation:
+    strength: MUST
+    statement: 初始化界面在用户输入时实时校验地址：地址不合法时“开始使用”按钮不可用并显示原因；地址合法时按钮可用且不显示错误。
+    scenarios:
+      empty-input-disabled:
+        - GIVEN: 初始化界面刚打开，输入框为空
+        - WHEN: 用户尚未输入
+        - THEN: “开始使用”按钮不可用
+      invalid-input-reason:
+        - GIVEN: 初始化界面已打开
+        - WHEN: 用户输入 ftp://dsh.example.test/
+        - THEN: “开始使用”按钮不可用，并显示只支持 http 或 https 的提示
+      valid-input-enabled:
+        - GIVEN: 初始化界面已打开
+        - WHEN: 用户输入 http://127.0.0.1:13080/?token=abc123
+        - THEN: “开始使用”按钮可用，不显示错误提示
+  complete-setup:
+    strength: MUST
+    statement: 点击“开始使用”后，应用保存去掉 token 的干净地址，并在主窗口中打开用户输入的原始地址（含 token）一次以建立 dsh 会话；原始地址不写入配置。
+    scenarios:
+      paste-token-url:
+        - GIVEN: 用户在初始化界面输入 dsh web 打印的 http://127.0.0.1:13080/?token=abc123
+        - WHEN: 点击“开始使用”
+        - THEN: 配置中保存 http://127.0.0.1:13080/ 且不含 abc123，主窗口打开 http://127.0.0.1:13080/?token=abc123
+      no-token-url:
+        - GIVEN: 用户在初始化界面输入 https://dsh.example.test/
+        - WHEN: 点击“开始使用”
+        - THEN: 配置中保存 https://dsh.example.test/，主窗口打开 https://dsh.example.test/
+  setup-save-failure:
+    strength: MUST
+    statement: 保存失败时，初始化界面显示可读的错误信息并保持打开，主窗口不离开初始化界面，错误信息中不含 token 值。
+    scenarios:
+      config-dir-unwritable:
+        - GIVEN: 配置目录无法写入
+        - WHEN: 用户输入 http://127.0.0.1:13080/?token=abc123 并点击“开始使用”
+        - THEN: 初始化界面显示保存失败的错误且不含 abc123，主窗口仍停留在初始化界面

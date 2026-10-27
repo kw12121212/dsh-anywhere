@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: external-navigation
+  milestone: harness-web-shell
+status: complete
+summary: 与 harness 同源的导航留在主窗口内，其他链接和新窗口请求交给系统默认浏览器
+details: internal/navigation 根据已配置 harness URL 的协议、主机和端口判定同源（已确认的 navigation-scope 决定）。非同源导航和 window.open 请求被拦截，并通过系统浏览器打开（Wails 3 Browser.OpenURL）。实现前需确认 Wails 3 是否提供跨平台拦截 webview 导航与 window.open 的 API；若没有，改为向 harness 页面注入脚本拦截链接点击与 window.open，并在三平台手工验证。单元测试覆盖同源、子路径、不同端口、不同协议和不同主机的判定。
+depends_on:
+  - remote-page-window

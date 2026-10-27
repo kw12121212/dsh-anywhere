@@ -1,0 +1,42 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: external-navigation
+approach:
+  - internal/navigation 提供三部分：SameOrigin(base, target string) bool；Script 常量（注入脚本，embed 自 script.js）；Handler{mainWindowID func() uint, store *config.Store, openURL func(string) error} 的 HandleMessage(windowID uint, msg string)。
+  - main.go 设置 Options.RawMessageHandler 为 func(w, msg, _) { handler.HandleMessage(w.ID(), msg) }，主窗口 WebviewWindowOptions.JS 为 navigation.Script，openURL 为 app.Browser.OpenURL。
+  - 注入脚本以 IIFE 防重复安装（window.__dshNavigation 标记，不是安全边界），在 document 上以捕获阶段监听 click 与 auxclick（中键）：用 closest("a[href], area[href], a[*|href]") 找链接，以 getAttribute("href") 或 xlink:href 相对 document.baseURI 解析；非 http/https 不处理；有效 target 取链接 target 或 <base target>，不是空、_self、_top、_parent 时视为新窗口。非同源或同源新窗口时立即 preventDefault 保证主窗口不离开，并包装本事件的 preventDefault：派发结束后（setTimeout 0）若页面自己也阻止了默认行为则视为页面接管，否则非同源发送 "dsh-anywhere:open-external:"+url、同源 location.assign。window.open 被替换：无参数、空串与 about:blank 忽略；非同源发送、同源 location.assign；总是返回 null。同一任务内同一地址只发送一次。
+decisions:
+  script-injection:
+    decision: 用主窗口的 Wails JS 选项注入拦截脚本，而不是原生导航策略回调
+    rationale: Wails v3.0.0 不提供可取消导航或处理新窗口请求的接口；JS 选项在 Linux 的 WindowLoadFinished 与 macOS 的 WebViewDidFinishNavigation 上对每次加载（含远程页面）直接执行，不经 ExecJS 的 runtime 就绪队列；WSLg 实测脚本能拦截点击与 window.open 并经 RawMessageHandler 通知 Go。
+  windows-known-limitation:
+    decision: Windows 不在本变更范围内，记为已知限制并另立计划变更
+    rationale: 用户于 2026-10-27 选择方案 A：Wails v3.0.0 在 Windows 上只对 HTML 内容使用 JS 选项，不暴露 WebView2 实例；原生实现无法在本机运行验证。
+  go-side-revalidation:
+    decision: Go 侧对每个打开请求重新校验：只接受主窗口、固定前缀、http/https 绝对地址，且与已保存 harness 地址不同源
+    rationale: '消息来自远程页面，内容不可信；重新校验保证只有外部 http/https 地址被交给系统浏览器，同源地址不会被推到浏览器（会丢失会话 cookie），file:、javascript: 等协议不会被打开。'
+  raw-message-channel:
+    decision: 打开请求走 Wails 原生消息通道的 RawMessageHandler，而不是绑定服务
+    rationale: '远程页面对 /wails/ 的请求被 guard 全部拒绝（webview-isolation）；原生消息通道不经过资源服务器，Wails 把非 wails: 前缀的消息交给 RawMessageHandler，只暴露这一个受限动作，不为远程页面开放任何绑定服务。'
+  same-origin-blank-in-window:
+    decision: 同源的 target=_blank 链接与 window.open 在主窗口内导航
+    rationale: 路线图已确认同源导航留在主窗口；同源页面发起的导航是同站请求，dsh 的 SameSite=Strict 会话 cookie 会随请求发送；Linux 的 WebKitGTK 默认不为 target=_blank 创建新窗口，不处理时点击无反应。
+  script-behavior-tests:
+    decision: 注入脚本的判定逻辑在 Go 测试中用 node vm 加伪造 DOM 执行并断言
+    rationale: 字符串检查发现不了审查中实测到的空 window.open 重新加载、SVG/area 链接泄漏与重复打开；仿照 Wails 自身 linux_child_frame_guard_test.go 的做法，回归命令本就依赖 node。
+  defer-and-respect-page:
+    decision: 捕获阶段只阻止默认行为，打开或导航推迟到派发结束后，并尊重页面自己的 preventDefault
+    rationale: 捕获阶段先于页面处理器执行，立即发送会与页面自己的 window.open(href) 重复打开，也会无视页面把点击改为复制链接等自定义行为；推迟并检查页面是否阻止默认行为可同时避免两种问题，而立即 preventDefault 保证主窗口在任何情况下都不离开。
+alternatives: []
+risks:
+  - 页面加载完成前（JS 选项注入之前）发生的点击或 window.open 不会被拦截。
+  - 被入侵的 harness 页面可以请求用系统浏览器打开任意外部 http/https 地址；不能借此访问本地服务或本地文件。
+  - Linux 的 OriginInfo 只给出 webview 当前地址且不填 IsMainFrame，无法区分 harness 中跨源 iframe 发来的消息；Go 侧校验仍限制为外部 http/https 地址。
+  - 只拦截顶层文档：同源 iframe 中的链接与 window.open 不受拦截，iframe 中 target=_top 的外部链接会让主窗口离开 harness。
+  - 页面在脚本注入之前缓存的 window.open 引用不受拦截（WebKitGTK 上调用后无反应）。
+  - 注入脚本按 location.origin 判同源、Go 侧按已保存地址判同源；主窗口被重定向到其他源时，指回 harness 的链接会被两边各自拒绝而无反应。
+  - window.open 总是返回 null，页面若据此判断弹窗被拦截会提示误报。
+  - 没有对打开请求节流；被入侵的页面或 harness 中的跨源 iframe 可在无用户手势时连续请求打开外部 http/https 地址。
+  - macOS 只有源码依据（webview_window_darwin.go:1773-1777、:193），用户已于 2026-10-27 接受，待 ci-regression-matrix 的 macOS runner 或真机验证。

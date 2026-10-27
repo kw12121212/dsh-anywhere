@@ -1,0 +1,39 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsh-session-auth
+  status: proposed
+summary:
+  what:
+    - 在 Linux 上为 Wails 使用的 WebKitGTK 默认 network session 开启 SQLite 持久化 cookie 存储，使 dsh 会话 cookie 跨应用重启保留
+    - 向主窗口页面注入会话失效识别脚本：页面为 dsh 的 401 固定文本时通知 Go，主窗口改为显示本地重新认证提示页，提示页说明运行 dsh-url 获取新地址，并提供“打开设置”按钮
+    - 修复首次建立会话：带 token 的导航之后第一次收到 401 时，主窗口用干净地址重试一次（从本地页面发起时 WebKitGTK 不在重定向中携带 SameSite=Strict cookie）
+    - 会话失效消息带每次启动随机生成的 nonce；cookie 数据库放在应用专属的 0700 目录；从提示页重新加载或保存设置都能回到 harness
+  why:
+    - WSLg 实测 Linux 上 cookie 默认不跨重启保留，每次重启应用都会得到 401；会话失效时用户只看到一行英文文本，不知道如何恢复
+    - 实测从初始化界面、设置窗口或提示页粘贴带 token 地址后，dsh 重定向到干净地址时不带刚签发的 cookie，得到 401，只有重启应用才能进入 harness
+    - 审查实测：harness 中的子 iframe 能伪造会话失效消息；WebKitGTK 默认目录中的 cookie 数据库为 0644 且由多个应用共享；提示页上重新加载会进入死页
+scope:
+  in:
+    - internal/session：Script（识别 text/plain 且正文等于 dsh 固定文本的页面并发送消息）与 Handler（只接受主窗口且主窗口正显示远程内容时，经 mainwindow.Controller 打开本地提示页 /?view=reauth）
+    - mainwindow.Controller 增加 OpenLocalURL(url)，OpenLocal 改为调用它
+    - settings.Service 增加 Open()，供本地提示页的“打开设置”按钮调用；修改 webview-isolation/secondary-local-window 规则以允许本地页面经绑定打开辅助窗口
+    - 前端增加 ?view=reauth 提示页
+    - main.go 只做装配：app.Run 前调用 PersistCookies；JS 选项为导航脚本与会话脚本拼接；RawMessageHandler 同时转交两个 Handler
+    - 单元测试覆盖 session.Handler、OpenLocalURL、settings.Service.Open 与会话脚本（node vm）；以模拟 dsh 认证流程的本地服务器在 WSLg 真实窗口端到端验证 cookie 跨重启保留、401 时显示提示页
+    - mainwindow.Controller 记录最近一次导航是否带 token，RetrySession 用干净地址重试一次；session.Handler 先重试再显示提示页
+    - internal/webviewdata.PersistCookies(path)：Linux（GTK4/WebKitGTK 6.0 默认构建）经 cgo 调用 webkit_cookie_manager_set_persistent_storage，cookie 数据库放在应用专属的 XDG 数据目录（appinfo.DataDir，0700，文件 0600）；其他平台与构建配置为空操作
+    - 会话失效消息带每次启动随机生成的 nonce，子 iframe 无法伪造
+    - Reload 在非初始化本地页面（提示页）上重新尝试 harness；设置保存在主窗口位于本地页面时仍让主窗口回到 harness
+  out:
+    - Windows 上的会话失效识别（并入 windows-external-navigation 后续计划变更）
+    - 会话建立后用干净地址覆盖 Wails 内存中保留的带 token 地址
+    - 加载失败错误页（属于 load-failure-page）
+unchanged_behavior:
+  - token 剥离、带 token 地址的一次性导航、导航范围策略与 guard 行为不变
+  - 远程页面仍无法调用任何本地服务；“打开设置”只能由本地页面调用
+roadmap:
+  milestone: harness-web-shell
+  planned_change: dsh-session-auth

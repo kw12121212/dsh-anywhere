@@ -1,0 +1,54 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: project-scaffold
+open: []
+resolved:
+  - id: frontend-template
+    question: 前端使用哪个 wails3 模板？
+    context: 影响 frontend/ 的依赖与后续本地界面实现方式（实现文件、依赖）。选项：vanilla-ts、react-ts、vue-ts 等。
+    answer: 使用 vanilla-ts：本地界面只有初始化界面、设置界面和错误页，避免引入框架。
+    status: resolved
+    answered_by: roadmap
+  - id: first-internal-package
+    question: 覆盖率门槛需要的首个非 main 包承担什么职责？
+    context: 回归命令排除 main.go 统计覆盖率，仅有 main 包时总覆盖率为 0% 会失败（影响实现文件与测试）。路线图要求建立 internal/ 包结构并提供至少一个带真实单元测试的非 main 包。
+    answer: 建立 internal/ 包结构并提供至少一个带真实单元测试的非 main 包；具体为 internal/appinfo（应用名与配置目录 os.UserConfigDir()/dsh-anywhere，配置目录位置取自里程碑 notes）。
+    status: resolved
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图：仓库目前只有 AGENTS.md 与 .strict-spec-driven/，没有任何 Go/Wails 代码，config.yaml 中的完整回归命令无法执行；开发者无法开始 harness-web-shell 里程碑的任何后续计划变更（它们全部直接或间接依赖 project-scaffold）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 路线图验收：在 Linux 上执行 config.yaml 中的回归命令退出码为 0（里程碑 done 标准：Go 覆盖率不低于 80%，不含 main.go）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 路线图：project-scaffold 是 harness-web-shell 里程碑中唯一无依赖的计划变更，其余计划变更均依赖它，必须先完成才能推进里程碑。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 路线图：只在已有的 AGENTS.md 中补充实际可用的 wails3 / task 命令；里程碑 scope.out 排除安装包、签名、CI 与发布以及客户端自建鉴权；项目约定禁止硬编码 harness URL 与凭据、禁止手改 frontend/bindings。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 路线图 details：执行 wails3 init 生成 main.go、go.mod（go 1.27）、frontend/、build/、Taskfile.yml，前端模板选用 vanilla-ts，删除示例 GreetService，提交 package-lock.json，补充 .gitignore，建立 internal/ 包结构并提供至少一个带真实单元测试的非 main 包。只有这一种读法。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

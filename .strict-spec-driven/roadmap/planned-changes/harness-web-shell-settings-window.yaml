@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: settings-window
+  milestone: harness-web-shell
+status: complete
+summary: 提供独立的设置窗口，用于查看和修改 harness URL，从应用菜单打开
+details: 应用菜单增加“设置…”（Ctrl/Cmd+,），打开一个独立的本地设置窗口（重复打开时聚焦已有窗口），不替换主窗口中的 harness 页面。设置窗口显示当前已保存的干净地址，可编辑并实时校验，可粘贴 dsh-url 输出的带 token 地址。“保存”写入配置（只保存干净地址）并关闭设置窗口，主窗口由 Go 侧用原始输入地址 SetURL 一次以建立会话；“取消”或关闭窗口不修改配置，主窗口保持原页面。地址未改动且不带 token 时，保存不触发主窗口重新加载。设置窗口是本地资源，远程 harness 页面无法打开或调用它。
+depends_on:
+  - harness-url-config
+  - remote-page-window

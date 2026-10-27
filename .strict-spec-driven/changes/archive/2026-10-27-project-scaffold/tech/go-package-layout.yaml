@@ -1,0 +1,24 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+standard:
+  title: Go 包布局
+  category: architecture
+operations:
+  ADDED:
+    main-assembly-only:
+      strength: MUST
+      statement: main.go 只做 Wails 应用与窗口的装配；配置读写、校验、探测、导航判定等需要测试的逻辑必须放在 internal/ 下的非 main 包中。
+      rationale: 完整回归命令统计覆盖率时排除 main.go，且 main 包依赖 webview 难以单元测试；逻辑留在 main 包既不计入覆盖率也无法被测试，会使 80% 门槛失效或失败。
+      enforcement:
+        method: review
+        detail: 审查 main.go 中除 application.New、窗口创建、服务注册与 app.Run 之外是否含有分支逻辑；回归命令的覆盖率门槛兜底。
+      examples:
+        good:
+          - internal/appinfo.ConfigDir() 计算配置目录，main.go 只引用 appinfo.Name
+        bad:
+          - 在 main.go 中直接解析、校验并保存 harness URL
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: settings-window
+sections:
+  Implementation:
+    settings-service:
+      text: 实现 internal/settings：Service.Save/Cancel 与 Open(focusExisting, create)，窗口操作与主窗口导航以回调注入
+      status: complete
+    settings-menu:
+      text: appmenu 增加“文件”子菜单中的“设置…”（CmdOrCtrl+,），Build 接收 reload 与 openSettings 两个回调
+      status: complete
+    settings-ui:
+      text: 前端：抽出 validation.ts，拆分 setup.ts 与 settings.ts，main.ts 按 ?view=settings 选择界面；设置界面预填当前地址、实时校验、保存与取消
+      status: complete
+    wire-main:
+      text: main.go 只做装配：注册 settings.Service，设置窗口按名称查找/聚焦/创建/关闭，菜单传入两个回调，重新生成 bindings
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：设置窗口的查找/聚焦/关闭判断移入 internal/settings（Window、Lookup、ByName、Open、Close），main.go 不含分支；主窗口关闭时退出应用；菜单项改为按表构建并测试接线；设置界面在读取当前地址成功后才隐藏占位区，取消失败显示错误；合并重复 CSS；WSLg 复测关闭主窗口退出
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt、go vet（含 server 标签）与前端类型检查
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./... && go vet -tags server ./internal/... && (cd frontend && npx tsc --noEmit)
+    unit-tests:
+      text: 单元测试：Save 覆盖带 token 新地址、未改动不导航、同地址新 token 导航、首尾空白、校验失败不关窗不导航、写入失败错误不含 token；Cancel 只关窗；Open 已存在时聚焦、不存在时创建；菜单含 CmdOrCtrl+, 的“设置…”且回调可注入
+      status: complete
+      command: go test -race -cover ./internal/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    ui-server-mode-check:
+      text: 以 Wails server 模式加 agent-browser 检查 /?view=settings：预填当前地址、非法地址禁用保存并显示原因、清空禁用、保存带 token 地址后配置只含干净地址、取消不改配置、写入失败显示错误；初始化界面行为不回归
+      status: complete
+    e2e-wslg:
+      text: 在 WSLg 下运行真实桌面应用确认启动正常、guard 仍拦截远程页面调用、本地初始化页调用仍成功
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与界面检查一致
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify settings-window 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify settings-window
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: first-run-setup
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图：首次启动或配置无效时用户没有可用的 harness 地址，需要在主窗口中被引导填写并保存；dsh web 打印的是带启动令牌的地址，必须用它导航一次才能换到会话 cookie。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 路线图 done 标准：全新用户配置目录下首次启动显示初始化界面，保存合法 URL 后主窗口显示该网页；配置损坏或地址无效时显示初始化界面并提示已有配置无效；初始化界面拒绝空值、相对路径和非 http/https 地址；粘贴带 token URL 初始化后配置文件中不含 token。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 路线图：依赖的 harness-url-config 已归档；first-run-setup 是 remote-page-window、settings-window 等后续计划变更的前置依赖。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 路线图：原始带 token 地址只保存在内存中，用后即丢弃；不由本地页面用 JS 跳转进入 harness；有效配置下直接加载 harness、重新加载菜单、设置窗口与会话失效提示属于其他计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 路线图 details：本地初始化界面包含欢迎说明、地址输入框（提示文字：粘贴 dsh-url 或 dsh web 输出的地址）、实时校验提示和“开始使用”按钮，地址不合法时按钮不可用并提示原因；保存成功后由 Go 侧用原始地址 SetURL 一次；配置损坏或地址无效时同样进入初始化界面并提示已有配置无效；是否进入初始化界面的判定抽成可测函数。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

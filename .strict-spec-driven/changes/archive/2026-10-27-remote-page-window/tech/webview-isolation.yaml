@@ -1,0 +1,38 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: webview-isolation
+standard:
+  title: webview 远程内容隔离
+  category: security
+operations:
+  ADDED:
+    mark-remote-before-navigate:
+      strength: MUST
+      statement: 任何会让窗口显示非本地内容的导航都必须经 internal/mainwindow 等导航控制器发起：先 guard.SetRemote(id, true) 再 SetURL；切回本地页面时先导航再取消标记；在 app.Run 之前以远程地址创建的窗口须在 Run 之前标记。
+      rationale: guard 依据窗口的远程标记拒绝 /wails/ 请求；标记晚于导航会留下远程页面可调用本地服务的窗口期，WSLg 实测未加防护时远程页面能改写配置。
+      enforcement:
+        method: test
+        detail: 导航控制器的测试用记录器断言每次 SetURL 调用时 guard.IsRemote 的状态；审查 main.go 与 internal 包中直接调用 SetURL 的位置。
+      examples:
+        good:
+          - navigator.OpenRemote(url)
+        bad:
+          - mainWindow.SetURL(remoteURL) 后再 runtimeGuard.SetRemote(id, true)
+    no-cors-reliance-custom-scheme:
+      strength: MUST
+      statement: 不得以 CORS 预检或 webview 的跨源策略作为 wails://、http://wails.localhost 本地资源与 /wails/runtime 的访问控制；访问控制必须由 guard 中间件在 Go 侧完成。
+      rationale: WSLg 实测 WebKitGTK 2.52.6 对 wails:// 的跨源 JSON POST 不做预检，no-cors POST 与 img GET 也会到达 Go；Wails v3.0.0 桌面构建自身不校验来源。
+      enforcement:
+        method: review
+        detail: 审查涉及本地服务访问控制的设计理由与实现，确认没有把浏览器跨源策略当作防线。
+    service-routes-under-wails-prefix:
+      strength: SHOULD
+      statement: 以 HTTP Route 暴露的 Wails 服务必须挂在 /wails/ 路径下；挂在其他路径时必须同步扩展 guard 的拦截范围。
+      rationale: guard 只检查 /wails/ 前缀的请求，其他路径上的服务路由不受远程标记与 Origin 校验保护。
+      enforcement:
+        method: review
+        detail: 审查 application.NewServiceWithOptions 的 Route 选项与 guard 的路径前缀是否一致。
+  MODIFIED: {}
+  REMOVED: {}

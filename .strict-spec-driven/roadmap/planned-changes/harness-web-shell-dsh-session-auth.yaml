@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsh-session-auth
+  milestone: harness-web-shell
+status: complete
+summary: 识别 dsh 会话失效并显示重新认证提示页，确保会话 cookie 跨应用重启保持
+details: token 剥离与带 token 地址的一次性导航已分别由 harness-url-config、first-run-setup、settings-window 完成；本变更负责会话的持续可用。一、cookie 持久化：在三平台验证 webview 的 cookie 能否跨应用重启保留（Linux WebKitGTK 优先验证）；若不能，需要为 webview 配置持久化的数据目录。二、会话失效识别：dsh 在会话失效时对根路径返回 401，响应正文为固定文本“dsh web authentication required; reopen the URL printed by dsh web.”。Go 侧探测不携带 webview cookie，无法用来判断会话，因此需在 webview 侧识别，具体方式（导航事件、响应识别或注入脚本）在设计阶段按 Wails 3 能力确定。识别到后，主窗口改为显示本地的需要重新认证提示页，说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供打开设置界面的按钮。三、验收：重启 dsh-web 并重启应用后无需重新输入；使会话失效（如访问时改用未被签发 cookie 的地址）时出现提示页，经设置界面粘贴新地址后恢复。token 值不得出现在配置文件、日志、错误页或提示页中。
+depends_on:
+  - first-run-setup
+  - settings-window

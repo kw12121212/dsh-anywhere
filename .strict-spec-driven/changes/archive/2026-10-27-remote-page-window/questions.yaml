@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: remote-page-window
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图：已有有效配置的用户每次启动都应直接进入 harness 页面并能重新加载；同时远程页面运行在 Wails webview 中，可能获得 runtime/bindings 访问能力，远程页面不得调用任何本地服务（包括读取或修改配置）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 路线图 done 标准：保存合法 URL 后重启应用直接进入网页，不再显示初始化界面；应用菜单“重新加载”（Ctrl/Cmd+R）重新加载当前 harness 页面；在远程 harness 页面的上下文中调用本地保存地址接口失败，配置文件内容不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 路线图：依赖的 first-run-setup 已归档；完成初始化后主窗口已会加载远程页面，必须尽快加上调用来源限制；settings-window、load-failure-page、external-navigation 等都依赖本变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 路线图：所有进入 harness 的导航都由 Go 侧 SetURL 发起，不得由本地页面用 JS 跳转；设置窗口、错误页、会话失效提示与外部链接策略属于其他计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 路线图 details：启动决策为配置中存在合法 URL 时主窗口 SetURL 指向干净地址，否则交给初始化界面；应用菜单增加“重新加载”（Ctrl/Cmd+R）；启动决策抽成可测函数，main.go 只做装配；确认 Wails 3 会向远程源页面注入 runtime，因此必须确保远程页面无法调用任何本地服务，并以测试或手工步骤验证远程页面调用保存地址接口失败。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

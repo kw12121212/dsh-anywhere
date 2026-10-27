@@ -1,0 +1,11 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: project-scaffold
+  milestone: harness-web-shell
+status: complete
+summary: 用 wails3 初始化 Go 1.27 + Wails 3 项目骨架，使完整回归命令可执行并通过
+details: 执行 wails3 init 生成 main.go、go.mod（go 1.27）、frontend/、build/、Taskfile.yml；前端模板选用 vanilla-ts（只需初始化界面、设置界面和错误页，避免引入框架）。删除模板自带的示例 GreetService。提交 frontend/package-lock.json（回归命令使用 npm ci），补充 .gitignore（bin/、frontend/dist/、frontend/node_modules/、coverage*.out、.task/）。建立 internal/ 包结构并提供至少一个带真实单元测试的非 main 包；回归命令统计覆盖率时排除 main.go，仅有 main 包时总覆盖率为 0% 会导致门槛失败。验收：在 Linux 上执行 config.yaml 中的回归命令退出码为 0。在已有的 AGENTS.md 中补充实际可用的 wails3 / task 命令。
+depends_on: []

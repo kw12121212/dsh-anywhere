@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: app-identity
+  milestone: cross-platform-release
+status: planned
+summary: 统一配置应用显示名称、bundle identifier、版本号注入和三平台图标
+details: 在 build/config.yml 中设置显示名称 DSH Anywhere、bundle identifier work.keepwriting.dsh-anywhere（由组织域名 dsh-anywhere.keepwriting.work 反写），以及公司与版权信息；替换默认图标并生成三平台图标资源。版本号默认为 dev，构建时通过 ldflags 从 git tag 注入；应用菜单增加“关于”对话框，显示名称与版本号。
+depends_on:
+  - project-scaffold

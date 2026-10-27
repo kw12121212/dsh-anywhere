@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: settings-window
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图：harness 地址需要随时可改；dsh web 每次重启都会重新生成启动令牌，会话失效后用户要在设置界面粘贴新的带 token 地址恢复访问，而不打断主窗口中的 harness 页面。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 路线图 done 标准：通过应用菜单“设置…”打开设置界面，显示当前地址；修改并保存后设置窗口关闭，主窗口立即加载新地址，且新地址在重启后仍生效；修改后点击取消或直接关闭窗口，配置不变，主窗口仍停留在原页面；设置界面拒绝空值、相对路径和非 http/https 地址。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 路线图：依赖的 harness-url-config 与 remote-page-window 已归档；dsh-session-auth 与 load-failure-page 都依赖设置窗口作为恢复入口。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 路线图：设置窗口不替换主窗口中的 harness 页面；只保存干净地址；设置窗口是本地资源，远程 harness 页面无法打开或调用它；会话失效提示与错误页属于其他计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 路线图 details：应用菜单增加“设置…”（Ctrl/Cmd+,），打开独立本地设置窗口（重复打开时聚焦已有窗口）；显示当前已保存的干净地址，可编辑并实时校验，可粘贴 dsh-url 输出的带 token 地址；“保存”写入干净地址并关闭设置窗口，主窗口由 Go 侧用原始输入地址 SetURL 一次；“取消”或关闭窗口不修改配置；地址未改动且不带 token 时保存不触发主窗口重新加载。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

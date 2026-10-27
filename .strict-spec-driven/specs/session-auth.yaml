@@ -1,0 +1,40 @@
+schema: strict-spec-driven/main-spec/v1
+schema_version: 1
+artifact_type: main_spec
+schema_file: templates/strict-spec-driven/schemas/main-spec.yaml
+spec:
+  id: session-auth
+  title: dsh 会话
+requirements:
+  session-survives-restart:
+    strength: MUST
+    statement: 用带有效 token 的地址建立 dsh 会话后，重启应用（包括 dsh web 重启之后，只要会话仍有效）无需重新输入地址即可直接进入 harness 页面。
+    scenarios:
+      restart-keeps-session:
+        - GIVEN: 用户已粘贴 dsh web 打印的带 token 地址完成初始化，主窗口显示 harness 页面
+        - WHEN: 退出并重新启动应用
+        - THEN: 主窗口直接显示 harness 页面，没有出现初始化界面或重新认证提示
+  session-expired-page:
+    strength: MUST
+    statement: 在 Linux 与 macOS 上，主窗口中的 dsh 页面返回会话失效（401，正文为 dsh 的固定提示文本）时，主窗口改为显示本地的需要重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供“打开设置”按钮；提示页不显示 token。
+    scenarios:
+      expired-session:
+        - GIVEN: dsh 会话已失效
+        - WHEN: 应用启动或重新加载 harness 页面
+        - THEN: 主窗口显示需要重新认证的提示页，包含运行 dsh-url 的说明和“打开设置”按钮
+  reauth-recovery:
+    strength: MUST
+    statement: 在重新认证提示页点击“打开设置”会打开设置窗口；在设置中粘贴新的带 token 地址并保存后，主窗口恢复显示 harness 页面。
+    scenarios:
+      recover-with-new-url:
+        - GIVEN: 主窗口显示重新认证提示页
+        - WHEN: 用户点击“打开设置”，粘贴 dsh-url 输出的新地址并保存
+        - THEN: 设置窗口关闭，主窗口显示 harness 页面，配置中只保存去掉 token 的地址
+  first-session-immediate:
+    strength: MUST
+    statement: 在初始化界面、设置窗口或重新认证提示页之后粘贴 dsh web 打印的带有效 token 的地址并保存后，主窗口无需重启应用即可显示 harness 页面。
+    scenarios:
+      paste-token-url-from-local-page:
+        - GIVEN: 主窗口显示本地页面（初始化界面或重新认证提示页）
+        - WHEN: 用户粘贴带有效 token 的地址并保存
+        - THEN: 主窗口显示 harness 页面，没有出现重新认证提示

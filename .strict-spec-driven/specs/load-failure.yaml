@@ -1,0 +1,56 @@
+schema: strict-spec-driven/main-spec/v1
+schema_version: 1
+artifact_type: main_spec
+schema_file: templates/strict-spec-driven/schemas/main-spec.yaml
+spec:
+  id: load-failure
+  title: 加载失败
+requirements:
+  unreachable-error-page:
+    strength: MUST
+    statement: 主窗口要打开的 harness 地址因 DNS 解析失败、连接被拒绝、超时（默认 10 秒）或 TLS 错误而不可达时，主窗口显示本地错误页：展示不含 token 的地址与失败原因，并提供“重试”和“修改地址”按钮。
+    scenarios:
+      refused-at-startup:
+        - GIVEN: 已保存 http://127.0.0.1:13080/，该端口没有服务
+        - WHEN: 启动应用
+        - THEN: 主窗口显示本地错误页，内容包含 http://127.0.0.1:13080/ 与“连接被拒绝”的说明，以及“重试”“修改地址”按钮
+      dns-failure:
+        - GIVEN: 已保存 https://dsh.example.invalid/
+        - WHEN: 启动应用
+        - THEN: 主窗口显示本地错误页，说明无法解析主机名
+      tls-failure:
+        - GIVEN: 已保存的 https 地址使用不受信任的证书
+        - WHEN: 启动应用
+        - THEN: 主窗口显示本地错误页，说明安全连接（TLS）失败
+  retry-recovers:
+    strength: MUST
+    statement: 在本地错误页点击“重试”会重新检查地址：地址恢复可达时主窗口打开 harness 页面，仍不可达时继续显示错误页。点击“修改地址”打开设置窗口。
+    scenarios:
+      retry-after-recovery:
+        - GIVEN: 主窗口显示 http://127.0.0.1:13080/ 的连接被拒绝错误页，之后该地址的服务已启动
+        - WHEN: 用户点击“重试”
+        - THEN: 主窗口打开 harness 页面
+      retry-still-down:
+        - GIVEN: 主窗口显示错误页，地址仍不可达
+        - WHEN: 用户点击“重试”
+        - THEN: 主窗口仍显示错误页
+      change-address:
+        - GIVEN: 主窗口显示错误页
+        - WHEN: 用户点击“修改地址”
+        - THEN: 设置窗口打开，显示当前已保存的地址
+  http-errors-pass-through:
+    strength: MUST
+    statement: 地址返回任何 HTTP 响应（包括 401、5xx 与重定向）时视为可达，主窗口打开该地址，由远程页面自己展示。
+    scenarios:
+      server-error:
+        - GIVEN: 已保存的地址返回 502
+        - WHEN: 启动应用
+        - THEN: 主窗口打开该地址并显示远程返回的内容，而不是本地错误页
+  connecting-indicator:
+    strength: SHOULD
+    statement: 启动时如果已保存有效地址，主窗口在检查地址期间显示本地的“正在连接”提示。
+    scenarios:
+      slow-host:
+        - GIVEN: 已保存的地址响应较慢
+        - WHEN: 启动应用
+        - THEN: 检查期间主窗口显示“正在连接”提示，随后显示 harness 页面或错误页

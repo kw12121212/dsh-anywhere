@@ -1,0 +1,37 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: project-scaffold
+  status: proposed
+summary:
+  what:
+    - 删除模板自带的 GreetService 示例，建立 internal/ 包结构并提供至少一个带真实单元测试的非 main 包
+    - 提交 frontend/package-lock.json，补充 .gitignore，并在 AGENTS.md 中补充实际可用的 wails3 / task 命令
+    - 用 wails3 init（vanilla 模板，即 Vanilla + TypeScript）生成 Go 1.27 + Wails 3 项目骨架：main.go、go.mod、frontend/、build/、Taskfile.yml
+  why:
+    - 后续所有计划变更都依赖可构建的项目骨架；config.yaml 中的完整回归命令目前无法执行
+    - 回归命令排除 main.go 统计覆盖率，仅有 main 包时总覆盖率为 0% 会导致 80% 门槛失败，因此骨架必须带一个有测试的 internal 包
+scope:
+  in:
+    - 执行 wails3 init 生成骨架，go.mod 声明 go 1.27
+    - 删除 GreetService 示例及其生成的 bindings，重新生成 bindings
+    - 建立 internal/ 包（如 internal/appinfo）并编写真实单元测试，使排除 main.go 后的覆盖率不低于 80%
+    - .gitignore 覆盖 bin/、frontend/dist/、frontend/node_modules/、coverage*.out、.task/
+    - 提交 frontend/package-lock.json 以支持 npm ci
+    - 在 AGENTS.md 中补充实际可用的 wails3 / task 命令
+    - 前端使用 vanilla 模板（TypeScript），不引入前端框架；TypeScript 升级到 5.x，前端 build 先执行 tsc --noEmit
+    - 删除三平台之外的 build/android、build/ios 及其 Taskfile 引用
+    - package-lock.json 的 resolved 指向 https://registry.npmjs.org
+  out:
+    - 初始化界面、设置界面、错误页等任何用户可见功能（属于后续计划变更）
+    - harness URL 配置、校验与持久化（属于 harness-url-config）
+    - 安装包、签名、图标、CI 与发布（属于 cross-platform-release 里程碑）
+    - 在代码或配置中写入任何 harness URL 或凭据
+unchanged_behavior:
+  - .strict-spec-driven/ 下的规范、路线图与配置内容不因本变更被手工修改
+  - AGENTS.md「约定与约束」一节的已有条目保持不变；只在「常用命令」一节追加命令并更正与实际不符的依赖说明
+roadmap:
+  milestone: harness-web-shell
+  planned_change: project-scaffold

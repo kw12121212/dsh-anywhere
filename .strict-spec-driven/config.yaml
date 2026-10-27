@@ -1,0 +1,43 @@
+schema: strict-spec-driven/config/v1
+schema_version: 1
+artifact_type: workflow_config
+preferred_human_language: Chinese
+context: dsh-anywhere 是一个多平台（Windows / macOS / Linux）桌面客户端，用于接入用户指定的远程 DeepSeek harness URL，并在本地提供交互界面。技术栈：Go 1.27 + Wails 3.0；Go 后端服务通过 Wails bindings 暴露给前端，前端为 npm 构建的 Web UI，产物 frontend/dist 经 go:embed 嵌入单一可执行文件，构建由 wails3 CLI / Taskfile 驱动。约定：远程 harness URL 必须可配置、不得硬编码；API key / 令牌等凭据不得提交到仓库或写入日志；frontend/bindings 为自动生成代码，不得手改。
+rules:
+  specs:
+    - Describe observable behavior only — no implementation details, technology choices, or internal structure
+    - MUST = required with no exceptions; SHOULD = default unless explicitly justified; MAY = genuinely optional
+    - Each requirement must be independently verifiable from outside the system
+  change:
+    - Implement only what is in scope in proposal.yaml — if scope needs to expand, use strict-spec-modify first, never expand silently
+    - When a requirement or task is ambiguous, ask the user before proceeding — do not assume or guess
+    - Delta specs must reflect what was actually built, not the original plan
+    - Mark tasks done immediately upon completion — never batch at the end
+    - Every change must include test tasks (validation + unit tests at minimum)
+  code:
+    - Read existing code before modifying it
+    - Implement only what the current task requires — no speculative features
+    - No abstractions for hypothetical future needs (YAGNI)
+    - 远程 DeepSeek harness URL 与凭据只能来自用户配置，禁止硬编码、提交到仓库或输出到日志
+    - 不得手工修改 Wails 自动生成的 frontend/bindings 代码，需通过 wails3 generate bindings 重新生成
+  test:
+    - Tests must verify observable behavior described in specs, not internal implementation details
+    - Each test must be independent — no shared mutable state between tests
+    - Prefer real dependencies over mocks for code the project owns
+review_evidence:
+  project_regression:
+    method: complete_project_regression
+    command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+    meaning: Passing this command is required review evidence before strict-spec-review recommends archive or strict-spec-auto performs archive. This command represents the complete project-level regression suite, not only the Testing section tasks for an individual change. When a coverage declaration is present, this command also enforces the minimum coverage threshold, so insufficient coverage is a blocking workflow failure rather than advisory output.
+    unavailable_behavior: If the command cannot run because required dependencies, services, credentials, fixtures, or other test conditions are unavailable, review or auto archive is blocked until a human prepares the environment or explicitly provides the missing evidence.
+    coverage:
+      metric: line
+      threshold: 80
+      scope:
+        include:
+          - '**/*.go'
+        exclude:
+          - main.go
+          - '**/*_test.go'
+          - frontend/**
+          - build/**

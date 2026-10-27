@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: project-scaffold
+approach:
+  - 先用 go install github.com/wailsapp/wails/v3/cmd/wails3@latest 安装 wails3 CLI，再在临时目录执行 wails3 init -n dsh-anywhere -t vanilla-ts 生成骨架，把生成物合入仓库根目录（保留已有 AGENTS.md 与 .strict-spec-driven/），将 go.mod 的 go 指令设为 1.27。
+  - 删除模板的 GreetService 及其注册，前端 main.ts / index.html 改为不依赖任何 Go 服务的最小占位页，执行 wails3 generate bindings 让 frontend/bindings 与 Go 服务保持一致。
+  - 新增 internal/appinfo 包承载应用名称常量与用户配置目录解析（os.UserConfigDir()/dsh-anywhere），main.go 只做装配并引用该包；为 appinfo 编写真实单元测试，使排除 main.go 后的覆盖率满足 80% 门槛。
+  - Wails v3.0.0 的 wails3 init 还会生成 build/android、build/ios（其中不含 main 函数的 package main 会让 go build ./... 失败），以及 server/docker 模式；本变更删除三平台之外的 android/ios 目录及其 Taskfile 引用，server/docker 任务暂时保留。
+decisions:
+  vanilla-ts-template:
+    decision: 前端采用 wails3 v3.0.0 的 vanilla 模板（即 Vanilla + TypeScript + Vite；v3.0.0 没有名为 vanilla-ts 的模板），TypeScript 升级到 5.x，并在前端 build 脚本中先执行 tsc --noEmit
+    rationale: 客户端本地界面只有初始化界面、设置界面和错误页，引入 React/Vue 等框架会增加依赖和构建体积而无对应收益；模板自带的 TypeScript 4.9 不支持 tsconfig 中的 moduleResolution bundler，而 vite build 本身不做类型检查，把 tsc --noEmit 放进 build 才能让回归命令真正执行 bindings 的类型检查。
+  appinfo-package:
+    decision: 以 internal/appinfo 作为首个非 main 包，提供应用名称与配置目录路径
+    rationale: 回归命令排除 main.go 统计覆盖率，没有非 main 包时总覆盖率为 0% 会失败；应用名与配置目录是后续 harness-url-config 必然使用的真实职责，而不是为凑覆盖率而写的空包。
+  init-in-temp-dir:
+    decision: 在临时目录执行 wails3 init 后再合入仓库根目录
+    rationale: 仓库根目录已有 AGENTS.md 与 .strict-spec-driven/，直接在根目录 init 可能拒绝非空目录或覆盖已有文件；临时目录生成后逐项合入可控。
+  no-delta-spec:
+    decision: 本变更不新增、修改或删除任何主 spec 需求，specs/ 保持为空
+    rationale: 项目骨架只建立构建、测试与目录结构，不产生任何用户可观察行为；初始化界面、设置界面等可观察行为由后续计划变更各自定义 delta spec。
+alternatives:
+  - option: 保留 GreetService 示例作为首个可测服务
+    reason: 示例服务与产品无关，后续还需删除；且远程页面风险要求暴露给前端的 Go 服务最小化。
+  - option: 只在 main 包写测试
+    reason: 回归命令显式排除 main.go 的覆盖率统计，main 包测试不计入总覆盖率，无法满足门槛。
+risks:
+  - wails3 CLI 为 alpha/beta 版本，@latest 生成的模板结构可能与文档不一致，需以实际生成物为准调整。
+  - go:embed frontend/dist 要求先构建前端，否则 go vet / go build 失败；回归命令已先执行 npm run build。
+  - Wails v3.0.0 在 Linux 上默认链接 GTK4 / WebKitGTK 6.0（GTK3 需 -tags gtk3，回归命令不带该标签）；go test -race 需要 cgo 以及 libgtk-4-dev、libwebkitgtk-6.0-dev，其他平台需各自的依赖。
+  - 本机 npm registry 为镜像时，npm install 会把镜像地址写入 package-lock.json 的 resolved；lockfile 必须用 --registry=https://registry.npmjs.org 生成，CI 与其他开发者才能用 npm ci 复现。

@@ -1,0 +1,23 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+operations:
+  ADDED:
+    first-navigation-after-window-ready:
+      strength: MUST
+      statement: 不得在 app.Run 之前对窗口做程序化 SetURL；需要启动后立即导航时，在窗口的第一个 WindowRuntimeReady 事件中以 sync.Once 发起。
+      rationale: Wails v3.0.0 创建原生窗口时会用初始 URL 覆盖此前的 SetURL，后台任务很快完成时导航会丢失。
+      enforcement:
+        method: review
+        detail: 审查 main.go 与 internal 包在 app.Run 之前是否可能调用 SetURL。
+    platform-errno-classification:
+      strength: SHOULD
+      statement: 按系统错误码分类网络错误时，以带构建标签的文件分别列出 Windows（WSA* 错误码）与其他平台的错误码。
+      rationale: Windows 上的 WSAECONNREFUSED 等错误码与 Go 在 Windows 上定义的 syscall.ECONN* 不相等，统一匹配会在 Windows 上误分类。
+      enforcement:
+        method: review
+        detail: 审查 syscall 错误码比较是否覆盖 Windows，并运行 GOOS=windows go vet。
+  MODIFIED: {}
+  REMOVED: {}

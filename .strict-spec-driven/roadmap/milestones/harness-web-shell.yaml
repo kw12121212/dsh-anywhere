@@ -1,0 +1,72 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  harness-web-shell:
+    title: 远程 harness 网页承载 MVP
+order: 100
+goal: 用户首次启动时通过初始化界面配置远程 DeepSeek harness（DSH）URL，之后主窗口直接以网页形式显示该地址；地址可随时在设置界面中修改，远程不可达时给出明确的本地错误页。
+scope:
+  in:
+    - 用 wails3 初始化 Go 1.27 + Wails 3 项目骨架，使完整回归命令可执行并通过
+    - 远程地址不可达或加载失败时显示本地错误页，提供重试与修改地址入口
+    - 窗口内导航范围策略：harness 同源页面留在窗口内，其他链接交给系统浏览器
+    - harness URL 的校验（仅 http/https 绝对 URL）与持久化，供两个界面共用
+    - 初始化界面：首次启动或配置无效时在主窗口中引导用户填写并保存 harness URL
+    - 设置界面：从应用菜单打开的独立本地窗口，查看并修改 harness URL，可保存或取消
+    - 主窗口在已有有效配置时直接加载 harness URL，应用菜单提供“重新加载”
+    - 兼容 dsh web 启动令牌认证：用带 token 的 URL 建立会话、只持久化去掉 token 的地址、会话失效时引导重新认证
+  out:
+    - 在本机执行 harness 下发的工具调用（读写文件、执行命令等）
+    - 自定义聊天界面或解析 harness 协议——客户端只承载网页
+    - 安装包、签名、CI 与发布（属于 cross-platform-release 里程碑）
+    - 客户端自建鉴权（API Key、OAuth、账号体系）；只兼容 dsh web 自带的启动令牌与会话 cookie
+done_criteria:
+  - 配置地址不可达时显示本地错误页；点击重试在地址恢复后能正常加载
+  - 在 Linux 上执行 config.yaml 中的完整回归命令退出码为 0，Go 覆盖率不低于 80%（不含 main.go）
+  - 在全新用户配置目录下首次启动应用，主窗口显示初始化界面；保存合法 URL 后主窗口显示该网页，重启应用后直接进入网页，不再显示初始化界面
+  - 配置文件损坏或其中地址无效时启动应用，显示初始化界面并提示已有配置无效
+  - 初始化界面与设置界面都拒绝空值、相对路径和非 http/https 协议的地址，给出错误提示且不写入配置
+  - 通过应用菜单“设置…”打开设置界面，显示当前地址；修改并保存后设置窗口关闭，主窗口立即加载新地址，且新地址在重启后仍生效
+  - 在设置界面修改地址后点击取消或直接关闭窗口，配置不变，主窗口仍停留在原页面
+  - 粘贴 dsh web 打印的带 token URL 完成初始化后，配置文件中不含 token；重启应用（包括重启 dsh web 之后）无需重新输入即可进入 DSH 页面
+  - dsh web 会话失效（访问返回 401）时，主窗口显示需要重新认证的本地提示页，可从该页打开设置界面粘贴新的带 token URL 恢复访问
+  - 配置文件与应用日志中均不出现 token 查询参数的值
+  - 在 harness 页面中点击指向其他域名的链接或触发 window.open 时，系统默认浏览器打开目标地址，主窗口仍停留在 harness 页面
+  - 应用菜单“重新加载”（Ctrl/Cmd+R）重新加载当前 harness 页面
+  - 在远程 harness 页面的上下文中调用本地保存地址接口失败，配置文件内容不变
+intake_questions:
+  - id: navigation-scope
+    question: harness 页面中的链接点击后应在哪里打开？
+    context: harness 网页可能包含指向第三方站点的链接或新窗口请求；webview 内无地址栏，跳出 harness 后用户难以返回。
+    impact: 决定 external-navigation 计划变更的行为与测试用例。
+    recommendation: 已确认（2026-10-27）：与 harness URL 同源（协议、主机、端口均相同）的导航留在主窗口内，其余链接和 window.open 一律交给系统默认浏览器打开。
+  - id: test-harness-url
+    question: 手工验收使用哪个 harness 地址？
+    context: done 标准需要真实可达的 harness 页面来验证加载、重启保持和错误页恢复。
+    impact: 没有可达地址时，加载类 done 标准只能用本地 HTTP 测试服务器替代验证。
+    recommendation: 已确认（2026-10-27）：自动化测试使用 httptest 本地服务器；手工验收使用在 DSH 主机上运行 dsh-url 得到的地址（https://gamepc.tail89569c.ts.net:13080/?token=…，经 Tailscale 访问本机 dsh-web 服务）。
+  - id: dsh-session-auth
+    question: 如何兼容 dsh web 的启动令牌认证？
+    context: dsh web 打印的 URL 形如 http://host:port/?token=启动令牌；令牌在每次 dsh web 重启时重新生成。带有效令牌访问根路径会签发 HttpOnly、SameSite=Strict、绑定 host:port、有效期数天的会话 cookie 并重定向到去掉令牌的地址；带过期令牌访问返回 401。会话 cookie 的签名密钥持久保存，dsh 重启后 cookie 仍有效。
+    impact: 决定 harness-url-config、first-run-setup、settings-window 的保存流程，以及新增的 dsh-session-auth 计划变更；若直接保存带令牌的 URL，dsh 重启后应用将无法打开。
+    recommendation: 用户粘贴 dsh web 打印的完整 URL；客户端用它导航一次以换取会话 cookie，只持久化去掉 token 参数后的地址；之后启动加载干净地址，依靠 webview 持久化的 cookie；会话失效（401）时显示本地的需要重新认证提示页，引导到设置界面粘贴新 URL。token 不写入配置文件或日志。
+planned_changes: {}
+dependencies:
+  - 本机安装 wails3 CLI、Node.js/npm，Linux 需安装 GTK3 与 WebKit2GTK 开发库
+  - DSH 主机上运行的 dsh-web 用户服务，以及输出当前访问地址的 dsh-url 脚本（经 Tailscale 的 https://gamepc.tail89569c.ts.net:13080 访问），用于手工验收
+risks:
+  - Wails 3 在三平台上对导航失败事件的支持不一致；需以 Go 侧可达性探测为主、webview 事件为辅来判定加载失败
+  - webview 行为难以单元测试；配置读写、URL 校验、可达性探测和导航策略须放在可测的 Go 包中以满足 80% 覆盖率
+  - Wails 3 各平台 webview 的 cookie 存储是否跨重启持久化尚未验证（尤其 Linux WebKitGTK）；若不持久，每次重启应用都需要新的带 token URL
+  - Go 侧可达性探测不携带 webview 的会话 cookie，访问 dsh 根路径总是得到 401，因此无法用探测判断会话是否有效，需要在 webview 侧识别 401
+  - dsh 会话 cookie 绑定访问地址（host:port），Tailscale 主机名与 127.0.0.1 互不通用；dsh-url 输出的 Tailscale 地址已在 dsh web 的 --trusted-host 中，换用其他地址访问时需同步配置
+  - 远程页面运行在 Wails webview 中，可能获得 Wails runtime / bindings 访问能力；暴露给前端的 Go 服务必须最小化，远程页面不得调用任何本地服务（包括读取或修改配置）
+  - dsh 会话 cookie 为 SameSite=Strict：由本地页面（初始化界面、错误页等）用 JS 跳转到 harness 时 cookie 不会随请求发送，会被误判为会话失效；所有进入 harness 的导航须由 Go 侧 SetURL 发起
+status: complete
+notes:
+  - 配置文件放在 os.UserConfigDir()/dsh-anywhere/ 下，不进入仓库
+  - dsh web 认证机制依据本机 @deepseek-ai/dsh 的 dsh-client-connection 源码确认（2026-10-27）：token 查询参数名为 token，cookie 名前缀为 dsh-auth-。
+  - dsh-url 从 dsh-web 用户服务日志中取最新启动 URL，并把 http://127.0.0.1:13080 替换为 https://gamepc.tail89569c.ts.net:13080；令牌随 dsh-web 每次重启而变化。
+details: 本地前端（frontend/，打包进二进制）承担初始化界面、设置界面和错误页。初始化界面显示在主窗口中；设置界面是独立的本地窗口，不打断主窗口中的 harness 页面。主窗口在有合法配置时通过 SetURL 指向远程 harness。Go 侧拆分为 internal/config（读写与校验）、internal/probe（带超时的可达性探测）、internal/navigation（同源判定）等可测包，main.go 只做装配。

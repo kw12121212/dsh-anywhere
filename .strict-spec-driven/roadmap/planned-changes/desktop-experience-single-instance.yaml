@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: single-instance
+  milestone: desktop-experience
+status: planned
+summary: 应用已运行时再次启动，激活并聚焦已有窗口，新进程立即退出
+details: 启用 Wails 3 SingleInstance 选项，UniqueID 使用已确认的 bundle identifier work.keepwriting.dsh-anywhere。本里程碑早于 app-identity，因此先在 Go 代码中定义唯一的应用标识常量，app-identity 落地时改为与 build/config.yml 同源，不得出现两份不同的值。第二个实例启动时通知首个实例恢复窗口（若已最小化）并聚焦主窗口，然后自身退出。需在 Windows、macOS 和 Linux 上手工验证。
+depends_on:
+  - remote-page-window

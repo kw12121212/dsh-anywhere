@@ -1,0 +1,25 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: main-window
+operations:
+  ADDED: {}
+  MODIFIED:
+    reload-menu:
+      strength: MUST
+      statement: 应用菜单提供“重新加载”命令（Windows/Linux 为 Ctrl+R，macOS 为 Cmd+R）：主窗口显示 harness 页面或初始化界面以外的本地页面（如重新认证提示页）时重新打开已保存的 harness 地址（不含 token）；已保存的配置不再可用时回到本地初始化界面；主窗口显示初始化界面时重新打开初始化界面。
+      scenarios:
+        reload-harness:
+          - GIVEN: 主窗口正在显示已保存的 harness 地址 https://dsh.example.test/
+          - WHEN: 用户选择菜单“重新加载”或按 Ctrl/Cmd+R
+          - THEN: 主窗口重新请求 https://dsh.example.test/ 并显示该页面，不显示初始化界面
+        reload-without-config:
+          - GIVEN: 主窗口正在显示 harness 页面，但配置文件已损坏
+          - WHEN: 用户选择“重新加载”
+          - THEN: 主窗口显示本地初始化界面并提示已有配置无效
+        reload-from-reauth:
+          - GIVEN: 主窗口显示重新认证提示页，dsh 会话已重新有效
+          - WHEN: 用户选择“重新加载”
+          - THEN: 主窗口显示 harness 页面
+  REMOVED: {}

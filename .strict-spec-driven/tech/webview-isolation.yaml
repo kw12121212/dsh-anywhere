@@ -1,0 +1,70 @@
+schema: strict-spec-driven/main-tech/v1
+schema_version: 1
+artifact_type: main_tech
+schema_file: templates/strict-spec-driven/schemas/main-tech.yaml
+standard:
+  id: webview-isolation
+  title: webview 远程内容隔离
+  category: security
+rules:
+  mark-remote-before-navigate:
+    strength: MUST
+    statement: 任何会让窗口显示非本地内容的导航都必须经 internal/mainwindow 等导航控制器发起：先 guard.SetRemote(id, true) 再 SetURL；切回本地页面时先导航再取消标记；在 app.Run 之前以远程地址创建的窗口须在 Run 之前标记。
+    rationale: guard 依据窗口的远程标记拒绝 /wails/ 请求；标记晚于导航会留下远程页面可调用本地服务的窗口期，WSLg 实测未加防护时远程页面能改写配置。
+    enforcement:
+      method: test
+      detail: 导航控制器的测试用记录器断言每次 SetURL 调用时 guard.IsRemote 的状态；审查 main.go 与 internal 包中直接调用 SetURL 的位置。
+    examples:
+      good:
+        - navigator.OpenRemote(url)
+      bad:
+        - mainWindow.SetURL(remoteURL) 后再 runtimeGuard.SetRemote(id, true)
+  no-cors-reliance-custom-scheme:
+    strength: MUST
+    statement: 不得以 CORS 预检或 webview 的跨源策略作为 wails://、http://wails.localhost 本地资源与 /wails/runtime 的访问控制；访问控制必须由 guard 中间件在 Go 侧完成。
+    rationale: WSLg 实测 WebKitGTK 2.52.6 对 wails:// 的跨源 JSON POST 不做预检，no-cors POST 与 img GET 也会到达 Go；Wails v3.0.0 桌面构建自身不校验来源。
+    enforcement:
+      method: review
+      detail: 审查涉及本地服务访问控制的设计理由与实现，确认没有把浏览器跨源策略当作防线。
+  service-routes-under-wails-prefix:
+    strength: SHOULD
+    statement: 以 HTTP Route 暴露的 Wails 服务必须挂在 /wails/ 路径下；挂在其他路径时必须同步扩展 guard 的拦截范围。
+    rationale: guard 只检查 /wails/ 前缀的请求，其他路径上的服务路由不受远程标记与 Origin 校验保护。
+    enforcement:
+      method: review
+      detail: 审查 application.NewServiceWithOptions 的 Route 选项与 guard 的路径前缀是否一致。
+  native-message-revalidate:
+    strength: MUST
+    statement: 远程页面经 Wails 原生消息通道（RawMessageHandler）发来的消息一律不可信：Go 侧必须校验窗口 ID、固定前缀与参数白名单，只执行单一受限动作，日志不记录参数原文。
+    rationale: 原生消息通道不经过 guard，任何页面（含 harness 中的跨源 iframe）都能直接发送消息；只有 Go 侧重新校验才能把它限制在预期动作内。
+    enforcement:
+      method: test
+      detail: 处理函数的单元测试覆盖其他窗口、前缀不符、非白名单参数（如 file:、javascript:、同源地址）全部被拒，以及日志不含参数。
+  injected-js-behavior-test:
+    strength: SHOULD
+    statement: 注入 webview 的 JS 必须在 Go 测试中用 node vm 加伪造 DOM 执行并断言行为，不能只做字符串检查。
+    rationale: 注入第三方页面的脚本面对的 DOM 形态多样（SVG、area、页面自有处理器），external-navigation 审查实测的三个缺陷都只能由行为测试提前发现；Wails 自身对注入脚本也采用同样的测试方式。
+    enforcement:
+      method: test
+      detail: 审查新增或修改的注入脚本是否有对应的 node vm 行为测试，场景覆盖主要分支。
+  secondary-local-window:
+    strength: SHOULD
+    statement: 新增的本地辅助窗口只加载本地资源地址，不经 SetRemote 标记，不注入 navigation.Script；只能由菜单等 Go 侧入口或本地页面经绑定服务打开，打开它的绑定方法不得接受任意地址或窗口参数。
+    rationale: guard 按窗口 ID 放行本地窗口的调用并拒绝远程窗口的全部 /wails/ 请求，因此本地页面（重新认证提示页、加载失败错误页）可以安全地提供“打开设置”按钮；辅助窗口一旦能被导航到远程内容或被参数化，就绕过了远程标记。
+    enforcement:
+      method: review
+      detail: 审查新增窗口的 URL、是否注入脚本、打开入口与绑定方法参数。
+  native-message-frame-origin:
+    strength: SHOULD
+    statement: 会改变主窗口状态的原生消息必须带上只有主 frame 注入脚本知道的每次启动随机 nonce，或在 design 中明确接受子 frame 能触发它。
+    rationale: 'Linux 上 Wails 的原生消息不区分发送的 frame，OriginInfo 只给出顶层地址，child frame guard 只过滤 wails: 前缀；页面中的任何子 iframe 都能发送同样的消息。'
+    enforcement:
+      method: test
+      detail: 处理函数测试覆盖 nonce 不符或缺失时拒绝；审查新增的原生消息处理是否带 nonce 或有 design 接受记录。
+  serialize-navigation-effects:
+    strength: MUST
+    statement: 导航控制器的后台任务完成时，必须在同一把互斥锁内完成代次比较与 SetRemote/SetURL；同步发起的导航也在该锁内执行副作用。
+    rationale: 先检查后执行会让较早的探测在较新的导航之后改写远程标记，使远程页面在未标记时显示、获得本地服务访问权限。
+    enforcement:
+      method: test
+      detail: 用真正的 goroutine 并发发起导航并以 -race 运行，断言最终 SetURL 与远程标记一致。

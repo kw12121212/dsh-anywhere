@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: ci-regression-matrix
+  milestone: cross-platform-release
+status: planned
+summary: 在 CI 中于 ubuntu、macos、windows 三个平台运行完整回归命令
+details: 新增 GitHub Actions 工作流，在 push 和 pull request 时触发，矩阵覆盖 ubuntu-latest、macos-latest、windows-latest；安装 Go 1.27、Node.js 与 Linux 下的 GTK3/WebKit2GTK 开发库；所有平台统一使用 bash shell 执行 config.yaml 中的回归命令，保证与本地门槛一致。前提是 GitHub 仓库已创建并设为 origin 远程。
+depends_on:
+  - project-scaffold

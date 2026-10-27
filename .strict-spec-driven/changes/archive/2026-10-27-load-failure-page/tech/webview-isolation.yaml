@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: webview-isolation
+operations:
+  ADDED:
+    serialize-navigation-effects:
+      strength: MUST
+      statement: 导航控制器的后台任务完成时，必须在同一把互斥锁内完成代次比较与 SetRemote/SetURL；同步发起的导航也在该锁内执行副作用。
+      rationale: 先检查后执行会让较早的探测在较新的导航之后改写远程标记，使远程页面在未标记时显示、获得本地服务访问权限。
+      enforcement:
+        method: test
+        detail: 用真正的 goroutine 并发发起导航并以 -race 运行，断言最终 SetURL 与远程标记一致。
+  MODIFIED: {}
+  REMOVED: {}

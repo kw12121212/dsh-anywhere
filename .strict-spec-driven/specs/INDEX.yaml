@@ -1,0 +1,26 @@
+schema: strict-spec-driven/spec-index/v1
+schema_version: 1
+artifact_type: spec_index
+schema_file: ../schemas/spec-index.yaml
+specs:
+  - id: first-run-setup
+    title: 首次启动初始化
+    path: .strict-spec-driven/specs/first-run-setup.yaml
+  - id: harness-url-config
+    title: harness URL 配置
+    path: .strict-spec-driven/specs/harness-url-config.yaml
+  - id: load-failure
+    title: 加载失败
+    path: .strict-spec-driven/specs/load-failure.yaml
+  - id: main-window
+    title: 主窗口
+    path: .strict-spec-driven/specs/main-window.yaml
+  - id: navigation-scope
+    title: 导航范围
+    path: .strict-spec-driven/specs/navigation-scope.yaml
+  - id: session-auth
+    title: dsh 会话
+    path: .strict-spec-driven/specs/session-auth.yaml
+  - id: settings-window
+    title: 设置窗口
+    path: .strict-spec-driven/specs/settings-window.yaml

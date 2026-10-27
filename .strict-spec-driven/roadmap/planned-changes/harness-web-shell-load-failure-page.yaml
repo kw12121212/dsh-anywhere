@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: load-failure-page
+  milestone: harness-web-shell
+status: complete
+summary: 远程地址不可达或加载失败时显示本地错误页，提供重试和打开设置的入口
+details: internal/probe 在导航前对已保存的干净地址（不带 token）做带超时（默认 10 秒）的 HTTP 可达性探测；DNS 失败、连接拒绝、超时、TLS 错误时主窗口加载本地错误页，页面展示干净地址与失败原因分类，并提供“重试”和“修改地址”按钮：重试由 Go 侧重新探测并 SetURL，修改地址打开设置窗口。HTTP 4xx/5xx 视为可达并交给远程页面展示，其中 dsh 的 401 由 dsh-session-auth 处理。在平台支持时再监听 webview 导航失败事件作为补充。测试使用 httptest 服务器覆盖成功、401、超时、拒绝连接与 TLS 失败。
+depends_on:
+  - remote-page-window
+  - settings-window

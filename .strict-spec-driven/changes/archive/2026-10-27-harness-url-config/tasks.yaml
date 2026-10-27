@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: harness-url-config
+sections:
+  Implementation:
+    url-normalize:
+      text: 实现 internal/config/url.go：Normalize（去空白、http/https、主机名必填、剥离全部 token 参数）与 Redact，错误使用不含输入内容的中文哨兵错误
+      status: complete
+    config-store:
+      text: 实现 internal/config/store.go：Store.Load 区分 ErrNotFound 与 ErrInvalidConfig 并经 Normalize 复核；Store.Save 先校验，再用同目录临时文件 + Sync + Rename 原子写入，目录 0700、文件 0600
+      status: complete
+    config-service:
+      text: 实现 internal/config/service.go：Service.CurrentURL、ValidateURL、SaveURL；SaveURL 返回干净地址
+      status: complete
+    wire-service:
+      text: main.go 用 config.DefaultStore() 组装 Store 并注册 config.Service（只做装配），按 Taskfile 参数执行 wails3 generate bindings -clean=true -ts -i 重新生成 frontend/bindings，并把 AGENTS.md 常用命令中的该命令更正为同样参数
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：rename 抽为包级变量并新增中断保存测试（旧配置不变、无残留临时文件）；拒绝输入且无已有配置的表驱动测试（/chat、ftp、file）；stripToken 去掉空段并注明只按 & 分隔、区分大小写；AGENTS.md 固定 wails3@v3.0.0；同步 design 文字
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt 与 go vet 静态检查
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./...
+    config-unit-tests:
+      text: 为 internal/config 编写单元测试：合法/非法 URL、token 剥离（单个或多个、带路径前缀、无 token、保留其他参数与片段）、错误信息不含 token、Redact、配置缺失、损坏 JSON、无效地址、手工写入带 token、原子写入覆盖且无残留临时文件、文件权限、Service 三个方法
+      status: complete
+      command: go test -race -cover ./internal/config/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现与测试一致，代码、测试夹具和日志中不含真实 harness 地址或 token
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify harness-url-config 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify harness-url-config
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: config-unit-tests

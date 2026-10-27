@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: remote-page-window
+sections:
+  Implementation:
+    start-url:
+      text: 在 internal/setup 增加 StartURL(store)：已配置返回干净地址与 remote=true，否则返回“/”与 remote=false
+      status: complete
+    runtime-guard:
+      text: 实现 internal/guard：Guard.SetRemote/IsRemote 与 Middleware；远程窗口的 /wails/ 请求 403；/wails/runtime 非 POST、非 application/json 或缺少 x-wails-client-id 时 403；拒绝时记录不含查询参数的警告日志
+      status: complete
+    app-menu:
+      text: 实现 internal/appmenu.Build(reload func())：macOS 应用菜单、编辑菜单、视图菜单中的“重新加载”（CmdOrCtrl+R）
+      status: complete
+    wire-main:
+      text: main.go 只做装配：按 StartURL 设置主窗口初始 URL 并在 app.Run 前标记远程；navigate 回调先标记再 SetURL；安装 guard 中间件；设置应用菜单并让主窗口使用；重新生成 bindings
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：新增 internal/mainwindow.Controller 集中导航与远程标记顺序，重新加载改为重新打开已保存地址（Linux reload 会回到 wails://）；guard 增加 Origin 校验（server 构建标签下停用）；appmenu 抽出点击处理并断言快捷键与编辑菜单；修正测试中的事件负载路径；补充注释；在 WSLg 下复测攻击、仅 Origin/形态校验、重新加载与本地调用四种场景
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt、go vet 与前端类型检查
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./... && (cd frontend && npx tsc --noEmit)
+    unit-tests:
+      text: 单元测试：StartURL（缺失、无效、有效、带 token 的手工配置）；guard 放行本地合法调用与非 runtime 资源，拒绝远程窗口的任意 /wails/ 请求、GET 查询调用、text/plain POST、缺少 client-id、OPTIONS，SetRemote(false) 后恢复放行，拒绝日志不含查询参数；菜单含 CmdOrCtrl+R 的“重新加载”且点击回调可注入
+      status: complete
+      command: go test -race -cover ./internal/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-wslg:
+      text: 在 WSLg 下运行真实桌面应用：配置指向本地攻击页（fetch JSON、no-cors text/plain、img GET 三种方式调用 config.Service.SaveURL），确认配置文件不变且 guard 记录拒绝；配置无效时启动，用 inotifywait 确认本地初始化页的 State() 调用读取了配置
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与端到端结果一致
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify remote-page-window 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify remote-page-window
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

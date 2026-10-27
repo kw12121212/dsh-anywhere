@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: first-run-setup
+  status: proposed
+summary:
+  what:
+    - 新增 internal/setup：判定是否进入初始化界面（尚未配置或已有配置无效）的可测函数，以及绑定给本地页面的 setup 服务（查询初始化状态、完成初始化）
+    - 本地前端实现初始化界面：欢迎说明、harness URL 输入框（提示文字：粘贴 dsh-url 或 dsh web 输出的地址）、实时校验提示和“开始使用”按钮，已有配置无效时显示提示
+    - 完成初始化时由 Go 侧保存干净地址，再用用户输入的原始地址（可能带 token）对主窗口调用一次 SetURL，让 dsh 签发会话 cookie；原始地址不落盘、不保留
+  why:
+    - 首次启动的用户没有任何地址可用，需要在主窗口内被引导填写 harness URL；dsh 会话 cookie 只能通过带有效 token 的地址换取，且 cookie 为 SameSite=Strict，必须由 Go 侧 SetURL 发起导航
+scope:
+  in:
+    - setup.Decide：根据配置读取结果给出 NeedsSetup 与 InvalidConfig；读取失败（非文件不存在）也视为已有配置无效
+    - setup.Service.State() 返回初始化状态；setup.Service.Complete(raw) 校验并保存，成功后用去除首尾空白的原始地址导航主窗口一次并返回干净地址，失败返回可展示的错误且不导航
+    - 前端初始化界面：输入时调用 config.Service.ValidateURL 实时校验，不合法时“开始使用”按钮不可用并显示原因；点击后调用 Complete，失败时显示错误并停留在初始化界面
+    - main.go 组装 setup 服务，导航回调指向主窗口 SetURL（只做装配），重新生成 bindings
+    - 单元测试覆盖判定函数（缺失、损坏、地址无效、读取失败、有效）与 Complete（成功导航原始地址、校验失败不保存不导航、写入失败不导航）；以 Wails server 模式加浏览器手工验证界面行为
+  out:
+    - 已有有效配置时启动直接加载 harness 页面、应用菜单“重新加载”（属于 remote-page-window）
+    - 限制远程 harness 页面调用本地服务（属于 remote-page-window）
+    - 设置窗口（属于 settings-window）
+    - 会话失效（401）识别与重新认证提示页（属于 dsh-session-auth）
+unchanged_behavior:
+  - 已有有效配置时启动，主窗口仍显示本地占位内容（直接加载 harness 由 remote-page-window 实现）
+  - config.Service 的 CurrentURL、ValidateURL、SaveURL 行为与 harness-url-config 主 spec 保持不变
+  - 不得把 application.Options.LogLevel 设为 Debug（security-secrets/wails-loglevel-not-debug）
+roadmap:
+  milestone: harness-web-shell
+  planned_change: first-run-setup

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: first-run-setup
+  milestone: harness-web-shell
+status: complete
+summary: 首次启动且没有有效配置时，主窗口显示初始化界面，引导用户填写并保存 harness URL
+details: 本地初始化界面（打包在 frontend/ 中）包含欢迎说明、harness URL 输入框（提示文字：粘贴 dsh-url 或 dsh web 输出的地址）、实时校验提示和“开始使用”按钮；地址不合法时按钮不可用并提示原因。保存成功后，由 Go 侧用用户输入的原始地址（可能带 token）调用一次 SetURL，以便 dsh 签发会话 cookie；原始地址只保存在内存中，用后即丢弃，配置中只有干净地址。配置文件存在但内容损坏或地址无效时，同样进入初始化界面，并提示已有配置无效。是否进入初始化界面的判定抽成可测函数。
+depends_on:
+  - harness-url-config

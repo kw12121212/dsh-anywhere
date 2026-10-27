@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: load-failure-page
+  status: proposed
+summary:
+  what:
+    - 新增 internal/probe：对干净地址做带超时（默认 10 秒）的 HTTP 可达性探测，把失败分类为 DNS、拒绝连接、超时、TLS 与其他；任何 HTTP 响应都算可达
+    - 主窗口进入 harness 前先探测：启动时先显示本地“正在连接”页，探测通过才打开 harness；不可达时显示本地错误页，展示干净地址与失败原因，提供“重试”和“修改地址”
+  why:
+    - harness 不可达时 webview 只显示平台自带的错误页，用户无法重试也找不到修改地址的入口
+scope:
+  in:
+    - mainwindow.Controller：OpenRemote 与 Reload 先在后台用干净地址探测，通过后标记远程并导航，失败时打开本地错误页 /?view=load-failed（查询参数带干净地址与原因）；会话重试不探测；用代次计数保证只有最后一次导航生效
+    - mainwindow.Controller.InitialURL 与 Start：有有效配置时主窗口先显示 /?view=connecting，Start 在后台探测后打开 harness；没有有效配置时显示初始化界面
+    - 新增绑定服务 mainwindow.Service.Retry（错误页“重试”），“修改地址”复用 settings.Service.Open
+    - 前端增加 connecting 与 load-failed 两个视图
+    - 单元测试用 httptest 覆盖成功、401、5xx、重定向、超时、拒绝连接、TLS 失败、DNS 失败；控制器测试覆盖探测成功与失败、代次、会话重试不探测；WSLg 真实窗口验证拒绝连接与 DNS 失败显示错误页、服务恢复后重试进入 harness
+  out:
+    - 监听 webview 导航失败事件（Wails v3.0.0 桌面平台没有该事件，只有 iOS 有）
+    - 页面加载过程中途断开（探测通过之后）的情况
+unchanged_behavior:
+  - HTTP 4xx/5xx 仍交给远程页面展示，dsh 401 仍由会话失效识别处理
+  - guard、导航范围策略、会话重试与设置窗口行为不变
+roadmap:
+  milestone: harness-web-shell
+  planned_change: load-failure-page

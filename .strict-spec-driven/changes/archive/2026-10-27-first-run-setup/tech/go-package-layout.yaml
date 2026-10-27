@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+operations:
+  ADDED:
+    inject-window-effects:
+      strength: SHOULD
+      statement: 需要窗口副作用（导航、打开或聚焦窗口等）的逻辑放在 internal 包中，以 func 参数注入副作用；main.go 只提供对窗口方法的闭包，单元测试用记录器断言回调的次数与参数。
+      rationale: Wails 窗口无法在单元测试中创建；把副作用注入为回调后，决定何时、以什么参数触发副作用的逻辑可以达到覆盖率门槛，main.go 也保持只做装配。
+      enforcement:
+        method: review
+        detail: 审查 internal 包是否直接引用 application.WebviewWindow；对应测试是否断言注入回调的调用次数与参数。
+      examples:
+        good:
+          - setup.NewService(store, func(url string) { mainWindow.SetURL(url) })
+        bad:
+          - 在 setup 包中持有 *application.WebviewWindow 并直接调用 SetURL
+  MODIFIED: {}
+  REMOVED: {}

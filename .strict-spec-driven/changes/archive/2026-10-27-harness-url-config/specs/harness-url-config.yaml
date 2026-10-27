@@ -1,0 +1,92 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: harness-url-config
+spec:
+  title: harness URL 配置
+  path: .strict-spec-driven/specs/harness-url-config.yaml
+operations:
+  ADDED:
+    url-validation:
+      strength: MUST
+      statement: 应用只接受带主机名的 http 或 https 绝对地址作为 harness URL；输入的首尾空白会被忽略；空值、相对路径和其他协议的地址被拒绝，给出说明原因的错误提示，且不修改已保存的配置。
+      scenarios:
+        accept-https-with-whitespace:
+          - GIVEN: 用户输入 '  https://dsh.example.test:13080/  '（首尾带空格）
+          - WHEN: 保存该地址
+          - THEN: 保存成功，已保存的地址为 https://dsh.example.test:13080/
+        reject-empty:
+          - GIVEN: 已保存地址 https://a.example.test/
+          - WHEN: 用户提交空白输入并保存
+          - THEN: 保存被拒绝并提示地址不能为空，已保存的地址仍为 https://a.example.test/
+        reject-relative:
+          - GIVEN: 没有已保存的配置
+          - WHEN: 用户提交 /chat 并保存
+          - THEN: 保存被拒绝并提示必须是完整地址，配置文件不存在
+        reject-other-scheme:
+          - GIVEN: 没有已保存的配置
+          - WHEN: 用户提交 ftp://dsh.example.test/ 或 file:///tmp/x 并保存
+          - THEN: 保存被拒绝并提示只支持 http 或 https，配置文件不存在
+    token-stripped-persistence:
+      strength: MUST
+      statement: 保存 harness URL 时，应用去除所有名为 token 的查询参数并只保存去除后的地址，其他查询参数、路径和片段保持不变；保存操作向调用方返回该干净地址。
+      scenarios:
+        strip-single-token:
+          - GIVEN: 用户粘贴 http://127.0.0.1:13080/?token=abc123
+          - WHEN: 保存该地址
+          - THEN: 返回并保存 http://127.0.0.1:13080/，配置文件中不含 abc123
+        strip-token-keep-others:
+          - GIVEN: 用户粘贴 https://dsh.example.test/base/?lang=zh&token=abc123&token=def456#top
+          - WHEN: 保存该地址
+          - THEN: 返回并保存 https://dsh.example.test/base/?lang=zh#top，配置文件中不含 abc123 和 def456
+        no-token-unchanged:
+          - GIVEN: 用户输入 https://dsh.example.test/base/?lang=zh
+          - WHEN: 保存该地址
+          - THEN: 返回并保存 https://dsh.example.test/base/?lang=zh
+    persisted-across-restarts:
+      strength: MUST
+      statement: 已保存的 harness URL 保存在当前用户的配置目录中，应用重启后仍能读取到同一个干净地址；保存过程中断不会留下内容不完整的配置。
+      scenarios:
+        read-after-restart:
+          - GIVEN: 用户已保存 https://dsh.example.test/
+          - WHEN: 应用重新启动并读取当前地址
+          - THEN: 读取到 https://dsh.example.test/
+        overwrite-previous:
+          - GIVEN: 已保存 https://a.example.test/
+          - WHEN: 用户保存 https://b.example.test/ 后应用重新启动
+          - THEN: 读取到 https://b.example.test/，配置目录中没有残留的临时文件
+    invalid-config-detection:
+      strength: MUST
+      statement: 读取配置时，应用能区分“从未保存过配置”和“已有配置无效”（内容损坏或其中地址不符合校验规则）两种情况；两种情况下都不提供可用的 harness URL。
+      scenarios:
+        missing-config:
+          - GIVEN: 配置目录中没有配置文件
+          - WHEN: 应用读取当前地址
+          - THEN: 结果为尚未配置，当前地址为空
+        corrupt-config:
+          - GIVEN: 配置文件内容不是合法的配置数据
+          - WHEN: 应用读取当前地址
+          - THEN: 结果为已有配置无效，当前地址为空
+        invalid-url-in-config:
+          - GIVEN: 配置文件中保存的地址为 ftp://dsh.example.test/
+          - WHEN: 应用读取当前地址
+          - THEN: 结果为已有配置无效，当前地址为空
+    token-never-exposed:
+      strength: MUST
+      statement: token 查询参数的值不得出现在配置文件、应用日志或返回给界面的错误信息中。
+      scenarios:
+        hand-edited-token:
+          - GIVEN: 配置文件中被手工写入 https://dsh.example.test/?token=abc123
+          - WHEN: 应用读取当前地址
+          - THEN: 读取到 https://dsh.example.test/，不含 abc123
+        error-without-token:
+          - GIVEN: 用户提交无法解析的地址 http://dsh.example.test/%zz?token=abc123
+          - WHEN: 保存该地址
+          - THEN: 保存被拒绝，错误信息中不含 abc123
+        redact-for-log:
+          - GIVEN: 一个带 token 的地址 https://dsh.example.test/?token=abc123
+          - WHEN: 应用需要在日志中记录该地址
+          - THEN: 记录的文本为 https://dsh.example.test/，不含 abc123
+  MODIFIED: {}
+  REMOVED: {}

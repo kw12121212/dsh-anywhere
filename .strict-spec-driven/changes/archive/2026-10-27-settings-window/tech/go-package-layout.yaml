@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+operations:
+  ADDED:
+    window-lifecycle-ownership:
+      strength: SHOULD
+      statement: 创建辅助窗口时必须明确主窗口关闭时的处理（退出应用或一并关闭辅助窗口）；任何引用 WebviewWindow 的副作用闭包都必须由生命周期逻辑保证调用时窗口仍存在。
+      rationale: Wails v3.0.0 在 Linux 与 Windows 上只在窗口数为 0 时退出，对已销毁窗口调用 SetURL 不报错且在 Linux 上仍会发出请求。
+      enforcement:
+        method: review
+        detail: 审查新增窗口时 main.go 是否注册主窗口 WindowClosing 的处理，以及副作用闭包引用的窗口在关闭后是否仍可能被调用。
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: project-scaffold
+sections:
+  Implementation:
+    install-wails3-cli:
+      text: 安装 wails3 CLI（go install github.com/wailsapp/wails/v3/cmd/wails3@latest）并确认 wails3 version 可执行
+      status: complete
+      command: wails3 version
+    init-scaffold:
+      text: 在临时目录执行 wails3 init -n dsh-anywhere -t vanilla（v3.0.0 中 vanilla 即 Vanilla + TypeScript 模板），将 main.go、go.mod、go.sum、frontend/、build/、Taskfile.yml 合入仓库根目录，去掉三平台之外的 build/android、build/ios 及其 Taskfile 引用，go.mod 设为 go 1.27，模块路径为 dsh-anywhere
+      status: complete
+    remove-greet-service:
+      text: 删除 GreetService 示例及其在 main.go 中的注册，前端改为不调用任何 Go 服务的最小占位页，执行 wails3 generate bindings 重新生成 frontend/bindings
+      status: complete
+    add-appinfo-package:
+      text: 新增 internal/appinfo 包，提供应用名称常量与 ConfigDir()（os.UserConfigDir()/dsh-anywhere），main.go 引用该包设置应用名称
+      status: complete
+    gitignore-and-lockfile:
+      text: 补充 .gitignore（bin/、frontend/dist/、frontend/node_modules/、coverage*.out、.task/），确保 frontend/package-lock.json 存在且可被 npm ci 使用
+      status: complete
+    update-agents-md:
+      text: 在 AGENTS.md 常用命令部分补充实际可用的 wails3 / task 命令（安装 CLI、wails3 dev、wails3 build、wails3 generate bindings、wails3 task --list），并把 Linux 依赖说明更正为 Wails v3.0.0 默认的 GTK4 / WebKitGTK 6.0，不改动约定与约束条目
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：TypeScript 升级到 ^5.9.3 并在 build 中执行 tsc --noEmit；用 npmjs registry 重新生成 package-lock.json；appinfo 测试精确断言 ConfigDir 路径与 Name；.gitignore 锚定根路径并忽略生成的 build/linux/*.desktop
+      status: complete
+  Testing:
+    appinfo-unit-tests:
+      text: 为 internal/appinfo 编写单元测试，覆盖应用名称与 ConfigDir 在 UserConfigDir 可用及不可用时的行为
+      status: complete
+      command: go test -race ./internal/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    verify-scope:
+      text: 确认变更只包含骨架、appinfo 包、.gitignore 与 AGENTS.md 命令补充，代码与配置中不含任何 harness URL 或凭据
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify project-scaffold 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify project-scaffold
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: appinfo-unit-tests

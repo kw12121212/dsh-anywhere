@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: external-navigation
+sections:
+  Implementation:
+    same-origin:
+      text: 实现 navigation.SameOrigin：协议、主机（不区分大小写）、端口（缺省端口按协议补全）比较
+      status: complete
+    message-handler:
+      text: 实现 navigation.Handler.HandleMessage：校验主窗口、前缀、http/https 绝对地址、与已保存 harness 地址不同源后调用 openURL；不记录 URL
+      status: complete
+    inject-script:
+      text: 编写注入脚本 script.js（embed 为 navigation.Script）：捕获阶段拦截 click/auxclick 与 window.open，同源留在主窗口，非同源发消息给 Go
+      status: complete
+    wire-main:
+      text: main.go 只做装配：RawMessageHandler 转交 Handler，主窗口 JS 选项为 navigation.Script，openURL 为 app.Browser.OpenURL
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：空 window.open/about:blank 忽略；支持 SVG（href 与 xlink:href）与 area 链接；有效 target 含 <base target> 与命名 target；捕获阶段只阻止默认行为、派发后再打开并尊重页面 preventDefault、同一任务内去重；新增 node vm 行为测试；WSLg 复测
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt、go vet（含 server 标签）与前端类型检查
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./... && go vet -tags server ./internal/... && (cd frontend && npx tsc --noEmit)
+    unit-tests:
+      text: 单元测试：SameOrigin（同源、子路径、不同端口、不同协议、不同主机、缺省端口、大小写、无法解析）；HandleMessage（外部地址打开、同源忽略、非 http 忽略、无法解析忽略、其他窗口忽略、前缀不符忽略、配置不可用时按外部处理、openURL 出错不崩溃）；Script 非空且含消息前缀
+      status: complete
+      command: go test -race -cover ./internal/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-wslg:
+      text: '在 WSLg 下用真实窗口（openURL 替换为记录的临时构建）验证：外部链接点击、中键、window.open 被交给 openURL 且主窗口不离开；同源 target=_blank 与 window.open 在主窗口内导航；file: 请求被忽略；远程页面仍无法调用本地服务'
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与端到端结果一致
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify external-navigation 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify external-navigation
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

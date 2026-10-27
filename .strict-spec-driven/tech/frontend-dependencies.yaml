@@ -1,0 +1,21 @@
+schema: strict-spec-driven/main-tech/v1
+schema_version: 1
+artifact_type: main_tech
+schema_file: templates/strict-spec-driven/schemas/main-tech.yaml
+standard:
+  id: frontend-dependencies
+  title: 前端依赖管理
+  category: tooling
+rules:
+  lockfile-public-registry:
+    strength: MUST
+    statement: 提交的 frontend/package-lock.json 中所有 resolved 地址必须指向 https://registry.npmjs.org；修改依赖时用 npm install --registry=https://registry.npmjs.org 生成 lockfile。
+    rationale: npm ci 直接使用 lockfile 的 resolved 地址，默认 replace-registry-host=npmjs 只会把 registry.npmjs.org 替换为本机配置的镜像；写入镜像地址会让 CI 与其他开发者依赖该第三方镜像，影响可复现性和供应链安全。
+    enforcement:
+      method: review
+      detail: 审查时执行 grep '"resolved"' frontend/package-lock.json，确认没有 registry.npmjs.org 之外的主机。
+    examples:
+      good:
+        - '"resolved": "https://registry.npmjs.org/vite/-/vite-8.3.5.tgz"'
+      bad:
+        - '"resolved": "https://registry.npmmirror.com/vite/-/vite-8.3.5.tgz"'

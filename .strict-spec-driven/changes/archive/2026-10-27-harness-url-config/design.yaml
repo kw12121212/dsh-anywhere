@@ -1,0 +1,37 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: harness-url-config
+approach:
+  - 'internal/config 分三部分：url.go 提供 Normalize(raw) 与 Redact(raw)，Normalize 去除首尾空白、用 net/url 解析、要求协议为 http/https 且主机名非空，再删除全部 token 查询参数并返回干净地址；store.go 提供 Store{path}，Load 读取 JSON {"harnessURL": ...} 并用 Normalize 复核，Save 先 MkdirAll(0700)，在同目录 CreateTemp、写入、Sync、Chmod 0600 后 Rename 覆盖；service.go 提供绑定给前端的 Service。'
+  - main.go 只用 appinfo.ConfigDir() 组装 Store 并注册 config.Service，随后执行 wails3 generate bindings 生成 frontend/bindings/dsh-anywhere/internal/config。
+decisions:
+  sentinel-errors:
+    decision: 所有校验与读取错误使用不含输入内容的哨兵错误（ErrEmpty、ErrMalformed、ErrNotAbsolute、ErrUnsupportedScheme、ErrNotFound、ErrInvalidConfig），消息为可直接展示的中文
+    rationale: net/url 的解析错误会把原始字符串（可能含 token）写进 Error()；Wails 会以 Error 级别记录绑定方法返回的 err.Error()，并把错误序列化成 JSON 放进前端异常的 cause。只用固定文本的哨兵错误（无导出字段，序列化为 {}），才能保证 token 不会经由错误信息进入日志或界面。
+  strip-in-normalize:
+    decision: token 剥离在 Normalize 内完成，Load 也经过 Normalize
+    rationale: 唯一的入口函数保证任何被保存或读取出的地址都不带 token；即使用户手工在配置文件中写入带 token 的地址，读取结果也是干净地址。
+  distinguish-missing-invalid:
+    decision: Load 对文件不存在返回 ErrNotFound，对 JSON 损坏或地址无效返回包装了具体原因的 ErrInvalidConfig
+    rationale: 里程碑要求配置损坏或地址无效时初始化界面提示已有配置无效，而首次启动不提示；后续 first-run-setup 需要据此区分两种情况。
+  atomic-write:
+    decision: 写入使用同目录 os.CreateTemp（默认权限 0600）、Sync、Close 后 os.Rename 覆盖，目录权限 0700；失败时删除临时文件；rename 作为包级变量供测试注入失败
+    rationale: 同一文件系统内 Rename 是原子的，写入中途失败不会留下半截配置导致下次启动被判为损坏；注入 rename 失败的测试证明旧配置保持不变且没有残留临时文件；配置属于用户私有数据，不应被其他用户读取。
+  service-surface:
+    decision: Service 只暴露 CurrentURL()、ValidateURL(raw) (string, error)、SaveURL(raw) (string, error) 三个方法
+    rationale: 里程碑风险要求暴露给前端的 Go 服务最小化；这三个方法正好覆盖初始化界面与设置界面的需求，没有删除或任意文件访问能力。
+  tests-real-filesystem:
+    decision: 存储测试使用 t.TempDir() 的真实文件系统，不使用 mock
+    rationale: 项目测试规则要求优先使用真实依赖；临时目录保证每个测试互相独立。
+alternatives:
+  - option: 把带 token 的原始地址也保存起来，下次启动直接用它换取 cookie
+    reason: dsh web 每次重启都重新生成 token，旧 token 会返回 401；而且会把凭据写入磁盘，违反项目约定。
+  - option: 用 YAML 或 TOML 作为配置格式
+    reason: 需要额外的第三方依赖；标准库 encoding/json 已足够表达单个地址字段。
+risks:
+  - Service 注册后，Wails 可能也把它注入到后续加载的远程 harness 页面；在 remote-page-window 完成调用来源限制前，主窗口只加载本地页面，风险暂不暴露。
+  - Windows 上 os.Rename 覆盖已打开的文件可能失败；配置文件只在保存时短暂打开，风险较低。
+  - Wails v3.0.0 以 Debug 级别记录每次绑定调用的原始参数（SaveURL/ValidateURL 的入参可能带 token）；当前 main.go 未设置 LogLevel（默认 Info），production 构建丢弃日志，因此安全；由技术标准 security-secrets 的 wails-loglevel-not-debug 规则守护。
+  - CurrentURL 对“尚未配置”和“已有配置无效”都返回空字符串；Store.Load 已区分两者，first-run-setup 需要在 Go 侧做进入初始化界面的判定并把“已有配置无效”传给界面。

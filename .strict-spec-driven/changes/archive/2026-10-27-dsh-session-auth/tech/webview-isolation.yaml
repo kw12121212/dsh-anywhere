@@ -1,0 +1,23 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: webview-isolation
+operations:
+  ADDED:
+    native-message-frame-origin:
+      strength: SHOULD
+      statement: 会改变主窗口状态的原生消息必须带上只有主 frame 注入脚本知道的每次启动随机 nonce，或在 design 中明确接受子 frame 能触发它。
+      rationale: 'Linux 上 Wails 的原生消息不区分发送的 frame，OriginInfo 只给出顶层地址，child frame guard 只过滤 wails: 前缀；页面中的任何子 iframe 都能发送同样的消息。'
+      enforcement:
+        method: test
+        detail: 处理函数测试覆盖 nonce 不符或缺失时拒绝；审查新增的原生消息处理是否带 nonce 或有 design 接受记录。
+  MODIFIED:
+    secondary-local-window:
+      strength: SHOULD
+      statement: 新增的本地辅助窗口只加载本地资源地址，不经 SetRemote 标记，不注入 navigation.Script；只能由菜单等 Go 侧入口或本地页面经绑定服务打开，打开它的绑定方法不得接受任意地址或窗口参数。
+      rationale: guard 按窗口 ID 放行本地窗口的调用并拒绝远程窗口的全部 /wails/ 请求，因此本地页面（重新认证提示页、加载失败错误页）可以安全地提供“打开设置”按钮；辅助窗口一旦能被导航到远程内容或被参数化，就绕过了远程标记。
+      enforcement:
+        method: review
+        detail: 审查新增窗口的 URL、是否注入脚本、打开入口与绑定方法参数。
+  REMOVED: {}

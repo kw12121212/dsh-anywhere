@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: load-failure-page
+sections:
+  Implementation:
+    probe:
+      text: 实现 internal/probe：带超时的 HTTP 可达性探测与原因分类
+      status: complete
+    controller-probe:
+      text: mainwindow.Controller 注入 check 与 run：OpenRemote/Reload 先探测再导航，失败打开 /?view=load-failed；代次计数；RetrySession 不探测；InitialURL 与 Start；mainwindow.Service.Retry
+      status: complete
+    failure-ui:
+      text: 前端增加 connecting 与 load-failed 视图：展示地址与原因说明，“重试”调用 mainwindow.Service.Retry，“修改地址”调用 settings.Service.Open
+      status: complete
+    wire-main:
+      text: main.go 只做装配：主窗口初始 URL 取 InitialURL，创建后调用 Start；注册 mainwindow.Service；注入 probe；移除不再使用的 setup.StartURL；重新生成 bindings
+      status: complete
+    review-fixes:
+      text: 按审查与端到端发现修正：Start 改在第一个 WindowRuntimeReady 中调用（sync.Once）；导航副作用与代次比较放在同一把 navMu 内，补真正并发的测试；Reload 在有有效配置时总是重新尝试 harness；Windows 匹配 WSAECONNREFUSED；TLS 分类覆盖告警、记录头与明文响应；规范化失败时安全失败；探测不读正文；main-window 主 spec 增加 MODIFIED；WSLg 补测“修改地址”
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt、go vet（含 server、gtk3 标签与 GOOS=windows 交叉检查）与前端类型检查
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./... && go vet -tags server ./internal/... && go vet -tags gtk3 ./internal/... && GOOS=windows go vet ./internal/... && (cd frontend && npx tsc --noEmit)
+    unit-tests:
+      text: 单元测试：probe 覆盖成功、401、5xx、重定向、超时、拒绝连接、TLS、DNS；Controller 覆盖探测通过导航、失败打开错误页（地址无 token、原因正确）、较早探测结果被丢弃、RetrySession 不探测、InitialURL/Start 两种配置、Service.Retry
+      status: complete
+      command: go test -race -cover ./internal/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-wslg:
+      text: WSLg 真实窗口：拒绝连接与 DNS 失败显示错误页；启动服务后经错误页“重试”进入 harness；502 直接显示远程内容；正常启动经“正在连接”进入 harness 且会话 cookie 生效；guard 仍拦截远程页面调用
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与端到端结果一致
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify load-failure-page 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify load-failure-page
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

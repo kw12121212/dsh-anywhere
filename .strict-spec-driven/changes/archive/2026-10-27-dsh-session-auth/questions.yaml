@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsh-session-auth
+open: []
+resolved:
+  - id: windows-session-detection
+    question: Windows 上无法为远程页面注入脚本，会话失效识别怎么处理？
+    context: 影响 proposal 范围与实现文件：Wails v3.0.0 在 Windows 上不为远程页面执行窗口 JS 选项（与 external-navigation 相同的限制）。
+    answer: 同样先做 Linux/macOS：Windows 上会话失效时主窗口显示 dsh 自身的 401 文本，用户可从菜单打开设置恢复；Windows 补齐并入 windows-external-navigation 后续计划变更。
+    status: resolved
+    kind: technical
+    answered_by: human
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图：dsh web 的会话 cookie 若不能跨应用重启保留，每次重启都要新的带 token 地址；会话失效（访问返回 401）时用户只看到一行英文文本，不知道如何恢复。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 路线图 done 标准：粘贴 dsh web 打印的带 token URL 完成初始化后，重启应用（包括重启 dsh web 之后）无需重新输入即可进入 DSH 页面；dsh web 会话失效（访问返回 401）时，主窗口显示需要重新认证的本地提示页，可从该页打开设置界面粘贴新的带 token URL 恢复访问；配置文件与应用日志中均不出现 token 值。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 路线图：依赖的 first-run-setup 与 settings-window 已归档；WSLg 实测 Linux 上 cookie 默认不跨重启保留，当前每次重启应用都会得到 401。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 路线图：客户端不自建鉴权，只兼容 dsh web 自带的启动令牌与会话 cookie；token 值不得出现在配置文件、日志、错误页或提示页中；Go 侧探测不携带 webview cookie，不能用来判断会话。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 路线图 details：一、在三平台验证 webview cookie 能否跨应用重启保留（Linux 优先），不能时为 webview 配置持久化数据；二、dsh 会话失效时对根路径返回 401，正文固定为“dsh web authentication required; reopen the URL printed by dsh web.”，需在 webview 侧识别，识别后主窗口改为显示本地的需要重新认证提示页，说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供打开设置界面的按钮。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

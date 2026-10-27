@@ -1,0 +1,29 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: settings-window
+operations:
+  ADDED: {}
+  MODIFIED:
+    settings-save:
+      strength: MUST
+      statement: 点击“保存”后，应用只保存去掉 token 的干净地址并关闭设置窗口，主窗口打开用户输入的原始地址（含 token）一次；新地址在重启后仍生效。地址未改动、输入不带 token 且主窗口正显示 harness 页面时，保存不重新加载主窗口。
+      scenarios:
+        save-new-token-url:
+          - GIVEN: 已保存 https://a.example.test/，主窗口显示该页面
+          - WHEN: 用户在设置窗口粘贴 http://127.0.0.1:13080/?token=abc123 并保存
+          - THEN: 配置中为 http://127.0.0.1:13080/ 且不含 abc123，设置窗口关闭，主窗口打开 http://127.0.0.1:13080/?token=abc123；重启后主窗口打开 http://127.0.0.1:13080/
+        save-unchanged:
+          - GIVEN: 已保存 https://dsh.example.test/，主窗口显示 harness 页面
+          - WHEN: 用户不修改地址直接保存
+          - THEN: 设置窗口关闭，主窗口不重新加载
+        save-same-url-new-token:
+          - GIVEN: 已保存 http://127.0.0.1:13080/
+          - WHEN: 用户粘贴 http://127.0.0.1:13080/?token=def456 并保存
+          - THEN: 配置不变，设置窗口关闭，主窗口打开 http://127.0.0.1:13080/?token=def456
+        save-unchanged-from-local-page:
+          - GIVEN: 已保存 https://dsh.example.test/，主窗口显示重新认证提示页
+          - WHEN: 用户在设置中不修改地址直接保存
+          - THEN: 设置窗口关闭，主窗口重新打开 https://dsh.example.test/
+  REMOVED: {}

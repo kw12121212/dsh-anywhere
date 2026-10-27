@@ -1,0 +1,45 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsh-session-auth
+approach:
+  - webviewdata.PersistCookies（cookies_linux.go，构建约束 linux && cgo && !gtk3 && !server && !android）在 C 中取 webkit_network_session_get_default()，以其 website data manager 的 base data directory 下的 cookies.sqlite 调用 webkit_cookie_manager_set_persistent_storage(..., SQLITE)；cookies_other.go 为其他构建返回 nil。main.go 在创建窗口之后、app.Run 之前调用，失败时退出。
+  - session.Script 在页面加载完成后检查 document.contentType 为 text/plain 且 body 文本去空白后等于 dsh 固定文本，满足时经 _wails.invoke 或 webkit 消息处理器发送 "dsh-anywhere:session-expired"。session.Handler.HandleMessage(windowID, msg) 只在消息完全相等、来自主窗口且 guard 标记主窗口为远程时调用 openReauth（mainwindow.Controller.OpenLocalURL("/?view=reauth")）。
+  - 本地提示页说明会话已失效，需要在 DSH 主机上运行 dsh-url 获取新地址，再在设置中粘贴；“打开设置”按钮调用 settings.Service.Open()（注入的 openWindow，即 main.go 中的 openSettings）。设置保存后经已有流程用带 token 地址导航主窗口并重新标记为远程。
+  - mainwindow.Controller.OpenRemote 每次都允许一次重试；RetrySession 在同一把锁内读取并清除该记录，为真时用已保存的干净地址导航（不再允许重试）并返回 true；OpenLocalURL 清除记录并记住当前本地页面。Reload 在本地初始化界面时重开初始化界面，在其他本地页面或远程页面时重新尝试已保存的 harness 地址。session.Handler 收到失效消息时先调用 RetrySession，返回 false 才打开提示页。
+decisions:
+  persist-cookies-via-cgo:
+    decision: 在应用代码中经 cgo 为 WebKitGTK 默认 network session 开启持久化 cookie 存储
+    rationale: WSLg 实测 Wails v3.0.0 的默认 session 不持久化 cookie，重启后请求不带 cookie；Wails 没有提供配置项。开启后实测重启应用请求带上有效 cookie。macOS 的 WKWebsiteDataStore.default 与 Windows 的 WebView2 用户数据目录默认持久化，不需要处理。
+  detect-by-marker-text:
+    decision: 以 dsh 401 响应的固定正文识别会话失效
+    rationale: Go 侧探测不携带 webview cookie，无法判断会话；Wails 不提供导航响应状态；dsh 源码确认失效时根路径返回 text/plain 的固定文本，注入脚本可在页面加载完成后可靠识别。
+  reauth-local-page:
+    decision: 识别到失效后主窗口切到本地提示页，并取消远程标记
+    rationale: 提示页是本地页面，需要调用“打开设置”绑定；经 OpenLocalURL 先导航后取消标记，遵循 webview-isolation/mark-remote-before-navigate。
+  handler-requires-remote:
+    decision: 会话失效消息只在主窗口被标记为远程时生效
+    rationale: 消息来自不可信页面（native-message-revalidate）；主窗口显示本地页面时不应被消息切走；被入侵的 harness 页面最多让主窗口显示本地提示页，不能导航到任意地址。
+  modify-secondary-window-rule:
+    decision: 修改 webview-isolation/secondary-local-window：允许本地页面经绑定服务打开辅助窗口
+    rationale: 路线图要求提示页提供“打开设置”按钮（load-failure-page 的“修改地址”同样需要）；guard 拒绝远程窗口的全部 /wails/ 请求，远程页面仍无法调用该绑定。
+  retry-after-navigation:
+    decision: 每次 OpenRemote 之后第一次收到会话失效时，先用已保存的干净地址重试一次，再决定是否显示提示页
+    rationale: WSLg 用模拟 dsh 实测：从本地页面（wails://）发起的任何导航都被 WebKitGTK 视为跨站，SameSite=Strict 会话 cookie 不随请求发送——带 token 导航后的重定向、以及从提示页重新加载 harness 都得到 401；此时页面已位于 harness 源，再导航是同站请求，实测带上已有 cookie 进入 harness。会话确实失效时重试仍为 401，随后显示提示页，代价只是一次额外请求。带 token 时重试还覆盖了 Wails 内存中保留的带 token 地址。
+  expiry-nonce:
+    decision: 会话失效消息带每次启动随机生成的 nonce，Handler 只接受完全匹配的消息
+    rationale: 'Wails 只在主 frame 执行窗口 JS 选项，而 Linux 上原生消息不区分 frame（OriginInfo 只有顶层地址，child frame guard 只过滤 wails: 前缀）；审查实测 harness 中的子 iframe 能让会话有效的主窗口切到提示页。nonce 只存在于主 frame 注入脚本的闭包中，子 frame 无法得知。'
+  app-private-cookie-store:
+    decision: cookie 数据库放在应用专属的 XDG 数据目录（dsh-anywhere/cookies.sqlite），目录 0700、文件 0600，由 Go 侧预先创建
+    rationale: cookie 就是 dsh 会话凭据；WebKitGTK 默认数据目录（XDG_DATA_HOME/webkitgtk）由多个应用共享且实测文件为 0644、目录为 0775。预先以 0600 创建空文件后 SQLite 沿用该权限，日志文件受目录权限保护。
+  settings-save-when-main-local:
+    decision: 设置保存未改动的地址时，若主窗口正显示本地页面，仍让主窗口重新打开 harness
+    rationale: 审查实测：主窗口在提示页时保存未改动地址不导航，用户被困在提示页；“未改动不重载”只是为了不打断正在使用的 harness 页面。
+alternatives: []
+risks:
+  - macOS 与 Windows 的 cookie 持久化只有平台默认行为依据，未在真机验证。
+  - dsh 若修改 401 正文，识别会失效，主窗口显示 dsh 原文；用户仍可从菜单打开设置恢复。
+  - Windows 上不识别会话失效（用户已于 2026-10-27 接受），并入 windows-external-navigation。
+  - Linux 的 gtk3 构建（WebKitGTK 4.1）不开启 cookie 持久化，不在支持范围内。
+  - 注入导航脚本的打开外部链接消息仍不带 nonce，子 iframe 可请求用系统浏览器打开外部 http/https 地址（external-navigation 已接受的风险）。

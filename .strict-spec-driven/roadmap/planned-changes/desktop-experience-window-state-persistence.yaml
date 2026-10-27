@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: window-state-persistence
+  milestone: desktop-experience
+status: planned
+summary: 持久化并恢复主窗口位置、尺寸和最大化状态，恢复时保证窗口可见
+details: 窗口关闭时把位置、尺寸、最大化状态写入配置目录（与 harness URL 字段分开）；启动时恢复，若保存的矩形与当前任何显示器都不相交，则在主显示器居中并使用默认尺寸。可见性判定抽成纯函数并做单元测试。Wayland 下无法设置窗口位置时只恢复尺寸。
+depends_on:
+  - remote-page-window

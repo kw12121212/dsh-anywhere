@@ -1,0 +1,45 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: remote-page-window
+approach:
+  - 启动：main.go 调 setup.StartURL(store) 得到初始 URL，创建主窗口后、app.Run 之前调用 guard.SetRemote(mainWindow.ID(), remote)（Run 之前创建的窗口推迟到 Run 时才加载）。其余导航全部经 internal/mainwindow.Controller：OpenRemote 先标记再 SetURL；OpenLocal 先 SetURL 本地页再取消标记；Reload 在远程时重新打开已保存的干净地址，配置不可用时 OpenLocal，本地时重新打开本地页。
+  - guard.Guard 用互斥锁保护的窗口 ID 集合；Middleware(next) 对路径以 /wails/ 开头的请求依次检查：x-wails-window-id 属于远程集合则 403；带 Origin 且不是本地源（wails://localhost、http://wails.localhost）则 403（server 构建标签下由 Wails 自身做同源校验，此项不生效）；路径为 /wails/runtime 时方法不是 POST、Content-Type 不以 application/json 开头或缺少 x-wails-client-id 则 403。经 application.Options.Assets.Middleware 安装，位于 Wails 中间件链最外层。
+  - appmenu.Build(reload func()) 返回 *application.Menu：macOS 先加 AppMenu 角色；所有平台加 EditMenu 角色和“视图”子菜单中的“重新加载”（CmdOrCtrl+R）；main.go 用 app.Menu.Set 设置，回调为 Controller.Reload，主窗口 UseApplicationMenu。
+decisions:
+  block-by-window-id:
+    decision: 以 x-wails-window-id 判定请求来自哪个窗口，并由应用记录该窗口当前是否显示远程内容
+    rationale: Wails v3.0.0 在 Linux 与 Windows 上由原生层按 webview 写入并覆盖该头（application.go webViewAssetRequest.Header、webview_window_windows.go processRequest），页面无法伪造；Wails 没有提供按来源或按窗口禁用服务的内建机制，也没有可信的当前 URL 查询接口。
+  require-runtime-shape:
+    decision: /wails/runtime 只接受 POST、Content-Type 为 application/json 且带 x-wails-client-id 的请求
+    rationale: 本地 @wailsio/runtime 3.0.0 的调用（含分块上传）总是这种形态；该校验拒绝 no-cors 的 text/plain POST 与 img/script 发起的 GET 查询参数调用。它不能单独阻止跨源 JSON POST：WSLg 实测 WebKitGTK 2.52.6 对 wails:// 的跨源 JSON POST 不做预检，因此另设 Origin 校验。
+  mark-before-navigate:
+    decision: 先标记窗口为远程，再调用 SetURL
+    rationale: 反过来会留下一个窗口已加载远程页面但尚未被标记的竞态窗口期。
+  menu-callback:
+    decision: 重新加载动作以回调注入 appmenu，main.go 传入 Controller.Reload
+    rationale: 遵循 go-package-layout/inject-window-effects；点击处理函数抽成可测函数。
+  e2e-on-wslg:
+    decision: 以 WSLg Wayland 显示运行真实桌面应用做端到端验证，用 inotifywait 观察配置文件被读取来确认本地绑定调用确实到达 Go
+    rationale: 远程页面能否触达本地服务取决于真实 WebKitGTK 的跨源策略，server 模式无法复现；本机无法截图，配置文件的打开事件是本地 State() 调用成功的外部可观察证据。
+  reject-foreign-origin:
+    decision: 带 Origin 头且不属于本地源集合的 /wails/ 请求一律拒绝
+    rationale: WSLg 实测远程页面的跨源请求带上自己的 Origin，而本地页面的同源请求不带 Origin（Windows/macOS 本地页面带的是本地源）；在未标记远程的情况下，Origin 与请求形态两层校验已拦下实测的全部三种攻击方式。
+  reload-reopens-saved-url:
+    decision: “重新加载”不调用 WebviewWindow.Reload，而是在远程时重新打开已保存的干净地址
+    rationale: Wails v3.0.0 的 Linux reload 实际加载 wails:// 本地首页（linux_cgo.go:1510-1514），会把用户从 harness 带回本地页且该页调用被 guard 拒绝；Wails 没有可信的当前 URL 接口，ExecJS 在远程页上因 runtime 未就绪而永远排队。重新打开已保存地址在三个平台上行为一致，代价是 harness 内部的子路径不保留。
+  navigation-controller:
+    decision: 所有导航与远程标记的先后顺序集中在 internal/mainwindow.Controller，以注入的窗口函数实现
+    rationale: 先标记再导航、先导航再取消标记是安全关键顺序；放进 internal 包后可用记录器断言 SetURL 调用时的标记状态，符合 go-package-layout/inject-window-effects。
+alternatives:
+  - option: 把远程内容放进单独的窗口
+    reason: 里程碑要求主窗口直接显示 harness 页面，并在同一窗口中切换初始化界面与错误页；多一个窗口会改变用户可见行为。
+  - option: 检查 Origin 或 Referer 头
+    reason: 各平台自定义 scheme 请求是否携带这些头未确认，可能误拒本地调用或被缺省绕过；window-id 由原生层写入更可靠。
+risks:
+  - Windows 上 https 页面对 http://wails.localhost 的 mixed content 处理未实测；拒绝逻辑不依赖该行为。
+  - 后续变更（load-failure-page、dsh-session-auth）在主窗口切回本地页面时必须调用 SetRemote(id, false)，否则本地页面的调用会被拒绝。
+  - macOS 与 Windows 上未做真实窗口端到端验证；window-id 头在所有平台都经 webViewAssetRequest.Header 由原生 windowId 覆盖（Wails application.go:388-397），Origin 与请求形态校验作为第二道防线。
+  - 被拒绝的请求每次都记一条 WARN 日志，远程页面可借此刷屏；日志不含查询参数与 URL，暂不限流。
+  - 重新加载会回到已保存地址的根页面，不保留 harness 内部导航到的子路径。

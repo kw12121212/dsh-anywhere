@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: harness-url-config
+  status: proposed
+summary:
+  what:
+    - 新增 internal/config：harness URL 校验与规范化（去除首尾空白，只接受带主机名的 http/https 绝对 URL）、剥离 token 查询参数、脱敏函数，以及 os.UserConfigDir()/dsh-anywhere/config.json 的读取与原子写入
+    - 新增一个最小的 Wails 服务（读取当前地址、校验地址、保存地址），注册到应用并重新生成 bindings，供后续初始化界面与设置界面共用
+  why:
+    - 初始化界面、设置界面和启动决策都依赖同一套地址校验与持久化规则；dsh web 的启动令牌每次重启都会变化，若把带 token 的地址落盘，dsh 重启后应用将无法打开，且 token 会泄露到配置文件
+scope:
+  in:
+    - 校验规则：首尾空白自动去除；必须是带主机名的绝对 URL；协议仅限 http/https；空值、相对路径和其他协议被拒绝并返回可展示的中文错误信息
+    - 保存时剥离所有名为 token 的查询参数，保留其他查询参数、路径和片段；配置中只持久化干净地址
+    - 脱敏函数：日志或错误信息只能使用去掉 token 的地址；无法解析的输入不回显原文
+    - 读取配置：区分配置文件不存在、配置损坏（JSON 无法解析）或地址无效三种情况
+    - 写入配置：在同一目录写临时文件后原子重命名，目录与文件权限仅限当前用户
+    - Wails 服务：CurrentURL、ValidateURL、SaveURL；SaveURL 返回干净地址，失败时返回可展示的错误
+    - 单元测试覆盖合法/非法 URL、token 剥离（单个或多个查询参数、带路径前缀、无 token）、配置文件缺失、损坏 JSON 与原子写入
+  out:
+    - 初始化界面、设置界面等任何界面（属于 first-run-setup、settings-window）
+    - 启动时根据配置决定加载 harness 还是初始化界面（属于 remote-page-window）
+    - 用带 token 的原始地址导航以换取会话 cookie（属于 first-run-setup、settings-window）
+    - 限制远程 harness 页面调用本地服务（属于 remote-page-window）
+unchanged_behavior:
+  - 主窗口仍显示项目骨架的本地占位页
+  - 完整回归命令与覆盖率门槛保持不变
+roadmap:
+  milestone: harness-web-shell
+  planned_change: harness-url-config

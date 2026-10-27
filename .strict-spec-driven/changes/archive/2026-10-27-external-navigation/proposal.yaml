@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: external-navigation
+  status: proposed
+summary:
+  what:
+    - 新增 internal/navigation：按协议、主机、端口判定与已保存 harness 地址是否同源；处理注入脚本发来的打开外部链接请求，经系统默认浏览器打开非同源的 http/https 地址
+    - 通过主窗口的 Wails JS 选项向每个加载完成的页面注入脚本：拦截链接点击、中键点击与 window.open，同源目标留在主窗口内，非同源目标交给 Go 侧用系统浏览器打开
+    - 为注入脚本增加 node vm 行为测试，覆盖链接、SVG、area、修饰键、target 变体、页面接管点击与 window.open 各参数
+  why:
+    - harness 页面中的第三方链接或新窗口请求会让主窗口离开 harness，webview 内没有地址栏，用户难以返回
+    - 注入第三方页面的脚本缺陷会让主窗口离开 harness 或重复打开浏览器，必须有可回归的行为测试
+scope:
+  in:
+    - navigation.SameOrigin(base, target)：协议、主机（不区分大小写）、端口（缺省端口按协议补全）全部相同才算同源
+    - navigation.Handler.HandleMessage(windowID, msg)：只接受主窗口发来、带固定前缀的消息；目标必须是 http/https 绝对地址且与已保存 harness 地址不同源，才调用注入的 openURL；配置不可用时按非同源处理
+    - 注入脚本：捕获阶段拦截 a[href] 的 click 与 auxclick（中键）以及 window.open；同源目标在主窗口内导航（target=_blank 也留在主窗口），非同源 http/https 目标经 _wails.invoke 或 webkit 消息处理器发给 Go，并阻止默认行为；其他协议不处理
+    - main.go 只做装配：设置 RawMessageHandler 转交 Handler，主窗口 JS 选项为 navigation.Script，openURL 为 app.Browser.OpenURL
+    - 单元测试覆盖同源判定（同源、子路径、不同端口、不同协议、不同主机、缺省端口、大小写）与消息处理；在 WSLg 下用真实窗口端到端验证外部链接、window.open、target=_blank 同源链接
+  out:
+    - Windows 上的导航与新窗口拦截（Wails v3.0.0 在 Windows 上不为远程页面注入 JS 选项，另立计划变更用 WebView2 原生接口实现）
+    - 表单提交、location 赋值等脚本发起的跨源导航
+    - 页面加载完成之前发生的点击
+    - iframe 内的链接与 window.open、页面预先缓存的 window.open 引用
+unchanged_behavior:
+  - 远程页面仍无法调用任何本地服务（webview-isolation 标准与 guard 行为不变）
+  - 进入 harness 的导航仍由 Go 侧发起；重新加载、启动决策与初始化界面行为不变
+roadmap:
+  milestone: harness-web-shell
+  planned_change: external-navigation

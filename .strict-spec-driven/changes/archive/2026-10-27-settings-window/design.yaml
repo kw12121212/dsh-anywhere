@@ -1,0 +1,39 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: settings-window
+approach:
+  - internal/settings.Service 持有 *config.Store、openRemote func(string)（mainwindow.Controller.OpenRemote）与 closeWindow func()。Save(raw)：先读出旧地址，再 store.Save(raw)；失败直接返回错误；成功后若旧地址有效、干净地址等于旧地址且 strings.TrimSpace(raw) 等于干净地址则不导航，否则 openRemote(strings.TrimSpace(raw))；最后 closeWindow()。Cancel() 只调用 closeWindow()。
+  - 前端：src/validation.ts 提供 bindValidation(input, errorText, button)，封装校验代次、空输入禁用与错误显示，返回 validate 与 invalidate；src/setup.ts 与 src/settings.ts 分别实现两个界面，src/main.ts 按 ?view=settings 选择界面。
+  - 设置窗口的查找、聚焦、创建与关闭都在 internal/settings：Window 窄接口（Show、Focus、Close）与 Lookup；ByName 把 app.Window.GetByName 适配为 Lookup；Open(lookup, create) 已存在时 Show+Focus，否则 create；Close(lookup) 存在时关闭。main.go 只传入 GetByName 与 NewWithOptions 的闭包，创建名为 settings、加载 /?view=settings 的本地窗口。
+decisions:
+  separate-local-window:
+    decision: 设置界面是独立的本地窗口，而不是在主窗口内切换页面
+    rationale: 路线图要求不打断主窗口中的 harness 页面；独立窗口的 window-id 从未被标记为远程，guard 对它放行本地调用，而主窗口中的远程页面仍被拒绝。
+  skip-reload-when-unchanged:
+    decision: 地址未改动且输入不带 token 时保存不重新加载主窗口
+    rationale: 路线图明确要求；用户只是打开设置看一眼再保存时不应打断 harness 中的会话；带 token 时即使干净地址相同也要导航一次，以便用新 token 换取会话 cookie。
+  close-after-save:
+    decision: 保存成功后由 Go 侧关闭设置窗口，失败时窗口保持打开
+    rationale: 路线图要求保存后关闭设置窗口；失败时用户需要看到错误并修改输入。
+  shared-validation-module:
+    decision: 初始化界面与设置界面共用 validation.ts 的实时校验逻辑
+    rationale: 两处都需要校验代次作废、空输入禁用按钮与错误显示，first-run-setup 审查中修过的竞态逻辑只应维护一份。
+  single-entry-view-query:
+    decision: 设置界面与初始化界面共用 index.html，通过 ?view=settings 区分
+    rationale: 避免为 Vite 配置多入口；本地资源服务器对两者都是同源，guard 的 Origin 校验与窗口标记行为一致。
+  quit-with-main-window:
+    decision: 主窗口关闭时退出应用
+    rationale: Linux 与 Windows 上 Wails 只在窗口数为 0 时退出；设置窗口打开时关闭主窗口会让进程继续运行，之后保存会对已销毁的主窗口 SetURL，审查实测已销毁的 webview 仍发出带 token 的请求。主窗口是应用的唯一主界面，关闭即退出与单窗口应用的预期一致；WSLg 实测关闭主窗口后约 0.1 秒进程退出。
+  menu-item-table:
+    decision: 自定义菜单项以 (子菜单、文字、快捷键、回调) 表定义，build 按表构建
+    rationale: Wails 不导出菜单点击入口，测试无法点击菜单项；按表构建后测试可以逐项断言文字与回调的对应关系，回调接反会被发现。
+alternatives: []
+risks:
+  - 关闭设置窗口发生在 Save 绑定调用返回之前，前端可能收不到返回值；前端不依赖该返回值。
+  - macOS 上“设置…”惯例位于应用菜单，本变更放在“文件”子菜单；Cmd+, 快捷键仍然有效。
+  - 真实窗口中无法在本机触发菜单与点击，窗口打开、聚焦与关闭只有单元测试与装配证据，界面行为由 server 模式检查。
+  - Wails 的 Close 先发事件再标记销毁；极短时间内再次打开设置可能拿到正在关闭的窗口。
+  - “未改动不重载”默认主窗口正在显示 harness；主窗口因配置失效回到本地页后配置又恢复有效时，未改动的保存不会把主窗口带回 harness。
+  - 输入与干净地址只在首尾空白之外有差异（如大写协议）时也会触发一次主窗口导航，方向是多加载一次。

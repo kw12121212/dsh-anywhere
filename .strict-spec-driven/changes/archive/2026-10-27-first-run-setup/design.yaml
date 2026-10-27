@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: first-run-setup
+approach:
+  - internal/setup 提供 State{NeedsSetup, InvalidConfig} 与 Decide(store)：store.Load 成功为无需初始化；ErrNotFound 为需要初始化且无提示；其他错误（ErrInvalidConfig 或读取失败）为需要初始化并提示已有配置无效。
+  - main.go 先声明主窗口变量，navigate 闭包在调用时对主窗口 SetURL；前端 main.ts 在启动时调用 setup State()，需要初始化时渲染初始化界面，否则保留占位内容。
+  - setup.Service 持有 *config.Store 与 navigate func(string)。State() 每次调用 Decide；Complete(raw) 调 store.Save(raw)，成功后 navigate(strings.TrimSpace(raw)) 并返回干净地址；应用代码不在任何字段、全局变量或前端状态中保留原始地址。
+  - 前端提交时递增校验代次以作废在途校验，提交失败后按当前输入重新校验来决定按钮状态，避免过期结果重新启用按钮或造成重复提交。
+decisions:
+  go-side-navigation:
+    decision: 进入 harness 的导航只由 Go 侧 navigate 回调（主窗口 SetURL）发起，前端不做 location 跳转
+    rationale: dsh 会话 cookie 为 SameSite=Strict，从本地页面用 JS 跨站跳转时 cookie 不随请求发送，会被误判为会话失效；里程碑风险明确要求所有进入 harness 的导航由 Go 侧 SetURL 发起。
+  navigate-raw-once:
+    decision: Complete 用去除首尾空白的原始输入导航，而不是干净地址
+    rationale: 只有带有效 token 的地址才能让 dsh 签发会话 cookie；token 仅用于这一次导航，配置中只有干净地址，原始值随调用结束丢弃。
+  validation-in-go:
+    decision: 前端实时校验直接调用 config.Service.ValidateURL，不在 TypeScript 中重复校验规则
+    rationale: 校验规则已由 harness-url-config 主 spec 定义并有 Go 单元测试；在前端重写会产生两套可能不一致的规则，且前端没有测试框架。
+  separate-setup-package:
+    decision: 初始化逻辑放在新的 internal/setup 包，而不是扩充 config.Service
+    rationale: 初始化需要导航主窗口，config 包只负责校验与持久化；分开后 config.Service 的行为保持不变，setup 的导航副作用可用注入的回调测试。
+  server-mode-ui-check:
+    decision: 界面行为以 go build -tags server 的 Wails server 模式加 agent-browser 无头浏览器手工验证
+    rationale: 本机 WSL 环境无法对 webview 窗口截图；server 模式提供同一份前端和 bindings 的 HTTP 服务，可在真实浏览器中检查按钮状态、提示文字和保存结果，导航回调在该模式下不生效。
+alternatives: []
+risks:
+  - 完成初始化后主窗口加载远程 harness 页面；在 remote-page-window 实现调用来源限制之前，远程页面可能调用本地绑定服务。该风险由紧随其后的 remote-page-window 解决，里程碑完成前不发布。
+  - Wails 在绑定方法内调用 SetURL 的线程模型：v3.0.0 的 SetURL 通过 InvokeSync 切回主线程，可在绑定调用的 goroutine 中安全调用。
+  - Wails v3.0.0 的 SetURL 会把带 token 的原始地址保存在窗口的 options.URL 中，Windows 上还记为 lastNavigatedURL，并在 WebView2 进程崩溃恢复时用它重新导航；该值只在内存中，不落盘。会话建立后用干净地址覆盖的处理由 remote-page-window 或 dsh-session-auth 评估。

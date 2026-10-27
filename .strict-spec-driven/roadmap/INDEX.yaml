@@ -1,0 +1,17 @@
+schema: strict-spec-driven/roadmap-index/v2
+schema_version: 2
+artifact_type: roadmap_index
+schema_file: ../schemas/roadmap-index.yaml
+milestones:
+  harness-web-shell:
+    title: 远程 harness 网页承载 MVP
+    path: roadmap/milestones/harness-web-shell.yaml
+    status: complete
+  desktop-experience:
+    title: 桌面使用体验
+    path: roadmap/milestones/desktop-experience.yaml
+    status: proposed
+  cross-platform-release:
+    title: 三平台打包与发布
+    path: roadmap/milestones/cross-platform-release.yaml
+    status: proposed

@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: settings-window
+  status: proposed
+summary:
+  what:
+    - 应用菜单增加“设置…”（CmdOrCtrl+,），打开独立的本地设置窗口；已打开时聚焦已有窗口，主窗口中的页面不受影响
+    - 设置窗口显示当前已保存的干净地址，可编辑并实时校验，可粘贴带 token 的地址；“保存”只写入干净地址、关闭设置窗口，并由 Go 侧用输入的原始地址让主窗口打开一次；“取消”或直接关闭窗口不修改配置
+  why:
+    - 里程碑要求地址可随时在设置界面修改；dsh web 每次重启都会换 token，会话失效后用户需要粘贴新的带 token 地址恢复访问
+scope:
+  in:
+    - 新增 internal/settings：Service.Save(raw) 与 Service.Cancel()，以及打开或聚焦设置窗口的 Open 逻辑；窗口操作以回调注入
+    - Save：校验并保存，地址未改动且输入不带 token 时不重新加载主窗口，否则经 mainwindow.Controller.OpenRemote 用去除首尾空白的原始地址打开主窗口；成功后关闭设置窗口；失败时返回可展示的错误且不关闭窗口、不导航
+    - appmenu 增加“文件”子菜单中的“设置…”（CmdOrCtrl+,），回调注入
+    - 前端按 ?view=settings 显示设置界面：输入框预填当前地址、实时校验（复用 config.Service.ValidateURL）、“保存”与“取消”按钮；把初始化界面与设置界面共用的实时校验逻辑抽成独立模块
+    - main.go 只做装配：注册 settings.Service，设置窗口以名称 settings 创建、加载本地 /?view=settings，重新生成 bindings
+    - 单元测试覆盖 Save（带 token、未改动、改动、首尾空白、校验失败、写入失败）、Cancel、Open（已存在时聚焦、不存在时创建）与菜单项；以 Wails server 模式加 agent-browser 检查设置界面行为
+  out:
+    - 会话失效（401）识别与重新认证提示页（属于 dsh-session-auth）
+    - 加载失败错误页（属于 load-failure-page）
+    - 除 harness 地址以外的其他设置项
+unchanged_behavior:
+  - 初始化界面、启动决策、重新加载与导航范围策略的行为不变
+  - 远程页面仍无法调用任何本地服务；设置窗口是本地页面，远程页面无法打开它
+roadmap:
+  milestone: harness-web-shell
+  planned_change: settings-window

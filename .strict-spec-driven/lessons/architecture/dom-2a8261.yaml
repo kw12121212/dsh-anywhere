@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: dom-2a8261
+  title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
+category: architecture
+status: active
+created_at: '2026-10-27T11:58:34.788Z'
+updated_at: '2026-10-27T11:58:34.788Z'
+context: external-navigation 在 harness 页面注入捕获阶段的 click 监听，按 a[href] 与 anchor.href 判定外部链接，并立即发送打开请求。
+observation: SVG <a> 的 href 是 SVGAnimatedString、xlink:href 与 <area> 不匹配 a[href]，导致主窗口离开 harness；捕获阶段先于页面处理器执行，页面自己 window.open(href) 时浏览器打开两次，页面改写的点击行为被无视；把无参 window.open() 解析为当前地址导致页面重新加载。
+takeaway: 注入脚本用 getAttribute/getAttributeNS 读链接属性并覆盖 a、area、SVG a；捕获阶段只阻止默认行为，派发结束后再执行动作并检查页面是否接管；按规范处理 window.open 的空参数；用 node vm 加伪造 DOM 的行为测试覆盖这些变体。
+applies_when: 向不受控制的第三方页面注入全局事件拦截或 API 替换脚本（链接点击、window.open、表单提交等）时
+occurrences:
+  - origin: external-navigation
+    date: '2026-10-27'
+    evidence: 审查在 WSLg 真实窗口复现：svg.html、area.html 请求了外部地址；dbl.html 打开两次；empty.html 调 window.open() 后页面重新加载；修复后 links3.html 全部按预期。

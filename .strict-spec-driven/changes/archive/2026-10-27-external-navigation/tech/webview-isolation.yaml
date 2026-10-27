@@ -1,0 +1,23 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: webview-isolation
+operations:
+  ADDED:
+    native-message-revalidate:
+      strength: MUST
+      statement: 远程页面经 Wails 原生消息通道（RawMessageHandler）发来的消息一律不可信：Go 侧必须校验窗口 ID、固定前缀与参数白名单，只执行单一受限动作，日志不记录参数原文。
+      rationale: 原生消息通道不经过 guard，任何页面（含 harness 中的跨源 iframe）都能直接发送消息；只有 Go 侧重新校验才能把它限制在预期动作内。
+      enforcement:
+        method: test
+        detail: 处理函数的单元测试覆盖其他窗口、前缀不符、非白名单参数（如 file:、javascript:、同源地址）全部被拒，以及日志不含参数。
+    injected-js-behavior-test:
+      strength: SHOULD
+      statement: 注入 webview 的 JS 必须在 Go 测试中用 node vm 加伪造 DOM 执行并断言行为，不能只做字符串检查。
+      rationale: 注入第三方页面的脚本面对的 DOM 形态多样（SVG、area、页面自有处理器），external-navigation 审查实测的三个缺陷都只能由行为测试提前发现；Wails 自身对注入脚本也采用同样的测试方式。
+      enforcement:
+        method: test
+        detail: 审查新增或修改的注入脚本是否有对应的 node vm 行为测试，场景覆盖主要分支。
+  MODIFIED: {}
+  REMOVED: {}

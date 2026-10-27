@@ -1,0 +1,41 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: main-window
+operations:
+  ADDED: {}
+  MODIFIED:
+    start-harness-when-configured:
+      strength: MUST
+      statement: 启动时如果已保存有效的 harness URL，主窗口先显示本地的“正在连接”提示并检查该地址，地址可达时打开该地址（不含 token），不可达时显示本地错误页；两种情况都不显示初始化界面。
+      scenarios:
+        restart-after-setup:
+          - GIVEN: 用户已完成初始化，配置中保存了 https://dsh.example.test/，该地址可达
+          - WHEN: 重新启动应用
+          - THEN: 主窗口打开 https://dsh.example.test/，不显示初始化界面
+        unconfigured-start:
+          - GIVEN: 配置目录中没有 dsh-anywhere 配置
+          - WHEN: 启动应用
+          - THEN: 主窗口显示初始化界面
+    reload-menu:
+      strength: MUST
+      statement: 应用菜单提供“重新加载”命令（Windows/Linux 为 Ctrl+R，macOS 为 Cmd+R）：已保存有效地址时，无论主窗口当前显示 harness 页面还是本地页面，都重新检查并打开已保存的 harness 地址（不含 token），地址不可达时显示本地错误页；没有有效配置时回到本地初始化界面。
+      scenarios:
+        reload-harness:
+          - GIVEN: 主窗口正在显示已保存的 harness 地址 https://dsh.example.test/
+          - WHEN: 用户选择菜单“重新加载”或按 Ctrl/Cmd+R
+          - THEN: 主窗口重新请求 https://dsh.example.test/ 并显示该页面，不显示初始化界面
+        reload-without-config:
+          - GIVEN: 主窗口正在显示 harness 页面，但配置文件已损坏
+          - WHEN: 用户选择“重新加载”
+          - THEN: 主窗口显示本地初始化界面并提示已有配置无效
+        reload-from-reauth:
+          - GIVEN: 主窗口显示重新认证提示页，dsh 会话已重新有效
+          - WHEN: 用户选择“重新加载”
+          - THEN: 主窗口显示 harness 页面
+        reload-unreachable:
+          - GIVEN: 主窗口显示 harness 页面，之后该地址变得不可达
+          - WHEN: 用户选择“重新加载”
+          - THEN: 主窗口显示本地错误页
+  REMOVED: {}

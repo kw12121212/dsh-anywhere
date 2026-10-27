@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: harness-url-config
+  milestone: harness-web-shell
+status: complete
+summary: 实现 harness URL 的校验、token 剥离与持久化，以及供初始化界面和设置界面共用的 Go 服务
+details: internal/config 负责读写 os.UserConfigDir()/dsh-anywhere/config.json，写入使用临时文件加原子重命名。校验规则：必须是带主机名的绝对 URL，协议仅限 http/https，首尾空白自动去除。保存时剥离 token 查询参数（保留其他参数、路径和片段），配置中只持久化干净地址，从第一个变更起就不会落盘 token。另提供脱敏函数：任何日志或错误信息只能使用去掉 token 的地址。通过一个最小的 Wails 服务（读取当前地址、校验地址、保存地址）供本地初始化界面与设置界面共用；保存接口返回干净地址，校验或保存失败时返回可展示的错误信息。本变更不含界面。单元测试覆盖合法/非法 URL、token 剥离（单个或多个查询参数、带路径前缀、无 token）、配置文件缺失、损坏 JSON 与原子写入。
+depends_on:
+  - project-scaffold

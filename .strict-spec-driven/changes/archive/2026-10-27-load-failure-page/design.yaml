@@ -1,0 +1,47 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: load-failure-page
+approach:
+  - mainwindow.Controller 注入 check func(string) probe.Reason 与 run func(func())（生产为 go f()）。OpenRemote(url)：代次加一，取 url 的干净形式，在 run 中探测；完成时若代次已变则放弃；可达则标记远程并 SetURL(url)；不可达则 OpenLocalURL(/?view=load-failed&url=<干净地址>&reason=<原因>)。RetrySession 直接导航不探测。Reload 与 Start 走 OpenRemote。InitialURL 在有有效配置时返回 /?view=connecting，否则返回初始化界面；Start 在有有效配置时调用 OpenRemote。
+  - mainwindow.Service.Retry() 调用 Controller.Reload（错误页属于非初始化本地页面，会重新探测并尝试 harness）。前端 load-failed 视图从查询参数读取地址与原因，原因码映射为中文说明；“修改地址”调用 settings.Service.Open。
+  - probe.Prober.Check(url) 用不跟随重定向的 http.Client（超时 10 秒）GET 干净地址，收到响应即关闭不读正文；错误按 net.DNSError、平台的连接被拒绝错误码、TLS 错误、超时分类，其余为 other。
+decisions:
+  probe-before-navigation:
+    decision: 以 Go 侧可达性探测为主判断加载失败
+    rationale: 里程碑风险已指出各平台导航失败事件支持不一致；Wails v3.0.0 只在 iOS 提供 WebViewDidFailNavigation，桌面平台没有。
+  async-probe:
+    decision: 探测在后台进行，导航以代次计数只让最后一次生效
+    rationale: 探测最长 10 秒，在绑定调用（初始化完成、设置保存、重试）中同步等待会让界面无响应；连续操作时较早完成的探测不能覆盖较新的导航。
+  connecting-page-at-startup:
+    decision: 有有效配置时主窗口先显示本地“正在连接”页，探测通过后再打开 harness
+    rationale: 在创建窗口前同步探测会让应用在最长 10 秒内没有任何窗口；先显示本地页面再导航会触发 WebKitGTK 的 SameSite 跨站行为，由 dsh-session-auth 的会话重试处理（一次额外请求）。
+  reachable-on-any-response:
+    decision: 任何 HTTP 响应（含 4xx/5xx 与重定向）都算可达
+    rationale: 路线图要求 HTTP 错误交给远程页面展示；探测不带 webview cookie，dsh 根路径对探测总是 401。
+  clean-url-in-query:
+    decision: 错误页通过查询参数接收干净地址与原因码
+    rationale: 错误页是静态本地页面，不需要新的查询绑定；地址已去掉 token，不会把凭据带进页面或日志。
+  start-on-runtime-ready:
+    decision: Start 在主窗口第一个 WindowRuntimeReady 事件中调用，并以 sync.Once 只生效一次
+    rationale: WSLg 实测：在 app.Run 之前调用 Start 时，探测很快失败（连接被拒绝）的 SetURL 发生在原生窗口创建之前，被窗口的初始 URL 覆盖，错误页丢失；WindowRuntimeReady 由本地页面的 runtime 就绪消息触发，此时窗口已创建；重复触发与远程页面伪造的就绪消息都被 sync.Once 吸收。
+  serialize-navigation:
+    decision: 所有导航副作用与后台探测完成时的代次比较都在同一把 navMu 内执行
+    rationale: 审查指出先检查后执行的竞态可能让窗口显示远程页面而 guard 未标记；Wails 的菜单、窗口事件、绑定调用与原生消息回调都运行在独立 goroutine 中，持有 navMu 调用 SetURL（InvokeSync 到主线程）不会死锁。并发测试用真正的 goroutine 与 -race 断言最终 SetURL 与远程标记一致。
+  reload-always-retries-with-config:
+    decision: Reload 在已保存有效地址时总是重新探测并打开 harness，否则回到初始化界面
+    rationale: 审查实测：初始化完成后、探测结束前按 Ctrl+R 会重新打开初始化页，而已有配置时初始化页只显示占位文字，用户被困；不再区分当前本地页面后行为更简单，也覆盖正在连接页、错误页与提示页。
+  platform-refused-errno:
+    decision: 连接被拒绝按平台匹配系统错误码：Windows 额外匹配 WSAECONNREFUSED（10061）
+    rationale: Windows 上 ConnectEx 返回 10061，与 Go 在 Windows 上定义的 syscall.ECONNREFUSED 不相等，否则错误页只能显示“其他”。
+  tls-classification:
+    decision: 证书错误、TLS 告警、记录头错误以及 net/http 的“server gave HTTP response to HTTPS client”都归为 TLS
+    rationale: 规格要求 TLS 错误显示安全连接失败；把 http 服务填成 https 是常见错误，net/http 用文本错误替换了底层的 tls.RecordHeaderError，只能按文本识别。
+alternatives: []
+risks:
+  - 探测通过与 webview 实际加载之间的网络中断不会显示本地错误页，此时显示平台自带错误页；用户仍可用“重新加载”。
+  - 启动时多一次本地页面到 harness 的导航，依赖会话重试才能带上 SameSite=Strict cookie。
+  - 探测请求不经过 webview 的代理设置；系统代理与 webview 代理不一致时判断可能不同。
+  - 本机 WSL 网络对大多数已关闭的本地端口丢包而不是拒绝，此时错误页在 10 秒探测超时后显示（原因为超时）。
+  - 被新导航作废的探测仍会运行到超时才结束（只占用一个 goroutine）。

@@ -1,0 +1,21 @@
+schema: strict-spec-driven/tech-index/v1
+schema_version: 1
+artifact_type: tech_index
+schema_file: ../schemas/tech-index.yaml
+standards:
+  - id: frontend-dependencies
+    title: 前端依赖管理
+    category: tooling
+    path: .strict-spec-driven/tech/frontend-dependencies.yaml
+  - id: go-package-layout
+    title: Go 包布局
+    category: architecture
+    path: .strict-spec-driven/tech/go-package-layout.yaml
+  - id: security-secrets
+    title: 凭据与敏感输入保护
+    category: security
+    path: .strict-spec-driven/tech/security-secrets.yaml
+  - id: webview-isolation
+    title: webview 远程内容隔离
+    category: security
+    path: .strict-spec-driven/tech/webview-isolation.yaml

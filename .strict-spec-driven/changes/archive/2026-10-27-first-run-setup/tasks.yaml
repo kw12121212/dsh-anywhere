@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: first-run-setup
+sections:
+  Implementation:
+    setup-decide:
+      text: 实现 internal/setup：State 与 Decide(store)，区分尚未配置、已有配置无效（含读取失败）与已配置
+      status: complete
+    setup-service:
+      text: 实现 setup.Service：State() 与 Complete(raw)，成功后用去除首尾空白的原始地址调用 navigate 一次并返回干净地址，失败不导航
+      status: complete
+    wire-setup:
+      text: main.go 组装 setup.Service，navigate 回调对主窗口 SetURL（只做装配），执行 wails3 generate bindings -clean=true -ts -i
+      status: complete
+    setup-ui:
+      text: 前端实现初始化界面：启动时查询 State，需要初始化时显示欢迎说明、带提示文字的输入框、实时校验提示（调用 ValidateURL）、“开始使用”按钮与已有配置无效提示；点击后调用 Complete，失败时显示错误
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：前端提交时作废在途校验、失败后按当前输入重新校验；setup 测试增加带 token 的非法输入并断言错误不含 token；design 如实记录 Wails 在内存中保留原始地址的风险
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt、go vet 与前端类型检查
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./... && (cd frontend && npx tsc --noEmit)
+    setup-unit-tests:
+      text: 为 internal/setup 编写单元测试：Decide 覆盖缺失、损坏、地址无效、读取失败、有效；Complete 覆盖带 token 成功（导航原始地址、配置为干净地址）、校验失败不保存不导航、写入失败不导航且错误不含 token、State 随配置变化
+      status: complete
+      command: go test -race -cover ./internal/setup/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    ui-server-mode-check:
+      text: 以 go build -tags server 运行 Wails server 模式（临时 XDG_CONFIG_HOME），用 agent-browser 检查：空配置显示初始化界面且无无效提示；损坏配置显示无效提示；输入非法地址按钮不可用并显示原因；输入合法带 token 地址按钮可用；点击后配置文件只含干净地址
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与界面检查一致，代码与夹具不含真实 harness 地址或 token
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify first-run-setup 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify first-run-setup
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: setup-unit-tests

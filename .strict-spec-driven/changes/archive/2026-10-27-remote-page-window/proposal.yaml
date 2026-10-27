@@ -1,0 +1,38 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: remote-page-window
+  status: proposed
+summary:
+  what:
+    - 启动决策：配置中存在合法 URL 时主窗口直接打开该干净地址，否则显示本地初始化界面；判定抽成可测函数
+    - 应用菜单增加“重新加载”（CmdOrCtrl+R），重新加载主窗口当前页面；macOS 同时保留应用菜单与编辑菜单，保证复制粘贴可用
+    - 新增 internal/guard 资源中间件：主窗口显示远程页面时拒绝该窗口发往 /wails/ 的全部请求，并要求 /wails/runtime 请求符合本地 runtime 的形态（POST、application/json、带 x-wails-client-id），使远程 harness 页面无法调用任何本地服务
+    - 新增 internal/mainwindow 导航控制器：集中处理打开远程、回到本地与重新加载，并保证远程标记与导航的先后顺序
+  why:
+    - 里程碑目标要求有效配置下启动直接进入 harness 页面，并提供重新加载入口
+    - Wails v3.0.0 桌面构建对 /wails/runtime 不做任何来源校验，并会向远程页面注入 _wails 对象；不加限制时远程页面可调用保存地址等本地服务改写配置、让主窗口跳到任意地址
+    - Wails v3.0.0 的 Linux reload 会回到 wails:// 本地首页，WebKitGTK 对 wails:// 的跨源请求不做 CORS 预检；这两点只能在应用层处理
+scope:
+  in:
+    - setup.StartURL(store)：已配置时返回干净地址，否则返回本地首页“/”；main.go 据此设置主窗口初始 URL
+    - 进入 harness 的导航（启动与完成初始化）都由 Go 侧发起，导航前先把主窗口标记为远程
+    - internal/guard：记录显示远程内容的窗口 ID（取自 Wails 原生层写入、页面无法伪造的 x-wails-window-id 头）；对这些窗口的 /wails/ 请求返回 403；对所有 /wails/runtime 请求校验方法、Content-Type 与 x-wails-client-id；拒绝时记录不含查询参数的警告日志
+    - internal/appmenu：构建应用菜单（macOS 应用菜单、编辑菜单、视图菜单中的“重新加载”），重新加载动作以回调注入
+    - 单元测试覆盖 StartURL、guard 中间件的放行与拒绝组合、菜单结构；在 WSLg 下运行真实桌面应用做端到端验证：远程攻击页调用保存地址失败、配置不变，本地初始化页的绑定调用仍然成功
+    - guard 额外拒绝 Origin 不是本地源的 /wails/ 请求（server 构建标签下停用，由 Wails 自身同源校验替代）
+    - “重新加载”在远程时重新打开已保存的干净地址，配置不可用时回到本地初始化界面
+  out:
+    - 设置窗口与“设置…”菜单（属于 settings-window）
+    - 加载失败错误页与会话失效提示页（属于 load-failure-page、dsh-session-auth）
+    - 同源导航策略与外部链接交给系统浏览器（属于 external-navigation）
+    - 会话建立后用干净地址覆盖 Wails 内存中保留的带 token 地址
+unchanged_behavior:
+  - 未配置或配置无效时的初始化界面行为与 first-run-setup 主 spec 一致
+  - config、setup 服务的方法签名与 harness-url-config 主 spec 行为不变
+  - 不设置 LogLevel 为 Debug，不启用 AllowSimpleEventEmit，不设置 RawMessageHandler
+roadmap:
+  milestone: harness-web-shell
+  planned_change: remote-page-window

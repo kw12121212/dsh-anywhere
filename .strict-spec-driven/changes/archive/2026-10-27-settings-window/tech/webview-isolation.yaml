@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: webview-isolation
+operations:
+  ADDED:
+    secondary-local-window:
+      strength: SHOULD
+      statement: 新增的本地辅助窗口只加载本地资源地址，不经 SetRemote 标记，不注入 navigation.Script，只能由菜单等 Go 侧入口打开，不得提供页面可调用的“打开窗口”绑定。
+      rationale: guard 按窗口 ID 放行本地窗口的调用；辅助窗口一旦能被导航到远程内容或被远程页面打开，就绕过了远程标记。
+      enforcement:
+        method: review
+        detail: 审查新增窗口的 URL、是否注入脚本、打开入口与绑定方法。
+  MODIFIED: {}
+  REMOVED: {}

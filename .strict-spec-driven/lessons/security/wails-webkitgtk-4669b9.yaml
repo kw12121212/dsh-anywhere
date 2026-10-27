@@ -1,0 +1,28 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: wails-webkitgtk-4669b9
+  title: Wails 窗口方法与 WebKitGTK 跨源行为不能凭文档或常识假设
+category: security
+status: active
+created_at: '2026-10-27T10:36:38.763Z'
+updated_at: '2026-10-27T14:25:15.026Z'
+context: remote-page-window 设计假设 WebviewWindow.Reload 会重新加载当前页，并把“跨源 JSON 请求必须预检”当作 /wails/runtime 的第二道防线。
+observation: Wails v3.0.0 的 Linux reload 实际加载 wails:// 本地首页（macOS/Windows 才是真正重新加载）；WebKitGTK 2.52.6 对 wails:// 的跨源 JSON POST 不发预检直接送达，no-cors POST 与 img GET 也能到达 Go；不加 guard 时远程页面实测改写了配置。
+takeaway: 依赖 Wails 窗口方法或 webview 跨源策略之前，先按平台核对 Wails 源码，再在 WSLg 下用真实桌面构建做端到端实测；为每一层防护准备单独去掉其他层的对照构建，证明各层各自有效。
+applies_when: 依赖 Wails v3 窗口方法（Reload、ExecJS、SetURL）的跨平台语义，或把 webview 对自定义 scheme 的跨源策略（CORS 预检、Origin、mixed content）当作功能或安全前提时
+occurrences:
+  - origin: remote-page-window
+    date: '2026-10-27'
+    evidence: linux_cgo.go:1510-1514 reload 加载 wails://；对照构建中攻击页把配置改为 http://evil.example.test/；仅保留形态校验时 JSON POST 无预检到达；加 Origin 校验后三种攻击全部被拒。
+  - origin: external-navigation
+    date: '2026-10-27'
+    evidence: Wails v3.0.0 的窗口 JS 选项在 Linux（WindowLoadFinished）与 macOS（WebViewDidFinishNavigation）每次加载都执行，但在 Windows 上只用于 HTML 内容（webview_window_windows.go:2794），远程页面上 ExecJS 永远排队；导致 external-navigation 只能覆盖 Linux/macOS。
+  - origin: dsh-session-auth
+    date: '2026-10-27'
+    evidence: 'Linux 上 Wails 原生消息的 OriginInfo 只有顶层 URI，linux_child_frame_guard 只过滤 wails: 前缀；审查 R5 实测 harness 中的跨源 iframe 发送会话失效消息即可让主窗口切到提示页，改为每次启动的 nonce 后实测被拒。'
+  - origin: load-failure-page
+    date: '2026-10-27'
+    evidence: 在 app.Run 之前调用的程序化 SetURL 会被原生窗口创建时的初始 URL 覆盖：探测很快失败时错误页丢失；改在第一个 WindowRuntimeReady 中调用后恢复（/tmp/dshe2e/app-dbg.log）。

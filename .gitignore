@@ -1,0 +1,9 @@
+/.task
+/bin
+/frontend/dist
+/frontend/node_modules
+/build/linux/appimage/build
+/build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+# 打包前由 build/linux/Taskfile.yml 的 generate:dotdesktop 重新生成
+/build/linux/*.desktop
+coverage*.out

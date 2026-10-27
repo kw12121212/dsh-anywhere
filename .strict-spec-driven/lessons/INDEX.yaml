@@ -1,0 +1,38 @@
+schema: strict-spec-driven/lessons-index/v2
+schema_version: 2
+artifact_type: lessons_index
+schema_file: templates/strict-spec-driven/schemas/lessons-index.yaml
+categories:
+  architecture:
+    dom-2a8261:
+      title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/architecture/dom-2a8261.yaml
+    wails-80aace:
+      title: Wails 多窗口应用的主窗口关闭后进程仍存活，副作用作用于已销毁窗口
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/architecture/wails-80aace.yaml
+  security:
+    wails-seturl-token-e08b6a:
+      title: Wails SetURL 会在内存中保留并可能重放带 token 的地址
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/security/wails-seturl-token-e08b6a.yaml
+    wails-webkitgtk-4669b9:
+      title: Wails 窗口方法与 WebKitGTK 跨源行为不能凭文档或常识假设
+      status: active
+      occurrences: 4
+      path: .strict-spec-driven/lessons/security/wails-webkitgtk-4669b9.yaml
+    wails-samesite-strict-cookie-1a13f2:
+      title: 从 wails:// 本地页面发起的导航，重定向中不携带 SameSite=Strict cookie
+      status: active
+      occurrences: 2
+      path: .strict-spec-driven/lessons/security/wails-samesite-strict-cookie-1a13f2.yaml
+  tooling:
+    wails-v3-0-0-linux-init-c87c5b:
+      title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/wails-v3-0-0-linux-init-c87c5b.yaml

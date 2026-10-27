@@ -1,0 +1,58 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsh-session-auth
+sections:
+  Implementation:
+    persist-cookies:
+      text: 实现 internal/webviewdata.PersistCookies（Linux cgo 与其他平台空实现）
+      status: complete
+    session-detect:
+      text: 实现 internal/session：Script（识别 dsh 401 固定文本并发消息）与 Handler（主窗口且为远程时打开本地提示页）
+      status: complete
+    local-url:
+      text: mainwindow.Controller 增加 OpenLocalURL；settings.Service 增加 Open()
+      status: complete
+    reauth-ui:
+      text: 前端增加 ?view=reauth 提示页：说明运行 dsh-url 获取新地址，“打开设置”按钮调用 settings.Service.Open
+      status: complete
+    wire-main:
+      text: main.go 只做装配：app.Run 前 PersistCookies；JS 选项拼接导航与会话脚本；RawMessageHandler 转交两个 Handler；注入 openSettings；重新生成 bindings
+      status: complete
+    session-retry:
+      text: 端到端发现：从本地页面发起的带 token 导航，dsh 重定向时 WebKitGTK 不携带 SameSite=Strict cookie 而得到 401；mainwindow.Controller 增加 RetrySession（带 token 导航后用干净地址重试一次），session.Handler 先重试再显示提示页，并补单元测试
+      status: complete
+    review-fixes:
+      text: 按审查结论修正：会话失效消息加入每次启动的 nonce；cookie 数据库移到应用专属 0700 目录并预建 0600 文件（appinfo.DataDir）；Reload 在非初始化本地页面上重新尝试 harness；设置保存在主窗口位于本地页面时仍导航；RetrySession 在锁内读取并清除，并推广为每次导航后允许一次重试（从提示页重新加载同样受 SameSite 影响）；补测试并在 WSLg 复测
+      status: complete
+    windows-followup:
+      text: 更新 roadmap 计划变更 windows-external-navigation 的 details，纳入 Windows 上的会话失效识别
+      status: complete
+  Testing:
+    lint:
+      text: 运行 gofmt、go vet（含 server 标签与 GOOS=windows 交叉检查）与前端类型检查；darwin 交叉检查需要 macOS SDK 与 cgo，本机不可用
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./... && go vet -tags server ./internal/... && GOOS=windows go vet ./internal/... && (cd frontend && npx tsc --noEmit)
+    unit-tests:
+      text: 单元测试：session.Handler（主窗口远程时打开提示页、本地时忽略、其他窗口忽略、消息不完全相等忽略）；会话脚本 node vm 测试（text/plain 固定文本发送、html 页面、其他文本、空 body 不发送）；OpenLocalURL 先导航后取消标记；settings.Service.Open 调用注入回调
+      status: complete
+      command: go test -race -cover ./internal/...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-wslg:
+      text: 用模拟 dsh 认证流程的本地服务器在 WSLg 真实窗口验证：带 token 导航后重启应用请求带有效 cookie 并显示 harness；更换会话密钥使 cookie 失效后显示本地提示页；提示页的本地调用成功；guard 仍拦截远程页面调用；日志不含 token
+      status: complete
+    verify-spec-alignment:
+      text: 逐条对照 delta spec 场景确认实现、单元测试与端到端结果一致
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify dsh-session-auth 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify dsh-session-auth
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

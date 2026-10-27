@@ -1,0 +1,36 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  desktop-experience:
+    title: 桌面使用体验
+order: 200
+goal: 让客户端像常驻桌面应用一样使用：记住窗口位置与大小，重复启动时聚焦已有窗口而不是开第二个实例。
+scope:
+  in:
+    - 窗口位置、尺寸、最大化状态的持久化与恢复，恢复时保证窗口落在当前可见显示器内
+    - 单实例：再次启动应用时激活并聚焦已运行的窗口，新进程退出
+  out:
+    - 托盘图标、全局快捷键、开机自启
+    - 多窗口或多 harness 地址同时打开
+done_criteria:
+  - 保存的窗口位置在当前任何显示器之外时（如拔掉外接屏），窗口居中显示在主显示器上
+  - 应用已运行时再次启动，不出现第二个窗口，已有窗口被带到前台
+  - 完整回归命令通过且覆盖率不低于 80%
+  - 调整窗口位置与大小后退出，再次启动窗口恢复到相同位置与大小，最大化状态同样被恢复；Wayland 会话下只要求恢复尺寸与最大化状态
+intake_questions:
+  - id: keep-scope
+    question: 发布首版前是否需要本里程碑？
+    context: 窗口状态记忆和单实例不是用户明确提出的需求，而是常驻桌面应用的常见预期。
+    impact: 若不需要，可整体推迟到发布之后，不影响 cross-platform-release。
+    recommendation: 已确认（2026-10-27）：保留，排在 cross-platform-release 之前。
+planned_changes: {}
+dependencies:
+  - harness-web-shell 里程碑完成（配置目录与主窗口已存在）
+risks:
+  - Wails 3 单实例与窗口状态 API 在 Linux 不同桌面环境（X11 / Wayland）下行为可能不同，Wayland 下可能无法设置窗口位置
+status: proposed
+notes:
+  - 本里程碑为体验增强，可在发布前按需裁剪
+details: 窗口状态与 harness URL 存于同一配置目录，但使用独立字段，写入采用原子替换避免损坏。单实例使用 Wails 3 的 SingleInstance 选项，唯一标识与应用 bundle identifier 保持一致。
