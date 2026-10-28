@@ -1,0 +1,62 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  electron-migration:
+    title: 迁移到 Electron 技术栈
+order: 400
+goal: 把 dsh-anywhere 从 Go + Wails v3 整体迁移到 Electron + TypeScript（electron-vite 构建、electron-builder 打包），specs/ 下全部主规格的可观察行为保持不变，并在三平台（含 Windows）上一致满足 navigation-scope 与 session-auth；完成后仓库不再包含 Go/Wails 代码与 cgo/GTK 构建依赖。
+scope:
+  in:
+    - Electron main/preload/本地页面全部用 TypeScript 实现，electron-vite 构建，electron-builder 打包
+    - 按现有主规格逐项复刻行为：harness-url-config、first-run-setup、main-window、navigation-scope、session-auth、load-failure、settings-window、single-instance、window-state、app-identity
+    - Electron 安全基线：contextIsolation、sandbox、禁用 nodeIntegration、远程页面不挂 preload、IPC 校验发送方来源、本地页面 CSP、electron fuses
+    - 回归命令、覆盖率门槛（80%）、CI 三平台矩阵、release workflow 与打包产物（Windows NSIS、macOS universal dmg、Linux AppImage 与 deb）迁移到 Node/Electron 工具链
+    - 技术标准、config.yaml 的 context 与 code 规则、AGENTS.md、README 中的技术栈说明同步改为 Electron；Wails 专属 lesson 标记为过时
+  out:
+    - 任何对外可观察行为的新增或改变（包括自动更新、托盘、新菜单项等新能力）
+    - Windows 代码签名、macOS 签名与公证
+    - Go sidecar 或保留任何 Go 运行时组件
+    - 旧 Wails 版本的 webview cookie 迁移（尚未发布任何版本）
+done_criteria:
+  - 用模拟 dsh 服务端端到端验证：带 token 地址换取 SameSite=Strict 会话 cookie 后进入 harness、cookie 跨应用重启保留、会话失效显示本地重新认证页，且带 token 的地址不残留在导航历史或配置中
+  - 在 Windows 真机上，非同源链接与 window.open 交给系统浏览器且主窗口不变、会话失效显示重新认证页，与 Linux/macOS 行为一致
+  - 推送 v* tag 后，版本发布页出现由 electron-builder 产出的 Windows 安装包、macOS dmg、Linux AppImage 与 deb 及 SHA256 校验文件，三平台安装后应用可启动、完成首次设置并加载 harness
+  - 仓库中不再有 go.mod、*.go、Taskfile.yml 与 wails 依赖，config.yaml 的回归命令只调用 Node 工具链并在 ubuntu、macos、windows 三个 CI 平台通过，覆盖率不低于 80%
+intake_questions:
+  - id: toolchain
+    question: Electron 的构建与打包工具用什么？
+    context: 可选 electron-builder 或 Electron Forge，构建可选 electron-vite。
+    impact: 决定脚手架、回归命令与打包、release workflow 的实现方式。
+    recommendation: 已确认（2026-10-28）：electron-vite 构建，electron-builder 打包。
+  - id: behavior-parity
+    question: 迁移是否允许改变对外行为或顺带加入新能力？
+    context: 切换技术栈是加入自动更新等能力的时机，但会扩大范围。
+    impact: 决定每个计划变更是否带 delta spec。
+    recommendation: 已确认（2026-10-28）：功能行为完全不变，只做技术栈迁移；Windows 因此补齐与主规格一致的行为。
+  - id: data-location
+    question: Electron 版本的配置与窗口状态存放在哪里？
+    context: Go 版写入系统用户配置目录下的 dsh-anywhere 目录；仓库尚无任何版本 tag，没有已发布用户。
+    impact: 决定是否需要数据迁移逻辑。
+    recommendation: 沿用 Go 版相同位置与格式，不做额外迁移；webview cookie 因引擎不同不迁移。
+  - id: windows-verification
+    question: Windows 真机验收由谁、在哪台机器上执行？
+    context: 里程碑完成标准要求在 Windows 真机上验证导航范围与会话失效；WSL/WSLg 只能验证 Linux 行为。
+    impact: 决定 Windows 验收完成标准能否达成以及验收步骤。
+    recommendation: 已确认（2026-10-28）：使用本机 WSL 的 Windows 宿主 GAMEPC，electron-main-window 完成后由用户在宿主桌面按 delta spec 场景逐条验收；从 WSL 调用宿主命令需用 /mnt/c/Windows/System32/cmd.exe 全路径。
+planned_changes: {}
+dependencies:
+  - cross-platform-release 里程碑已完成，本里程碑沿用其 GitHub Actions 与 Releases 设施
+  - Windows 真机验收使用本机 WSL 的 Windows 宿主 GAMEPC（即运行 dsh-web 的主机，已装 Node 与 Tailscale）：在 WSL 内交叉打出 Windows 产物或在宿主上用 Windows 版 Node 运行，由用户在宿主桌面上操作验收
+risks:
+  - 安装包体积由约十几 MB 增至约 100 MB，内存占用上升
+  - 从本地页面导航到 harness 时 SameSite=Strict cookie 是否随重定向发送、带 token 地址是否残留在导航历史，均需实测，不能沿用 Wails 时期结论
+  - 迁移期间 Go 与 Electron 两套实现并存，回归命令需同时覆盖两者直到最后一个变更移除 Go
+  - Electron 及 Chromium 安全更新频繁，需要定期升级 electron 依赖
+status: proposed
+notes:
+  - 原 cross-platform-release 中基于 Wails 的 windows-external-navigation 已取消（2026-10-28），Windows 与主规格一致的导航范围与会话失效行为由 electron-main-window 实现、由本里程碑 Windows 真机验收完成标准保证
+  - navigation-scope 与 session-auth 主规格现限定 Linux 与 macOS，electron-main-window 以 delta spec 扩展到三平台；其余主规格不变
+  - 迁移直接在 dev 分支上进行（2026-10-28 用户决定，不使用迁移分支）；迁移期间 dev 上 Go 与 Electron 两套实现并存，每个变更归档时回归命令都必须通过
+details: 迁移期间新 Electron 应用与现有 Wails 应用并存：electron-scaffold 起回归命令为“现有 Go 回归 && Electron 回归”，两部分各自执行 80% 覆盖率门槛；electron-release 删除 Go/Wails 后只保留 Electron 部分。配置文件与窗口状态文件保持与 Go 版相同的位置（系统用户配置目录下的 dsh-anywhere 目录）与格式。导航范围与会话失效改用 Electron 原生事件（will-navigate、setWindowOpenHandler、导航响应状态码），不再向远程页面注入脚本；远程页面不暴露任何本地 IPC，取代 Wails 时期的 guard。测试用 Vitest（单元，含覆盖率），端到端用 Playwright 的 Electron 支持配合模拟 dsh 服务端。

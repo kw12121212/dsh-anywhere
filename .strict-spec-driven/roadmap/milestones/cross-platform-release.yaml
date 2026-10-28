@@ -41,6 +41,6 @@ risks:
   - 未签名的安装包会触发 macOS Gatekeeper 与 Windows SmartScreen 警告，需要在发布说明中给出绕过步骤
   - Windows runner 上回归命令依赖 bash、grep、awk，需要在 CI 中显式使用 bash shell
   - macOS 通用二进制（arm64 + amd64）需要 cgo 交叉编译，可能需要分别构建后合并
-status: proposed
+status: complete
 notes: []
 details: 打包优先复用 wails3 生成的 Taskfile 与 build/<platform>/ 配置（wails3 package），CI 只负责调用这些任务，不复制一份打包逻辑。版本号经 ldflags 注入并通过“关于”菜单展示。

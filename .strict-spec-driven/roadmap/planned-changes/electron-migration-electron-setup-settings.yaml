@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: electron-setup-settings
+  milestone: electron-migration
+status: planned
+summary: 在 Electron 中复刻首次设置界面与设置窗口（含“设置…”菜单项），本地页面经 preload 最小 API 读写 harness URL
+details: 复刻主规格 first-run-setup、settings-window 以及 session-auth、load-failure 中依赖设置窗口的部分：从未保存或配置无效时主窗口显示初始化界面（含无效配置提示），实时校验地址，“开始使用”保存去掉 token 的干净地址后在主窗口打开原始地址一次以建立会话；应用菜单加入“设置…”（Ctrl+, / Cmd+,），打开独立设置窗口，已打开则聚焦；保存后关闭设置窗口并让主窗口打开原始地址一次，取消或关闭时配置与主窗口不变；保存失败时显示不含 token 的可读错误且主窗口不导航；接通错误页“修改地址”与重新认证页“打开设置”按钮。关闭主窗口即退出应用，设置窗口不能让进程继续存活。把现有 frontend/src 中 setup、settings、loadfailed、reauth、validation 页面移植到 src/renderer，用 preload 中 contextBridge 暴露的最小 API 替换 Wails bindings；main 进程 IPC 处理器校验发送方 frame 是本地页面来源，拒绝其他来源。配置写入原子化，配置与日志中不出现 token。单元测试覆盖 IPC 来源校验与配置读写，端到端测试覆盖首次设置、设置窗口保存与取消、从重新认证页恢复会话、关闭主窗口时进程退出。不改变任何主规格。
+depends_on:
+  - electron-main-window
