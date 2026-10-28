@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: electron-main-window
   milestone: electron-migration
-status: planned
+status: complete
 summary: 在 Electron 中复刻主窗口、加载失败页、导航范围与会话认证行为，并把导航范围与会话失效的主规格扩展到 Windows
 details: 复刻主规格 main-window、load-failure、harness-url-config 的行为，以及 navigation-scope、session-auth 中不依赖设置窗口的部分。配置：实现 harness URL 校验、token 剥离与配置读取（文件位置与格式与 Go 版一致，原子写入，区分从未保存与配置无效），本变更只负责读取与主窗口使用，写入界面在 electron-setup-settings。主窗口：标题为 DSH Anywhere；有有效配置时先显示本地“正在连接”页并探测地址（默认 10 秒超时，任何 HTTP 响应含 401、5xx、重定向都视为可达），可达则打开干净地址，DNS 失败、连接被拒、超时、TLS 错误时显示本地错误页（展示不含 token 的地址与原因，“重试”重新探测）；没有有效配置时显示本地占位页，初始化界面由 electron-setup-settings 实现。应用菜单在本变更建立：重新加载（Ctrl+R / Cmd+R，三平台都重新探测并打开已保存地址）与退出，macOS 使用标准应用菜单；“设置…”与“关于”分别由后续两个变更加入。导航范围用 will-navigate、will-frame-navigate 与 setWindowOpenHandler 实现：同源（协议、主机、端口）链接与 window.open 留在主窗口，非同源 http/https（含中键点击）交给 shell.openExternal 且主窗口不变，其他协议忽略；不向远程页面注入脚本。会话：使用 persist 分区让 cookie 跨重启保留，并确认数据目录仅当前用户可读；按主框架导航响应识别会话失效（401 且正文为 dsh 固定提示文本），每次导航后先用干净地址重试一次，仍失效再显示本地重新认证页；带 token 地址只用于一次 loadURL，会话建立后确认不残留在导航历史，必要时清除。远程页面不挂 preload、无法调用任何本地 IPC，调用尝试不改变配置也不导航主窗口。错误页“修改地址”与重新认证页“打开设置”按钮在本变更中渲染，打开设置窗口的动作由 electron-setup-settings 接通。主规格变更：navigation-scope 与 session-auth 现有要求限定“在 Linux 与 macOS 上”，本变更带 delta spec 去掉平台限定，使其覆盖 Windows/Linux/macOS 三平台（依据里程碑 intake 问题 behavior-parity 的决定）；其余主规格不变。测试：单元测试覆盖 URL 校验与 token 剥离、同源判定、失效识别与重试；端到端测试使用模拟 dsh 服务端（签发 HttpOnly、SameSite=Strict cookie 后 302 到干净地址，过期返回 401 与固定正文），覆盖 cookie 签发与重定向、重启后保留、失效提示、外部链接与 window.open、加载失败与重试、远程页面无法调用本地服务；Go 版 lesson 中 RetrySession 的必要性需在 Electron 中重新实测并记录结论。
 depends_on:

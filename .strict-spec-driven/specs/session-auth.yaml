@@ -16,12 +16,16 @@ requirements:
         - THEN: 主窗口直接显示 harness 页面，没有出现初始化界面或重新认证提示
   session-expired-page:
     strength: MUST
-    statement: 在 Linux 与 macOS 上，主窗口中的 dsh 页面返回会话失效（401，正文为 dsh 的固定提示文本）时，主窗口改为显示本地的需要重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供“打开设置”按钮；提示页不显示 token。
+    statement: 在 Windows、Linux 与 macOS 上，主窗口中的 dsh 页面返回会话失效（401，正文为 dsh 的固定提示文本）时，主窗口改为显示本地的需要重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供“打开设置”按钮；提示页不显示 token。
     scenarios:
       expired-session:
         - GIVEN: dsh 会话已失效
         - WHEN: 应用启动或重新加载 harness 页面
         - THEN: 主窗口显示需要重新认证的提示页，包含运行 dsh-url 的说明和“打开设置”按钮
+      windows-expired-session:
+        - GIVEN: 在 Windows 上，dsh 会话已失效
+        - WHEN: 应用启动
+        - THEN: 主窗口显示需要重新认证的提示页，页面中不含 token，而不是 dsh 返回的 401 原文
   reauth-recovery:
     strength: MUST
     statement: 在重新认证提示页点击“打开设置”会打开设置窗口；在设置中粘贴新的带 token 地址并保存后，主窗口恢复显示 harness 页面。

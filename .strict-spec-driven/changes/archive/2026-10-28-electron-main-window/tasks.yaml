@@ -59,10 +59,10 @@ sections:
       command: strict-spec-cli ready electron-main-window
     verify-windows-manual:
       text: '在 Windows 宿主 GAMEPC 上运行 Electron 版，由用户按 navigation-scope 与 session-auth delta spec 场景逐条验收（同源链接与 window.open、外部链接与中键、不同端口、file: 忽略、会话失效显示重新认证页）并记录结果'
-      status: pending
+      status: complete
     verify-verify:
       text: 运行 strict-spec-cli verify 确认任务、delta spec 与 delta tech 与实现一致
-      status: pending
+      status: complete
       command: strict-spec-cli verify electron-main-window
 testing_gates:
   validation_task: test-typecheck
