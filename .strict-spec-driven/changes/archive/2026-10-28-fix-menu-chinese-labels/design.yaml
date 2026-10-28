@@ -1,0 +1,20 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-menu-chinese-labels
+approach:
+  - '在菜单模板构建函数 buildMenuTemplate 中用按平台生成的显式子菜单替换 { role: ''editMenu'' }，结构与 Electron 默认 editMenu 逐项一致（Windows/Linux：撤销、重做、剪切、复制、粘贴、删除、全选；macOS 另含粘贴并匹配样式与语音子菜单），每项保留对应 role 以继承系统行为与快捷键，只覆盖 label；macOS 的窗口菜单保留 windowMenu 角色并提供与默认一致的中文子项（最小化、缩放、前置全部窗口）。'
+decisions:
+  keep-roles-override-labels:
+    decision: 子项保留 Electron role，只设置中文 label
+    rationale: role 提供平台原生的编辑行为与快捷键（含 macOS webview 中 Cmd+C/V 依赖编辑菜单才能生效），只改标签是满足中文一致性的最小改动，不改变任何功能
+  fix-in-menu-template:
+    decision: 修复放在 src/main/app-menu.ts 的纯函数模板中
+    rationale: 菜单标签完全由模板决定，模板已有单元测试，可在不启动 Electron 的情况下复现与验证
+  mirror-electron-defaults:
+    decision: 显式子菜单逐项复刻 Electron 默认 editMenu 与 macOS windowMenu 的结构，只改标签
+    rationale: 替换组合角色时若只列常用项，会丢掉删除、粘贴并匹配样式、语音等默认项，其中 macOS 的粘贴并匹配样式快捷键依赖菜单才能生效；逐项复刻保证菜单结构与功能不变，满足 scope.out 中不改变菜单结构的约束
+alternatives: []
+risks:
+  - Electron 在 macOS 上会为编辑菜单自动追加“开始听写”“表情与符号”等系统项，这由系统按菜单识别，改用显式子菜单后可能不再追加；它们不属于任何规格要求，需在 macOS 上观察

@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-menu-chinese-labels
+sections:
+  Implementation:
+    repro-failing-test:
+      text: 先在 src/main/app-menu.test.ts 增加断言：三平台菜单栏为中文（Windows/Linux：文件、编辑、视图；macOS：应用菜单、编辑、视图、窗口），编辑菜单子项为撤销、重做、剪切、复制、粘贴、全选且保留对应 role；运行确认该测试在修复前失败
+      status: complete
+      command: npx vitest run src/main/app-menu.test.ts
+    fix-menu-labels:
+      text: 修改 src/main/app-menu.ts：编辑菜单改为按平台生成、结构与 Electron 默认 editMenu 一致、保留 role 的中文显式子菜单；macOS 窗口菜单保留 windowMenu 角色并提供中文子项
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与覆盖率门槛（修复后 app-menu 回归测试通过）
+      status: complete
+      command: npm run test:coverage
+    test-e2e:
+      text: 构建并运行 Playwright 端到端测试（含真实 Electron 菜单中文标签断言）
+      status: complete
+      command: npm run build && npm run test:e2e
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    verify-ready:
+      text: 运行 strict-spec-cli ready 确认无确定性阻塞
+      status: complete
+      command: strict-spec-cli ready fix-menu-chinese-labels
+    verify-verify:
+      text: 运行 strict-spec-cli verify 确认任务与 delta spec 一致
+      status: complete
+      command: strict-spec-cli verify fix-menu-chinese-labels
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-unit

@@ -91,3 +91,10 @@ rules:
     enforcement:
       method: test
       detail: 控制器单元测试在 dispose 之后完成探测并触发远程事件，断言没有任何副作用调用。
+  menu-labels-explicit:
+    strength: SHOULD
+    statement: 应用菜单中面向用户的菜单与菜单项必须显式设置中文 label，不得依赖 Electron 角色的英文默认标签；需要系统行为时保留 role 只覆盖 label；用显式子菜单替代 editMenu、windowMenu 等组合角色时，必须逐项复刻 Electron 默认子项或在 design 中说明取舍。macOS 应用菜单（appMenu）的系统项除外。
+    rationale: Electron 组合角色的默认标签为英文，直接使用会让菜单中英混杂（electron-main-window 的 Windows 验收截图即为此例）；只列常用项替换组合角色又会悄悄丢掉删除、粘贴并匹配样式等默认项与其快捷键。
+    enforcement:
+      method: test
+      detail: 菜单模板单元测试按平台断言每一项的 label 与 role 及结构；端到端测试读取真实应用菜单并通过菜单项执行编辑动作。

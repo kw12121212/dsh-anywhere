@@ -171,6 +171,64 @@ test.describe('主窗口', () => {
     expect(await running().evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle())).toBe('DSH Anywhere')
   })
 
+  test('应用菜单使用中文标签，编辑菜单保留系统编辑角色', async () => {
+    await launch()
+    const menu = await running().evaluate(({ Menu }) =>
+      (Menu.getApplicationMenu()?.items ?? []).map((item) => ({
+        label: item.label,
+        items: (item.submenu?.items ?? []).filter((sub) => sub.type !== 'separator').map((sub) => `${sub.role ?? ''}:${sub.label}`)
+      }))
+    )
+    expect(menu.map((m) => m.label)).toEqual(['文件', '编辑', '视图'])
+    expect(menu[1]?.items).toEqual([
+      'undo:撤销',
+      'redo:重做',
+      'cut:剪切',
+      'copy:复制',
+      'paste:粘贴',
+      'delete:删除',
+      'selectall:全选'
+    ])
+  })
+
+  test('编辑菜单的“复制”“粘贴”执行系统编辑动作', async () => {
+    const local = await launch()
+    await local.evaluate(() => {
+      for (const id of ['copy-source', 'paste-target']) {
+        const input = document.createElement('input')
+        input.id = id
+        document.body.appendChild(input)
+      }
+      const source = document.getElementById('copy-source') as HTMLInputElement
+      source.value = '菜单复制测试'
+      source.focus()
+      source.select()
+    })
+    const clickEditItem = (label: string) =>
+      running().evaluate(({ BrowserWindow, Menu }, target) => {
+        const window = BrowserWindow.getAllWindows()[0]
+        const edit = Menu.getApplicationMenu()?.items.find((item) => item.label === '编辑')
+        const item = edit?.submenu?.items.find((sub) => sub.label === target)
+        item?.click(undefined, window, window?.webContents)
+      }, label)
+
+    // 系统剪贴板在 WSLg 下与宿主共享：测试结束后恢复原内容。
+    const original = await running().evaluate(({ clipboard }) => clipboard.readText())
+    try {
+      await running().evaluate(({ clipboard }) => clipboard.writeText(''))
+      await clickEditItem('复制')
+      await expect.poll(() => running().evaluate(({ clipboard }) => clipboard.readText())).toBe('菜单复制测试')
+
+      await local.evaluate(() => (document.getElementById('paste-target') as HTMLInputElement).focus())
+      await clickEditItem('粘贴')
+      await expect
+        .poll(() => local.evaluate(() => (document.getElementById('paste-target') as HTMLInputElement).value))
+        .toBe('菜单复制测试')
+    } finally {
+      await running().evaluate(({ clipboard }, text) => clipboard.writeText(text), original)
+    }
+  })
+
   test('配置无效时提示已有配置无效', async () => {
     writeFileSync(configPath(), '{not json')
     const local = await launch()

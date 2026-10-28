@@ -50,3 +50,19 @@ requirements:
         - GIVEN: 主窗口显示 harness 页面，之后该地址变得不可达
         - WHEN: 用户选择“重新加载”
         - THEN: 主窗口显示本地错误页
+  menu-labels-chinese:
+    strength: MUST
+    statement: 应用菜单中由应用提供的菜单与菜单项使用中文标签（macOS 应用菜单中的系统项除外）：Windows/Linux 菜单栏为“文件”“编辑”“视图”，macOS 在应用菜单之后为“编辑”“视图”“窗口”；“编辑”菜单包含撤销、重做、剪切、复制、粘贴、删除、全选（macOS 另有粘贴并匹配样式与语音），macOS “窗口”菜单包含最小化、缩放、前置全部窗口；各项保留系统原有的编辑与窗口行为及快捷键。
+    scenarios:
+      windows-linux-menubar:
+        - GIVEN: 在 Windows 或 Linux 上启动应用
+        - WHEN: 查看主窗口的菜单栏并展开“编辑”菜单
+        - THEN: 菜单栏依次显示“文件”“编辑”“视图”，“编辑”菜单列出撤销、重做、剪切、复制、粘贴、删除、全选，没有英文菜单名
+      edit-shortcuts-unchanged:
+        - GIVEN: 主窗口中的输入框有选中的文字
+        - WHEN: 用户通过“编辑”菜单的“复制”复制它，再在另一个输入框中选择“粘贴”（或按 Ctrl/Cmd+C、Ctrl/Cmd+V）
+        - THEN: 文字被复制并粘贴，与修改菜单文字之前的行为一致
+      macos-menubar:
+        - GIVEN: 在 macOS 上启动应用
+        - WHEN: 查看菜单栏并展开“编辑”与“窗口”菜单
+        - THEN: 应用菜单之后依次显示“编辑”“视图”“窗口”，“编辑”菜单项与“窗口”菜单项均为中文

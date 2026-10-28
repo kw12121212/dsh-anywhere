@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-menu-chinese-labels
+  status: proposed
+summary:
+  what:
+    - 修复 Electron 应用菜单中编辑菜单显示英文 Edit（子项 Undo、Redo、Cut、Copy、Paste、Select All 也为英文）、macOS 窗口菜单显示英文 Window 的问题，使其与“文件”“视图”等中文菜单一致：编辑菜单显示“编辑”，子项为撤销、重做、剪切、复制、粘贴、全选，macOS 窗口菜单显示“窗口”。
+  why:
+    - Windows 真机验收截图（GAMEPC，shot-3-harness.png）中菜单栏为“文件 Edit 视图”，中英混杂；原因是 src/main/app-menu.ts 直接使用 Electron 的 editMenu、windowMenu 角色，其默认标签为英文。用户要求菜单文字统一为中文。
+scope:
+  in:
+    - src/main/app-menu.ts：编辑菜单改为带中文标签的显式子菜单（撤销、重做、剪切、复制、粘贴、全选，各自保留原有 role 与快捷键），macOS 窗口菜单标签改为“窗口”
+    - src/main/app-menu.test.ts：断言三平台菜单栏与编辑菜单子项的中文标签与 role
+    - delta spec：main-window 新增应用菜单使用中文标签的要求
+    - macOS 窗口菜单子项改为中文（最小化、缩放、前置全部窗口），保留 windowMenu 角色；编辑菜单结构与 Electron 默认 editMenu 一致（含删除、分隔线，macOS 另含粘贴并匹配样式与语音子菜单）
+  out:
+    - macOS 应用菜单（appMenu）中的“关于”“隐藏”“退出”等系统项文字：“关于”由 electron-desktop-experience 加入，其余沿用系统角色
+    - 菜单结构、快捷键与“重新加载”行为的任何改变
+unchanged_behavior:
+  - 编辑菜单各项的功能与快捷键（Ctrl/Cmd+Z、Shift+Ctrl/Cmd+Z 或 Ctrl+Y、Ctrl/Cmd+X/C/V/A）不变
+  - “重新加载”（CmdOrCtrl+R）与“退出”的行为和位置不变；main-window 主规格现有要求不变
