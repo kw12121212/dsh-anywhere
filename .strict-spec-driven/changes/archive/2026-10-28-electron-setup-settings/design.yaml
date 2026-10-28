@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: electron-setup-settings
+approach:
+  - 在现有 Electron 骨架上扩展：主窗口本地页面在 unconfigured 状态渲染初始化表单（复用现有 LocalState 下发机制，输入实时校验用共享纯校验模块同步完成），提交经 IPC 由主进程 saveConfig 保存干净地址并让 Navigator 用原始地址打开一次；设置窗口为 main 进程管理的第二个 BrowserWindow，加载同一渲染入口加 ?view=settings（镜像 Go 版 /?view=settings），挂同一 preload，经新增 IPC 通道读取当前地址、保存与取消，保存后的导航判定复刻 Go 版 internal/settings.Save 的四条件；菜单与生命周期在 app-menu.ts 与 index.ts 中调整。所有新 IPC 通道沿用 ipc.ts 的发送方来源校验（allowedLocalOrigins + 主 frame），参数严格校验，错误与日志不含 token。
+decisions:
+  settings-menu-placement:
+    decision: 设置…菜单项在 Windows/Linux 放入既有文件菜单（退出之前），macOS 放入自建应用菜单（关于之后），快捷键统一 CmdOrCtrl+，。
+    rationale: settings-window 主规格只要求应用菜单提供设置…及对应快捷键；main-window 主规格 menu-labels 枚举 macOS 菜单栏为应用菜单之后编辑、视图、窗口，没有文件菜单，而本计划变更禁止修改主规格，因此在 macOS 新增文件菜单会违反现有规格；应用菜单也是 macOS 放置 Preferences 的平台惯例。Windows/Linux 的文件菜单已存在，新增菜单项不改变规格枚举的菜单栏结构。
+  shared-url-validation:
+    decision: 把 normalizeHarnessURL、URL_ERRORS、URLValidationError 从 config.ts 提取为不依赖 node 内置模块的纯模块，渲染进程实时校验直接同步调用，主进程保存时仍经 IPC 重新校验。
+    rationale: 渲染进程与主进程需要完全一致的校验规则（实时校验与保存校验不能出现偏差）；Wails 版通过 ValidateURL 绑定往返校验，Electron 下共享纯模块消除额外 IPC 通道与异步竞态，且保存路径仍以主进程校验为准，不受渲染进程伪造结果影响。
+  settings-window-entry:
+    decision: 设置窗口加载与主窗口相同的渲染入口并追加 ?view=settings 查询参数（app://local/index.html?view=settings，开发模式为开发服务器地址加同一参数），复用 app:// 协议、CSP 与 preload；窗口 560x320、标题设置，由 main 进程持有单例引用，已打开则 show+focus。
+    rationale: 镜像 Go 版设置窗口（/?view=settings、560x320、GetByName 单例聚焦），无需为 electron-vite 增加多页入口配置；同一 preload 与来源校验管道自然覆盖新窗口，本地页面来源仍只有 app://local 与开发服务器。
+  main-window-close-quits:
+    decision: 主窗口 closed 事件触发 app.quit()（全平台），移除 darwin 下无窗口存活的 activate 重建路径；设置窗口随进程退出一并关闭。
+    rationale: Go 版 main.go 在主窗口 WindowClosing 时调用 app.Quit() 且 macOS 开启 ApplicationShouldTerminateAfterLastWindowClosed，可观察行为是关闭主窗口即退出；同时保证仅剩设置窗口打开时进程不继续存活（window-all-cached 仅在全部窗口关闭时触发，无法覆盖此场景）。
+  no-delta-spec:
+    decision: 本变更为技术栈迁移复刻，不修改任何主规格：first-run-setup、settings-window、session-auth、load-failure 等主规格描述的可观察行为在 Electron 版中逐条复刻，.strict-spec-driven/changes/electron-setup-settings/specs/ 留空。
+    rationale: electron-migration 里程碑 intake 已确认（2026-10-28）功能行为完全不变、只做技术栈迁移；计划变更 electron-setup-settings 明确记录不改变任何主规格；菜单等差异由现有 menu-labels 与 settings-window 主规格共同约束，无需 delta spec。
+alternatives:
+  - option: 为设置窗口单独建 settings.html 多页入口
+    reason: 需要改 electron.vite.config 与协议映射，收益仅是文件分离，与 Go 版 ?view=settings 结构不一致。
+risks:
+  - 设置窗口保存后的主窗口导航语义较细（未改动且不带 token 且正显示 harness 时不重载），需以单元测试逐条锁定四条件组合，端到端覆盖 save-unchanged 与 save-same-url-new-token 两个易错场景。

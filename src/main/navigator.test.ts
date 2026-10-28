@@ -137,6 +137,50 @@ describe('Navigator 远程页面事件', () => {
   })
 })
 
+describe('Navigator.openRemote', () => {
+  it('用原始地址打开远程视图并把干净地址记为 harness 地址', () => {
+    const h = harness(saved)
+    h.navigator.openRemote(' http://127.0.0.1:13080/?token=abc123 ')
+    expect(h.shown).toEqual([{ remote: 'http://127.0.0.1:13080/?token=abc123' }])
+    expect(h.navigator.harnessURL).toBe('http://127.0.0.1:13080/')
+    expect(h.navigator.showsHarness).toBe(true)
+  })
+
+  it('从本地页面（未配置或重新认证页）调用时同样打开远程视图', () => {
+    const h = harness({ status: 'missing' })
+    h.navigator.open()
+    h.navigator.openRemote('https://dsh.example.test/')
+    expect(h.shown.at(-1)).toEqual({ remote: 'https://dsh.example.test/' })
+    expect(h.navigator.showsHarness).toBe(true)
+  })
+
+  it('地址无效时抛出校验错误，不改变状态、不导航', () => {
+    const h = harness(saved)
+    const opening = h.navigator.open()
+    h.probes[0]?.resolve({ ok: true })
+    return opening.then(() => {
+      expect(() => h.navigator.openRemote('ftp://dsh.example.test/')).toThrow()
+      expect(h.shown.at(-1)).toEqual({ remote: 'https://dsh.example.test/' })
+      expect(h.navigator.harnessURL).toBe('https://dsh.example.test/')
+      expect(h.navigator.showsHarness).toBe(true)
+    })
+  })
+
+  it('显示本地页面时 showsHarness 为 false', async () => {
+    const h = harness({ status: 'missing' })
+    await h.navigator.open()
+    expect(h.navigator.showsHarness).toBe(false)
+  })
+
+  it('窗口关闭后调用不再产生副作用', async () => {
+    const h = await opened()
+    h.navigator.dispose()
+    h.navigator.openRemote('https://other.example.test/')
+    expect(h.shown.at(-1)).toEqual({ remote: 'https://dsh.example.test/' })
+    expect(h.navigator.showsHarness).toBe(false)
+  })
+})
+
 describe('Navigator.dispose', () => {
   it('窗口关闭后迟到的探测结果、远程事件与新的导航都不再产生副作用', async () => {
     const h = harness(saved)

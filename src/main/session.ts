@@ -1,4 +1,4 @@
-import { hasToken } from './config'
+import { hasToken } from './url-validation'
 
 // SESSION_PARTITION 是远程视图使用的持久化分区，会话 cookie 跨应用重启保留。
 export const SESSION_PARTITION = 'persist:dsh'

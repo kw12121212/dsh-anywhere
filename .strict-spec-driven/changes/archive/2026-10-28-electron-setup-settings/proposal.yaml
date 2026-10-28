@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: electron-setup-settings
+  status: proposed
+summary:
+  what:
+    - 在 Electron 版中复刻首次设置界面与设置窗口：主窗口未配置或配置无效时显示初始化界面（地址输入实时校验、已有配置无效提示，点击开始使用保存去掉 token 的干净地址后用原始地址在主窗口打开一次以建立会话）；应用菜单新增设置…（Ctrl+, / Cmd+,）打开独立设置窗口（已打开则聚焦，保存后关闭窗口并按 Go 版 internal/settings 语义决定主窗口是否用原始地址打开一次，取消或直接关闭不改变配置与主窗口，保存失败显示不含 token 的错误且主窗口不导航）；接通错误页修改地址与重新认证页打开设置按钮；主窗口关闭即全平台退出应用，设置窗口不能让进程继续存活。本地页面经 preload contextBridge 暴露的最小 API 读写 harness URL，main 进程 IPC 处理器校验发送方 frame 是本地页面来源，配置写入原子化且配置与日志中不出现 token。
+  why:
+    - electron-migration 里程碑要求按现有主规格逐项复刻行为（first-run-setup、settings-window 以及 session-auth、load-failure 中依赖设置窗口的部分）；electron-desktop-experience 归档后主窗口本地页面四个状态已就绪，但设置相关 UI 与 IPC 尚未接通（renderer main.ts 注明由后续设置窗口接通）；electron-release 计划变更依赖本变更完成后才能移除 Go/Wails。
+scope:
+  in:
+    - src/main：设置窗口管理（560x320、标题设置、单实例聚焦）、设置保存的导航判定（复刻 Go 版 prevErr || clean != previous || trimmed != clean || !mainShowsHarness 条件）、Navigator 暴露用原始地址打开与主窗口是否正显示 harness、app-menu 增设设置…菜单项（Windows/Linux 放入文件菜单，macOS 放入应用菜单）、ipc.ts 新增 setup 完成与设置窗口通道并沿用本地来源校验、index.ts 调整主窗口关闭即退出；src/preload 暴露设置窗口所需最小 API；src/renderer：初始化界面输入与实时校验、设置页面（?view=settings）、修改地址/打开设置按钮接线；从 config.ts 提取纯 URL 校验模块供渲染进程与主进程共用；单元测试覆盖 IPC 来源校验、导航判定与共享校验模块；Playwright 端到端测试覆盖首次设置、设置窗口保存与取消、从重新认证页恢复会话、关闭主窗口时进程退出。
+  out:
+    - 不修改 .strict-spec-driven/specs/ 下任何主规格（对外行为按现有主规格复刻，specs/ 留空）；不删除 Go/Wails 实现（由 electron-release 计划变更负责）；不新增自动更新、托盘、新菜单命令等任何对外新能力；不改变远程 harness 视图不挂 preload、contextIsolation、sandbox 等既有安全基线；不做 Windows/macOS 代码签名与公证；不迁移 webview cookie。
+unchanged_behavior:
+  - 导航范围（will-navigate 拦截、window.open 交系统浏览器）、会话失效检测与重新认证页显示条件、单实例激活、窗口状态持久化、应用身份与关于菜单、harness-url-config 的配置文件格式与存储位置、主窗口 connecting/error 本地页面渲染、菜单既有项与中文标签均保持不变。
+roadmap:
+  milestone: electron-migration
+  planned_change: electron-setup-settings

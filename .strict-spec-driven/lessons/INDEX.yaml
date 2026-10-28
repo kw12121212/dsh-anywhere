@@ -56,6 +56,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/electron-e2e-loadurl-48cae8.yaml
+    playwright-electron-45-fast-fail-403086:
+      title: Playwright 下同一实例反复创建/销毁第二个窗口会让 Electron 45 主进程 fast-fail
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/playwright-electron-45-fast-fail-403086.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

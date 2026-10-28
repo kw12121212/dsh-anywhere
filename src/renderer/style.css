@@ -70,6 +70,36 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* 地址表单（初始化界面与设置窗口），样式与 Wails 版一致。 */
+#setup-form,
+#settings-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+#harness-url,
+#settings-url {
+  align-self: stretch;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #3a3d4a;
+  border-radius: 6px;
+  background: #10121c;
+  color: inherit;
+  font: inherit;
+}
+
+#harness-url:disabled,
+#settings-url:disabled {
+  opacity: 0.6;
+}
+
+#harness-url:focus-visible,
+#settings-url:focus-visible {
+  outline: 1px solid #3b6cf6;
+}
+
 code {
   word-break: break-all;
 }

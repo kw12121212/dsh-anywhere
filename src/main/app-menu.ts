@@ -4,9 +4,13 @@ import { ABOUT_TITLE, DISPLAY_NAME } from './app-info'
 export const RELOAD_LABEL = '重新加载'
 // macOS 上为 Cmd+R，其他平台为 Ctrl+R。
 export const RELOAD_ACCELERATOR = 'CmdOrCtrl+R'
+export const SETTINGS_LABEL = '设置…'
+// macOS 上为 Cmd+,，其他平台为 Ctrl+,（settings-window 主规格 open-settings）。
+export const SETTINGS_ACCELERATOR = 'CmdOrCtrl+,'
 
 export interface MenuActions {
   reload(): void
+  openSettings(): void
   showAbout(): void
 }
 
@@ -66,6 +70,9 @@ function macAppMenu(actions: MenuActions): MenuItemConstructorOptions {
     label: DISPLAY_NAME,
     submenu: [
       { label: ABOUT_TITLE, click: () => actions.showAbout() },
+      // 设置放在应用菜单（macOS Preferences 惯例）：menu-labels 主规格枚举 macOS 菜单栏
+      // 无“文件”菜单，本变更不得新增（设计决策 settings-menu-placement）。
+      { label: SETTINGS_LABEL, accelerator: SETTINGS_ACCELERATOR, click: () => actions.openSettings() },
       { type: 'separator' },
       { role: 'services', label: '服务' },
       { type: 'separator' },
@@ -89,7 +96,13 @@ export function buildMenuTemplate(platform: NodeJS.Platform, actions: MenuAction
     return [macAppMenu(actions), editMenu(platform), view, MAC_WINDOW_MENU]
   }
   return [
-    { label: '文件', submenu: [{ role: 'quit', label: '退出' }] },
+    {
+      label: '文件',
+      submenu: [
+        { label: SETTINGS_LABEL, accelerator: SETTINGS_ACCELERATOR, click: () => actions.openSettings() },
+        { role: 'quit', label: '退出' }
+      ]
+    },
     editMenu(platform),
     view,
     { label: '帮助', submenu: [{ label: ABOUT_TITLE, click: () => actions.showAbout() }] }

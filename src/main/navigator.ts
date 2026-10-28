@@ -1,6 +1,7 @@
 import type { ConfigLoad } from './config'
 import type { FailureReason, ProbeResult } from './probe'
 import type { LocalState } from './view-state'
+import { normalizeHarnessURL } from './url-validation'
 
 export interface NavigatorDeps {
   loadConfig(): ConfigLoad
@@ -35,6 +36,11 @@ export class Navigator {
     return this.generation
   }
 
+  // 主窗口当前是否正显示远程 harness 页面；设置保存后判断是否需要重新打开时使用。
+  get showsHarness(): boolean {
+    return this.remote && !this.disposed
+  }
+
   // dispose 在窗口关闭后作废控制器：之后到达的异步结果与调用都不再触达已销毁的窗口。
   dispose(): void {
     this.disposed = true
@@ -66,6 +72,23 @@ export class Navigator {
     } else {
       this.showLocal({ view: 'error', url: config.url, reason: result.reason })
     }
+  }
+
+  // openRemote 用用户输入的原始地址（可能带 token）打开远程视图一次，供初始化完成与
+  // 设置保存后建立 dsh 会话：先经共享校验模块计算干净地址并更新 harness 状态（错误页
+  // 与重新加载随后使用它），再显示远程视图。校验失败抛出 URLValidationError，不改变
+  // 任何状态、不导航，由调用方把可读错误返回给本地页面。
+  openRemote(raw: string): void {
+    if (this.disposed) {
+      return
+    }
+    const trimmed = raw.trim()
+    const clean = normalizeHarnessURL(trimmed)
+    this.harness = clean
+    this.remote = true
+    this.local = { view: 'connecting' }
+    this.generation++
+    this.deps.showRemote(trimmed)
   }
 
   // sessionExpired 在远程页面返回 dsh 会话失效时显示重新认证页；observedGeneration 是开始读取失效页时的代次，

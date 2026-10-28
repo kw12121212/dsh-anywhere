@@ -1,0 +1,69 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: electron-setup-settings
+sections:
+  Implementation:
+    impl-shared-validation:
+      text: 从 src/main/config.ts 提取 URL 校验纯函数（normalizeHarnessURL、URL_ERRORS、URLValidationError、hasToken、redactURL）到不依赖 node 内置模块的共享模块，config.ts 改为引用共享模块并保留文件读写与原子写入；把 config.test.ts 中校验相关断言迁移为共享模块测试，主进程与渲染进程共用同一校验实现
+      status: complete
+    impl-settings-policy:
+      text: 新增 src/main/settings-policy.ts 纯函数：设置保存后是否用原始地址打开主窗口的判定，输入保存前配置加载结果、保存后的干净地址、原始输入与主窗口是否正显示 harness，复刻 Go 版 internal/settings.Save 的四条件（前次配置无效、地址已变更、输入带 token、主窗口不在 harness）；settings-policy.test.ts 覆盖条件组合真值表
+      status: complete
+    impl-ipc-channels:
+      text: 扩展 src/main/view-state.ts 与 src/main/ipc.ts：新增 setup:complete（单个 string 参数：校验保存并按初始化语义导航）、settings:get-url、settings:save（单个 string 参数：按 settings-policy 判定后保存导航并关窗）、settings:cancel、main-window:open-settings 通道；全部沿用 isTrustedSender 本地来源校验，参数严格白名单校验（仅接受单个字符串并设长度上限），校验失败与保存失败返回固定可读错误、日志与错误不回显输入；ipc.test.ts 覆盖非本地来源、子 frame、参数缺失或非字符串或超长被拒
+      status: complete
+    impl-settings-window:
+      text: 新增 src/main/settings-window.ts：设置窗口管理器——560x320、标题设置、挂与主窗口相同的 preload 与安全 webPreferences、will-navigate 拦截与 setWindowOpenHandler 拒绝、加载 rendererEntryURL 加 ?view=settings；open 时已存在则 show+focus 不新建，保存或取消时关闭并清理引用；settings-window.test.ts 覆盖重复 open 聚焦已有窗口
+      status: complete
+    impl-lifetime:
+      text: 改造 src/main/index.ts：主窗口 closed 事件触发 app.quit()（全平台，复刻 Go 版主窗口关闭即退出语义），移除 darwin 下无窗口存活的 activate 重建路径与 window-all-closed 的平台分支，确保仅剩设置窗口时进程不继续存活
+      status: complete
+    impl-app-menu:
+      text: 扩展 src/main/app-menu.ts：MenuActions 增加 openSettings，新增设置…菜单项（快捷键 CmdOrCtrl+,）——Windows/Linux 放在文件菜单退出之前，macOS 放在自建应用菜单关于之后（menu-labels 主规格枚举 macOS 菜单栏无文件菜单，本变更不改主规格故不新增该菜单）；app-menu.test.ts 按平台断言菜单位置、标签与快捷键及回调接线
+      status: complete
+    impl-navigator-open-remote:
+      text: 扩展 src/main/navigator.ts：新增 openRemote(raw) 方法——trim 后经共享校验模块校验并保存干净地址到 harness 状态，用原始地址（可能带 token）显示远程视图并递增代次，校验失败抛出可读错误不导航；暴露 showsHarness() 供设置保存判定使用；navigator.test.ts 覆盖从本地页面与从 harness 页面调用 openRemote 的行为
+      status: complete
+    impl-renderer-setup:
+      text: 扩展 src/renderer：unconfigured 状态渲染初始化表单——欢迎说明、地址输入框（placeholder 为粘贴 dsh-url 或 dsh web 输出的地址）、用共享校验模块同步实时校验（空输入禁用按钮不显示错误、非法地址禁用按钮并显示原因、合法启用）、开始使用提交经 IPC completeSetup（成功后隐藏表单显示正在打开 harness 提示、失败显示不含 token 的可读错误并恢复输入与按钮）；已有配置无效提示沿用现有 invalid-config 元素
+      status: complete
+    impl-renderer-settings:
+      text: 扩展 src/renderer：按 ?view=settings 渲染设置页面——进入时经 IPC 读取当前已保存的干净地址填入输入框并实时校验，保存按钮提交经 IPC saveSettings（失败显示不含 token 的错误、窗口保持打开，成功由主进程关闭窗口），取消按钮与直接关闭窗口经 IPC cancelSettings 不改配置；主窗口本地页面接通错误页修改地址与重新认证页打开设置按钮（经 IPC openSettings 打开设置窗口）
+      status: complete
+    impl-preload-api:
+      text: 扩展 src/preload/index.ts 与渲染进程类型声明：在现有 dsh API 上增加 completeSetup(raw)、getSettingsURL()、saveSettings(raw)、cancelSettings()、openSettings() 最小方法，通道常量集中维护在 view-state.ts，参数与返回类型同步声明；远程 harness 视图仍不挂 preload、无法访问任何通道
+      status: complete
+    impl-e2e:
+      text: 新增 e2e/setup-settings.spec.ts（复用 fake-dsh.ts 与独立临时 --user-data-dir 模式）：覆盖首次设置（未配置启动显示初始化界面、输入非法地址按钮禁用并显示原因、粘贴带 token 地址点开始使用后配置只存干净地址且主窗口打开原始地址进入 harness）、设置窗口（菜单打开显示当前地址、重复打开聚焦不新建、粘贴新地址保存后关窗且主窗口打开原始地址、未改动不带 token 且正显示 harness 时保存不重载主窗口、同地址新 token 保存仍打开、取消与直接关窗不改配置与主窗口、把 config.json 占位为同名目录使保存失败时显示不含 token 的错误且窗口保持打开主窗口不导航）、从重新认证页点打开设置粘贴新地址保存后恢复 harness、错误页修改地址打开设置窗口、关闭主窗口后进程退出且设置窗口打开时同样退出
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查（主进程、preload、渲染进程、e2e）
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与覆盖率门槛（覆盖共享校验模块、设置保存导航判定、IPC 新通道来源与参数校验、菜单模板、设置窗口管理器、Navigator openRemote）
+      status: complete
+      command: npm run test:coverage
+    test-e2e:
+      text: 构建并运行 Playwright 端到端测试（含新增 setup-settings 套件与既有套件回归）
+      status: complete
+      command: npm run build && npm run test:e2e
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Go 部分与 Electron 部分均通过、各自覆盖率不低于 80%）
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = ; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    verify-ready:
+      text: 运行 strict-spec-cli ready 确认变更无确定性阻塞
+      status: complete
+      command: strict-spec-cli ready electron-setup-settings
+    verify-verify:
+      text: 运行 strict-spec-cli verify 确认任务列表与实现一致（本变更无 delta spec 与 delta tech，specs/ 与 tech/ 留空为预期）
+      status: complete
+      command: strict-spec-cli verify electron-setup-settings
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-unit

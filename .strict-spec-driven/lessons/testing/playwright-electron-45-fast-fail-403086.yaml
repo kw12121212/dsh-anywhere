@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: playwright-electron-45-fast-fail-403086
+  title: Playwright 下同一实例反复创建/销毁第二个窗口会让 Electron 45 主进程 fast-fail
+category: testing
+status: active
+created_at: '2026-10-28T13:14:28.856Z'
+updated_at: '2026-10-28T13:14:28.856Z'
+context: electron-setup-settings 变更开发 e2e（e2e/setup-settings.spec.ts）时：同一应用实例内第二次及以后打开并关闭设置窗口（第二个 BrowserWindow），主进程以退出码 0xC0000409（STATUS_STACK_BUFFER_OVERRUN）死亡，无 closed/quit 事件、无 JS 异常，Playwright 连接随即报 Target closed，测试级联超时。
+observation: '逐项剥离 preload、app:// 协议、菜单点击创建、WebContentsView、单实例、页面内容（data: URL 裸页面）后崩溃依旧，且时序相关（2~6 轮内随机触发）；而完全等价的无 Playwright 自动化脚本（node 直接拉起 Electron，executeJavaScript 循环 window.close+重建）8/8 轮全部正常干净退出。裸 Electron + Playwright 最小复现 6/6 通过。判定为 Playwright 注入（loader/inspect）与 Electron 45 第二窗口销毁的上游交互问题，与应用代码无关。另注：主进程未捕获异常（如调试钩子在 closed 事件里访问已销毁窗口）会弹出模态 JS 错误对话框并阻塞主进程，放大故障。'
+takeaway: e2e 中每个应用实例只做一次辅助窗口的创建/销毁循环，需要覆盖多个关窗场景（取消、直接关闭、保存）时拆成独立测试（各自新起应用实例）；已打开未关闭的重复打开/聚焦场景不受影响。诊断此类疑似窗口生命周期崩溃时，先用无 Playwright 的自动化脚本复现：脚本正常而 e2e 崩溃即可定位到测试栈，避免在应用代码里盲目返工。
+applies_when: 在 Playwright Electron 端到端测试中创建并随后关闭第二个 BrowserWindow（设置窗口等辅助窗口），或调查 e2e 中主进程无提示退出/连接中断类 flake 时。
+occurrences:
+  - origin: electron-setup-settings 变更开发过程（2026-10-28，Windows 宿主 GAMEPC）
+    date: '2026-10-28'
+    evidence: 调试记录：剥离实验与 tmp-repro 最小复现（已清理）；无 Playwright 自动化脚本 8/8 通过、e2e 拆分后 setup-settings 套件连续 3 次及全套 41 项稳定通过

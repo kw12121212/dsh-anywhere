@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { APP_ENTRY_URL } from './app-protocol'
 import { SESSION_PARTITION } from './session'
 import { DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH } from './window-state'
-import { MAIN_WINDOW_TITLE, createMainWindowOptions, createRemoteViewOptions, rendererEntryURL } from './window'
+import {
+  MAIN_WINDOW_TITLE,
+  SETTINGS_WINDOW_HEIGHT,
+  SETTINGS_WINDOW_TITLE,
+  SETTINGS_WINDOW_WIDTH,
+  createMainWindowOptions,
+  createRemoteViewOptions,
+  createSettingsWindowOptions,
+  rendererEntryURL,
+  settingsEntryURL
+} from './window'
 
 const secure = {
   contextIsolation: true,
@@ -41,6 +51,27 @@ describe('createRemoteViewOptions', () => {
     expect(prefs).toEqual({ ...secure, partition: SESSION_PARTITION })
     expect(prefs).not.toHaveProperty('preload')
     expect(SESSION_PARTITION.startsWith('persist:')).toBe(true)
+  })
+})
+
+describe('createSettingsWindowOptions', () => {
+  it('标题为设置，几何 560x320 与 Go 版一致，挂同一 preload 与安全设置', () => {
+    const options = createSettingsWindowOptions('/app/out/preload/index.js')
+    expect(options.title).toBe(SETTINGS_WINDOW_TITLE)
+    expect(SETTINGS_WINDOW_TITLE).toBe('设置')
+    expect(options.width).toBe(SETTINGS_WINDOW_WIDTH)
+    expect(options.height).toBe(SETTINGS_WINDOW_HEIGHT)
+    expect(SETTINGS_WINDOW_WIDTH).toBe(560)
+    expect(SETTINGS_WINDOW_HEIGHT).toBe(320)
+    expect(options.show).toBe(false)
+    expect(options.webPreferences).toEqual({ ...secure, preload: '/app/out/preload/index.js' })
+  })
+})
+
+describe('settingsEntryURL', () => {
+  it('在主窗口入口上追加 view=settings 查询参数', () => {
+    expect(settingsEntryURL(true, undefined)).toBe(`${APP_ENTRY_URL}?view=settings`)
+    expect(settingsEntryURL(false, 'http://localhost:5173')).toBe('http://localhost:5173?view=settings')
   })
 })
 

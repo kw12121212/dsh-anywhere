@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: electron-setup-settings
+open: []
+resolved:
+  - id: settings-menu-placement
+    question: 设置…菜单项在 macOS 上放在哪里？
+    context: Go 版把设置…放在文件菜单（全平台），但 main-window 主规格 menu-labels 枚举 macOS 菜单栏为应用菜单之后编辑、视图、窗口，没有文件菜单，而本计划变更禁止修改主规格；影响提案范围、实现文件（src/main/app-menu.ts）与单元测试断言。
+    answer: 放入 macOS 自建应用菜单（关于之后），Windows/Linux 放入既有文件菜单（退出之前），快捷键统一 CmdOrCtrl+,：settings-window 主规格只要求菜单提供设置…及快捷键，menu-labels 禁止在 macOS 新增文件菜单，应用菜单亦是 macOS Preferences 的平台惯例。
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: Electron 版主窗口本地页面已有未配置、重新认证、错误页四个状态，但没有初始化表单与设置窗口，用户无法在 Electron 版首次配置或事后修改 harness 地址；同时 electron-release 计划变更依赖本变更（dependency-incomplete）而无法推荐。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按现有主规格逐条复刻 Go 版已有可观察行为：first-run-setup 与 settings-window 全部要求，以及 session-auth（重新认证页打开设置恢复）与 load-failure（错误页修改地址）中依赖设置窗口的部分；不新增对外能力、不修改任何主规格，菜单放置差异以现有 menu-labels 与 settings-window 主规格为准（macOS 放应用菜单）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 见 proposal.yaml 的 out 与 unchanged：不修改任何主规格（specs/ 留空）、不删除 Go/Wails 实现（electron-release 负责）、不新增自动更新/托盘/新菜单命令等对外行为、不改变 contextIsolation/sandbox/远程视图无 preload 等安全基线、不做代码签名、不迁移 webview cookie；配置文件格式与存储位置不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: Electron 版端到端可完成：未配置启动显示初始化界面并实时校验、开始使用保存干净地址后主窗口用原始地址建立会话；菜单设置…打开/聚焦设置窗口，保存/取消/保存失败语义与主规格一致；错误页与重新认证页按钮接通；关闭主窗口全平台退出且设置窗口不能让进程存活；单元与端到端测试及 config.yaml 完整回归命令通过后 electron-release 的依赖阻塞解除。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: electron-migration 里程碑按序推进：electron-main-window 与 electron-desktop-experience 已归档，roadmap-recommend 脚本在本里程碑 19 个计划变更中仅推荐本变更（其余已归档或被依赖阻塞），electron-release 依赖它完成后才能移除 Go/Wails 并收尾里程碑。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

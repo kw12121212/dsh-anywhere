@@ -1,7 +1,7 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import { describe, expect, it } from 'vitest'
 import { ABOUT_TITLE, DISPLAY_NAME, aboutMessage } from './app-info'
-import { RELOAD_ACCELERATOR, RELOAD_LABEL, buildMenuTemplate } from './app-menu'
+import { RELOAD_ACCELERATOR, RELOAD_LABEL, SETTINGS_ACCELERATOR, SETTINGS_LABEL, buildMenuTemplate } from './app-menu'
 
 function findReload(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions | undefined {
   for (const item of template) {
@@ -19,6 +19,18 @@ function findAbout(template: MenuItemConstructorOptions[]): MenuItemConstructorO
   for (const item of template) {
     if (Array.isArray(item.submenu)) {
       const found = item.submenu.find((sub) => sub.label === ABOUT_TITLE)
+      if (found) {
+        return found
+      }
+    }
+  }
+  return undefined
+}
+
+function findSettings(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions | undefined {
+  for (const item of template) {
+    if (Array.isArray(item.submenu)) {
+      const found = item.submenu.find((sub) => sub.label === SETTINGS_LABEL)
       if (found) {
         return found
       }
@@ -61,7 +73,7 @@ const MAC_EDIT_ITEMS = [
   }
 ]
 
-const ACTIONS = { reload: () => {}, showAbout: () => {} }
+const ACTIONS = { reload: () => {}, openSettings: () => {}, showAbout: () => {} }
 
 describe('buildMenuTemplate', () => {
   it('三平台都有“重新加载”（CmdOrCtrl+R），点击调用重新探测而不是 Chromium reload', () => {
@@ -85,12 +97,25 @@ describe('buildMenuTemplate', () => {
     }
   })
 
-  it('macOS 应用菜单自建：首项为关于，其余逐项复刻默认 appMenu 角色，标签为中文', () => {
+  it('三平台都有“设置…”（CmdOrCtrl+,），点击调用 openSettings', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      let opens = 0
+      const settings = findSettings(buildMenuTemplate(platform, { ...ACTIONS, openSettings: () => opens++ }))
+      expect(settings?.label).toBe(SETTINGS_LABEL)
+      expect(settings?.accelerator).toBe(SETTINGS_ACCELERATOR)
+      expect(SETTINGS_ACCELERATOR).toBe('CmdOrCtrl+,')
+      ;(settings?.click as () => void)()
+      expect(opens).toBe(1)
+    }
+  })
+
+  it('macOS 应用菜单自建：首项为关于，设置…紧随其后，其余逐项复刻默认 appMenu 角色，标签为中文', () => {
     const template = buildMenuTemplate('darwin', ACTIONS)
     expect(template[0]).toEqual({
       label: DISPLAY_NAME,
       submenu: [
         { label: ABOUT_TITLE, click: expect.any(Function) },
+        { label: SETTINGS_LABEL, accelerator: SETTINGS_ACCELERATOR, click: expect.any(Function) },
         { type: 'separator' },
         { role: 'services', label: '服务' },
         { type: 'separator' },
@@ -114,11 +139,14 @@ describe('buildMenuTemplate', () => {
     })
   })
 
-  it('Windows 与 Linux 的菜单栏为文件、编辑、视图、帮助，“文件”中提供退出，“帮助”中提供关于', () => {
+  it('Windows 与 Linux 的菜单栏为文件、编辑、视图、帮助，“文件”中提供设置…与退出，“帮助”中提供关于', () => {
     for (const platform of ['win32', 'linux'] as const) {
       const template = buildMenuTemplate(platform, ACTIONS)
       expect(topLabels(template)).toEqual(['文件', '编辑', '视图', '帮助'])
-      expect(template[0]?.submenu).toEqual([{ role: 'quit', label: '退出' }])
+      expect(template[0]?.submenu).toEqual([
+        { label: SETTINGS_LABEL, accelerator: SETTINGS_ACCELERATOR, click: expect.any(Function) },
+        { role: 'quit', label: '退出' }
+      ])
       expect(template[3]?.submenu).toEqual([{ label: ABOUT_TITLE, click: expect.any(Function) }])
     }
   })
