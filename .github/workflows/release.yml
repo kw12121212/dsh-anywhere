@@ -19,6 +19,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    # 发布 job 不 checkout（无 .git），gh CLI 靠 GH_REPO 定位仓库，
+    # 否则回退 git 远端探测并报 "not a git repository"。
+    env:
+      GH_REPO: ${{ github.repository }}
     defaults:
       run:
         shell: bash

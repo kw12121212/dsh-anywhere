@@ -125,6 +125,8 @@ describe('release.yml', () => {
     const workflow = repoFile('.github', 'workflows', 'release.yml')
     for (const fragment of [
       'contents: write',
+      // 发布 job 不 checkout，必须以 GH_REPO 显式定位仓库，gh 才不回退 git 远端探测。
+      'GH_REPO: ${{ github.repository }}',
       'dsh-anywhere_${VERSION}_windows_amd64_installer.exe',
       'dsh-anywhere_${VERSION}_macos_universal.dmg',
       'dsh-anywhere_${VERSION}_linux_amd64.AppImage',
