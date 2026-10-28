@@ -12,8 +12,15 @@ directories:
 # 应用没有运行时 npm 依赖，打包内容只有 electron-vite 产物。
 files:
   - out/**
-# fuses 基线复用 scripts/fuses.mts（技术标准 electron-layout-security/electron-fuses）。
-afterPack: scripts/after-pack.mts
+# fuses 用 electron-builder 内建 electronFuses 翻转（universal 构建在两架构合并后、
+# 签名前的正确时点执行，自定义 afterPack 会在每架构重签导致 universal 合并校验失败）；
+# 值与 scripts/fuses.mts 的 FUSE_CONFIG 同源，由 scripts/workflows.test.mts 断言锁定
+# （技术标准 electron-layout-security/electron-fuses）。
+electronFuses:
+  resetAdHocDarwinSignature: true
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
 win:
   target:
     - nsis

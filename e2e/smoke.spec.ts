@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
@@ -31,7 +31,8 @@ test.afterEach(async () => {
 test('启动后显示 app:// 本地页面，并使用临时 userData', async () => {
   await expect(page.locator('#app-title')).toHaveText('DSH Anywhere')
   expect(page.url()).toBe('app://local/index.html')
-  expect(await app.evaluate(({ app }) => app.getPath('userData'))).toBe(userDataDir)
+  // macOS 会把 /var/folders 规范化成 /private/var/folders，两侧都按真实路径比较。
+  expect(realpathSync(await app.evaluate(({ app }) => app.getPath('userData')))).toBe(realpathSync(userDataDir))
 })
 
 test('主窗口使用安全的 webPreferences', async () => {

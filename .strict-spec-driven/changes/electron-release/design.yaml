@@ -15,8 +15,8 @@ decisions:
     decision: 版本号由 CI 从 git tag 精确匹配派生（去 v 前缀，未命中为 dev），同一值注入 APP_VERSION 环境变量与 electron-builder extraMetadata.version；package.json 的 0.0.0 保持私有占位
     rationale: 满足 build-identity 的 electron-identity-single-source 与 packaging 的 package-version-from-tag：关于页、安装包元数据与文件名必须同源，否则包管理器与关于窗口互相矛盾且只在打包后暴露
   fuses-afterpack:
-    decision: electron-builder afterPack 钩子复用 scripts/fuses.mts 对解包产物执行 fuses 翻转，安装包内二进制与开发期基线一致
-    rationale: 把 fuses 步骤并入打包权威源，避免 CI 对最终安装包二次处理或本地与 CI 产物不一致
+    decision: fuses 由 electron-builder 内建 electronFuses 配置翻转：universal 构建在两架构合并后、签名前的唯一时点执行；electron-builder.yml 的 electronFuses 值与 scripts/fuses.mts 的 FUSE_CONFIG 同源，由 scripts/workflows.test.mts 断言锁定（含 afterPack 不得回流的负向断言）
+    rationale: 自定义 afterPack 钩子在 universal 每架构构建期各触发一次，resetAdHocDarwinSignature 重签使两架构的 _CodeSignature/CodeResources 不一致，@electron/universal 的非二进制文件 SHA 校验直接失败（macOS Package 实测）；内建时点保证合并后的最终二进制只翻转一次且随后签名
   keep-icons-relocate:
     decision: 保留现有三平台图标（build/darwin/icons.icns、build/windows/icon.ico、build/appicon.png 派生 Linux png），整理进 electron-builder buildResources 约定位置，删除其余 Wails 生成资产
     rationale: app-identity 主规格要求图标不变；Wails 资产（Info.plist、nfpm、nsis、msix 等）在 Electron 管线下已无消费者，保留只会误导

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -51,7 +51,8 @@ async function launch(): Promise<Page> {
       g.__opened.push(url)
     }
   })
-  expect(await launched.evaluate(({ app }) => app.getPath('userData'))).toBe(userDataDir)
+  // macOS 会把 /var/folders 规范化成 /private/var/folders，两侧都按真实路径比较。
+  expect(realpathSync(await launched.evaluate(({ app }) => app.getPath('userData')))).toBe(realpathSync(userDataDir))
   return findPage(launched, (url) => url.startsWith('app://local/'))
 }
 

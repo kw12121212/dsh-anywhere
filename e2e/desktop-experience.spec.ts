@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
@@ -53,7 +53,8 @@ async function launch(): Promise<Page> {
   }
   const launched = await electron.launch({ args: ['.', `--user-data-dir=${userDataDir}`], env })
   app = launched
-  expect(await launched.evaluate(({ app }) => app.getPath('userData'))).toBe(userDataDir)
+  // macOS 会把 /var/folders 规范化成 /private/var/folders，两侧都按真实路径比较。
+  expect(realpathSync(await launched.evaluate(({ app }) => app.getPath('userData')))).toBe(realpathSync(userDataDir))
   let page: Page | undefined
   await expect
     .poll(() => {

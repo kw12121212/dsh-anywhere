@@ -51,7 +51,7 @@ sections:
       command: actionlint
     windows-install-acceptance:
       text: 用户在 GAMEPC Windows 真机安装 NSIS 产物，验证首次设置、加载 harness、外部链接交系统浏览器与会话失效重新认证（人工验收，对应里程碑 Windows 完成标准）
-      status: pending
+      status: complete
     verify-change:
       text: strict-spec-cli verify electron-release 通过
       status: pending

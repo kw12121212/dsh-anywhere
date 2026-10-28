@@ -4,8 +4,10 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { FuseV1Options } from '@electron/fuses'
 import { describe, expect, it } from 'vitest'
 import { DISPLAY_NAME } from '../src/main/app-info'
+import { FUSE_CONFIG } from './fuses.mts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
@@ -179,6 +181,19 @@ describe('electron-builder.yml', () => {
     expect(config).toContain(`productName: ${DISPLAY_NAME}`)
     expect(config).not.toContain('com.example')
     expect(config).not.toContain('My Product')
+  })
+
+  it('electronFuses 配置与 fuses.mts 的 FUSE_CONFIG 同源（electron-fuses）', () => {
+    for (const [yamlKey, value] of [
+      ['runAsNode', FUSE_CONFIG[FuseV1Options.RunAsNode]],
+      ['enableNodeOptionsEnvironmentVariable', FUSE_CONFIG[FuseV1Options.EnableNodeOptionsEnvironmentVariable]],
+      ['enableNodeCliInspectArguments', FUSE_CONFIG[FuseV1Options.EnableNodeCliInspectArguments]],
+      ['resetAdHocDarwinSignature', FUSE_CONFIG.resetAdHocDarwinSignature]
+    ] as const) {
+      expect(config).toContain(`${yamlKey}: ${String(value)}`)
+    }
+    // 自定义 afterPack 钩子会在 universal 每架构构建时重签名导致合并失败，不得回流。
+    expect(config).not.toContain('afterPack:')
   })
 
   it('四类产物命名模板与 release.yml 的断言一一对应', () => {
