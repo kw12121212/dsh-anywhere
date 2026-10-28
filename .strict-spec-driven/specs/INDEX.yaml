@@ -3,6 +3,9 @@ schema_version: 1
 artifact_type: spec_index
 schema_file: ../schemas/spec-index.yaml
 specs:
+  - id: app-identity
+    title: 应用身份
+    path: .strict-spec-driven/specs/app-identity.yaml
   - id: first-run-setup
     title: 首次启动初始化
     path: .strict-spec-driven/specs/first-run-setup.yaml

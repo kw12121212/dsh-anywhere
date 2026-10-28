@@ -1,0 +1,54 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: app-identity
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: cross-platform-release 里程碑要在打版本 tag 时产出可安装的三平台安装包；而应用身份仍是 Wails 脚手架默认值：build/config.yml 与 Info.plist、info.json、nfpm.yaml、NSIS 定义写着 My Product、com.example.dshanywhere、My Company，二进制内也没有版本号。计划变更 details 明确指出：bundle identifier 一旦发布就不宜修改（macOS 按它存放 webview 数据、它同时是单实例标识），因此必须在首次发布前统一显示名称、包标识、版本与图标。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 里程碑 done 标准要求：安装三个平台产物后应用能启动，且“关于”信息显示的版本号与 tag 一致；里程碑 scope 要求统一应用名、bundle identifier、版本号（由 git tag 注入）与三平台图标。可观察结果是：关于对话框同时显示名称 DSH Anywhere 与版本号（打 tag 构建显示标签号，否则 dev）、主窗口标题显示正式名称、三平台构建元数据与桌面条目不再出现脚手架占位值，完整回归通过且覆盖率不低于 80%。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 依赖的计划变更 project-scaffold 已归档；cross-platform-release 是当前最早未完成的里程碑，app-identity 是其首个计划变更，且同里程碑的 platform-packaging 与 release-workflow 依赖它。bundle identifier 与显示名称必须在下一次对外发布前定稿，否则发布后修改会破坏 macOS webview 数据位置与单实例标识。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 里程碑 scope.out：Windows 代码签名、macOS 签名与公证、应用内自动更新、上架应用商店。本变更另不含：CI 回归矩阵与发布工作流、安装包构建与三平台安装验收、Linux GTK 应用 id 重命名与桌面条目 StartupWMClass 对齐；配置目录仍为 dsh-anywhere、单实例标识仍为 work.keepwriting.dsh-anywhere，已有配置与 dsh 会话不受影响。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 版本号只从当前提交的 v 前缀标签注入并去掉前缀，其余构建显示 dev；显示名称 DSH Anywhere 只用于用户可见文案（窗口标题、关于、桌面条目、打包元数据），内部名称 dsh-anywhere 继续用于配置目录与 Wails 应用名；关于入口在 Linux/Windows 位于帮助子菜单，在 macOS 位于自建应用菜单首项；图标与公司/版权文案以本变更 questions.yaml 的确认值为准。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: app-icon-source
+    question: 三平台图标使用哪个源文件？仓库目前只有 Wails 默认图标（build/appicon.png 与 build/appicon.icon/Assets/wails_icon_vector.svg）。
+    context: 需要 1024×1024 的 PNG（或可生成 .icns/.ico 的 SVG/Icon Composer 源）。影响 proposal 的范围与实现文件：build/appicon.png、build/appicon.icon/Assets 与 icon.json、darwin/icons.icns、windows/icon.ico，以及只能在 macOS 上生成的 darwin/Assets.car；如果本次没有可用图标源，app-identity 的“三平台图标”目标无法完成，需要把图标替换拆成后续变更。推荐：由你提供品牌图标 PNG（1024×1024，方形或自带圆角），我替换源文件并重新生成三平台图标资源，Assets.car 由 macOS runner 或你的 Mac 重新生成；若暂时没有，请确认是否接受先用占位图标并在后续变更替换。
+    answer: 由 agent 生成候选图标：用简洁的终端提示符几何图形（深色圆角底 + 折线提示符 + 下划线）生成 1024×1024 PNG 作为 build/appicon.png，并同步替换 build/appicon.icon/Assets 中的 SVG 层；据此重新生成 darwin/icons.icns 与 windows/icon.ico。正式品牌图标后续可替换同一源文件。macOS 的 Assets.car 需在 macOS 上重新生成。
+    status: resolved
+    answered_by: human
+  - id: branding-text
+    question: 公司名称、版权文本与应用描述用哪组定稿值？
+    context: 这些值会写进 build/config.yml 并生成到 darwin/Info.plist 与 Info.dev.plist（CFBundleGetInfoString、NSHumanReadableCopyright）、windows/info.json、NSIS 安装器定义与 linux/nfpm/nfpm.yaml，打包后对用户可见，属于技术标准 build-identity 的“身份单一来源”范围。bundle identifier 反写自 dsh-anywhere.keepwriting.work，据此推荐：公司名 Keepwriting、版权 © 2026 Keepwriting、描述“接入远程 DeepSeek harness 的桌面客户端”。若公司名、版权年份或描述措辞不同，请给出确切文本，我按确认值生成构建资源。
+    answer: 采用推荐值：公司名 Keepwriting；版权文本 © 2026 Keepwriting；应用描述“接入远程 DeepSeek harness 的桌面客户端”。这些值写入 build/config.yml 并生成到 Info.plist、windows/info.json、NSIS 定义与 nfpm 包元数据。
+    status: resolved
+    answered_by: human

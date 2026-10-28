@@ -1,0 +1,49 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: app-identity
+approach:
+  - 身份常量集中在 internal/appinfo：新增 DisplayName（DSH Anywhere）与 Version（默认 dev），关于标题与正文由这两者生成；保留 Name（dsh-anywhere，用于配置目录、Wails 应用名与单实例相关路径）与 Identifier。main.go 只做装配：主窗口标题用 DisplayName，application.Options.Name 仍用 Name。
+  - 版本在构建期注入：根 Taskfile 定义 VERSION，用 git describe --tags --match v* --exact-match 取当前提交的发布标签并去掉 v 前缀，否则取 dev；common（build:server）、linux、darwin、windows 四个生产 BUILD_FLAGS 在既有 -ldflags 中追加 -X dsh-anywhere/internal/appinfo.Version={{.VERSION}}，开发构建不注入。
+  - internal/appmenu 增加关于项：macOS 自建应用菜单（关于 DSH Anywhere 为首项，随后是 Services、Hide、HideOthers、UnHide、Quit 角色，顺序与 Wails NewAppMenu 一致），Linux/Windows 在“帮助”子菜单放置关于项；Build 增加 showAbout 回调，main.go 用 app.Dialog.Info() 显示 appinfo 生成的标题与正文。
+  - 打包身份以 build/config.yml 为源：填入定稿字段后运行 wails3 update build-assets 重新生成 Info.plist、Info.dev.plist、info.json、wails_tools.nsh、nfpm.yaml、linux/desktop 与 manifest；build/linux/Taskfile.yml 的 generate:dotdesktop 改用 -name 传显示名，使实际打包的 dsh-anywhere.desktop 也显示正式名称。图标源替换后运行 wails3 generate icons 生成 icons.icns 与 icon.ico。
+  - 一致性由单元测试守住：读取 build/config.yml 与重新生成的资源，断言身份值一致且不含脚手架占位；断言四个 Taskfile 仍注入版本；appinfo 测试断言默认 dev 与关于文本。
+  - 交叉编译走 build/docker/Dockerfile.cross：linux、darwin、windows 三个平台的 build:docker 任务把 VERSION 传入容器，镜像内把同一个 -X 注入追加到 ldflags，避免交叉编译产物退回 dev。
+decisions:
+  display-name-separate-from-machine-name:
+    decision: internal/appinfo 增加 DisplayName = DSH Anywhere，Name 仍为 dsh-anywhere；用户可见文案用 DisplayName，配置目录与 Wails 应用名继续用 Name，单实例标识用 Identifier。
+    rationale: 配置目录与 dsh 会话 cookie 位置由 Name 决定，改名会让已有用户配置与登录态失效；Identifier 已定为包标识，单实例与发布升级都依赖它稳定，因此显示名称必须是新增的独立常量。
+  keep-wails-application-name-for-linux-identity:
+    decision: application.Options.Name 继续使用 appinfo.Name，不改成显示名称；只有窗口标题、关于对话框与菜单显示名使用 DisplayName。
+    rationale: Wails v3.0.0 用 Options.Name 派生 Linux GTK 应用 id（org.wails.dsh-anywhere）与菜单中的 Hide/Quit 文案；换成带空格的显示名会静默改变桌面集成，而 GTK 应用 id 与 desktop 文件的对齐不在本变更范围内。
+  version-from-exact-tag-else-dev:
+    decision: 只有当前提交恰好带 v 前缀标签时注入标签号（去掉 v），其余构建显示 dev；版本号在根 Taskfile 计算一次并传入各平台 BUILD_FLAGS。
+    rationale: 里程碑要求关于显示的版本号与 tag 一致；把提交哈希或 dirty 后缀当作版本展示会让人误以为那是对外发布版本，也与计划变更的 dev 默认值冲突。
+  custom-about-item-instead-of-wails-about-role:
+    decision: 不使用 Wails 的 About role，改为自建关于菜单项与对话框：macOS 复刻 AppMenu 的角色组合并把关于放在首项，Linux/Windows 在帮助子菜单放置关于项。
+    rationale: Wails v3.0.0 的 About role 只把 Options.Name 与 Options.Description 交给平台对话框，没有版本通道，标签还是硬编码英文 About；把版本塞进 Description 会语义错位，也无法同时显示名称与版本。
+  generated-build-assets-through-cli:
+    decision: build/ 下的平台资源视为生成物：只改 build/config.yml，再用 wails3 update build-assets 重新生成；实际打包用的 desktop 条目由 build/linux/Taskfile.yml 的 generate:dotdesktop 参数生成显示名。
+    rationale: 这些文件每次构建或资源更新都会被覆盖，手改必然漂移；wails3 update build-assets 会以新模板值覆盖同名键并保留模板外的自定义键（如 Info.plist 的 NSAppTransportSecurity），因此可安全重生成。
+  about-text-in-appinfo:
+    decision: 关于的标题与正文由 internal/appinfo 的 AboutTitle 与 AboutMessage 生成，菜单与对话框只负责渲染。
+    rationale: 名称与版本是身份数据，放在同一包可以用单元测试断言而无需创建窗口；菜单包与 main.go 都不再重复身份字面量。
+  macos-stale-icon-asset-fallback:
+    decision: 删除过期的 build/darwin/Assets.car，并在重新生成的 Info.plist 与 Info.dev.plist 中移除其 CFBundleIconName 引用，使 macOS 回退到新生成的 icons.icns；等 macOS 上重新生成 Assets.car 后再由 wails3 update build-assets 恢复分层图标引用。
+    rationale: Assets.car 只能由 Xcode 图标工具在 macOS 上生成，仓库中的副本仍是脚手架默认图标，而 macOS 优先使用 Assets.car；保留它会让 macOS 继续显示旧图标，与三平台图标统一的目标矛盾，删除后 CFBundleIconFile 指向的 icons.icns 是本次可验证的新图标。
+alternatives:
+  - option: 把 DisplayName 直接用作 application.Options.Name
+    reason: 会让 Linux GTK 应用 id 从 org.wails.dsh-anywhere 变成 org.wails.dsh_anywhere，并改变 macOS 菜单中的 Hide/Quit 文案，属于未经验证的桌面集成变化。
+  - option: 复用 Wails 的 AppMenu 与 About role，把版本写进 Options.Description
+    reason: About 只能显示名称与 Description，没有独立版本字段；版本混进描述后该字段还要承担应用说明的语义，后续本地化会被这一选择限制。
+  - option: 运行时直接从 build/config.yml 读取版本
+    reason: config.yml 是打包元数据，不会随二进制分发；在其他机器上运行时读不到它，构建期注入才是唯一可靠来源。
+  - option: 只改 build/config.yml，不重新生成平台资源
+    reason: Info.plist、info.json、nfpm.yaml 与 NSIS 定义仍是脚手架值，打包产物的名称、标识与版权不一致，里程碑的身份目标没有达成。
+risks:
+  - macOS 应用菜单由本项目自建，本环境无法实机验证菜单结构；只能依据 Wails v3.0.0 源码（NewAppMenu 的 role 组合）与结构单元测试，实机验收留给 macOS runner 或真机。
+  - config.yml 中的安装包版本（0.1.0）与 tag 注入的二进制版本是两个来源；按 tag 同步 config.yml 并重新生成资源的编排属于 release-workflow，未在本变更实现。
+  - git 不可用（例如从源码压缩包构建）时 VERSION 退化为 dev；发布流程必须保证在 git 工作区构建。
+  - Windows NSIS 与 info.json 的元数据渲染无法在 Linux 上验证（本环境没有 Windows），需由 CI runner 或实机确认。
+  - 本次删除过期的 darwin/Assets.car 并从 Info.plist 与 Info.dev.plist 移除 CFBundleIconName 引用，属于一次性迁移；在 macOS 上运行图标任务重新生成 Assets.car 后，还需要再运行 wails3 update build-assets 才会恢复分层图标引用，该步骤留给 platform-packaging 的 macOS runner 完成。

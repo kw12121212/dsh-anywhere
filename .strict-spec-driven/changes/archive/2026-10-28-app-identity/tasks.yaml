@@ -1,0 +1,68 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: app-identity
+sections:
+  Implementation:
+    appinfo-identity:
+      text: 在 internal/appinfo 增加 DisplayName = DSH Anywhere、Version（var，默认 dev）与 AboutTitle/AboutMessage；保留 Name 与 Identifier 并注释各自用途：Name 决定配置目录与 Wails 应用名，Identifier 是包标识与单实例唯一标识
+      status: complete
+    version-injection:
+      text: 根 Taskfile 增加 VERSION 变量：git describe --tags --match v* --exact-match 命中当前提交时去掉 v 前缀，否则为 dev；在 build/Taskfile.yml（build:server）、build/linux、build/darwin、build/windows 的生产 BUILD_FLAGS 中把 -X dsh-anywhere/internal/appinfo.Version={{.VERSION}} 追加进既有 -ldflags，开发构建不注入
+      status: complete
+    appmenu-about:
+      text: internal/appmenu 增加关于菜单项：macOS 自建应用菜单（关于 DSH Anywhere 首项，随后 Services、Hide、HideOthers、UnHide、Quit 角色，顺序与 Wails NewAppMenu 一致），Linux/Windows 在“帮助”子菜单放置关于项；Build 增加 showAbout 回调参数，快捷键为空时不调用 SetAccelerator
+      status: complete
+    main-assembly:
+      text: main.go 只做装配：主窗口标题用 appinfo.DisplayName，application.Options.Name 保持 appinfo.Name（避免改变 Linux GTK 应用 id 与桌面集成）；把 showAbout 闭包传给 appmenu.Build，由 app.Dialog.Info() 用 appinfo.AboutTitle/AboutMessage 显示关于对话框
+      status: complete
+    build-config-identity:
+      text: 按定稿值更新 build/config.yml 的 info 字段（productName、productIdentifier、companyName、copyright、description、comments、version 0.1.0），身份文案以 questions.yaml 的确认结果为准
+      status: complete
+    regenerate-build-assets:
+      text: 把 wails3 加入 PATH 后运行 wails3 update build-assets，提交重新生成的 darwin/Info.plist、darwin/Info.dev.plist、windows/info.json、windows/nsis/wails_tools.nsh、windows/wails.exe.manifest、linux/desktop 与 linux/nfpm/nfpm.yaml；核对 LSMinimumSystemVersion 保留、Info.dev.plist 的 NSAppTransportSecurity 自定义键保留，并清理由此多生成的 build/ios 目录
+      status: complete
+    desktop-entry-display-name:
+      text: build/linux/Taskfile.yml 的 generate:dotdesktop 用 -name 传显示名、-exec 传二进制名并补 -comment 描述（categories 保持现状），重新生成 build/linux/dsh-anywhere.desktop，确认实际打包使用的桌面条目 Name=DSH Anywhere 且 Exec 指向 dsh-anywhere
+      status: complete
+    app-icon:
+      text: 用 questions.yaml 中确认的图标源替换 build/appicon.png 与 build/appicon.icon 的 Assets 与 icon.json 引用，运行 wails3 generate icons 重新生成 darwin/icons.icns 与 windows/icon.ico；macOS 的 Assets.car 无法在本环境生成，需在 verification 中记录重新生成方式
+      status: complete
+  Testing:
+    unit-tests:
+      text: 单元测试：appinfo 的 DisplayName、Version 默认 dev、AboutTitle/AboutMessage；appmenu 三平台关于项位置与回调接线、自建 macOS 应用菜单的角色；构建资源一致性（build/config.yml、darwin/Info.plist、darwin/Info.dev.plist、windows/info.json、windows/nsis/wails_tools.nsh、linux/nfpm/nfpm.yaml、linux/desktop、linux/dsh-anywhere.desktop 与定稿身份一致且无脚手架占位；四个 Taskfile 仍注入版本）
+      status: complete
+      command: go test -race ./internal/...
+    version-injection-build:
+      text: 用显式 ldflags 构建二进制并确认注入的版本字符串出现在产物中，验证 -X 符号路径与变量可注入
+      status: complete
+      command: CGO_ENABLED=1 go build -ldflags "-X dsh-anywhere/internal/appinfo.Version=0.0.0-test" -o /tmp/dsh-anywhere-version-check . && grep -a -q "0.0.0-test" /tmp/dsh-anywhere-version-check
+    lint:
+      text: 运行 gofmt 与 go vet，确认没有格式或静态检查问题
+      status: complete
+      command: test -z "$(gofmt -l .)" && go vet ./...
+    project-regression:
+      text: 在 Linux 上执行 config.yaml 中的完整回归命令，退出码为 0 且覆盖率不低于 80%
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+  Verification:
+    e2e-about-dialog:
+      text: 在 WSLg 下构建并运行真实应用：主窗口标题显示 DSH Anywhere；打开应用菜单中的“关于 DSH Anywhere”，确认对话框同时显示名称与 dev（当前提交未打标签）；确认“重新加载”“设置…”等其他菜单项行为不变
+      status: complete
+    tagged-version-evidence:
+      text: 以 -ldflags 注入 0.1.0 构建并运行，打开关于确认显示 0.1.0（等同 v0.1.0 标签注入结果）；同时核对 wails3 update build-assets 重新生成的三平台资源确为定稿身份，且 Linux 桌面条目显示名为 DSH Anywhere
+      status: complete
+    macos-source-review:
+      text: 核对 Wails v3.0.0 macOS 菜单角色处理与自建应用菜单的组合（与 NewAppMenu 逐项对照），并把本环境无法验证的部分（macOS 应用菜单实机行为、Assets.car 重新生成、Windows 元数据渲染）记录为发布前风险，交给 cross-platform-release 的 CI/真机验收
+      status: complete
+    spec-alignment:
+      text: 逐条对照 delta spec 场景与 delta tech 规则确认实现、单元测试与端到端结果一致，并确认 proposal 的 unchanged_behavior 未被改变
+      status: complete
+    strict-verify:
+      text: 运行 strict-spec-cli verify app-identity 确认变更产物有效且任务全部完成
+      status: complete
+      command: strict-spec-cli verify app-identity
+testing_gates:
+  validation_task: project-regression
+  unit_test_task: unit-tests

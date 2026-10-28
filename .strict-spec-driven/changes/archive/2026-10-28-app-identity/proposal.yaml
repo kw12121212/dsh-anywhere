@@ -1,0 +1,41 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: app-identity
+  status: proposed
+summary:
+  what:
+    - 在 internal/appinfo 增加显示名称常量 DSH Anywhere 与版本变量 Version（默认 dev），并提供关于对话框的标题与正文；main.go 用显示名称设置主窗口标题
+    - 应用菜单增加“关于 DSH Anywhere”：Linux/Windows 放在“帮助”子菜单，macOS 自建应用菜单并把关于放在首项，其余角色与 Wails AppMenu 一致；对话框同时显示显示名称与版本号
+    - build/config.yml 填写正式身份（显示名 DSH Anywhere、包标识 work.keepwriting.dsh-anywhere、公司与版权文案、0.1.0），用 wails3 update build-assets 重新生成三平台构建资源；实际打包使用的 Linux 桌面条目显示名改为 DSH Anywhere
+    - 用定稿图标源替换 build/appicon.png 与 build/appicon.icon，重新生成 macOS icons.icns 与 Windows icon.ico
+    - 构建时用 -ldflags -X dsh-anywhere/internal/appinfo.Version 从 v 前缀发布标签注入版本号（去掉 v 前缀），无标签构建显示 dev；根 Taskfile 计算版本，common（server）、linux、darwin、windows 四个生产构建分支与 Docker 交叉编译都注入同一符号
+  why:
+    - build/config.yml、Info.plist、info.json、nfpm.yaml 与 NSIS 定义仍是 Wails 脚手架占位值（My Product、com.example.dshanywhere、My Company），打包产物的应用名、包标识与版权都不正确；bundle identifier 一经发布不宜修改，必须在首次发布前定稿
+    - 版本号目前散落在 config.yml、Info.plist、info.json 与 nfpm.yaml 中且互不一致（0.0.1 与 0.1.0），二进制内没有版本；发布里程碑要求关于信息显示的版本号与 tag 一致
+    - 应用目前没有关于入口，用户无法确认正在运行的版本；Wails 默认图标也不能作为正式发布产物
+scope:
+  in:
+    - internal/appinfo 的显示名称、版本常量与关于文本；main.go 的窗口标题装配
+    - 根 Taskfile 的版本计算与四个生产构建分支的 ldflags 注入
+    - internal/appmenu 的关于菜单项、macOS 自建应用菜单、Linux/Windows 帮助子菜单，以及关于对话框的装配
+    - build/config.yml 身份字段、wails3 update build-assets 重新生成的构建资源，以及 Linux 桌面条目显示名
+    - 图标源替换与三平台图标资源重新生成
+    - 单元测试：关于文本、菜单结构、构建资源与配置一致性；版本注入的构建检查
+  out:
+    - CI 回归矩阵与发布工作流（同里程碑的 ci-regression-matrix、release-workflow）
+    - 安装包构建与三平台安装验收（platform-packaging），以及打包时 tag 到 config.yml 版本的编排
+    - Windows 代码签名与 macOS 签名、公证
+    - 应用内自动更新与应用商店上架
+    - Linux GTK 应用 id（org.wails.dsh-anywhere 改为 work.keepwriting.dsh-anywhere）与桌面条目 StartupWMClass 的对齐
+unchanged_behavior:
+  - 配置目录仍为 <用户配置目录>/dsh-anywhere，Linux webview 数据目录仍为 XDG 数据目录下的 dsh-anywhere，改名会丢失已有配置与 dsh 会话 cookie
+  - 单实例锁标识仍为 work.keepwriting.dsh-anywhere
+  - 菜单“重新加载”“设置…”的文字、快捷键与行为不变；主窗口仍默认使用应用菜单
+  - 首次启动初始化、harness URL 配置、导航范围、会话与窗口状态行为不变
+  - 远程页面仍不能调用任何本地服务，新增关于对话框不扩大其能力
+roadmap:
+  milestone: cross-platform-release
+  planned_change: app-identity

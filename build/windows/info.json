@@ -5,11 +5,11 @@
 	"info": {
 		"0409": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A dsh-anywhere application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"CompanyName": "Keepwriting",
+			"FileDescription": "接入远程 DeepSeek harness 的桌面客户端",
+			"LegalCopyright": "© 2026 Keepwriting",
+			"ProductName": "DSH Anywhere",
+			"Comments": "接入远程 DeepSeek harness 的桌面客户端"
 		}
 	}
 }

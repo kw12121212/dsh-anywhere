@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: wails3-update-build-assets-build-ios-plist-72a1b8
+  title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
+category: tooling
+status: active
+created_at: '2026-10-28T03:44:17.110Z'
+updated_at: '2026-10-28T03:44:17.110Z'
+context: app-identity 需要把应用身份写进三平台构建资源，按 wails3 模板约定修改 build/config.yml 后运行 wails3 update build-assets。
+observation: 该命令按模板生成全部 updatable 资源：除了目标三平台文件，还会新建 build/ios/（本仓库不构建 iOS）；Info.plist 的合并策略是以旧文件为基底、新值覆盖同名键，因此模板已不再生成的键（如删除 Assets.car 后的 CFBundleIconName）会从旧文件保留下来，需要一次性移除。
+takeaway: 运行 wails3 update build-assets 后立即用 git status 检查多生成的平台目录并删除非目标平台；对“应消失但合并会保留”的键，在 design 记录一次性迁移并从 plist 显式移除，之后重新生成不会再带回。
+applies_when: 运行 wails3 update build-assets、修改 build/config.yml 的身份或图标资源，或删除某个 wails3 生成的平台资源后重新生成时。
+occurrences:
+  - origin: app-identity
+    date: '2026-10-28'
+    evidence: 执行 update build-assets 后出现未跟踪的 build/ios/（6 个 iOS 资源），已删除；删除 darwin/Assets.car 后 Info.plist 仍保留 CFBundleIconName=appicon，已从 Info.plist 与 Info.dev.plist 移除；重新生成的三平台资源由单元测试核对一致。

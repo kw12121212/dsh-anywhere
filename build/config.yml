@@ -4,14 +4,15 @@
 version: '3'
 
 # This information is used to generate the build assets.
+# 显示名称、包标识与公司/版权文案必须与 internal/appinfo 及仓库测试保持一致。
 info:
-  companyName: "My Company" # The name of the company
-  productName: "My Product" # The name of the application
-  productIdentifier: "com.mycompany.myproduct" # The unique product identifier
-  description: "A program that does X" # The application description
-  copyright: "(c) 2025, My Company" # Copyright text
-  comments: "Some Product Comments" # Comments
-  version: "0.0.1" # The application version
+  companyName: "Keepwriting" # The name of the company
+  productName: "DSH Anywhere" # The name of the application
+  productIdentifier: "work.keepwriting.dsh-anywhere" # The unique product identifier
+  description: "接入远程 DeepSeek harness 的桌面客户端" # The application description
+  copyright: "© 2026 Keepwriting" # Copyright text
+  comments: "接入远程 DeepSeek harness 的桌面客户端" # Comments
+  version: "0.1.0" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"

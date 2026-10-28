@@ -73,6 +73,10 @@ func main() {
 	sessionNonce := session.NewNonce()
 	expiry := session.NewHandler(sessionNonce, func() uint { return mainWindow.ID() }, runtimeGuard.IsRemote,
 		navigator.RetrySession, navigator.OpenLocalURL)
+	// 关于对话框使用应用身份常量：名称与版本由 internal/appinfo 提供，注入的版本号随构建变化。
+	showAbout := func() {
+		app.Dialog.Info().SetTitle(appinfo.AboutTitle()).SetMessage(appinfo.AboutMessage()).Show()
+	}
 
 	app = application.New(application.Options{
 		Name: appinfo.Name,
@@ -112,7 +116,7 @@ func main() {
 	})
 
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  appinfo.Name,
+		Title:  appinfo.DisplayName,
 		Width:  windowstate.DefaultWidth,
 		Height: windowstate.DefaultHeight,
 		// 先隐藏创建：由 windowState.Restore 在映射前设好尺寸再显示，避免窗口先按默认
@@ -137,7 +141,7 @@ func main() {
 		navigator.Start()
 		activator.Start()
 	})
-	app.Menu.Set(appmenu.Build(navigator.Reload, openSettings))
+	app.Menu.Set(appmenu.Build(navigator.Reload, openSettings, showAbout))
 	// 关闭主窗口即退出应用：否则 Linux/Windows 上设置窗口会让进程继续运行，
 	// 之后保存会对已销毁的主窗口导航。
 	mainWindow.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { app.Quit() })

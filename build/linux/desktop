@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A dsh-anywhere application
+Name=DSH Anywhere
+Comment=接入远程 DeepSeek harness 的桌面客户端
 # The Exec line includes %u to pass the URL to the application
 Exec=/usr/local/bin/dsh-anywhere %u
 Terminal=false

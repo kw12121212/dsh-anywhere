@@ -1,0 +1,48 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: build-identity
+standard:
+  title: 构建身份与版本注入
+  category: tooling
+operations:
+  ADDED:
+    identity-single-source:
+      strength: MUST
+      statement: 运行时显示名称、包标识与版本只定义在 internal/appinfo；build/config.yml 及其生成的平台构建资源必须与该定义一致，main.go 与菜单代码不得重复身份字面量（测试里的期望值只用于断言常量取值）。
+      rationale: 身份值同时出现在 Go 运行时与打包元数据中，任何一侧单独修改都会让关于窗口、安装包名称与桌面条目互相矛盾，而这类矛盾只有在打包之后才会暴露。
+      enforcement:
+        method: test
+        detail: 单元测试读取 build/config.yml、darwin/Info.plist、darwin/Info.dev.plist、windows/info.json、windows/nsis/wails_tools.nsh、linux/nfpm/nfpm.yaml 与 linux/desktop，断言显示名称、包标识与版权与 internal/appinfo 一致，且不含 Wails 脚手架占位值。
+      examples:
+        good:
+          - main.go 的窗口标题与关于文本都取自 internal/appinfo.DisplayName 与 Version
+        bad:
+          - 在 main.go 再写一份 DSH Anywhere 字面量，或只改 build/config.yml 而不重新生成 Info.plist
+    version-injected-at-build-time:
+      strength: MUST
+      statement: 发布版本号只能通过 -ldflags -X dsh-anywhere/internal/appinfo.Version=<版本> 在构建时注入，源码中的默认值为 dev；本机构建、server 构建与 Docker 交叉编译都必须注入同一符号，不得在 Go 源码写死发布版本，也不得在运行时读取 build/config.yml。
+      rationale: 源码无法知道构建时对应的 git 标签，只有构建期注入能让关于显示的版本与 tag 一致；漏掉任意一条构建路径都会让该路径产出的安装包显示 dev，而交叉编译产物正是发布时容易遗漏的一条。
+      enforcement:
+        method: test
+        detail: 单元测试断言 internal/appinfo.Version 默认值为 dev，断言 common、linux、darwin、windows 四个 Taskfile 的生产构建分支都包含该 -X 注入，断言三个平台的 Docker 任务把 VERSION 传入容器且 Dockerfile.cross 把它追加到 ldflags；另用显式 ldflags 构建并确认注入值出现在产物中。
+      examples:
+        good:
+          - 根 Taskfile 用 git describe --tags --exact-match 计算版本，本机与交叉编译的构建路径都注入 appinfo.Version
+        bad:
+          - 只在 build/linux/Taskfile.yml 注入版本，Docker 交叉编译仍用 -s -w 的旧 ldflags
+    generated-build-assets-not-hand-edited:
+      strength: SHOULD
+      statement: build/ 下由 wails3 生成的平台资源（Info.plist、Info.dev.plist、info.json、wails_tools.nsh、wails.exe.manifest、linux/desktop、nfpm.yaml）不得手工修改；先改 build/config.yml，再用 wails3 update build-assets 重新生成，实际打包使用的桌面条目显示名通过 generate:dotdesktop 的参数提供。唯一例外：为移除模板已不再生成、但重新生成时会从旧文件保留的过期键而做的一次性迁移，必须在该变更的 design 记录原因，并确认后续重新生成不会再带回该键。
+      rationale: 这些资源在每次构建或资源更新时都会被重新生成，手改会在下一次构建中静默丢失；而旧文件的键会在合并时保留，不加说明的手改与不加说明的保留都会造成配置与产物不一致。
+      enforcement:
+        method: review
+        detail: 审查 diff 中生成的平台资源是否伴随 build/config.yml 变更；若出现只改生成文件的 diff，需要说明为何不能改配置源，一次性迁移是否已在 design 记录。
+      examples:
+        good:
+          - 改 build/config.yml 后运行 wails3 update build-assets 并提交生成结果
+        bad:
+          - 直接编辑 build/darwin/Info.plist 的产品名称，且不说明为何不能改配置源
+  MODIFIED: {}
+  REMOVED: {}

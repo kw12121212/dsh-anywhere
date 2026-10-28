@@ -41,3 +41,8 @@ categories:
       status: active
       occurrences: 2
       path: .strict-spec-driven/lessons/tooling/wslg-weston-7217b7.yaml
+    wails3-update-build-assets-build-ios-plist-72a1b8:
+      title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/wails3-update-build-assets-build-ios-plist-72a1b8.yaml

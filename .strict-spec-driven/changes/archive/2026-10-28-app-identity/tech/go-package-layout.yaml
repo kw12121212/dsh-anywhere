@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+operations:
+  ADDED:
+    inject-wails-global-dependencies:
+      strength: SHOULD
+      statement: 构造或断言依赖 Wails 全局应用实例的行为（菜单角色、ShowAbout、窗口方法等）时，必须把该调用以 func 参数注入 internal 包，由 main.go 或生产代码提供真实实现；不得在单元测试中直接调用会解引用 globalApplication 的 Wails 构造器。
+      rationale: Wails v3.0.0 的菜单角色构造器（如 Hide）直接读取 globalApplication.options；单元测试没有全局应用实例，直接调用会 panic，导致 macOS 应用菜单的结构无法被测到，而这类平台专属结构又最需要测试兜底。
+      enforcement:
+        method: review
+        detail: 审查 internal 包的菜单、托盘或窗口构造是否把依赖全局状态的调用作为 func 参数接收；测试是否用记录器断言调用顺序与参数，而不是直接调用会触达 globalApplication 的 Wails API。
+      examples:
+        good:
+          - internal/appmenu 以 roleAdder 参数注入角色构造，测试记录 macOS 应用菜单的角色顺序
+        bad:
+          - 在单元测试里直接 build darwin 菜单并由代码调用 application.NewRole(application.Hide)
+  MODIFIED: {}
+  REMOVED: {}
