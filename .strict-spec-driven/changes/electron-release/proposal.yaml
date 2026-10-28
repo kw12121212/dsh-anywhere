@@ -12,10 +12,12 @@ summary:
     - 确认 Electron 版覆盖全部主规格后移除 Go/Wails：删除 go.mod、go.sum、main.go、internal/、frontend/、Taskfile.yml 与 build/ 中 Wails 专属资产
     - 回归命令与 CI 改为纯 Node 工具链：config.yaml 回归命令去掉 Go 部分、coverage scope 只保留 TypeScript；CI 不再安装 Go 与 GTK4/WebKitGTK
     - 技术标准与文档同步：退役 go-package-layout、webview-isolation，更新 packaging、ci-regression、build-identity、frontend-dependencies、state-persistence、security-secrets；更新 config.yaml 的 context 与 code 规则、AGENTS.md、README；Wails 专属 lessons 标记过时
+    - CI 收敛为只打包：删除 regression.yml（回归测试不上 GitHub Actions，完整回归命令在本地执行），package.yml 触发收敛为仅 main 分支 push（保留手动与 tag 复用入口）
   why:
     - electron-migration 里程碑的最后一个计划变更：前置 electron-setup-settings 与 electron-desktop-experience 已归档，Electron 版已按主规格逐项复刻，只剩发布管线迁移与旧栈清除
     - 里程碑完成标准要求仓库不再有 go.mod、*.go、Taskfile.yml 与 wails 依赖，回归命令只调用 Node 工具链并在 ubuntu、macos、windows 三个 CI 平台通过，覆盖率不低于 80%
     - 里程碑完成标准要求推送 v* tag 后发布页出现 electron-builder 产出的 Windows 安装包、macOS dmg、Linux AppImage 与 deb 及 SHA256 校验文件
+    - 用户决定回归测试撤出 GitHub Actions：三平台回归矩阵占用 CI 时长且与打包发布解耦，回归证据改由本地完整执行 config.yaml 回归命令提供
 scope:
   in:
     - electron-builder 配置（仓库根 electron-builder.yml，appId、productName、三平台图标、NSIS/dmg/AppImage/deb 目标、artifactName 命名模板、afterPack 钩子复用 scripts/fuses.mts 的 fuses 基线）与 npm 打包 script
@@ -25,6 +27,7 @@ scope:
     - 删除 Go/Wails 代码与构建资产；更新 config.yaml（context、code 规则去 Wails bindings、回归命令纯 Node、coverage scope 去 Go）与 regression.yml（去 Go 与 GTK 安装步骤）
     - 更新 AGENTS.md 与 README 的技术栈、常用命令、Linux 依赖与未签名安装包绕过说明；Wails/Go 专属 lessons 用 lesson-obsolete 标记过时
     - 打包配置、版本接线与产物命名的单元测试（Vitest）
+    - 删除 regression.yml；package.yml push 触发收敛为仅 main 分支；workflows.test.mts 改为锁定 workflows 目录只含打包与发布工作流及 main 触发口径，并保留 config.yaml 回归命令全工具链步骤断言；AGENTS.md 同步回归本地执行、CI 只打包的口径
   out:
     - 任何主规格可观察行为的新增或改变
     - Windows 代码签名、macOS 签名与公证

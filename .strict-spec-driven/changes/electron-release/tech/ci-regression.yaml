@@ -4,15 +4,26 @@ artifact_type: delta_tech
 schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
 target_standard: ci-regression
 operations:
-  ADDED: {}
+  ADDED:
+    ci-packaging-only:
+      strength: MUST
+      statement: GitHub Actions 只保留打包与发布工作流：package.yml 仅由 main 分支 push 触发（workflow_dispatch 手动与 workflow_call 复用入口除外），release.yml 仅由 v* tag 触发；不得新增回归或其他测试类工作流
+      rationale: 回归本地执行后 CI 只承担打包产出；触发收敛到 main 避免开发分支推送反复占用三平台打包矩阵
+      enforcement:
+        method: test
+        detail: 'scripts/workflows.test.mts 断言 workflows 目录只含 package.yml 与 release.yml，且 package.yml 的 push 触发限定 branches: [main]'
   MODIFIED:
     ci-regression-verbatim:
       strength: MUST
-      statement: 回归 CI 工作流必须在 ubuntu、macos、windows 三个平台的矩阵 job 中逐字执行 config.yaml review_evidence.project_regression.command 的完整回归命令，不得拆分、改写或省略覆盖率门槛
-      rationale: CI 与本地回归门槛必须完全一致，任何口径漂移都会让平台特定回归逃逸
+      statement: 完整回归命令（config.yaml review_evidence.project_regression.command）必须在本地完整逐字执行作为评审与归档证据，不得拆分、改写或省略覆盖率门槛；回归测试不得放上 GitHub Actions，CI 工作流只承担打包
+      rationale: 回归转本地执行后，防平台特定回归逃逸的手段从 CI 矩阵改为本地完整跑同一命令；命令被拆改仍是最大风险，须以 config.yaml 单一来源与结构断言锁死
       enforcement:
-        method: ci
-        detail: 覆盖三平台矩阵与完整命令（npm ci、typecheck、electron-vite 构建、Vitest 覆盖率不低于 80%、Playwright 端到端）；TypeScript 侧断言测试锁定 regression.yml 逐字包含 config 中的回归命令
+        method: test
+        detail: scripts/workflows.test.mts 断言 .github/workflows 只含 package.yml 与 release.yml（回归工作流不得回流），并断言 config.yaml 回归命令保留 npm ci、typecheck、build、test:coverage、test:e2e 全工具链步骤
   REMOVED:
     ci-linux-gui-deps:
       reason: Wails v3.0.0 在 Linux 链接 GTK4/WebKitGTK 6.0 的依赖随 Go 栈移除；Electron 回归不需要系统 GUI 开发库，保留该步骤只会拖慢 CI
+    ci-bash-shell:
+      reason: 回归工作流已删除，bash shell 统一要求随工作流下线；本地回归命令的跨平台一致性由 npm scripts 承担
+    ci-linux-display:
+      reason: CI 不再执行端到端，Xvfb 与 Electron 沙箱改为本地 Linux 跑端到端时的环境要求（AGENTS.md 记录），不再是工作流规则

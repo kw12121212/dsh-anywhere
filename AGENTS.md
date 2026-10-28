@@ -32,10 +32,10 @@ npm run test:e2e   # Playwright 端到端（Electron）
 npm run dist:win   # 打包 Windows NSIS 安装包（dist:mac / dist:linux 同理，输出 dist/）
 ```
 
-完整回归（安装依赖 + 类型检查 + 构建 + 覆盖率门槛 80% + 端到端），以 `.strict-spec-driven/config.yaml` 中的 `review_evidence.project_regression.command` 为准：
+完整回归（安装依赖 + 类型检查 + 构建 + 覆盖率门槛 80% + 端到端）在本地执行，以 `.strict-spec-driven/config.yaml` 中的 `review_evidence.project_regression.command` 为准：
 
 ```bash
 npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
 ```
 
-CI 在 ubuntu / macos / windows 三平台矩阵逐字执行同一命令；Linux 端到端需要 Xvfb 显示服务器与可用的 Electron 沙箱（CI 已在回归步骤前准备）。
+回归测试不上 GitHub Actions；CI 只做打包：push 到 `main` 触发 Package 工作流（`package.yml`，三平台打包并上传产物），打 `v*` tag 触发 Release 工作流（`release.yml`，复用打包并发布）。Linux 上本地跑端到端需要 Xvfb 显示服务器与可用的 Electron 沙箱。

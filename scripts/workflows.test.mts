@@ -1,7 +1,7 @@
 // CI/发布工作流与打包配置的结构断言（技术标准 packaging/workflow-structure-assertion-tests）。
 // 迁移自 internal/appinfo 下的 Go 断言测试：关键片段正向断言、负向断言，并锁定
 // 被复用上游的关键前提（package.yml 的 workflow_call 触发器）。
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { FuseV1Options } from '@electron/fuses'
@@ -25,57 +25,34 @@ function regressionCommand(): string {
   throw new Error('.strict-spec-driven/config.yaml has no review_evidence.project_regression.command')
 }
 
-describe('regression.yml', () => {
-  it('三平台矩阵逐字执行 config.yaml 的完整回归命令', () => {
-    const workflow = repoFile('.github', 'workflows', 'regression.yml')
+describe('.github/workflows', () => {
+  it('CI 只保留打包与发布工作流，回归不上 GitHub Actions', () => {
+    // 回归测试只在本地执行（config.yaml 的完整回归命令），CI 上只放打包。
+    expect(readdirSync(join(repoRoot, '.github', 'workflows')).sort()).toEqual([
+      'package.yml',
+      'release.yml'
+    ])
+  })
+
+  it('打包工作流只由 main 分支 push 触发（手动与 tag 复用入口保留）', () => {
+    const workflow = repoFile('.github', 'workflows', 'package.yml')
+    expect(workflow).toContain('push:\n    branches: [main]\n')
+    // 其他分支名不得回流到触发器。
+    expect(workflow).not.toContain('branches: [main, dev]')
+  })
+})
+
+describe('config.yaml 完整回归口径', () => {
+  it('本地回归命令保留完整的 Node 工具链步骤，缺一步即口径漂移', () => {
     const command = regressionCommand()
-    expect(workflow).toContain(`\n          ${command}\n`)
-    // 回归命令必须保留完整的 Node 工具链步骤，缺一步即口径漂移。
     for (const fragment of [
+      'npm ci',
       'npm run typecheck',
       'npm run build',
       'npm run test:coverage',
       'npm run test:e2e'
     ]) {
       expect(command).toContain(fragment)
-    }
-    for (const fragment of [
-      '- ubuntu-latest',
-      '- macos-latest',
-      '- windows-latest',
-      'shell: bash',
-      'package-lock.json'
-    ]) {
-      expect(workflow).toContain(fragment)
-    }
-  })
-
-  it('回归前为 Linux 准备显示服务器与 Electron 沙箱，且不含 Go/GTK 步骤', () => {
-    const workflow = repoFile('.github', 'workflows', 'regression.yml')
-    const regression = workflow.indexOf('- name: Full project regression')
-    expect(regression).toBeGreaterThanOrEqual(0)
-    for (const fragment of [
-      'Xvfb :99',
-      'echo "DISPLAY=:99" >> "$GITHUB_ENV"',
-      'kernel.apparmor_restrict_unprivileged_userns=0'
-    ]) {
-      const at = workflow.indexOf(fragment)
-      expect(at).toBeGreaterThanOrEqual(0)
-      // 显示服务器与沙箱必须先于回归步骤就绪。
-      expect(at).toBeLessThan(regression)
-    }
-    // 负向断言：环境由前置步骤提供，命令保持三平台一致，不以关闭沙箱绕过安全基线；
-    // Go/Wails 工具链与 GTK 开发库不得回流。
-    for (const forbidden of [
-      'xvfb-run',
-      '--no-sandbox',
-      'setup-go',
-      'go test',
-      'go vet',
-      'libgtk-4-dev',
-      'libwebkitgtk-6.0-dev'
-    ]) {
-      expect(workflow).not.toContain(forbidden)
     }
   })
 })

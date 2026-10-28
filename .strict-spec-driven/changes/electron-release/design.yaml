@@ -7,6 +7,7 @@ approach:
   - 在仓库根新增 electron-builder.yml：appId work.keepwriting.dsh-anywhere、productName DSH Anywhere，图标指向整理后的 buildResources 目录，目标为 Windows NSIS、macOS universal dmg、Linux AppImage 与 deb，artifactName 模板产出 dsh-anywhere_<版本>_<平台>_<架构>[_installer].<扩展> 命名；electron-vite 产物 out/ 作为打包输入，afterPack 钩子复用 scripts/fuses.mts 对解包二进制翻转 fuses。打包入口封装为 npm script，CI 与发布工作流只调用该入口，不在工作流中复制打包命令。
   - 'CI package.yml 三平台矩阵删除 Go、wails3、choco NSIS 与 GTK/WebKitGTK 安装步骤；checkout 保持 fetch-depth: 0，由 git describe --tags --exact-match 计算 VERSION（去 v 前缀，缺省 dev），同一 VERSION 注入 APP_VERSION 环境变量（electron-vite define）与 electron-builder extraMetadata.version，保证关于对话框、安装包元数据与文件名三者同源。release.yml 保持 workflow_call 复用 package.yml、四类安装包齐全性断言、SHA256SUMS、草稿先行失败即删的结构，仅对齐 electron-builder 产物路径与命名。'
   - 删除 Go/Wails：go.mod、go.sum、main.go、internal/、frontend/、Taskfile.yml、build/ 下 Wails 生成资产（图标整理保留）；config.yaml 的 context、code 规则（删 Wails bindings 规则）、回归命令与 coverage scope 改为纯 Node；regression.yml 删 Go 与 GTK 安装步骤；AGENTS.md 与 README 技术栈、常用命令、Linux 依赖说明同步改写；internal/ 的 workflow 断言测试先迁移为 TypeScript（Vitest）再删除 Go 代码，Wails/Go 专属 lessons 标记过时。
+  - CI 触发与职责收敛：删除 regression.yml，回归测试不上 GitHub Actions，完整回归命令（config.yaml 单一来源）在本地执行作为评审与归档证据；package.yml 的 push 触发从 main/dev 收敛为仅 main，保留 workflow_dispatch 手动入口与 workflow_call 供 release.yml 复用；workflows.test.mts 改为断言 workflows 目录仅含 package.yml 与 release.yml、push 触发限定 main，并断言 config.yaml 回归命令保留全工具链步骤；AGENTS.md 同步该口径
 decisions:
   electron-builder-config-file:
     decision: electron-builder 配置独立为仓库根 electron-builder.yml，打包命令封装为 npm script（内部执行 electron-vite build 与 electron-builder）
@@ -23,6 +24,9 @@ decisions:
   no-delta-spec:
     decision: 本变更为纯技术迁移（发布管线切换与旧栈移除），不新增、不修改、不退役任何主规格需求，specs/ 目录保持为空
     rationale: 计划变更明确“不改变任何主规格”；全部十个主规格的可观察行为由已归档的 Electron 复刻变更实现并保持原样，本变更只触碰打包、CI、构建资产、技术标准与文档
+  ci-packaging-only:
+    decision: GitHub Actions 只承担打包与发布：package.yml 仅由 main 分支 push（加手动与复用入口）触发，release.yml 仅由 v* tag 触发；regression.yml 整体删除，回归命令只在本地逐字执行
+    rationale: 回归与发布解耦后，三平台矩阵只用于打包产物即可；回归口径以 config.yaml 单一来源加结构断言锁定，既满足评审证据要求，也避免开发分支推送反复占用 CI
 alternatives:
   - option: 在 package.json 内嵌 electron-builder build 字段
     reason: 与运行时字段混杂且 JSON 无注释，配置评审与维护成本高于独立 YAML

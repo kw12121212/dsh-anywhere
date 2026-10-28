@@ -29,6 +29,9 @@ sections:
     config-node-regression:
       text: 更新 config.yaml（context 改 Electron 技术栈、code 规则删 Wails bindings 条目、回归命令去 Go 部分、coverage scope 去 Go 条目）与 regression.yml（删 setup-go 与 GTK/WebKitGTK 安装步骤）
       status: complete
+    ci-packaging-only:
+      text: CI 收敛为只打包：删除 regression.yml（回归不上 GitHub Actions，完整回归在本地执行），package.yml 的 push 触发由 main/dev 收敛为仅 main（保留 workflow_dispatch 与 workflow_call），workflows.test.mts 改为断言 workflows 目录仅含 package.yml 与 release.yml 及 main 触发口径，AGENTS.md 同步回归本地执行口径
+      status: complete
     docs-update:
       text: 更新 AGENTS.md 与 README：技术栈说明、常用命令、Linux 构建依赖说明改为 Node/Electron 工具链，保留未签名安装包绕过步骤
       status: complete
@@ -57,7 +60,7 @@ sections:
       status: pending
       command: strict-spec-cli verify electron-release
     archive-readiness:
-      text: strict-spec-cli ready electron-release 通过，并确认归档证据齐备：完整回归通过、三平台 CI（regression 与 package）通过、Windows 真机验收记录、开放问题已解决
+      text: strict-spec-cli ready electron-release 通过，并确认归档证据齐备：完整回归在本地通过、三平台打包 CI（package）通过、Windows 真机验收记录、开放问题已解决
       status: pending
       command: strict-spec-cli ready electron-release
 testing_gates:
