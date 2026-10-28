@@ -1,0 +1,50 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: electron-main-window
+approach:
+  - '主窗口为 BrowserWindow，其自身 webContents 是加载 app://local 本地页面并挂 preload 的本地视图；远程 harness 由子 WebContentsView（persist:dsh 分区、不挂 preload）显示，显示远程内容时把它加入 contentView 并随窗口调整大小，显示本地页面时移除。导航控制器（src/main/navigator.ts）持有状态（connecting / error / unconfigured / reauth / remote）与代次计数，启动、重新加载与重试时先显示正在连接页，再用 net.request（远程视图的 session、redirect: manual、10 秒超时）探测干净地址，根据结果切到远程视图或错误页。配置模块（src/main/config.ts）路径为 app.getPath(''userData'')/config.json。导航策略（src/main/navigation-policy.ts）为纯函数，由远程视图的 will-navigate（主框架导航，含子 frame 以 target=_top 发起的导航）与 setWindowOpenHandler（含中键与 target=_blank）调用。会话失效识别（src/main/session.ts）在远程视图主框架 did-navigate 收到 401 后，于 did-finish-load 时用 executeJavaScriptInIsolatedWorld 读取 contentType 与正文并与 dsh 固定文本比较，失效即显示重新认证页。'
+decisions:
+  two-views:
+    decision: 本地页面与远程页面分属两个 webContents：BrowserWindow 自身的 webContents 显示本地页面，子 WebContentsView 显示远程 harness
+    rationale: preload 绑定在 webContents 上，单个 webContents 无法做到本地页面有 IPC、远程页面没有 preload；拆成两个后远程页面在结构上没有任何 IPC 入口，满足 remote-content-no-preload。用 BrowserWindow 而不是 BaseWindow 承载本地页面，可沿用 electron-scaffold 的窗口选项与 Playwright 的 firstWindow，实测 Playwright 同样能看到 persist 分区中的子视图页面
+  config-in-userdata:
+    decision: 'config.json 放在 app.getPath(''userData'') 下，格式沿用 Go 版 {"harnessURL": "..."}，以临时文件加重命名原子写入'
+    rationale: Electron 默认 userData 与 Go 版 os.UserConfigDir()/dsh-anywhere 在三平台上是同一目录，沿用即满足里程碑 data-location 的决定；同时端到端测试传入 --user-data-dir 即可隔离配置，符合 e2e-isolated-user-data
+  probe-with-electron-net:
+    decision: '探测使用 Electron net.request（远程视图的 session、redirect: manual、不带会话 cookie），收到响应头或 redirect 事件即可达，按 Chromium 网络错误码分类为 DNS、连接被拒、超时、TLS 与其他，默认 10 秒超时'
+    rationale: '与远程视图使用同一网络栈与证书信任，避免 Node TLS 与 Chromium 系统证书库判定不一致；实测 session.fetch 的 redirect: manual 会以“Redirect was cancelled”错误拒绝，无法与真正的失败区分，而 net.request 以 redirect 事件报告重定向'
+  expiry-isolated-world-read:
+    decision: 会话失效识别只在主框架导航响应为 401 时，用 executeJavaScriptInIsolatedWorld 一次性读取 contentType 与正文，返回值直接回到主进程
+    rationale: dsh 的失效响应只能由状态码加固定正文区分；隔离世界的一次性读取不在页面中留下脚本或消息通道，页面无法伪造调用，满足不注入脚本、不暴露 IPC 的要求，取代 Wails 时期带 nonce 的注入脚本
+  token-history-cleanup:
+    decision: 带 token 地址只用于一次 remoteView.loadURL；会话建立后检查 navigationHistory，存在含 token 的条目时清除历史只保留当前干净地址
+    rationale: dsh 签发 cookie 后 302 到干净地址，但 Chromium 可能保留中间条目；清除后后退与历史中不再出现 token，满足 token-never-exposed
+  generation-serialized:
+    decision: 导航控制器每次发起导航递增代次，探测或重试的异步结果仅在代次未变时才切换视图或加载地址
+    rationale: 重新加载、重试与启动探测可能并发，较早的探测结果晚到时不能覆盖较新的导航，这是 Go 版 serialize-navigation-effects 规则在 Electron 单线程事件循环下的等价做法
+  no-scene:
+    decision: 本变更不创建 delta scene，scenes/ 保持缺省
+    rationale: 这是技术栈迁移：参与者（桌面用户、dsh web 服务端、系统浏览器）、前置条件与正常及异常流程都与现有主规格一致，唯一可观察变化是 navigation-scope 与 session-auth 的平台范围扩展到 Windows，流程步骤本身不变；项目当前未记录任何 scene，为平台扩展补写完整流程只会复述已有主规格场景
+  no-session-retry:
+    decision: 不实现 Wails 时期的“导航后同站重试一次”，主框架 401 且正文为 dsh 固定文本时直接显示重新认证页
+    rationale: 2026-10-28 用模拟 dsh 在 Electron 45 实测：远程视图由主进程 loadURL 发起的导航（包括带 token 地址的首次导航、302 重定向、失效页之后再次加载）都携带 SameSite=Strict 会话 cookie；Wails 需要重试是因为导航从 wails:// 本地文档发起，而 Electron 中远程视图从不由本地文档导航。重试只会让真正失效时多一次请求
+  main-frame-will-navigate:
+    decision: 导航范围只拦截 will-navigate（主框架）与 setWindowOpenHandler，不拦截子 frame 自身的导航
+    rationale: will-navigate 覆盖主框架的所有渲染进程发起导航，包括子 frame 以 target=_top 发起的；子 frame 内部导航属于 harness 中嵌入内容自身的行为，主规格只约束主窗口显示的页面，拦截它会破坏 harness 中的 iframe
+  remote-permissions-deny:
+    decision: 远程会话 persist:dsh 的权限请求与权限检查默认拒绝，只放行 clipboard-sanitized-write 与 fullscreen
+    rationale: Electron 默认批准所有权限请求，远程 harness 及其中的第三方 iframe 会自动获得通知、摄像头、麦克风、地理位置等权限；放行复制写剪贴板与全屏两项，保证 harness 的复制按钮与全屏展示可用，其余能力 dsh-anywhere 不需要
+  navigator-dispose:
+    decision: 窗口关闭时作废导航控制器（dispose：置 disposed、取消远程状态并递增代次），会话失效判定带上开始读取正文时的代次，由导航控制器丢弃过时结果
+    rationale: macOS 上窗口关闭后应用仍运行，探测或读取失效页正文等异步步骤可能在窗口销毁后完成；会话失效判定是继探测之后的第二个异步步骤，同样必须遵守 serialize-navigation-effects
+alternatives:
+  - option: 单个 BrowserWindow 在本地与远程页面间导航，并在远程页面期间拒绝 IPC
+    reason: preload 在远程页面仍会加载并暴露 contextBridge API，只能靠运行时判断拒绝，违反 remote-content-no-preload，也会重现 Wails 时期远程标记的时序问题
+  - option: 向远程页面注入脚本检测会话失效并经 IPC 通知
+    reason: 需要给远程页面暴露消息通道，任何子 iframe 或页面脚本都能伪造失效消息，与里程碑“不向远程页面注入脚本”的决定冲突
+  - option: 用 Node 的 http/https 模块探测地址
+    reason: Node 使用自带 CA 列表，与 Chromium 使用的系统证书库不一致，企业或自签证书场景下探测结果与实际加载不符
+risks:
+  - Windows 行为只能在宿主 GAMEPC 真机验收，WSL 内端到端测试只覆盖 Linux

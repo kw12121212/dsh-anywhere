@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: electron-layout-security
+operations:
+  ADDED:
+    remote-view-navigation-policy:
+      strength: MUST
+      statement: 显示远程内容的 webContents 必须在加载任何远程地址之前注册 will-navigate（主框架导航）与 setWindowOpenHandler，并统一交给一个纯函数导航策略判定：同源留在原视图，非同源 http/https 交给 shell.openExternal，其他协议拒绝；setWindowOpenHandler 一律返回 deny，不得创建新的 BrowserWindow。
+      rationale: Electron 默认允许远程页面导航到任意地址并弹出新窗口，新窗口会继承不受控的 webPreferences；集中在纯函数中判定让同源、外部与忽略三类行为可单元测试，取代 Wails 时期注入页面的导航脚本。
+      enforcement:
+        method: test
+        detail: '导航策略纯函数的单元测试覆盖同源、不同端口、非同源 http/https、file: 与 javascript:；端到端测试断言 window.open 不产生新窗口、外部链接调用 shell.openExternal。'
+    serialize-navigation-effects:
+      strength: MUST
+      statement: 导航控制器发起的每次导航必须递增代次；探测、重试等异步步骤完成后，只有代次未变时才可以切换显示的视图或调用 loadURL。
+      rationale: 启动探测、重新加载与重试会重叠，较早的异步结果晚到时若仍生效，会把主窗口切回过时的页面或在显示本地页面时加载远程地址；代次比较是 Go 版同名规则在单线程事件循环下的等价约束。
+      enforcement:
+        method: test
+        detail: 导航控制器单元测试用可控完成顺序的假探测发起并发导航，断言只有最新一次导航的结果生效。
+    remote-session-permissions-deny:
+      strength: MUST
+      statement: 显示远程内容的 session 必须设置 setPermissionRequestHandler 与 setPermissionCheckHandler，默认拒绝全部权限，需要放行的权限由一个纯函数按白名单判定。
+      rationale: Electron 默认批准所有权限请求，远程页面及其中的第三方 iframe 会自动获得通知、摄像头、麦克风、地理位置等能力；白名单让放行的每项能力都有明确理由并可单元测试。
+      enforcement:
+        method: test
+        detail: 权限判定纯函数的单元测试覆盖白名单放行与其他权限拒绝；端到端测试断言远程页面 Notification.requestPermission() 为 denied；审查远程 session 的接线。
+    window-bound-controller-disposal:
+      strength: SHOULD
+      statement: 绑定到某个窗口的副作用控制器（导航控制器、视图切换等）必须在窗口 closed 时作废，之后到达的异步结果与调用不得触达已销毁的窗口或 webContents。
+      rationale: macOS 上关闭最后一个窗口后应用仍运行，探测等异步步骤可能在窗口销毁后完成；不作废控制器会在已销毁对象上调用方法并抛出未处理的异常，这与 Wails 时期 lesson wails-80aace 是同一类问题。
+      enforcement:
+        method: test
+        detail: 控制器单元测试在 dispose 之后完成探测并触发远程事件，断言没有任何副作用调用。
+  MODIFIED: {}
+  REMOVED: {}

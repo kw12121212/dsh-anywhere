@@ -1,21 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import { APP_ENTRY_URL } from './app-protocol'
-import { createMainWindowOptions, rendererEntryURL } from './window'
+import { SESSION_PARTITION } from './session'
+import { MAIN_WINDOW_TITLE, createMainWindowOptions, createRemoteViewOptions, rendererEntryURL } from './window'
+
+const secure = {
+  contextIsolation: true,
+  sandbox: true,
+  nodeIntegration: false,
+  nodeIntegrationInSubFrames: false,
+  nodeIntegrationInWorker: false,
+  webSecurity: true,
+  allowRunningInsecureContent: false,
+  experimentalFeatures: false
+}
 
 describe('createMainWindowOptions', () => {
-  it('启用上下文隔离与沙箱并关闭 Node 集成', () => {
-    const prefs = createMainWindowOptions('/app/out/preload/index.js').webPreferences
-    expect(prefs).toMatchObject({
-      preload: '/app/out/preload/index.js',
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      nodeIntegrationInSubFrames: false,
-      nodeIntegrationInWorker: false,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      experimentalFeatures: false
-    })
+  it('标题为 DSH Anywhere，启用上下文隔离与沙箱并关闭 Node 集成', () => {
+    const options = createMainWindowOptions('/app/out/preload/index.js')
+    expect(options.title).toBe(MAIN_WINDOW_TITLE)
+    expect(MAIN_WINDOW_TITLE).toBe('DSH Anywhere')
+    expect(options.webPreferences).toEqual({ ...secure, preload: '/app/out/preload/index.js' })
+  })
+})
+
+describe('createRemoteViewOptions', () => {
+  it('远程视图使用持久化分区与安全设置，且不挂 preload', () => {
+    const prefs = createRemoteViewOptions().webPreferences
+    expect(prefs).toEqual({ ...secure, partition: SESSION_PARTITION })
+    expect(prefs).not.toHaveProperty('preload')
+    expect(SESSION_PARTITION.startsWith('persist:')).toBe(true)
   })
 })
 

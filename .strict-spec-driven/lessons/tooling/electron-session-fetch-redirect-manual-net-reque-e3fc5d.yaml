@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-session-fetch-redirect-manual-net-reque-e3fc5d
+  title: Electron session.fetch 的 redirect manual 以错误拒绝，探测重定向需用 net.request
+category: tooling
+status: active
+created_at: '2026-10-28T08:33:20.539Z'
+updated_at: '2026-10-28T08:33:20.539Z'
+context: 'electron-main-window 设计用远程视图 session 的 fetch（redirect: manual）探测 harness 地址，把 3xx 视为可达。'
+observation: 'Electron 45 中 session.fetch(url, { redirect: ''manual'' }) 遇到 302 时以 Error(''Redirect was cancelled'') 拒绝，与网络失败无法可靠区分；net.request({ redirect: ''manual'' }) 则发出 redirect 事件，网络错误以 net::ERR_* 消息出现在 error 事件。'
+takeaway: 在 Electron 主进程中需要区分“收到重定向”与“请求失败”时使用 net.request 的 redirect 事件，不要依赖 fetch 的 manual 模式或匹配错误文本。
+applies_when: 在 Electron 主进程用 session.fetch 或 net.fetch 发请求并需要不跟随重定向、把重定向当作成功或按错误类型分类时
+occurrences:
+  - origin: electron-main-window
+    date: '2026-10-28'
+    evidence: spike main3.js：session.fetch 对 302 输出 'ERR ... Redirect was cancelled'；main4.js：net.request 输出 'REDIRECT 302 https://example.org/'；src/main/probe.ts

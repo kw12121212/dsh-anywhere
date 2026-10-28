@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: playwright-locator-aba903
+  title: 主进程阻止的导航会让 Playwright 认为页面导航未完成，后续 locator 操作超时
+category: testing
+status: active
+created_at: '2026-10-28T08:33:20.713Z'
+updated_at: '2026-10-28T08:33:20.713Z'
+context: electron-main-window 的端到端测试用 locator.click 点击远程页面中的外部链接，主进程在 will-navigate 中 preventDefault 并交给系统浏览器。
+observation: Playwright 1.64 的 locator.click 在“waiting for scheduled navigations to finish”处超时；之后同一页面上的 locator.boundingBox 也停在“waiting for navigation to finish”，而 webContents.isLoading() 为 false、页面实际未变化。
+takeaway: 测试被主进程阻止的导航时，先一次性取得目标坐标再用 page.mouse 点击，并通过主进程读取 webContents 的 URL 与 isLoading 断言结果，不再对该页面使用 locator。
+applies_when: 用 Playwright 驱动 Electron 页面上会被 will-navigate preventDefault、setWindowOpenHandler deny 或其他主进程逻辑取消的导航时
+occurrences:
+  - origin: electron-main-window
+    date: '2026-10-28'
+    evidence: e2e/main-window.spec.ts 首次运行：locator.click Timeout 30000ms exceeded（waiting for scheduled navigations to finish）；改为 linkCenters + clickAt 并用 remoteState() 断言后通过

@@ -1,0 +1,40 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: electron-main-window
+  status: proposed
+summary:
+  what:
+    - 在 Electron 应用中复刻主窗口：harness URL 配置读取（校验、token 剥离、原子写入、区分未配置与配置无效，文件位置与格式与 Go 版一致）、启动探测与“正在连接”页、加载失败错误页与重试、未配置占位页、应用菜单（重新加载、退出，macOS 标准应用菜单）、导航范围（主框架 will-navigate 与 setWindowOpenHandler：同源留在主窗口，非同源 http/https 含中键交给系统浏览器，其他协议忽略）、dsh 会话（persist 分区 cookie 跨重启保留、401 固定正文识别失效后直接显示本地重新认证页、带 token 地址不残留在导航历史）；远程页面不挂 preload、无法调用本地 IPC，远程会话权限默认拒绝；并通过 delta spec 把 navigation-scope 与 session-auth 中限定 Linux 与 macOS 的要求扩展到 Windows/Linux/macOS 三平台。
+  why:
+    - electron-migration 里程碑要求以 Electron 原生事件完整复刻主规格行为并在 Windows 上补齐与主规格一致的导航范围与会话失效；electron-scaffold 已建立安全基线与 app:// 本地页面，主窗口是后续 electron-setup-settings、electron-desktop-experience、electron-release 的共同前提。
+scope:
+  in:
+    - 'src/main 下的配置模块：harness URL 校验、token 剥离与日志脱敏、config.json 读取与原子写入（写入仅供测试与后续设置界面使用），文件位于 app.getPath(''userData'')/config.json，格式 {"harnessURL": ...}'
+    - 主窗口：标题 DSH Anywhere；本地视图（app:// 页面，挂 preload）与远程视图（persist 分区，无 preload）分离；启动/重新加载时显示“正在连接”页并以 10 秒超时探测地址，任何 HTTP 响应视为可达
+    - 本地页面：正在连接、加载失败错误页（不含 token 的地址与原因，“重试”“修改地址”）、未配置占位页、重新认证页（dsh-url 说明与“打开设置”）；“修改地址”“打开设置”按钮仅渲染，动作留给 electron-setup-settings
+    - 应用菜单：重新加载（CmdOrCtrl+R，三平台重新探测并打开已保存地址）、退出；macOS 使用标准应用菜单与编辑菜单
+    - 导航范围：will-navigate、will-frame-navigate、setWindowOpenHandler 与中键点击处理；同源（协议、主机、端口）留在主窗口，非同源 http/https 交给 shell.openExternal，其他协议忽略；不向远程页面注入脚本
+    - 会话：persist 分区 cookie 跨重启保留，POSIX 上 userData 目录权限仅当前用户；主框架 401 且正文为 dsh 固定文本识别为失效，每次导航后先用干净地址重试一次，仍失效显示重新认证页；带 token 地址只用于一次 loadURL，会话建立后从导航历史清除
+    - IPC：本地视图专用通道，遵循 ipc-sender-validation；远程视图无任何 IPC
+    - delta spec：navigation-scope 的 same-origin-stays、external-to-browser 与 session-auth 的 session-expired-page 去掉“在 Linux 与 macOS 上”的平台限定
+    - delta tech：electron-layout-security 增加远程视图导航策略与导航副作用串行化规则
+    - 测试：Vitest 单元测试（URL 校验与 token 剥离、配置读写、同源判定、外部打开判定、失效识别与重试、探测错误分类、菜单模板、IPC 校验），Playwright 端到端测试配合模拟 dsh 服务端；实测并记录 Electron 中 RetrySession 的必要性
+    - 实现调整（见 design no-session-retry 与 main-frame-will-navigate）：实测 Electron 中不需要同站重试，会话失效判定后直接显示重新认证页；导航范围只拦截主框架 will-navigate 与 setWindowOpenHandler
+    - 远程会话权限：persist:dsh 分区设置权限请求与检查处理器，默认拒绝，只放行 clipboard-sanitized-write 与 fullscreen（审查发现 Electron 默认批准全部权限，属于里程碑 Electron 安全基线）
+  out:
+    - 设置窗口、首次启动初始化界面的保存流程、“修改地址”“打开设置”的实际打开动作（electron-setup-settings）
+    - “设置…”与“关于”菜单项、单实例、窗口状态记忆、应用身份（electron-desktop-experience 等后续变更）
+    - 删除 Go/Wails 代码、打包与 release workflow 迁移（electron-release）
+    - 任何新增或改变的对外可观察行为（自动更新、托盘等）
+    - 旧 Wails 版 webview cookie 迁移
+unchanged_behavior:
+  - specs/ 下 main-window、load-failure、harness-url-config 的全部要求与场景
+  - navigation-scope 与 session-auth 除平台限定外的要求内容
+  - 现有 Go/Wails 应用的代码与行为，回归命令中的 Go 部分继续通过
+  - config.json 的位置与格式与 Go 版一致，token 不出现在配置、日志或界面错误信息中
+roadmap:
+  milestone: electron-migration
+  planned_change: electron-main-window

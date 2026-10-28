@@ -29,7 +29,7 @@ test.afterEach(async () => {
 })
 
 test('启动后显示 app:// 本地页面，并使用临时 userData', async () => {
-  await expect(page.locator('#app-title')).toHaveText('dsh-anywhere')
+  await expect(page.locator('#app-title')).toHaveText('DSH Anywhere')
   expect(page.url()).toBe('app://local/index.html')
   expect(await app.evaluate(({ app }) => app.getPath('userData'))).toBe(userDataDir)
 })

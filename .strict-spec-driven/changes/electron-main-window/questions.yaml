@@ -1,0 +1,60 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: electron-main-window
+open: []
+resolved:
+  - id: data-location
+    question: Electron 版 config.json 放在哪里、用什么格式？
+    context: '影响实现文件 src/main/config.ts 与端到端测试隔离方式；Go 版位于系统用户配置目录下的 dsh-anywhere 目录，格式为 {"harnessURL": ...}。'
+    answer: 沿用 Go 版位置与格式：app.getPath('userData')/config.json，不做数据迁移（里程碑 details 与 intake data-location）。
+    status: resolved
+    answered_by: roadmap
+  - id: settings-buttons
+    question: 错误页“修改地址”与重新认证页“打开设置”在本变更中是否要打开设置窗口？
+    context: 影响提案范围与 load-failure retry-recovers 中 change-address 场景、session-auth reauth-recovery 的验收时机。
+    answer: 本变更只渲染按钮，打开设置窗口的动作由 electron-setup-settings 接通；相关场景在该变更中验收（planned change details）。
+    status: resolved
+    answered_by: roadmap
+  - id: platform-scope
+    question: navigation-scope 与 session-auth 是否扩展到 Windows？
+    context: 影响 delta spec：是否去掉“在 Linux 与 macOS 上”的平台限定，以及 Windows 真机验收任务。
+    answer: 扩展到三平台，功能行为其余不变；Windows 由用户在宿主 GAMEPC 上按 delta spec 场景验收（里程碑 intake behavior-parity 与 windows-verification）。
+    status: resolved
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 当前 Windows 上的 Wails 版无法满足 navigation-scope 与 session-auth（主规格只限定 Linux 与 macOS，基于 Wails 的 windows-external-navigation 已取消）；Electron 版尚无主窗口，用户无法用它接入 harness。受影响的是在 Windows/Linux/macOS 上使用 dsh-anywhere 的用户（里程碑 goal 与 notes）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: Electron 版启动后按已保存地址进入 harness、不可达显示错误页可重试、会话失效显示重新认证页、cookie 跨重启保留、带 token 地址不残留；Windows 上非同源链接与 window.open 交给系统浏览器且主窗口不变、会话失效显示重新认证页，与 Linux/macOS 一致（里程碑 done_criteria 前两条与 planned change details）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 2026-10-28 决定整体迁移到 Electron 并取消 Wails 版 windows-external-navigation；electron-scaffold 已归档，本变更是 electron-setup-settings、electron-desktop-experience、electron-release 的共同依赖（里程碑 notes 与 planned change depends_on）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不新增或改变任何对外可观察行为；main-window、load-failure、harness-url-config 主规格不变，navigation-scope 与 session-auth 仅去掉平台限定；设置窗口与“设置…”“关于”菜单留给后续变更；现有 Go/Wails 应用继续通过回归；不迁移旧 webview cookie（里程碑 scope.out 与 planned change details）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 取“以 Electron 原生事件逐项复刻现有主规格行为”的解读：用 will-navigate、will-frame-navigate、setWindowOpenHandler 与导航响应状态码实现，不向远程页面注入脚本，远程页面不暴露任何本地 IPC；配置位置与格式与 Go 版一致（里程碑 details 与 planned change details）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

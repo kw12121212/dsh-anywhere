@@ -30,6 +30,11 @@ categories:
       status: active
       occurrences: 2
       path: .strict-spec-driven/lessons/security/wails-samesite-strict-cookie-1a13f2.yaml
+    electron-loadurl-samesite-strict-cookie-wails-39e30f:
+      title: Electron 主进程 loadURL 发起的导航携带 SameSite=Strict cookie，Wails 时期的同站重试不再需要
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/security/electron-loadurl-samesite-strict-cookie-wails-39e30f.yaml
   testing:
     playwright-page-evaluate-cdp-csp-eval-7bf922:
       title: Playwright page.evaluate 经 CDP 执行会绕过 CSP 的 eval 检查
@@ -41,6 +46,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/electron-userdata-dsh-anywhere-19fbdd.yaml
+    playwright-locator-aba903:
+      title: 主进程阻止的导航会让 Playwright 认为页面导航未完成，后续 locator 操作超时
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/playwright-locator-aba903.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
@@ -67,3 +77,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/wails-build-config-yml-98c650.yaml
+    electron-session-fetch-redirect-manual-net-reque-e3fc5d:
+      title: Electron session.fetch 的 redirect manual 以错误拒绝，探测重定向需用 net.request
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/electron-session-fetch-redirect-manual-net-reque-e3fc5d.yaml

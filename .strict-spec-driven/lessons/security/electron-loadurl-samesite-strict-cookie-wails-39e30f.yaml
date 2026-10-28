@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-loadurl-samesite-strict-cookie-wails-39e30f
+  title: Electron 主进程 loadURL 发起的导航携带 SameSite=Strict cookie，Wails 时期的同站重试不再需要
+category: security
+status: active
+created_at: '2026-10-28T08:33:20.361Z'
+updated_at: '2026-10-28T08:33:20.361Z'
+context: electron-main-window 按 Go 版设计计划保留“每次导航后用干净地址同站重试一次”（Wails 版 RetrySession），以应对从本地页面进入 harness 时重定向不带 SameSite=Strict cookie 的问题。
+observation: 在 Electron 45 中用模拟 dsh 实测：远程 WebContentsView 由主进程 loadURL 发起的导航（带 token 地址首次导航后的 302、失效页之后再次加载、应用重启后加载）都携带会话 cookie；Wails 需要重试是因为导航由 wails:// 本地文档发起，而 Electron 中远程视图从不由本地文档导航。
+takeaway: 迁移平台时不要照搬为旧 webview 行为写的补丁；先用模拟服务端按新平台的导航发起方式实测 cookie 是否携带，再决定是否保留重试等变通。
+applies_when: 把 Wails 或其他 webview 时期针对 SameSite cookie、导航发起方或重定向的变通（如 RetrySession）迁移到 Electron，或在 Electron 中依赖 SameSite=Strict 会话 cookie 设计导航流程时
+occurrences:
+  - origin: electron-main-window
+    date: '2026-10-28'
+    evidence: 'spike：fake dsh 记录 ''/?token=* cookie=none'' 后 ''/ cookie=valid''；401 后再次 loadURL 首个请求即 cookie=valid；e2e/main-window.spec.ts 会话测试断言 token 请求后的下一个请求为 { path: ''/'', cookie: ''valid'' }'

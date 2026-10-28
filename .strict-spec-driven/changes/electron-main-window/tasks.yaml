@@ -1,0 +1,69 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: electron-main-window
+sections:
+  Implementation:
+    impl-config:
+      text: 新增 src/main/config.ts：harness URL 校验（去首尾空白、仅接受带主机名的 http/https 绝对地址、错误信息不含 token）、去除所有 token 查询参数、日志脱敏、读取 userData/config.json（区分未配置与配置无效，手工写入的 token 被剥离）、临时文件加重命名原子写入；同目录 config.test.ts 覆盖 harness-url-config 全部场景
+      status: complete
+    impl-navigation-policy:
+      text: 新增 src/main/navigation-policy.ts 纯函数：同源判定（协议、主机、端口，含默认端口归一）与打开请求分类（同源留在主窗口、非同源 http/https 外部打开、其他协议忽略）；navigation-policy.test.ts 覆盖 navigation-scope 场景（含不同端口与 file:、javascript:）
+      status: complete
+    impl-probe:
+      text: '新增 src/main/probe.ts：用 Electron net.request（远程视图 session、redirect: manual、不带会话 cookie，默认 10 秒超时）探测干净地址，收到响应头或 redirect 事件即可达，网络错误按 Chromium 错误码分类为 DNS 失败、连接被拒、超时、TLS 失败与其他，结果不含 token；probe.test.ts 用假请求覆盖各分类与超时'
+      status: complete
+    impl-session:
+      text: 新增 src/main/session.ts：失效判定（主框架 401、text/plain、正文等于 dsh 固定文本）与导航历史中需清除的含 token 条目计算；session.test.ts 覆盖失效识别、非 401 或正文或类型不同不判定为失效、历史清除索引不含当前条目
+      status: complete
+    impl-navigator:
+      text: 新增 src/main/navigator.ts 导航控制器：状态 connecting/error/unconfigured/reauth/remote、代次计数、启动与重新加载流程（读配置→正在连接→探测→远程或错误页）、重试、失效后切重新认证页，异步结果在代次变化后丢弃；navigator.test.ts 用假视图与假探测覆盖 main-window 与 load-failure 场景及并发重新加载
+      status: complete
+    impl-main-window:
+      text: 改造 src/main/index.ts 与 window.ts：BrowserWindow 标题 DSH Anywhere，其自身 webContents 加载 app:// 本地页面并挂 preload；子 WebContentsView（persist:dsh 分区、不挂 preload）显示远程 harness，两者均使用安全 webPreferences；远程视图挂接 will-navigate（主框架）、setWindowOpenHandler 与导航策略、did-navigate 失效识别、带 token 地址历史清除（src/main/remote-view.ts）；远程会话权限默认拒绝（src/main/permissions.ts）；窗口关闭时作废导航控制器；POSIX 上把 userData 目录权限设为 0700；window.test.ts 断言两个视图的 webPreferences 与远程视图无 preload
+      status: complete
+    impl-local-pages:
+      text: 实现本地页面与 IPC：src/renderer 按视图状态渲染正在连接、错误页（干净地址、原因、“重试”“修改地址”）、未配置占位页、重新认证页（dsh-url 说明与“打开设置”）；src/preload 经 contextBridge 暴露获取视图状态、订阅状态变化与重试；src/main/ipc.ts 每个处理函数按 ipc-sender-validation 校验主 frame 与允许来源并白名单校验参数；“修改地址”“打开设置”只渲染按钮；ipc.test.ts 覆盖非本地来源、子 frame 与非白名单参数被拒
+      status: complete
+    impl-app-menu:
+      text: 新增 src/main/app-menu.ts：菜单模板含“重新加载”（CmdOrCtrl+R，调用导航控制器重新探测，不使用 Chromium reload 角色）与退出，macOS 使用标准应用菜单角色与编辑菜单；app-menu.test.ts 按平台断言模板结构与重新加载回调
+      status: complete
+    impl-e2e:
+      text: '新增 e2e/fake-dsh.ts 模拟 dsh 服务端（带 token 请求签发 HttpOnly SameSite=Strict cookie 后 302 到干净地址，过期或无 cookie 返回 401 与固定正文，记录请求是否带 cookie）与 e2e/main-window.spec.ts：每个测试独立临时 --user-data-dir，覆盖 cookie 签发与重定向、重启后会话保留、失效显示重新认证页、带 token 地址不在导航历史与配置中、同源与外部链接及 window.open（替换 shell.openExternal 记录调用）、file: 被忽略、连接被拒错误页与重试恢复、重新加载、未配置占位页、远程页面中 require/process 与本地 IPC 均不可用且配置不变'
+      status: complete
+    impl-retry-session-finding:
+      text: 用模拟 dsh 实测从本地视图首次进入 harness 及从重新认证页重新加载时重定向请求是否携带 SameSite=Strict cookie，据此确认同站重试在 Electron 中是否必要，并把结论记录为 lesson（补充 wails-samesite-strict-cookie 教训的 Electron 结论）
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与覆盖率门槛
+      status: complete
+      command: npm run test:coverage
+    test-e2e:
+      text: 构建并运行 Playwright 端到端测试
+      status: complete
+      command: npm run build && npm run test:e2e
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Go 部分与 Electron 部分均通过、各自覆盖率不低于 80%）
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    verify-ready:
+      text: 运行 strict-spec-cli ready 确认变更无确定性阻塞
+      status: complete
+      command: strict-spec-cli ready electron-main-window
+    verify-windows-manual:
+      text: '在 Windows 宿主 GAMEPC 上运行 Electron 版，由用户按 navigation-scope 与 session-auth delta spec 场景逐条验收（同源链接与 window.open、外部链接与中键、不同端口、file: 忽略、会话失效显示重新认证页）并记录结果'
+      status: pending
+    verify-verify:
+      text: 运行 strict-spec-cli verify 确认任务、delta spec 与 delta tech 与实现一致
+      status: pending
+      command: strict-spec-cli verify electron-main-window
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-unit
