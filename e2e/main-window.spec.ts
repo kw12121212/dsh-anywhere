@@ -364,9 +364,17 @@ test.describe('导航范围', () => {
     })
     await expect.poll(opened).toEqual(['https://example.org/popup'])
     expect(remote.url()).toBe(fake.baseURL)
-    await remote.evaluate(() => {
-      window.open('/sessions/2')
-    })
+    // 同源 window.open 会在 evaluate 返回前就让主窗口发起导航、销毁远程页面的执行
+    // 上下文（Linux 上该竞态是确定性的）；触发成功即视为完成，导航结果由下方断言验证。
+    await remote
+      .evaluate(() => {
+        window.open('/sessions/2')
+      })
+      .catch((error: unknown) => {
+        if (!/Execution context was destroyed/.test(String(error))) {
+          throw error
+        }
+      })
     await expect(remote.locator('#harness')).toHaveText('harness /sessions/2')
     expect(await windowCount()).toBe(1)
     expect(running().windows()).toHaveLength(2)
