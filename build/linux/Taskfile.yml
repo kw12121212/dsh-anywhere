@@ -154,16 +154,29 @@ tasks:
     summary: Creates a deb package
     cmds:
       - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      # nfpm 配置以 ${VERSION} 展开取版本，与 ldflags 注入二进制的版本同源。
+      VERSION: '{{.VERSION}}'
+      GIT_COMMITTER_NAME: '{{.GIT_COMMITTER_NAME | default "Keepwriting"}}'
+      GIT_COMMITTER_EMAIL: '{{.GIT_COMMITTER_EMAIL | default "keepwriting@users.noreply.github.com"}}'
 
   generate:rpm:
     summary: Creates a rpm package
     cmds:
       - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      VERSION: '{{.VERSION}}'
+      GIT_COMMITTER_NAME: '{{.GIT_COMMITTER_NAME | default "Keepwriting"}}'
+      GIT_COMMITTER_EMAIL: '{{.GIT_COMMITTER_EMAIL | default "keepwriting@users.noreply.github.com"}}'
 
   generate:aur:
     summary: Creates a arch linux packager package
     cmds:
       - wails3 tool package -name "{{.APP_NAME}}" -format archlinux -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      VERSION: '{{.VERSION}}'
+      GIT_COMMITTER_NAME: '{{.GIT_COMMITTER_NAME | default "Keepwriting"}}'
+      GIT_COMMITTER_EMAIL: '{{.GIT_COMMITTER_EMAIL | default "keepwriting@users.noreply.github.com"}}'
 
   generate:dotdesktop:
     summary: Generates a `.desktop` file

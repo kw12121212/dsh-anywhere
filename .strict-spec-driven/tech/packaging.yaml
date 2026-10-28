@@ -1,0 +1,63 @@
+schema: strict-spec-driven/main-tech/v1
+schema_version: 1
+artifact_type: main_tech
+schema_file: templates/strict-spec-driven/schemas/main-tech.yaml
+standard:
+  id: packaging
+  title: 安装包打包
+  category: tooling
+rules:
+  ci-calls-wails-package-tasks:
+    strength: MUST
+    statement: CI 打包步骤只允许调用 wails3 Taskfile 打包任务（darwin:package:universal:dmg、linux:create:appimage、linux:create:deb、windows:package），不得在 CI 工作流中复制编译或打包命令
+    rationale: 打包权威源单一（wails3 生成的 build/<platform> 配置），本地与 CI 产物才可能一致；CI 复制打包逻辑必然漂移
+    enforcement:
+      method: ci
+  installer-filename-scheme:
+    strength: MUST
+    statement: 对外发布的安装包文件名必须形如 dsh-anywhere_<版本>_<平台>_<架构>[_installer].<扩展>（如 dsh-anywhere_0.1.0_macos_universal.dmg、dsh-anywhere_0.1.0_windows_amd64_installer.exe、dsh-anywhere_0.1.0_linux_amd64.deb）
+    rationale: 统一命名让发布页产物可读可校验，SHA256SUMS 生成与用户下载选择都不依赖各打包器互不相同的默认名
+    enforcement:
+      method: review
+  unsigned-install-bypass-documented:
+    strength: MUST
+    statement: 未签名安装包首次启动的绕过步骤（macOS Gatekeeper 与 Windows SmartScreen）必须记录在 README
+    rationale: 里程碑明确不做签名公证，绕过步骤是用户能装起来的前置条件，缺失即安装体验断裂
+    enforcement:
+      method: test
+  package-version-from-tag:
+    strength: MUST
+    statement: 安装包元数据与文件名中的版本号必须与二进制内注入的版本同源（git tag 精确匹配派生，缺省 dev），deb 等经 nfpm 以 ${VERSION} 环境变量注入
+    rationale: 版本不同源会让包管理器显示的版本与关于页不一致，升级排查困难
+    enforcement:
+      method: test
+  ci-full-fetch-for-tag-version:
+    strength: SHOULD
+    statement: '依赖 Taskfile VERSION 变量（git describe --tags --exact-match，缺省静默回退 dev）的 CI 作业，checkout 必须设置 fetch-depth: 0 或 fetch-tags: true'
+    rationale: 浅克隆取不到 tag 时精确匹配静默失败，产物会被错命名为 dev 版而 CI 仍绿灯；release-workflow 等 tag 触发流程同样受影响
+    enforcement:
+      method: review
+  release-draft-verify-then-publish:
+    strength: MUST
+    statement: tag 发布必须先创建草稿 Release 并上传全部产物与 SHA256SUMS，全部成功后才转为正式发布；任一步失败必须删除草稿，不得留下半成品 Release
+    rationale: 半成品发布页会误导用户下载缺失平台的版本；草稿对外不可见，是唯一的原子性实现方式
+    enforcement:
+      method: ci
+  release-reuses-package-workflow:
+    strength: MUST
+    statement: 发布工作流必须以 workflow_call 复用 package.yml 打包，不得复制打包矩阵或打包命令
+    rationale: 与 ci-reuses-wails-package-tasks 同理：发布产物必须与日常打包产物同构，双份打包逻辑必然漂移
+    enforcement:
+      method: ci
+  release-notes-bypass-steps:
+    strength: MUST
+    statement: 每个发布的说明必须包含未签名安装包首次启动绕过 Gatekeeper 与 SmartScreen 的步骤
+    rationale: 发布页是用户第一触点，绕过步骤缺失则安装即受阻；里程碑风险条目明确要求发布说明给出绕过步骤
+    enforcement:
+      method: ci
+  workflow-structure-assertion-tests:
+    strength: SHOULD
+    statement: 无法直接单测的 CI/发布工作流结构，必须由 internal 包下的仓库文件断言测试锁定：关键片段正向断言，至少一条负向断言，并锁定被复用上游的关键前提（如 package.yml 的 workflow_call 触发器）
+    rationale: 本仓库 buildassets/packaging/release 三组测试已沿用该模式；不锁定则上游工作流改动会让发布断链而测试全绿
+    enforcement:
+      method: test

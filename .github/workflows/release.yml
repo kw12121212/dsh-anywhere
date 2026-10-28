@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package all platforms
+    uses: ./.github/workflows/package.yml
+
+  release:
+    name: Publish release
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Verify artifacts and generate checksums
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          ls -l dist/
+          # 四类安装包必须齐全且文件名内嵌 tag 版本号；缺失即失败，防止 dev 版产物被发布。
+          for f in \
+            "dsh-anywhere_${VERSION}_windows_amd64_installer.exe" \
+            "dsh-anywhere_${VERSION}_macos_universal.dmg" \
+            "dsh-anywhere_${VERSION}_linux_amd64.AppImage" \
+            "dsh-anywhere_${VERSION}_linux_amd64.deb"; do
+            if [ ! -f "dist/$f" ]; then
+              echo "missing release artifact: dist/$f" >&2
+              exit 1
+            fi
+          done
+          (cd dist && shasum -a 256 ./* > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<'EOF'
+          下载对应平台的安装包，校验文件见 SHA256SUMS（shasum -a 256 --check SHA256SUMS）。
+
+          安装包未做代码签名与公证，首次启动的系统警告属预期：
+
+          ## macOS（Gatekeeper）
+
+          在「应用程序」中对 DSH Anywhere 右键，选择「打开」，在弹窗中确认「打开」；
+          或双击启动一次后到「系统设置 → 隐私与安全性」底部点「仍要打开」。
+
+          ## Windows（SmartScreen）
+
+          SmartScreen 提示「Windows 已保护你的电脑」时，点「更多信息」，再点「仍要运行」。
+          EOF
+      - name: Create draft release with all assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --draft --verify-tag --title "${GITHUB_REF_NAME}" --notes-file release-notes.md dist/*
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false
+      - name: Delete draft release on failure
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 只删除草稿：对同一 tag 重跑时不得误删已正式发布的 Release。
+          if gh release view "${GITHUB_REF_NAME}" --json isDraft --jq .isDraft | grep -q true; then
+            gh release delete "${GITHUB_REF_NAME}" --yes
+          else
+            echo "release ${GITHUB_REF_NAME} is not a draft (or does not exist); nothing to clean up"
+          fi

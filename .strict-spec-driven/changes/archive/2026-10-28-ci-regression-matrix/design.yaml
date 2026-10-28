@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: ci-regression-matrix
+approach:
+  - 新增单个 GitHub Actions 工作流文件 .github/workflows/regression.yml：on 为 push 与 pull_request；一个 job 用 matrix 覆盖 ubuntu-latest、macos-latest、windows-latest 且 fail-fast 关闭；defaults.run.shell 设为 bash（Windows runner 走 Git Bash，提供回归命令依赖的 grep/awk）；actions/setup-go 按 go.mod 安装 Go 并缓存 go.sum；actions/setup-node 安装 Node 22 并按 frontend/package-lock.json 缓存 npm；仅 Linux 步骤安装 libgtk-4-dev 与 libwebkitgtk-6.0-dev；末步逐字执行 config.yaml 的完整回归命令；job 超时 60 分钟防止挂起烧配额
+decisions:
+  ci-runs-config-regression-verbatim:
+    decision: CI 末步逐字执行 config.yaml review_evidence.project_regression.command，不拆步、不省略覆盖率 awk 门槛
+    rationale: 保证 CI 与本地门槛完全一致是本计划变更的核心目标，改写或拆分命令会造成口径漂移，覆盖率门槛必须与本地同为硬失败
+  use-gtk4-webkitgtk6:
+    decision: Linux CI 安装 libgtk-4-dev 与 libwebkitgtk-6.0-dev，而非计划变更 details 中提到的 GTK3/WebKit2GTK 开发库
+    rationale: 回归命令不带 -tags gtk3，Wails v3.0.0 默认链接 GTK4/WebKitGTK 6.0（与 AGENTS.md 构建要求一致）；装 GTK3 库会让回归命令在 Linux 构建阶段直接失败
+  no-delta-spec:
+    decision: 本变更为纯技术变更：只新增 GitHub Actions 回归工作流，不改变任何用户可观察行为，也不触及任何主规格中的需求
+    rationale: specs/INDEX.yaml 中的 10 个主规格全部描述应用运行时行为（窗口、会话、配置、导航等），CI 工作流不在其覆盖范围；强行新增 delta-spec 会违反规格只描述可观察行为的规则
+alternatives: []
+risks: []

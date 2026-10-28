@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: wails-build-config-yml-98c650
+  title: wails 生成资产中的脚手架值可能无法经 build/config.yml 修正，只能手改并测试锁定
+category: tooling
+status: active
+created_at: '2026-10-28T06:10:53.134Z'
+updated_at: '2026-10-28T06:10:53.134Z'
+context: platform-packaging 变更中打包演练发现 deb 元数据 Homepage 仍指向 wails.io 脚手架值。
+observation: build/config.yml 只有 info 段的部分字段会同步到生成资产；homepage 等字段不在 config.yml 中，wails3 update build-assets 无法覆盖它们，脚手架默认值会一直残留到产物元数据里。
+takeaway: 遇到生成资产中的脚手架残留时：先确认该字段是否有 config.yml 配置源；没有则手改生成文件，并在变更 design 中按 generated-build-assets-not-hand-edited（SHOULD）记录显式偏离，同时以仓库文件断言测试（buildassets_test.go/packaging_test.go 模式）锁定，防止未来再生成时悄悄带回。
+applies_when: 修改 wails3 生成的平台资产（nfpm.yaml、Info.plist、info.json 等）或发现打包产物元数据含模板默认值时。
+occurrences:
+  - origin: platform-packaging
+    date: '2026-10-28'
+    evidence: 'ar p bin/dsh-anywhere.deb control.tar.gz | tar -xzO ./control 显示 Homepage: https://wails.io；build/config.yml 无 homepage 字段；修正后 packaging_test.go TestNfpmVersionInjectedFromEnv 断言锁定。'

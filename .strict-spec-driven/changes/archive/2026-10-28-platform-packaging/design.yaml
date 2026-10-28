@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: platform-packaging
+approach:
+  - '四块实现：1) build/darwin/Taskfile.yml 新增 package:universal:dmg（deps package:universal 后调 create:dmg），补齐通用二进制 dmg 入口；2) nfpm.yaml version 改为 ${VERSION}，generate:deb/rpm/aur 任务以 env 注入 Taskfile 的 VERSION 变量（git tag 精确匹配派生，缺省 dev），使 deb 元数据版本与 ldflags 注入的二进制版本同源；3) 新增 .github/workflows/package.yml：三平台矩阵，安装 Go(go.mod)/Node 22/wails3 v3.0.0，Windows 装 NSIS、Linux 装 libgtk-4-dev libwebkitgtk-6.0-dev，分别调用 wails3 task darwin:package:universal:dmg、linux:create:appimage + linux:create:deb、windows:package，统一重命名为 dsh-anywhere_<版本>_<平台>_<架构>[_installer].<扩展> 后 upload-artifact（if-no-files-found: error）；触发为 push 到 main/dev、workflow_dispatch、workflow_call（供 release-workflow 以 workflow 复用）；4) 新增 README.md 含未签名安装包首次启动绕过步骤。测试沿用 internal/appinfo 的仓库文件断言模式新增 packaging_test.go，另以本机 darwin 通用打包与 dummy 二进制 deb 配置演练作实证'
+decisions:
+  ci-reuses-wails-package-tasks:
+    decision: CI 打包步骤只调用 wails3 Taskfile 打包任务（darwin:package:universal:dmg、linux:create:appimage、linux:create:deb、windows:package），不在工作流中复制编译或打包命令
+    rationale: 里程碑 details 明确要求复用 wails3 生成的 Taskfile 与 build/<platform> 配置，CI 不复制打包逻辑；单一打包权威源保证本地与 CI 产物一致
+  macos-universal-dmg:
+    decision: macOS 采用 arm64+amd64 通用二进制打单个 dmg，新增 darwin:package:universal:dmg 任务；不在本变更预先实现降级双 dmg 方案
+    rationale: 计划变更要求优先通用二进制、仅当 cgo 交叉编译受阻才降级；本机 darwin 打包任务将实际执行 amd64+arm64 双架构 cgo 构建并 lipo 合并，若受阻再按计划变更降级并记录
+  nfpm-version-env-injection:
+    decision: nfpm.yaml 的 version 由硬编码 0.1.0 改为 ${VERSION}，同时把 homepage 从脚手架值 https://wails.io 修正为仓库地址（build/config.yml 无 homepage 字段，wails3 update build-assets 无法覆盖，同样只能手改并测试锁定）；generate:deb/rpm/aur 任务经 env 注入与 ldflags 同源的版本号及 maintainer 兜底；此为对 build-identity 标准 generated-build-assets-not-hand-edited（SHOULD）的显式偏离
+    rationale: config.yml 的 info.version 是静态值，无法表达 git tag 派生版本；wails3 tool package 无版本参数，nfpm 配置内环境变量展开是唯一注入途径；homepage 为脚手架残留、无配置源可改。偏离先例为 8ba5fdf（app-identity 已以 strict 变更方式修改 nfpm.yaml 并以测试锁定内容）；本次同样以 packaging_test.go 断言锁定（version、homepage 均在断言内），且改动不与 wails3 update build-assets 再生成冲突的键
+  artifact-naming-in-ci:
+    decision: 产物统一命名在 CI 重命名步骤完成：dsh-anywhere_<版本>_<平台>_<架构>[_installer].<扩展>（macos_universal、windows_amd64_installer.exe、linux_amd64.AppImage/.deb），不改各打包器内部输出名
+    rationale: NSIS/DMG/nfpm 各有默认输出名，强行改模板（project.nsi OutFile 等）属于对生成资产的高风险手改；CI 重命名一步达成统一命名且本地打包行为不变
+  package-workflow-triggers:
+    decision: 打包工作流触发为 push 到 main/dev、workflow_dispatch 与 workflow_call；不对任意分支 push 触发打包
+    rationale: 任意分支 push 打包（含 macOS 双架构 cgo 与 NSIS）将使每次提交的 CI 分钟数数倍于回归，里程碑验收只要求回归在任意分支触发；主线分支 + 手动 + 可复用调用覆盖打包验证与发布需求
+  no-delta-spec:
+    decision: 纯技术变更：只涉及打包任务、CI 工作流与 README，不改变任何用户可观察的应用行为
+    rationale: 现有主规格描述应用运行时行为（窗口、会话、配置等），安装包构建过程不在其覆盖范围
+alternatives: []
+risks: []

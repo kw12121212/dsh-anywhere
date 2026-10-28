@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: packaging
+operations:
+  ADDED:
+    release-draft-verify-then-publish:
+      strength: MUST
+      statement: tag 发布必须先创建草稿 Release 并上传全部产物与 SHA256SUMS，全部成功后才转为正式发布；任一步失败必须删除草稿，不得留下半成品 Release
+      rationale: 半成品发布页会误导用户下载缺失平台的版本；草稿对外不可见，是唯一的原子性实现方式
+      enforcement:
+        method: ci
+    release-reuses-package-workflow:
+      strength: MUST
+      statement: 发布工作流必须以 workflow_call 复用 package.yml 打包，不得复制打包矩阵或打包命令
+      rationale: 与 ci-reuses-wails-package-tasks 同理：发布产物必须与日常打包产物同构，双份打包逻辑必然漂移
+      enforcement:
+        method: ci
+    release-notes-bypass-steps:
+      strength: MUST
+      statement: 每个发布的说明必须包含未签名安装包首次启动绕过 Gatekeeper 与 SmartScreen 的步骤
+      rationale: 发布页是用户第一触点，绕过步骤缺失则安装即受阻；里程碑风险条目明确要求发布说明给出绕过步骤
+      enforcement:
+        method: ci
+    workflow-structure-assertion-tests:
+      strength: SHOULD
+      statement: 无法直接单测的 CI/发布工作流结构，必须由 internal 包下的仓库文件断言测试锁定：关键片段正向断言，至少一条负向断言，并锁定被复用上游的关键前提（如 package.yml 的 workflow_call 触发器）
+      rationale: 本仓库 buildassets/packaging/release 三组测试已沿用该模式；不锁定则上游工作流改动会让发布断链而测试全绿
+      enforcement:
+        method: test
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: release-workflow
+approach:
+  - '单文件两 job：package job 以 uses ./.github/workflows/package.yml 复用既有打包矩阵（tag 触发时 git describe 精确匹配命中 tag，产物名内嵌真实版本）；release job（needs package）在 ubuntu 上以 actions/download-artifact 汇总产物，先按 tag 版本断言四类安装包（exe/dmg/AppImage/deb）全部存在——这一步同时防住浅克隆取不到 tag 导致产物错命名 dev 的陷阱（见 packaging 标准 ci-full-fetch-for-tag-version），随后 shasum -a 256 生成 SHA256SUMS，写含绕过步骤的发布说明，gh release create --draft --verify-tag 一次性上传全部产物，最后 gh release edit --draft=false 转正式；带 if: failure() 的清理步骤删除草稿 Release。全程只用 runner 预装的 gh CLI 与 GITHUB_TOKEN，不引入第三方 action'
+decisions:
+  reuse-package-workflow-call:
+    decision: '打包通过 uses: ./.github/workflows/package.yml 复用，release.yml 不复制任何打包矩阵或命令'
+    rationale: platform-packaging 已为复用预留 workflow_call 触发器；单一打包权威源（wails3 task）+ 单一打包工作流，发布与日常打包产物必然同构
+  draft-verify-then-publish:
+    decision: '先 gh release create --draft 一次性上传全部产物与 SHA256SUMS，再 gh release edit --draft=false；if: failure() 清理步骤删除草稿'
+    rationale: 计划变更明确要求全部上传成功后才发布、失败不留半成品；草稿态对外不可见，失败清理保证发布页只出现完整版本
+  verify-artifact-version-before-release:
+    decision: 发布前按 tag 版本逐个断言四类产物文件存在，缺失即失败
+    rationale: 防止 fetch/tag 解析异常导致 dev 版产物被发布；也是浅克隆陷阱的最后一道闸
+  gh-cli-only-release:
+    decision: '发布步骤只用 gh CLI 与 GITHUB_TOKEN（permissions: contents: write），不引入第三方 release action'
+    rationale: 依赖面最小，行为可从 gh 文档直接核对，避免第三方 action 的供应链与版本漂移
+  no-delta-spec:
+    decision: 纯技术变更：只新增发布工作流与断言测试，不改变任何用户可观察的应用行为
+    rationale: 发布流程属仓库工程设施，主规格均为应用运行时行为
+alternatives: []
+risks: []

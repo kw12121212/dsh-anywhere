@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: ci-regression
+standard:
+  title: CI 回归矩阵
+  category: tooling
+operations:
+  ADDED:
+    ci-regression-verbatim:
+      strength: MUST
+      statement: 回归 CI 工作流必须在 ubuntu、macos、windows 三个平台的矩阵 job 中逐字执行 config.yaml review_evidence.project_regression.command 的完整回归命令，不得拆分、改写或省略覆盖率门槛
+      rationale: CI 与本地回归门槛必须完全一致，任何口径漂移都会让平台特定回归逃逸
+      enforcement:
+        method: ci
+        detail: 覆盖三平台矩阵与完整命令（前端构建、go vet、go build、go test -race、覆盖率 ≥80% awk 门槛）
+    ci-bash-shell:
+      strength: MUST
+      statement: '回归 CI 工作流的所有步骤必须统一使用 bash shell（defaults.run.shell: bash），使 Windows runner 通过 Git Bash 提供 grep/awk'
+      rationale: 回归命令依赖 bash、grep、awk；Windows runner 默认 shell 无法执行
+      enforcement:
+        method: ci
+    ci-linux-gui-deps:
+      strength: MUST
+      statement: Linux 回归 CI job 必须在执行回归命令前安装 libgtk-4-dev 与 libwebkitgtk-6.0-dev
+      rationale: Wails v3.0.0 在 Linux 默认链接 GTK4/WebKitGTK 6.0，回归命令不带 -tags gtk3；缺少开发库则构建失败
+      enforcement:
+        method: ci
+    ci-workflow-lint:
+      strength: MUST
+      statement: 对 .github/workflows/ 下工作流文件的每次变更，在提交前必须通过 actionlint 本地校验
+      rationale: 工作流 YAML 是治理盲区文件（无编译器、无单测），语法或矩阵/shell 结构错误只有推送到 GitHub 后才暴露；actionlint 在本地拦截
+      enforcement:
+        method: lint
+  MODIFIED: {}
+  REMOVED: {}

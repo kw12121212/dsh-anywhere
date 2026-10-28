@@ -7,6 +7,10 @@ standards:
     title: 构建身份与版本注入
     category: tooling
     path: .strict-spec-driven/tech/build-identity.yaml
+  - id: ci-regression
+    title: CI 回归矩阵
+    category: tooling
+    path: .strict-spec-driven/tech/ci-regression.yaml
   - id: frontend-dependencies
     title: 前端依赖管理
     category: tooling
@@ -15,6 +19,10 @@ standards:
     title: Go 包布局
     category: architecture
     path: .strict-spec-driven/tech/go-package-layout.yaml
+  - id: packaging
+    title: 安装包打包
+    category: tooling
+    path: .strict-spec-driven/tech/packaging.yaml
   - id: security-secrets
     title: 凭据与敏感输入保护
     category: security

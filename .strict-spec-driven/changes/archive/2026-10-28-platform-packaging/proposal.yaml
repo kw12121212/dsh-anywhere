@@ -1,0 +1,23 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: platform-packaging
+  status: proposed
+summary:
+  what:
+    - 打通三平台安装包打包并在 CI 中执行：补齐 macOS arm64+amd64 通用二进制的 dmg 打包任务与 deb 的版本号注入；新增 GitHub Actions 打包工作流（三平台矩阵安装依赖、调用 wails3 Taskfile 打包任务、统一产物命名后上传 workflow 产物）；新增 README 说明未签名安装包首次启动绕过 Gatekeeper 与 SmartScreen 的步骤
+  why:
+    - cross-platform-release 里程碑要求能产出 Windows NSIS 安装包、macOS .app 与 .dmg、Linux AppImage 与 .deb，且 CI 中按平台调用打包任务并上传产物，为 tag 发布工作流提供可复用的打包链路
+scope:
+  in:
+    - build/darwin/Taskfile.yml 新增 package:universal:dmg 任务；build/linux/nfpm/nfpm.yaml 版本改为 ${VERSION} 环境变量注入且 generate:deb/rpm/aur 任务设置 VERSION 环境；新增 .github/workflows/package.yml（ubuntu/macos/windows 矩阵、push 到 main/dev 与 workflow_dispatch/workflow_call 触发、安装 Go/Node/wails3/NSIS/GTK 开发库、调用 darwin:package:universal:dmg 与 linux:create:appimage、linux:create:deb 与 windows:package、重命名为 dsh-anywhere_<版本>_<平台>_<架构> 格式并 upload-artifact）；新增 README.md；internal/appinfo 增加 packaging_test.go 断言打包配置
+    - build/darwin/Taskfile.yml 新增 package:universal:dmg 任务；build/linux/nfpm/nfpm.yaml 版本改为 ${VERSION} 环境变量注入、homepage 由脚手架值 wails.io 修正为仓库地址、generate:deb/rpm/aur 任务设置 VERSION 与 maintainer 兜底环境；新增 .github/workflows/package.yml（ubuntu/macos/windows 矩阵、push 到 main/dev 与 workflow_dispatch/workflow_call 触发、安装 Go/Node/wails3/NSIS/GTK 开发库、调用 darwin:package:universal:dmg 与 linux:create:appimage、linux:create:deb 与 windows:package、重命名为 dsh-anywhere_<版本>_<平台>_<架构> 格式并 upload-artifact）；新增 README.md；internal/appinfo 增加 packaging_test.go 断言打包配置
+  out:
+    - 不做 v* tag 触发的发布工作流、SHA256SUMS、草稿 Release（属 release-workflow 计划变更）；不做代码签名与公证；不产出 rpm/aur/msix；不修改任何应用 Go/前端代码与运行时行为
+unchanged_behavior:
+  - 应用运行时行为、config.yaml 回归命令、frontend/bindings 生成物、回归工作流 .github/workflows/regression.yml 均不变；打包产物的应用内版本注入机制（ldflags -X internal/appinfo.Version）沿用 app-identity 既有实现
+roadmap:
+  milestone: cross-platform-release
+  planned_change: platform-packaging

@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: release-workflow
+  status: proposed
+summary:
+  what:
+    - 新增由 v* tag 触发的 GitHub Actions 发布工作流 .github/workflows/release.yml：以 workflow_call 复用 package.yml 在三平台打包，下载全部产物后校验四类安装包齐全且文件名含 tag 版本号，生成 SHA256SUMS，先创建草稿 Release 并一次性上传全部产物，全部成功后才转为正式发布；任一步失败则删除草稿，不留半成品 Release；发布说明包含 Gatekeeper 与 SmartScreen 绕过步骤
+  why:
+    - 里程碑要求推送 v* tag 时自动构建三平台安装包并发布到版本发布页，附带 SHA256 校验文件，且不允许失败时留下半成品 Release
+scope:
+  in:
+    - '新增 .github/workflows/release.yml（on push tags v*、permissions contents: write、job 复用 ./.github/workflows/package.yml、下载产物、按 tag 版本校验四类产物齐全、shasum -a 256 生成 SHA256SUMS、写发布说明（含绕过步骤）、gh release create --draft 上传全部产物、成功后 gh release edit --draft=false、failure 时 gh release delete）；internal/appinfo 新增 release_test.go 断言工作流结构'
+  out:
+    - 不修改打包工作流 package.yml 与回归工作流；不新增打包逻辑（全部复用）；不修改应用代码；不做签名公证
+unchanged_behavior:
+  - 应用运行时行为、package.yml、regression.yml、config.yaml 回归命令、Taskfile 均不变；产物命名沿用 dsh-anywhere_<版本>_<平台>_<架构> 方案
+roadmap:
+  milestone: cross-platform-release
+  planned_change: release-workflow

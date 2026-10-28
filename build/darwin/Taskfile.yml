@@ -135,6 +135,13 @@ tasks:
     cmds:
       - task: create:dmg
 
+  package:universal:dmg:
+    summary: Packages darwin universal binary (arm64 + amd64) into a styled `.dmg`
+    deps:
+      - task: package:universal
+    cmds:
+      - task: create:dmg
+
   create:dmg:
     summary: Creates a configurable `.dmg` from the `.app` bundle
     platforms: [darwin]

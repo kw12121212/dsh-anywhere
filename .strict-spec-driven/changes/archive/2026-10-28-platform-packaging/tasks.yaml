@@ -1,0 +1,51 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: platform-packaging
+sections:
+  Implementation:
+    add-universal-dmg-task:
+      text: 在 build/darwin/Taskfile.yml 新增 package:universal:dmg 任务：deps 为 package:universal，cmds 调用 create:dmg，产出 arm64+amd64 通用二进制的 .app 与 .dmg
+      status: complete
+    inject-nfpm-version:
+      text: build/linux/nfpm/nfpm.yaml 的 version 由硬编码 0.1.0 改为 ${VERSION}；build/linux/Taskfile.yml 的 generate:deb/generate:rpm/generate:aur 任务以 env 注入 VERSION（Taskfile 变量，git tag 精确匹配派生，缺省 dev）；如 nfpm 的 maintainer 环境变量展开失败则以本机 dummy 二进制演练结果修正
+      status: complete
+    create-package-workflow:
+      text: '新增 .github/workflows/package.yml：ubuntu/macos/windows 矩阵（bash shell）；安装 Go(go.mod)/Node 22/npm 缓存/wails3@v3.0.0；Windows choco 安装 NSIS，Linux apt 安装 libgtk-4-dev libwebkitgtk-6.0-dev；分别执行 wails3 task darwin:package:universal:dmg、linux:create:appimage 与 linux:create:deb、windows:package；统一重命名产物为 dsh-anywhere_<版本>_<平台>_<架构>[_installer].<扩展> 并 upload-artifact（if-no-files-found: error）；触发：push 到 main/dev、workflow_dispatch、workflow_call'
+      status: complete
+    write-readme:
+      text: 新增 README.md：项目简介、三平台安装说明、未签名安装包首次启动绕过 Gatekeeper（右键打开/系统设置允许）与 SmartScreen（更多信息-仍要运行）的步骤
+      status: complete
+    add-packaging-tests:
+      text: 新增 internal/appinfo/packaging_test.go，沿用 buildassets_test.go 的仓库文件断言模式：断言 darwin Taskfile 含 package:universal:dmg（deps package:universal、调 create:dmg）、nfpm.yaml 版本走 ${VERSION} 注入、generate:deb 传 VERSION env、package.yml 调用上述四个 wails3 task 且有 upload-artifact、README 含 Gatekeeper 与 SmartScreen 绕过说明
+      status: complete
+  Testing:
+    packaging-config-tests:
+      text: 运行 internal/appinfo 打包配置断言测试（含既有 buildassets 测试，确保未回归）
+      status: complete
+      command: go test -race ./internal/appinfo/
+    local-darwin-package:
+      text: 在本机执行 darwin 通用二进制打包全链路并断言产物：dmg 存在、.app 内二进制同时含 x86_64 与 arm64（lipo）
+      status: complete
+      command: export DEVELOPER_DIR=/Library/Developer/CommandLineTools; wails3 task darwin:package:universal:dmg && test -f bin/dsh-anywhere.dmg && lipo -info bin/dsh-anywhere.app/Contents/MacOS/dsh-anywhere | grep -q x86_64 && lipo -info bin/dsh-anywhere.app/Contents/MacOS/dsh-anywhere | grep -q arm64
+    local-deb-config:
+      text: 以 dummy 二进制在本机演练 deb 打包配置：生成 .desktop，伪造 bin/dsh-anywhere，VERSION=0.1.0 调 generate:deb，断言 bin/dsh-anywhere_0.1.0_amd64.deb 存在后清理
+      status: complete
+      command: 'wails3 task linux:generate:dotdesktop && mkdir -p bin && printf dummy > bin/dsh-anywhere && wails3 task linux:generate:deb VERSION=0.1.0 && test -f bin/dsh-anywhere.deb && ar p bin/dsh-anywhere.deb control.tar.gz | tar -xzO ./control | grep -F "Version: 0.1.0-1" && rm -f bin/dsh-anywhere bin/dsh-anywhere.deb'
+    validate-workflows:
+      text: actionlint 校验全部 GitHub Actions 工作流（regression.yml 与 package.yml）
+      status: complete
+      command: actionlint .github/workflows/regression.yml .github/workflows/package.yml
+  Verification:
+    verify-change:
+      text: 运行 ready 与 verify，确认变更工件齐备且无阻塞诊断
+      status: complete
+      command: strict-spec-cli ready platform-packaging && strict-spec-cli verify platform-packaging
+    check-archive-merge:
+      text: 确认 delta-tech 新标准 packaging 归档时能合入 .strict-spec-driven/tech/ 并更新 INDEX（无 id 冲突）
+      status: complete
+      command: strict-spec-cli verify platform-packaging
+testing_gates:
+  validation_task: validate-workflows
+  unit_test_task: packaging-config-tests

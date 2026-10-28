@@ -46,3 +46,13 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/wails3-update-build-assets-build-ios-plist-72a1b8.yaml
+    macos-xcode-select-xcode-clt-sdk-tapi-78e77f:
+      title: macOS 回归链接失败：xcode-select 指向外置 Xcode 与新版 CLT SDK 的 tapi 错配
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/macos-xcode-select-xcode-clt-sdk-tapi-78e77f.yaml
+    wails-build-config-yml-98c650:
+      title: wails 生成资产中的脚手架值可能无法经 build/config.yml 修正，只能手改并测试锁定
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/wails-build-config-yml-98c650.yaml

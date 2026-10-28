@@ -1,0 +1,34 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: release-workflow
+sections:
+  Implementation:
+    create-release-workflow:
+      text: '新增 .github/workflows/release.yml：on push tags v*；permissions contents: write；package job 复用 ./.github/workflows/package.yml；release job 下载产物、按 tag 版本断言四类安装包齐全、shasum -a 256 生成 SHA256SUMS、写含 Gatekeeper/SmartScreen 绕过步骤的发布说明、gh release create --draft --verify-tag 上传全部产物、成功后 --draft=false 发布、if failure 清理删除草稿'
+      status: complete
+    add-release-tests:
+      text: '新增 internal/appinfo/release_test.go：断言 release.yml 以 v* tag 触发、复用 package.yml（uses）、含四类产物版本校验、SHA256SUMS 生成（shasum -a 256）、草稿创建与 --draft=false 发布、失败清理（if: failure() 与 gh release delete）、发布说明含绕过步骤'
+      status: complete
+  Testing:
+    release-config-tests:
+      text: 运行 internal/appinfo 发布配置断言测试
+      status: complete
+      command: go test -race -count=1 ./internal/appinfo/
+    validate-workflows:
+      text: actionlint 校验全部三个工作流（regression、package、release）
+      status: complete
+      command: actionlint .github/workflows/regression.yml .github/workflows/package.yml .github/workflows/release.yml
+  Verification:
+    verify-change:
+      text: 运行 ready 与 verify 确认无阻塞诊断
+      status: complete
+      command: strict-spec-cli ready release-workflow && strict-spec-cli verify release-workflow
+    check-archive-merge:
+      text: 确认 delta-tech 对 packaging 标准的新增规则归档合并无冲突
+      status: complete
+      command: strict-spec-cli verify release-workflow
+testing_gates:
+  validation_task: validate-workflows
+  unit_test_task: release-config-tests

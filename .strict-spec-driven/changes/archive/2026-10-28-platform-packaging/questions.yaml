@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: platform-packaging
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 目前没有任何可安装产物：仓库只能产出裸二进制，用户无法在 Windows/macOS/Linux 上以安装包方式部署应用；CI 也从不验证打包链路，打包配置是否有功能缺失（如通用 dmg、deb 版本）无人知晓，问题要等 tag 发布时才会集中爆发。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 本机执行 wails3 task darwin:package:universal:dmg 产出含 x86_64+arm64 的 .app 与 .dmg；dummy 二进制演练产出正确版本号的 .deb；推送 main/dev 后 Actions 的 Package 工作流三平台 job 均产出并上传以 dsh-anywhere_<版本>_<平台>_<架构> 命名的安装包产物；README 含绕过 Gatekeeper/SmartScreen 的步骤。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 进入 cross-platform-release 里程碑：ci-regression-matrix 已归档解锁本计划变更，release-workflow 又依赖本变更的打包链路；没有可复用的三平台打包，v0.1.0 的发布验收无从做起。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不做 tag 触发发布、SHA256SUMS、草稿 Release（release-workflow 范围）；不做签名与公证；不产出 rpm/aur/msix；不修改应用 Go/前端代码与运行时行为；不改回归工作流与 config.yaml 回归命令。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 唯一读法：复用 wails3 Taskfile 打包任务补齐三平台安装包能力并在 CI 中调用上传；CI 触发限定 main/dev 与手动/复用调用（design 已论证）；macOS 以通用二进制单个 dmg 为准，受阻才降级。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: ci-regression-matrix
+  status: proposed
+summary:
+  what:
+    - 新增 GitHub Actions 回归工作流，在 ubuntu-latest、macos-latest、windows-latest 三平台矩阵上执行 config.yaml review_evidence.project_regression.command 中的完整回归命令（前端构建 + go vet/build/test -race + 覆盖率 ≥80% 门槛）
+  why:
+    - 三平台发布里程碑要求每次 push 后三个平台的 CI 均执行与本地一致的完整回归，防止平台特定回归逃逸到打包与发布环节
+scope:
+  in:
+    - 新建 .github/workflows/regression.yml：push 与 pull_request 触发；矩阵覆盖 ubuntu-latest、macos-latest、windows-latest（不 fail-fast）；按 go.mod 安装 Go 并缓存 go.sum；安装 Node.js 22 并按 frontend/package-lock.json 缓存 npm；Linux 步骤安装 libgtk-4-dev 与 libwebkitgtk-6.0-dev；defaults.run.shell 统一为 bash；最后一步逐字执行 config.yaml 的回归命令
+  out:
+    - 不涉及打包产物、tag 触发的发布流程、代码签名，也不修改任何 Go/frontend 应用代码
+unchanged_behavior:
+  - internal 与 frontend 应用代码、Wails Taskfile、frontend/bindings 生成物均保持不变；config.yaml 回归命令本身不改写
+roadmap:
+  milestone: cross-platform-release
+  planned_change: ci-regression-matrix

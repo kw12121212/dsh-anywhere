@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: navigation-scope
+operations:
+  ADDED: {}
+  MODIFIED:
+    same-origin-stays:
+      strength: MUST
+      statement: 主窗口中与已保存 harness 地址同源（协议、主机、端口均相同）的链接，包括 target=_blank 链接与 window.open 请求，都在主窗口内打开（Linux、macOS 与 Windows 行为一致）。
+      scenarios:
+        same-origin-link:
+          - GIVEN: 主窗口显示 harness 页面 https://dsh.example.test/
+          - WHEN: 用户点击指向 https://dsh.example.test/sessions/1 的链接
+          - THEN: 主窗口打开 https://dsh.example.test/sessions/1，系统浏览器没有被打开
+        same-origin-blank:
+          - GIVEN: 主窗口显示 harness 页面 https://dsh.example.test/
+          - WHEN: 页面打开 target=_blank 的同源链接或调用 window.open("/sessions/2")
+          - THEN: 主窗口打开 https://dsh.example.test/sessions/2，没有弹出新窗口
+    external-to-browser:
+      strength: MUST
+      statement: 主窗口中指向非同源 http/https 地址的链接点击（含中键点击）与 window.open 请求交给系统默认浏览器打开，主窗口仍停留在当前 harness 页面（Linux、macOS 与 Windows 行为一致）。
+      scenarios:
+        external-link:
+          - GIVEN: 主窗口显示 harness 页面 https://dsh.example.test/
+          - WHEN: 用户点击指向 https://example.org/docs 的链接
+          - THEN: 系统默认浏览器打开 https://example.org/docs，主窗口仍显示 https://dsh.example.test/
+        external-window-open:
+          - GIVEN: 主窗口显示 harness 页面 https://dsh.example.test/
+          - WHEN: 页面调用 window.open("https://example.org/popup")
+          - THEN: 系统默认浏览器打开 https://example.org/popup，主窗口仍显示原页面，没有弹出新窗口
+        different-port:
+          - GIVEN: 主窗口显示 harness 页面 https://dsh.example.test/
+          - WHEN: 用户点击指向 https://dsh.example.test:8443/ 的链接
+          - THEN: 系统默认浏览器打开该地址，主窗口不变
+  REMOVED: {}

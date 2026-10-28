@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: ci-regression-matrix
+open: []
+resolved:
+  - id: gtk-linux-libs
+    question: Linux CI 应安装 GTK3/WebKit2GTK 还是 GTK4/WebKitGTK 6.0 开发库？计划变更 details 写的是 GTK3/WebKit2GTK。
+    context: 影响实现文件（工作流的 Linux 依赖安装步骤）与 CI 可运行性。仓库证据：AGENTS.md 写明 Wails v3.0.0 默认 GTK4/WebKitGTK 6.0（Ubuntu 包 libgtk-4-dev libwebkitgtk-6.0-dev），GTK3 需加 -tags gtk3，而 config.yaml 回归命令不带该标签；装 GTK3 库会导致 Linux 上 go build/test 直接失败。
+    answer: 安装 libgtk-4-dev 与 libwebkitgtk-6.0-dev；计划变更 details 中的 GTK3/WebKit2GTK 为过时规划信息，以回归命令与 AGENTS.md 构建要求为准。
+    status: resolved
+    kind: technical
+    answered_by: assumption
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 回归目前只由开发者在 macOS 本机手动执行，Windows/Linux 的平台特定回归在提交时无法暴露（此前 windowstate 测试就曾在 Windows 回归失败、靠人工发现修复 d19877f）；对维护者而言，跨平台问题一直要拖到打包发布前才被发现，造成反复返工。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 向任意分支推送提交后，GitHub Actions 上出现 ubuntu、macos、windows 三个 job，各自逐字执行 config.yaml 完整回归命令（前端构建、go vet、go build、go test -race、覆盖率 ≥80%）并全部通过；维护者不再需要手动在三平台逐一跑回归。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 进入 cross-platform-release 里程碑：platform-packaging 与 release-workflow 两个计划变更均依赖 ci-regression-matrix；没有三平台回归 CI，打包与 tag 发布就无法建立在可验证的质量门槛上。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不修改任何应用代码（internal/frontend）、Wails Taskfile 与 frontend/bindings 生成物；不做安装包产出、tag 触发的发布流程与代码签名（属 platform-packaging 与 release-workflow 范围）；不改写 config.yaml 回归命令本身。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 唯一读法：新增一个在 push 与 pull_request 时触发的 GitHub Actions 三平台矩阵工作流，逐字执行 config.yaml 回归命令；CI 平台已由里程碑 intake 确认为 GitHub Actions，不含打包、发布、签名步骤。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

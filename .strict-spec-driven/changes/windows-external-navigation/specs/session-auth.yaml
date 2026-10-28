@@ -1,0 +1,17 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: session-auth
+operations:
+  ADDED: {}
+  MODIFIED:
+    session-expired-page:
+      strength: MUST
+      statement: 主窗口中的 dsh 页面返回会话失效（401，正文为 dsh 的固定提示文本）时，主窗口改为显示本地的需要重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供"打开设置"按钮；提示页不显示 token（Linux、macOS 与 Windows 行为一致）。
+      scenarios:
+        expired-session:
+          - GIVEN: dsh 会话已失效
+          - WHEN: 应用启动或重新加载 harness 页面
+          - THEN: 主窗口显示需要重新认证的提示页，包含运行 dsh-url 的说明和"打开设置"按钮
+  REMOVED: {}
