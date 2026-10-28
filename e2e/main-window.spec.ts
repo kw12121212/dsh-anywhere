@@ -180,22 +180,53 @@ test.describe('主窗口', () => {
         items: (item.submenu?.items ?? []).filter((sub) => sub.type !== 'separator').map((sub) => `${sub.role ?? ''}:${sub.label}`)
       }))
     )
-    expect(menu.map((m) => m.label)).toEqual(['文件', '编辑', '视图', '帮助'])
-    // “帮助”中提供“关于 DSH Anywhere”（app-identity 主规格，无系统角色）。
-    expect(menu[3]?.items).toEqual([':关于 DSH Anywhere'])
-    expect(menu[1]?.items).toEqual([
-      'undo:撤销',
-      'redo:重做',
-      'cut:剪切',
-      'copy:复制',
-      'paste:粘贴',
-      'delete:删除',
-      'selectall:全选'
-    ])
+    if (process.platform === 'darwin') {
+      // macOS 为独立菜单设计（app-menu.ts darwin 分支，设计决策 macos-custom-app-menu
+      // 与 settings-menu-placement）：自建应用菜单承载关于/设置/退出，无“文件/帮助”。
+      expect(menu.map((m) => m.label)).toEqual(['DSH Anywhere', '编辑', '视图', '窗口'])
+      expect(menu[0]?.items).toEqual([
+        ':关于 DSH Anywhere',
+        ':设置',
+        'services:服务',
+        'hide:隐藏 DSH Anywhere',
+        'hideOthers:隐藏其他',
+        'unhide:显示全部',
+        'quit:退出 DSH Anywhere'
+      ])
+      expect(menu[1]?.items).toEqual([
+        'undo:撤销',
+        'redo:重做',
+        'cut:剪切',
+        'copy:复制',
+        'paste:粘贴',
+        'pasteAndMatchStyle:粘贴并匹配样式',
+        'delete:删除',
+        ':语音'
+      ])
+    } else {
+      expect(menu.map((m) => m.label)).toEqual(['文件', '编辑', '视图', '帮助'])
+      // “帮助”中提供“关于 DSH Anywhere”（app-identity 主规格，无系统角色）。
+      expect(menu[3]?.items).toEqual([':关于 DSH Anywhere'])
+      expect(menu[1]?.items).toEqual([
+        'undo:撤销',
+        'redo:重做',
+        'cut:剪切',
+        'copy:复制',
+        'paste:粘贴',
+        'delete:删除',
+        'selectall:全选'
+      ])
+    }
   })
 
   test('编辑菜单的“复制”“粘贴”执行系统编辑动作', async () => {
     const local = await launch()
+    // 编辑角色的系统动作作用于聚焦窗口的选区；无头 CI（尤其 macOS runner）里窗口
+    // 可能不是 key window，先显式把应用与主窗口带到前台再选中文本。
+    await running().evaluate(({ app, BrowserWindow }) => {
+      app.focus({ steal: true })
+      BrowserWindow.getAllWindows()[0]?.focus()
+    })
     await local.evaluate(() => {
       for (const id of ['copy-source', 'paste-target']) {
         const input = document.createElement('input')

@@ -171,10 +171,12 @@ test.describe('单实例（single-instance）', () => {
 
 test.describe('窗口状态（window-state）', () => {
   test('保存的位置与尺寸在重启后恢复', async () => {
-    saveState({ x: 200, y: 120, width: 1200, height: 800, maximised: false })
+    // 几何取小值：macOS CI 的虚拟显示器工作区小于 1200×800，超出工作区的保存值
+    // 会被系统约束到实际工作区，恢复断言必须使用任何 runner 都容得下的几何。
+    saveState({ x: 60, y: 40, width: 800, height: 500, maximised: false })
     await launch()
-    await expect.poll(async () => (await mainWindow()).position).toEqual([200, 120])
-    await expect.poll(async () => (await mainWindow()).size).toEqual([1200, 800])
+    await expect.poll(async () => (await mainWindow()).position).toEqual([60, 40])
+    await expect.poll(async () => (await mainWindow()).size).toEqual([800, 500])
   })
 
   test('保存的最大化状态在重启后恢复', async () => {
@@ -206,25 +208,43 @@ test.describe('窗口状态（window-state）', () => {
     const configBefore = readFileSync(configPath(), 'utf8')
     await launch()
 
-    await running().evaluate(({ BrowserWindow }) => {
-      const win = BrowserWindow.getAllWindows()[0]
-      win?.setPosition(300, 200)
-      win?.setSize(1100, 700)
+    // 目标几何按主显示器实际工作区适配：CI 的 macOS 虚拟显示器（约 1024×768）
+    // 容不下固定的 1100×700，系统会把窗口约束到屏幕内，保存/恢复断言改为针对
+    // 适配工作区后的目标值，保持“保存并恢复实际几何”的行为语义不变。
+    const target = await running().evaluate(({ screen }) => {
+      const area = screen.getPrimaryDisplay().workArea
+      return {
+        x: area.x + 50,
+        y: area.y + 40,
+        width: Math.min(1100, area.width - 100),
+        height: Math.min(700, area.height - 80)
+      }
     })
-    await expect.poll(async () => (await mainWindow()).position).toEqual([300, 200])
-    await expect.poll(async () => (await mainWindow()).size).toEqual([1100, 700])
+    await running().evaluate(({ BrowserWindow }, t) => {
+      const win = BrowserWindow.getAllWindows()[0]
+      win?.setPosition(t.x, t.y)
+      win?.setSize(t.width, t.height)
+    }, target)
+    await expect.poll(async () => (await mainWindow()).position).toEqual([target.x, target.y])
+    await expect.poll(async () => (await mainWindow()).size).toEqual([target.width, target.height])
 
     await app?.close()
     app = null
 
-    expect(JSON.parse(readState())).toEqual({ x: 300, y: 200, width: 1100, height: 700, maximised: false })
+    expect(JSON.parse(readState())).toEqual({
+      x: target.x,
+      y: target.y,
+      width: target.width,
+      height: target.height,
+      maximised: false
+    })
     expect(readFileSync(configPath(), 'utf8')).toBe(configBefore)
     expect(readdirSync(userDataDir).filter((name) => name.includes('.tmp'))).toEqual([])
 
     // 重启后恢复的是新保存的几何（覆盖上一次状态）。
     await launch()
-    await expect.poll(async () => (await mainWindow()).position).toEqual([300, 200])
-    await expect.poll(async () => (await mainWindow()).size).toEqual([1100, 700])
+    await expect.poll(async () => (await mainWindow()).position).toEqual([target.x, target.y])
+    await expect.poll(async () => (await mainWindow()).size).toEqual([target.width, target.height])
 
     // 最大化后退出：保存的状态标记为最大化（无窗口管理器的 Linux 会话跳过）。
     if (process.platform !== 'linux') {
