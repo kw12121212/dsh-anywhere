@@ -13,10 +13,10 @@ rules:
     rationale: window-state-persistence 需要保存窗口几何，而配置目录已有 config.json，其保存语义是整文件覆盖。原子写入保证写入中断不会留下半截 JSON；容错读取保证状态损坏只丢一次状态而不是启动失败，也不会让 harness 配置被连带判定为无效。
     enforcement:
       method: review
-      detail: 审查新增的持久化是否以临时文件加重命名写入，读取失败是否回退默认值而不是返回错误；参考 internal/windowstate.Store 与 internal/config.Store 的写入实现。
+      detail: 审查新增的持久化是否以临时文件加重命名写入，读取失败是否回退默认值而不是抛错；参考 src/main/window-state.ts 与 src/main/config.ts 的写入实现。
     examples:
       good:
-        - internal/windowstate.Store 读写 window-state.json，Load 对缺失、损坏、非正与超大尺寸统一返回 ErrNoState，Manager 按默认几何启动
+        - src/main/window-state.ts 读写 window-state.json，loadState 对缺失、损坏、非正与超大尺寸统一返回无状态，按默认几何启动
       bad:
         - 直接写目标文件，写入中断留下半截 JSON，下次启动因为没有保存状态而丢失几何
   separate-state-files:
@@ -28,6 +28,6 @@ rules:
       detail: 审查新增状态是否使用独立文件，或共用文件时是否保留其他字段；偏离默认做法时审查 design.yaml 是否记录理由。
     examples:
       good:
-        - internal/windowstate 使用 window-state.json，与 internal/config 的 config.json 互不读写
+        - src/main/window-state.ts 使用 window-state.json，与 src/main/config.ts 的 config.json 互不读写
       bad:
         - 窗口几何与 harness 地址写在同一个 JSON 对象里，保存任一状态时整体覆盖文件

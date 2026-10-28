@@ -97,3 +97,8 @@ categories:
       status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/windows-go-test-race-msys2-mingw64-gcc-swift-cla-344a60.yaml
+    electron-builder-universal-afterpack-fuses-20577a:
+      title: electron-builder universal 打包中自定义 afterPack 翻 fuses 会让两架构签名目录不一致、合并失败
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/electron-builder-universal-afterpack-fuses-20577a.yaml

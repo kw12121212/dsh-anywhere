@@ -57,11 +57,11 @@ sections:
       status: complete
     verify-change:
       text: strict-spec-cli verify electron-release 通过
-      status: pending
+      status: complete
       command: strict-spec-cli verify electron-release
     archive-readiness:
       text: strict-spec-cli ready electron-release 通过，并确认归档证据齐备：完整回归在本地通过、三平台打包 CI（package）通过、Windows 真机验收记录、开放问题已解决
-      status: pending
+      status: complete
       command: strict-spec-cli ready electron-release
 testing_gates:
   validation_task: full-regression

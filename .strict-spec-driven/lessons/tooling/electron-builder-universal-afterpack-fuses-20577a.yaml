@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-builder-universal-afterpack-fuses-20577a
+  title: electron-builder universal 打包中自定义 afterPack 翻 fuses 会让两架构签名目录不一致、合并失败
+category: tooling
+status: active
+created_at: '2026-10-28T16:04:02.011Z'
+updated_at: '2026-10-28T16:04:02.011Z'
+context: electron-release 用 scripts/after-pack.mts 在 afterPack 钩子里调 @electron/fuses 翻转 fuse，macOS universal dmg 打包时
+observation: 'electron-builder 的 universal 流程是：每架构各打包一次（afterPack 各触发一次）→ @electron/universal 合并 → 再触发一次 afterPack → 内建 electronFuses → 签名。合并要求两架构所有非 Mach-O 文件 SHA 一致（唯一例外 MainMenu.nib）；resetAdHocDarwinSignature: true 的重签会按架构改写 Electron Framework 的 _CodeSignature/CodeResources，两架构必然不一致，合并报 Expected all non-binary files to have identical SHAs'
+takeaway: fuses 一律用 electron-builder 内建 electronFuses 配置（在合并后的最终二进制上、签名前执行），不要用自定义 afterPack 翻 fuse；fuse 值与集中定义模块的同源性用仓库文件断言测试锁定，负向断言 afterPack 配置键不得回流
+applies_when: 用 electron-builder 打 macOS universal（或任何触发 @electron/universal 合并的）产物并需要 electron fuses 时；以及任何想在 afterPack 钩子里改写包内文件/签名的场景
+occurrences:
+  - origin: electron-release
+    date: '2026-10-28'
+    evidence: CI Package (macos-latest) 在 4ac5cb2 报 CodeResources SHA 不一致；改用内建 electronFuses 后 276312f 三平台 Package 全绿，Windows 本机重打包实测三 fuse 全 DISABLE

@@ -54,7 +54,7 @@ risks:
   - 从本地页面导航到 harness 时 SameSite=Strict cookie 是否随重定向发送、带 token 地址是否残留在导航历史，均需实测，不能沿用 Wails 时期结论
   - 迁移期间 Go 与 Electron 两套实现并存，回归命令需同时覆盖两者直到最后一个变更移除 Go
   - Electron 及 Chromium 安全更新频繁，需要定期升级 electron 依赖
-status: proposed
+status: complete
 notes:
   - 原 cross-platform-release 中基于 Wails 的 windows-external-navigation 已取消（2026-10-28），Windows 与主规格一致的导航范围与会话失效行为由 electron-main-window 实现、由本里程碑 Windows 真机验收完成标准保证
   - navigation-scope 与 session-auth 主规格现限定 Linux 与 macOS，electron-main-window 以 delta spec 扩展到三平台；其余主规格不变

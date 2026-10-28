@@ -18,4 +18,4 @@ milestones:
   electron-migration:
     title: 迁移到 Electron 技术栈
     path: roadmap/milestones/electron-migration.yaml
-    status: proposed
+    status: complete
