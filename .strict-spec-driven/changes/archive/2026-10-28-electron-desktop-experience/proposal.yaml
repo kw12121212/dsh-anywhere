@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: electron-desktop-experience
+  status: proposed
+summary:
+  what:
+    - 在 Electron 主进程中复刻单实例激活、窗口状态持久化与“关于 DSH Anywhere”菜单项：用 requestSingleInstanceLock 与 second-instance 事件保证同一会话只有一个实例，再次启动恢复最小化、显示并聚焦已有主窗口，新进程以成功状态退出且主窗口页面与配置不变；主窗口位置、尺寸与最大化状态保存到 userData 下的 window-state.json（字段 x/y/width/height/maximised，与 Go 版格式一致），启动时恢复，保存位置与任何显示器都不相交时改用默认尺寸 1000x618 并在主显示器居中，状态文件缺失、损坏或数值无效时按无状态处理且不提示，Wayland 会话下只恢复尺寸与最大化；主窗口先隐藏创建、几何恢复后再显示以避免闪烁；应用菜单加入“关于 DSH Anywhere”，对话框显示 DSH Anywhere 与版本号（构建期注入，未注入时为 dev）
+  why:
+    - electron-migration 里程碑要求按现有主规格逐项把行为从 Go+Wails 迁移到 Electron：single-instance、window-state 与 app-identity 的“关于”部分是 electron-main-window（已归档）之后的下一项计划变更，其依赖已就绪；迁移期间 Go 与 Electron 并存，每个变更归档时完整回归命令必须通过
+scope:
+  in:
+    - 新增 src/main/window-state.ts：窗口状态读写与几何解析纯函数（状态文件 window-state.json、临时文件加重命名原子写入；读取端把缺失、损坏与非正数值一律按无状态处理；默认几何 1000x618 居中主显示器；保存矩形与任一显示器相交则保留位置与尺寸，全不相交回退默认居中；最大化标志独立判定；Wayland 会话只恢复尺寸与最大化，位置交给合成器）；新增 src/main/single-instance.ts：app ready 前调用 requestSingleInstanceLock，未获锁的进程以成功状态退出，second-instance 请求在主窗口未就绪时挂起、就绪后补做，激活顺序为取消最小化、显示、聚焦；扩展 src/main/app-menu.ts：非 macOS 在帮助子菜单、macOS 在自建应用菜单首项加入“关于 DSH Anywhere”，点击后对话框显示应用名称与版本号且不影响主窗口当前页面，版本号常量默认 dev、经 electron-vite 构建期注入；改造 src/main/index.ts 与 window.ts：主窗口默认几何改为 1000x618 居中，隐藏创建、恢复几何后显示并聚焦，关闭主窗口或退出时保存当前几何（恢复未完成或已销毁时跳过，保留旧状态）；新增单元测试（几何解析各场景、状态文件读写、单实例挂起与激活顺序、菜单模板与关于文案）与 e2e/desktop-experience.spec.ts（二次启动激活与新进程退出、窗口状态恢复与保存、损坏状态按默认启动；WSLg 不支持最小化，最小化恢复场景在真实桌面或 CI 验证）
+  out:
+    - 不改变任何主规格（single-instance、window-state、app-identity 已描述这些行为，本变更只是 Electron 复刻）；不实现发布构建的版本注入流水线（v 前缀标签转版本号接入 electron-builder/CI 属于 electron-release 计划变更）；不改动 harness 配置读写、导航范围与会话失效行为、本地页面与 IPC、既有“重新加载”与编辑菜单；不新增托盘、自动更新等新能力；不迁移或改写 Go 版实现（Go 侧移除属于后续变更）
+unchanged_behavior:
+  - 主窗口标题 DSH Anywhere、导航范围与会话失效行为、本地页面各视图与 IPC 通道、应用菜单既有“重新加载”与退出项及编辑菜单中文标签、harness 配置文件 config.json 的内容与读写语义、Go/Wails 现有实现的全部行为
+roadmap:
+  milestone: electron-migration
+  planned_change: electron-desktop-experience

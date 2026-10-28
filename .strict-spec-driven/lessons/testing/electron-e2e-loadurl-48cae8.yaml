@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-e2e-loadurl-48cae8
+  title: Electron e2e 程序化注入 loadURL 前必须等应用初始导航结束
+category: testing
+status: active
+created_at: '2026-10-28T10:32:19.327Z'
+updated_at: '2026-10-28T10:32:19.327Z'
+context: Playwright Electron e2e 需要程序化驱动远程视图导航（建立会话、注入地址）时
+observation: 'desktop-experience e2e 首跑在 launch() 后立即 evaluate loadURL 到远程视图，与 Navigator 自身的探测/加载并发，loadURL 以 ERR_ABORTED (-3) 失败；main-window.spec 的 enterHarness 模式先等 #reauth 可见再注入，从未失败'
+takeaway: '注入 loadURL 前先等待应用自身初始导航稳定（如本地页面进入稳定视图 #reauth/#unconfigured 可见），再驱动第二次导航'
+applies_when: 在 Playwright Electron e2e 中对主窗口远程视图做程序化 loadURL 或导航注入时
+occurrences:
+  - origin: electron-desktop-experience
+    date: '2026-10-28'
+    evidence: 'e2e/desktop-experience.spec.ts 首跑失败 electronApplication.evaluate: Error: (-3) loading，加入 #reauth 等待后稳定通过'

@@ -179,7 +179,9 @@ test.describe('主窗口', () => {
         items: (item.submenu?.items ?? []).filter((sub) => sub.type !== 'separator').map((sub) => `${sub.role ?? ''}:${sub.label}`)
       }))
     )
-    expect(menu.map((m) => m.label)).toEqual(['文件', '编辑', '视图'])
+    expect(menu.map((m) => m.label)).toEqual(['文件', '编辑', '视图', '帮助'])
+    // “帮助”中提供“关于 DSH Anywhere”（app-identity 主规格，无系统角色）。
+    expect(menu[3]?.items).toEqual([':关于 DSH Anywhere'])
     expect(menu[1]?.items).toEqual([
       'undo:撤销',
       'redo:重做',

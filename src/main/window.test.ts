@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { APP_ENTRY_URL } from './app-protocol'
 import { SESSION_PARTITION } from './session'
+import { DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH } from './window-state'
 import { MAIN_WINDOW_TITLE, createMainWindowOptions, createRemoteViewOptions, rendererEntryURL } from './window'
 
 const secure = {
@@ -20,6 +21,17 @@ describe('createMainWindowOptions', () => {
     expect(options.title).toBe(MAIN_WINDOW_TITLE)
     expect(MAIN_WINDOW_TITLE).toBe('DSH Anywhere')
     expect(options.webPreferences).toEqual({ ...secure, preload: '/app/out/preload/index.js' })
+  })
+
+  it('默认几何为 1000x618 且隐藏创建，几何恢复后再显示（window-state 主规格 no-saved-state）', () => {
+    const options = createMainWindowOptions('/app/out/preload/index.js')
+    expect(options.width).toBe(DEFAULT_WINDOW_WIDTH)
+    expect(options.height).toBe(DEFAULT_WINDOW_HEIGHT)
+    expect(DEFAULT_WINDOW_WIDTH).toBe(1000)
+    expect(DEFAULT_WINDOW_HEIGHT).toBe(618)
+    expect(options.show).toBe(false)
+    expect(options.x).toBeUndefined()
+    expect(options.y).toBeUndefined()
   })
 })
 

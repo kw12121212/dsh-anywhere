@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: windows-go-test-race-msys2-mingw64-gcc-swift-cla-344a60
+  title: Windows 原生跑 go test -race 需要 msys2 mingw64 gcc，Swift clang 不行
+category: tooling
+status: active
+created_at: '2026-10-28T10:32:32.217Z'
+updated_at: '2026-10-28T10:32:32.217Z'
+context: 在 Windows 宿主（GAMEPC）原生 Git Bash 中执行 config.yaml 的完整回归命令（含 go test -race）时
+observation: 默认 CGO_ENABLED=0 使 -race 直接报 requires cgo；设 CGO_ENABLED=1 后 Swift 工具链的 clang（MSVC 目标）链接 Go race 对象失败 LNK1143 invalid or corrupt file；C:/msys2/mingw64/bin/gcc.exe 配合 CGO_ENABLED=1 CC=gcc 全部包通过
+takeaway: 跑回归前 export PATH=/c/msys2/mingw64/bin:/c/Users/wx766/sdk/go/bin:/c/Users/wx766/ezwinports/bin:/c/Users/wx766/AppData/Local/Programs/Swift/Toolchains/6.4.1+Asserts/usr/bin:/c/Users/wx766/AppData/Roaming/npm:/c/Users/wx766/go/bin:/c/Users/wx766/bin:/mingw64/bin:/usr/local/bin:/usr/bin:/bin:/mingw64/bin:/usr/bin:/c/Users/wx766/bin:/c/WINDOWS/system32:/c/WINDOWS:/c/WINDOWS/System32/Wbem:/c/WINDOWS/System32/WindowsPowerShell/v1.0:/c/WINDOWS/System32/OpenSSH:/cmd:/c/Program Files/nodejs:/c/Program Files/Docker/Docker/resources/bin:/c/Program Files/dotnet:/c/Program Files/Tailscale:/c/Users/wx766/AppData/Local/Programs/Python/Python310/Scripts:/c/Users/wx766/AppData/Local/Programs/Python/Python310:/c/tools/maven-mvnd-1.0.2-windows-amd64/bin:/c/tools/apache-maven-3.9.16/bin:/c/Users/wx766/AppData/Local/Programs/Python/Python311/Scripts:/c/Users/wx766/AppData/Local/Programs/Python/Python311:/c/java/jdk-25.0.3+9/bin:/c/Users/wx766/.cargo/bin:/c/Users/wx766/AppData/Local/Microsoft/WindowsApps:/c/Users/wx766/AppData/Local/Programs/Microsoft VS Code/bin:/c/Users/wx766/.lmstudio/bin:/c/Users/wx766/AppData/Roaming/npm:/c/Users/wx766/.local/bin:/c/Users/wx766/AppData/Local/Microsoft/WinGet/Packages/DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe:/tmp/codepilot-shadow-claude-yh7qus/AppData/Local/Microsoft/WinGet/Packages/BurntSushi.ripgrep.MSVC_Microsoft.Winget.Source_8wekyb3d8bbwe/ripgrep-15.1.0-x86_64-pc-windows-msvc:/c/ProgramData/wx766/GitHubDesktop/bin:/c/Users/wx766/AppData/Local/Programs/CodeBuddy CN/bin:/c/Users/wx766/.bun/bin:/c/Users/wx766/AppData/Local/Programs/Zed/bin:/c/Users/wx766/AppData/Local/GitHubDesktop/bin:/c/Users/wx766/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1.1-full_build/bin:/c/Users/wx766/AppData/Local/Android/Sdk/platform-tools:/c/Users/wx766/AppData/Local/Android/Sdk/emulator:/c/Users/wx766/AppData/Local/Android/Sdk/cmdline-tools/latest/bin:/c/Users/wx766/AppData/Local/Programs/CatPawAI/bin:/c/Users/wx766/AppData/Local/Programs/Antigravity IDE/bin:/c/Users/wx766/.dotnet/tools:/c/Users/wx766/AppData/Local/Programs/windows-bridge:/c/Users/wx766/AppData/Local/Programs/Swift/Toolchains/6.4.1+Asserts/usr/bin:/c/Users/wx766/AppData/Local/Programs/Swift/Runtimes/6.4.1/usr/bin:/c/Users/wx766/sdk/go/bin:/c/Users/wx766/ezwinports/bin:/c/Users/wx766/AppData/Local/Programs/ZCode/resources/tools/ripgrep:/c/Users/wx766/AppData/Local/Programs/ZCode/resources/tools/ugrep:/c/Program Files/nodejs:/usr/bin/vendor_perl:/usr/bin/core_perl 并设 CGO_ENABLED=1 CC=gcc，命令本身保持逐字不变，只准备环境
+applies_when: 在 Windows 原生环境执行仓库完整回归命令或任何 go test -race 时
+occurrences:
+  - origin: electron-desktop-experience
+    date: '2026-10-28'
+    evidence: CGO_ENABLED=1 CC=clang(Swift) 报 LNK1143 build failed；切换 msys2 mingw64 gcc 后 internal/windowstate race 通过，完整回归退出码 0（coverage 94.5% meets 80%）

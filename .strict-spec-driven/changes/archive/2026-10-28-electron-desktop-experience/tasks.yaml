@@ -1,0 +1,51 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: electron-desktop-experience
+sections:
+  Implementation:
+    impl-window-state:
+      text: 新增 src/main/window-state.ts：WindowState 类型（x/y/width/height/maximised）与 userData 下 window-state.json 读写——临时文件加重命名原子写入，读取把缺失、无法解析、非正宽高一律按无状态处理（技术标准 state-persistence）；几何解析纯函数 resolvePlacement：无状态时默认 1000x618 居中主显示器，保存矩形与任一显示器相交则保留位置与尺寸，全不相交回退默认居中，最大化标志独立输出（离屏最大化仍在主显示器最大化），XDG_SESSION_TYPE=wayland 时只输出尺寸与最大化、不输出位置；window-state.test.ts 覆盖几何解析全部场景（含部分相交保留、断开显示器回退、损坏与无效数值）与状态文件读写、原子替换与 config.json 不受影响
+      status: complete
+    impl-single-instance:
+      text: 新增 src/main/single-instance.ts：app ready 前调用 requestSingleInstanceLock，未获锁的进程立即以成功状态退出；second-instance 事件转发为激活请求，主窗口未就绪时挂起、就绪后补做（对应规格 second-launch-during-startup），激活顺序固定为最小化时先恢复、再显示、最后聚焦；single-instance.test.ts 用注入的窗口操作记录器覆盖挂起到就绪补做、激活顺序与窗口就绪后立即激活
+      status: complete
+    impl-about-menu:
+      text: 新增版本常量模块（默认 dev，经 electron-vite define 以环境变量在构建期注入）与关于文案（“关于 DSH Anywhere”、“DSH Anywhere\n版本 <版本>”）；扩展 src/main/app-menu.ts：非 macOS 新增“帮助”子菜单、macOS 以显式子菜单替代 role:'appMenu'（首项关于，其后逐项复刻默认 appMenu 子项 services/hide/hideOthers/showAll/quit 并覆盖中文 label，按设计决策 macos-custom-app-menu），点击关于对主窗口弹出 dialog.showMessageBox 显示名称与版本且不影响当前页面；app-menu.test.ts 按平台断言模板结构、关于项存在与关于文案的版本取值
+      status: complete
+    impl-main-window-wiring:
+      text: 改造 src/main/index.ts 与 window.ts：主窗口默认几何改为 1000x618 并居中主显示器，show:false 隐藏创建；窗口就绪后按 resolvePlacement 结果以 Go 版 Restore 顺序应用（设尺寸、显示、设位置、最大化，Wayland 下省略位置），显示后触发单实例 Activator 就绪；close 事件中保存当前几何（恢复未完成或宽高非正时跳过）；window.test.ts 断言默认几何与隐藏创建选项
+      status: complete
+    impl-e2e:
+      text: 新增 e2e/desktop-experience.spec.ts（沿用 e2e 现有独立临时 --user-data-dir 与 fake-dsh 模式）：预写 window-state.json 后启动断言恢复位置尺寸与最大化；移动并调整窗口后关闭断言新状态已保存且 config.json 内容不变；损坏状态文件按默认 1000x618 启动且正常打开 harness；首实例运行中再启动同 userData 的第二个实例，断言不出现第二个窗口、已有窗口被带到前台、新进程以成功状态码退出、页面与配置不变；WSLg 不支持最小化，最小化恢复场景标注仅在真实桌面或 CI 验证（技术标准 e2e-isolated-user-data）
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与覆盖率门槛
+      status: complete
+      command: npm run test:coverage
+    test-e2e:
+      text: 构建并运行 Playwright 端到端测试
+      status: complete
+      command: npm run build && npm run test:e2e
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Go 部分与 Electron 部分均通过、各自覆盖率不低于 80%）
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    verify-ready:
+      text: 运行 strict-spec-cli ready 确认变更无确定性阻塞
+      status: complete
+      command: strict-spec-cli ready electron-desktop-experience
+    verify-verify:
+      text: 运行 strict-spec-cli verify 确认任务与实现一致（本变更无 delta spec 与 delta tech）
+      status: complete
+      command: strict-spec-cli verify electron-desktop-experience
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-unit

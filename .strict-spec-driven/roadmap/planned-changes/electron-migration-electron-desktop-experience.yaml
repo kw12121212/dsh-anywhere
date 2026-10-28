@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: electron-desktop-experience
   milestone: electron-migration
-status: planned
+status: complete
 summary: 在 Electron 中复刻单实例、窗口状态持久化与“关于”菜单项
 details: 复刻主规格 single-instance、window-state 以及 app-identity 中的“关于”部分：用 requestSingleInstanceLock 与 second-instance 事件保证同一用户会话只有一个实例，再次启动时恢复最小化、显示并聚焦已有主窗口，新进程退出且主窗口页面不变；主窗口位置、尺寸与最大化状态在关闭主窗口或退出时保存（文件位置与格式与 Go 版一致，不改动 harness 配置），启动时恢复，保存位置与任何显示器都不相交时改用默认尺寸并在主显示器居中，状态文件缺失、损坏或数值无效时按无状态处理且不提示，Wayland 下只恢复尺寸与最大化；主窗口先隐藏创建再显示以避免闪烁。应用菜单加入“关于 DSH Anywhere”，显示应用显示名称与版本号（v 前缀标签构建显示去掉前缀的标签号，未用标签构建显示开发版本标记，与 Go 版一致）。单元测试覆盖窗口几何可见性修正与状态文件读写，端到端测试覆盖二次启动激活与窗口状态恢复（WSLg 不支持最小化，最小化恢复在真实桌面或 CI 验证）。不改变任何主规格。
 depends_on:

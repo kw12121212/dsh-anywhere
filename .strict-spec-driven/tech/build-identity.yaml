@@ -43,3 +43,15 @@ rules:
         - 改 build/config.yml 后运行 wails3 update build-assets 并提交生成结果
       bad:
         - 直接编辑 build/darwin/Info.plist 的产品名称，且不说明为何不能改配置源
+  electron-identity-single-source:
+    strength: MUST
+    statement: Electron 侧运行时显示名称、关于文案与版本号只定义在 src/main/app-info.ts 与 src/main/version.ts：显示名称与关于文案取自 app-info 常量与函数，菜单、窗口标题与对话框代码不得重复身份字面量；版本号默认 dev，经 electron-vite 的 define（__APP_VERSION__，读取环境变量 APP_VERSION）在构建期注入，不得改用 app.getVersion() 或在源码写死发布版本；v 前缀发布标签转去前缀版本号的流水线接线由 electron-release 计划变更完成
+    rationale: 与 Go 版 identity-single-source、version-injected-at-build-time 同语义：窗口标题、菜单关于项与关于对话框必须同源，否则打包后互相矛盾且只在打包后暴露；app.getVersion() 返回 package.json 的版本（当前 0.0.0），既无法表达未打标签构建的 dev 语义，也要等 electron-release 写对 package.json 后才有意义
+    enforcement:
+      method: test
+      detail: 单元测试断言 APP_VERSION 默认 dev（version.test.ts）、关于标题与正文由 app-info 派生且窗口标题等于同一显示名称常量（app-menu.test.ts、window.test.ts）；评审检查菜单模板与 index.ts 不含身份字面量
+    examples:
+      good:
+        - index.ts 的关于对话框与 window.ts 的标题都取自 app-info/version 模块导出
+      bad:
+        - 在菜单模板里再写一份 'DSH Anywhere' 字面量，或改用 app.getVersion() 显示版本

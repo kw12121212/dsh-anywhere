@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: electron-desktop-experience
+open: []
+resolved:
+  - id: version-display-source
+    question: “关于”对话框显示的版本号从哪里来？v 前缀标签构建与未打标签构建分别显示什么？
+    context: 影响实现文件与构建脚本。计划变更 details 要求与 Go 版一致：v 前缀标签构建显示去掉前缀的标签号，未用标签构建显示 dev；影响 proposal 范围、src/main 版本常量模块与 electron.vite.config.ts 的 define 注入，发布流水线接线属于 electron-release 计划变更。
+    answer: 由路线图与设计决策 version-injection 回答：模块常量 APP_VERSION 默认 dev，electron-vite 构建期经 define 注入环境变量覆盖（与 Go 版 -ldflags -X 同语义）；app.getVersion() 因返回 package.json 的 0.0.0 且无法表达 dev 而不采用；v 标签到版本号的流水线接线由 electron-release 完成
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: Electron 版应用（electron-scaffold、electron-main-window 已完成）目前缺少单实例保护、窗口状态记忆与“关于”菜单：用户重复启动会出现第二个实例与主窗口、每次启动窗口回到默认几何（当前默认 1024x768 也与规格的 1000x618 不符）、应用菜单没有“关于 DSH Anywhere”入口；这些行为 Go+Wails 版已按 single-instance、window-state、app-identity 主规格提供，Electron 版用户今天得不到同等体验
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: Electron 版满足既有主规格的可观察行为，验收以主规格场景为准：再次启动不出现第二个主窗口、已有窗口恢复最小化并前置聚焦、新进程成功退出且页面与配置不变；窗口位置尺寸与最大化状态重启后恢复，保存位置与所有显示器不相交时回退默认 1000x618 主显示器居中，状态文件损坏按无状态处理且不提示，Wayland 下仍恢复尺寸与最大化；应用菜单的“关于 DSH Anywhere”显示 DSH Anywhere 与版本号（标签构建显示去 v 前缀的标签号、否则 dev）且不影响当前页面
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: electron-migration 里程碑按主规格逐项迁移（2026-10-28 决定直接在 dev 分支进行，迁移期间两套实现并存、每个变更归档时完整回归必须通过）；前置计划变更 electron-main-window 已归档，本计划变更依赖已满足，是脚本化推荐的当前唯一可选实施项，后续 electron-release 被本变更阻塞
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不改变任何主规格与任何对外可观察行为；harness 配置 config.json 的内容与读写语义不变；导航范围、会话失效、本地页面与 IPC、主窗口标题、既有“重新加载”与编辑菜单不变；不实现发布构建版本注入流水线（属 electron-release）；不迁移或改写 Go 版实现（Go 侧移除属后续变更）；不新增托盘、自动更新等新能力（里程碑 scope.out 明确排除）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 只有一种解读：本变更是技术栈迁移中的行为复刻——用 Electron 原生能力（requestSingleInstanceLock、BrowserWindow 几何 API、dialog.showMessageBox）逐条满足既有主规格，而不是重新定义或放宽这些行为；规格文本即解读边界，实现细节（如窗口先隐藏创建再显示）只为满足同一可观察行为
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

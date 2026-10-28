@@ -1,11 +1,24 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import { describe, expect, it } from 'vitest'
+import { ABOUT_TITLE, DISPLAY_NAME, aboutMessage } from './app-info'
 import { RELOAD_ACCELERATOR, RELOAD_LABEL, buildMenuTemplate } from './app-menu'
 
 function findReload(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions | undefined {
   for (const item of template) {
     if (Array.isArray(item.submenu)) {
       const found = item.submenu.find((sub) => sub.label === RELOAD_LABEL)
+      if (found) {
+        return found
+      }
+    }
+  }
+  return undefined
+}
+
+function findAbout(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions | undefined {
+  for (const item of template) {
+    if (Array.isArray(item.submenu)) {
+      const found = item.submenu.find((sub) => sub.label === ABOUT_TITLE)
       if (found) {
         return found
       }
@@ -48,11 +61,13 @@ const MAC_EDIT_ITEMS = [
   }
 ]
 
+const ACTIONS = { reload: () => {}, showAbout: () => {} }
+
 describe('buildMenuTemplate', () => {
   it('三平台都有“重新加载”（CmdOrCtrl+R），点击调用重新探测而不是 Chromium reload', () => {
     for (const platform of ['darwin', 'win32', 'linux'] as const) {
       let reloads = 0
-      const reload = findReload(buildMenuTemplate(platform, { reload: () => reloads++ }))
+      const reload = findReload(buildMenuTemplate(platform, { ...ACTIONS, reload: () => reloads++ }))
       expect(reload?.accelerator).toBe(RELOAD_ACCELERATOR)
       expect(reload?.role).toBeUndefined()
       ;(reload?.click as () => void)()
@@ -60,9 +75,32 @@ describe('buildMenuTemplate', () => {
     }
   })
 
-  it('macOS 使用标准应用菜单，其后的编辑、视图、窗口菜单为中文', () => {
-    const template = buildMenuTemplate('darwin', { reload: () => {} })
-    expect(template[0]).toEqual({ role: 'appMenu' })
+  it('三平台都有“关于 DSH Anywhere”，点击调用 showAbout', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      let abouts = 0
+      const about = findAbout(buildMenuTemplate(platform, { ...ACTIONS, showAbout: () => abouts++ }))
+      expect(about?.label).toBe(ABOUT_TITLE)
+      ;(about?.click as () => void)()
+      expect(abouts).toBe(1)
+    }
+  })
+
+  it('macOS 应用菜单自建：首项为关于，其余逐项复刻默认 appMenu 角色，标签为中文', () => {
+    const template = buildMenuTemplate('darwin', ACTIONS)
+    expect(template[0]).toEqual({
+      label: DISPLAY_NAME,
+      submenu: [
+        { label: ABOUT_TITLE, click: expect.any(Function) },
+        { type: 'separator' },
+        { role: 'services', label: '服务' },
+        { type: 'separator' },
+        { role: 'hide', label: `隐藏 ${DISPLAY_NAME}` },
+        { role: 'hideOthers', label: '隐藏其他' },
+        { role: 'unhide', label: '显示全部' },
+        { type: 'separator' },
+        { role: 'quit', label: `退出 ${DISPLAY_NAME}` }
+      ]
+    })
     expect(topLabels(template.slice(1))).toEqual(['编辑', '视图', '窗口'])
     expect(template[3]).toEqual({
       role: 'windowMenu',
@@ -76,20 +114,33 @@ describe('buildMenuTemplate', () => {
     })
   })
 
-  it('Windows 与 Linux 的菜单栏为文件、编辑、视图，“文件”中提供退出', () => {
+  it('Windows 与 Linux 的菜单栏为文件、编辑、视图、帮助，“文件”中提供退出，“帮助”中提供关于', () => {
     for (const platform of ['win32', 'linux'] as const) {
-      const template = buildMenuTemplate(platform, { reload: () => {} })
-      expect(topLabels(template)).toEqual(['文件', '编辑', '视图'])
+      const template = buildMenuTemplate(platform, ACTIONS)
+      expect(topLabels(template)).toEqual(['文件', '编辑', '视图', '帮助'])
       expect(template[0]?.submenu).toEqual([{ role: 'quit', label: '退出' }])
+      expect(template[3]?.submenu).toEqual([{ label: ABOUT_TITLE, click: expect.any(Function) }])
     }
   })
 
   it('编辑菜单子项为中文，结构与 Electron 默认编辑菜单一致并保留系统编辑角色', () => {
     const expected = { darwin: MAC_EDIT_ITEMS, win32: WIN_LINUX_EDIT_ITEMS, linux: WIN_LINUX_EDIT_ITEMS }
     for (const platform of ['darwin', 'win32', 'linux'] as const) {
-      const edit = buildMenuTemplate(platform, { reload: () => {} }).find((item) => item.label === '编辑')
+      const edit = buildMenuTemplate(platform, ACTIONS).find((item) => item.label === '编辑')
       expect(edit?.role).toBeUndefined()
       expect(edit?.submenu).toEqual(expected[platform])
     }
+  })
+})
+
+describe('应用身份与关于文案', () => {
+  it('显示名称与关于标题同源', () => {
+    expect(DISPLAY_NAME).toBe('DSH Anywhere')
+    expect(ABOUT_TITLE).toBe('关于 DSH Anywhere')
+  })
+
+  it('关于正文同时显示应用名称与版本号（标签构建与未打标签构建）', () => {
+    expect(aboutMessage('0.1.0')).toBe('DSH Anywhere\n版本 0.1.0')
+    expect(aboutMessage('dev')).toBe('DSH Anywhere\n版本 dev')
   })
 })

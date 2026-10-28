@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: electron-desktop-experience
+approach:
+  - '按 Go 版 internal/windowstate 与 internal/singleinstance 的模块边界在 Electron 主进程复刻：窗口状态模块拆为纯函数几何解析与容错状态读写（Store 语义：原子写、缺失/损坏/非正数值按无状态）；单实例模块用 requestSingleInstanceLock 在 app ready 前取锁，second-instance 请求经 Activator 挂起直到主窗口就绪，激活顺序固定为取消最小化、显示、聚焦；主窗口隐藏创建（show: false），按解析结果应用尺寸、显示、应用位置、最大化（与 Go 版 Restore 顺序一致，避免先按默认尺寸出现再跳动），close 时保存几何；关于菜单沿用 app-menu 模板扩展，版本号经 electron-vite define 构建期注入、默认 dev'
+decisions:
+  version-injection:
+    decision: 版本号以模块常量 APP_VERSION 表示，默认 'dev'，由 electron-vite 的 define 在构建期用环境变量注入覆盖；electron-release 计划变更负责把 v 前缀发布标签转换为去前缀版本号并接入构建流水线
+    rationale: 源码无法得知构建对应的 git 标签，只有构建期注入能让关于显示的版本与标签一致（与 Go 版 -ldflags -X appinfo.Version 同语义）；app.getVersion() 在未打包与打包时都返回 package.json 的 version（当前为 0.0.0），既无法表达 dev 语义也依赖 electron-release 才会写对的值，故不采用
+  macos-custom-app-menu:
+    decision: macOS 用显式子菜单替代 role:'appMenu'：首项为“关于 DSH Anywhere”点击弹出对话框显示“DSH Anywhere”与“版本 <版本号>”，其后逐项复刻 Electron 默认 appMenu 子项（services、hide、hideOthers、showAll、quit）并为可本地化项覆盖中文 label；其他平台在“帮助”子菜单提供同一关于项
+    rationale: app-identity 要求关于命令显示版本号，而 role:'appMenu' 的系统 about 项无法定制内容；electron-layout-security 的 menu-label 规则允许以显式子菜单替代组合角色，条件是逐项复刻默认子项或在 design 说明取舍，此处逐项复刻
+  save-on-window-close:
+    decision: 窗口状态保存在主窗口 close 事件中执行：从尚未销毁的窗口读取位置、尺寸与 isMaximized 后原子写入；恢复尚未完成（窗口未就绪）或几何非正（窗口已销毁）时跳过保存以保留上一次有效状态
+    rationale: 关闭主窗口与应用退出（window-all-closed/Cmd+Q 触发窗口关闭）都会经过 close 事件，单点保存避免 quit 路径竞态；跳过语义与 Go 版 Manager.Save 一致，宁可保留旧状态也不写入占位几何
+  wayland-size-only:
+    decision: XDG_SESSION_TYPE 为 wayland 时几何解析只输出保存的尺寸与最大化标志，不输出位置，窗口位置由合成器决定
+    rationale: Wayland 合成器接管窗口定位，Electron 的 setPosition 在该会话下不可靠，Go 版 window-state 主规格 wayland-size-only 也只承诺恢复尺寸与最大化
+  no-delta-spec:
+    decision: 本变更不产生任何 delta spec：single-instance、window-state 与 app-identity 主规格已经完整描述要复刻的可观察行为，本变更只是把同一行为从 Go+Wails 迁移到 Electron 实现，与计划变更 electron-desktop-experience 的“不改变任何主规格”一致
+    rationale: electron-migration 里程碑 intake 已确认（behavior-parity，2026-10-28）：迁移不改变任何对外可观察行为，只有技术栈替换；因此 specs/ 目录保持为空，行为验收以既有主规格为准
+alternatives: []
+risks: []

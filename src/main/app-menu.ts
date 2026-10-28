@@ -1,4 +1,5 @@
 import type { MenuItemConstructorOptions } from 'electron'
+import { ABOUT_TITLE, DISPLAY_NAME } from './app-info'
 
 export const RELOAD_LABEL = '重新加载'
 // macOS 上为 Cmd+R，其他平台为 Ctrl+R。
@@ -6,6 +7,7 @@ export const RELOAD_ACCELERATOR = 'CmdOrCtrl+R'
 
 export interface MenuActions {
   reload(): void
+  showAbout(): void
 }
 
 // 编辑菜单：与 Electron 默认 editMenu 的结构一致，保留系统编辑角色（行为与快捷键由平台提供），只把标签改为中文。
@@ -56,15 +58,40 @@ const MAC_WINDOW_MENU: MenuItemConstructorOptions = {
   ]
 }
 
+// macOS 应用菜单自建而非 role:'appMenu'：系统默认的 about 项无法显示版本号，
+// “关于 DSH Anywhere”必须显示名称与版本（app-identity 主规格）；其余子项逐项
+// 复刻 Electron 默认 appMenu 的角色与顺序（设计决策 macos-custom-app-menu）。
+function macAppMenu(actions: MenuActions): MenuItemConstructorOptions {
+  return {
+    label: DISPLAY_NAME,
+    submenu: [
+      { label: ABOUT_TITLE, click: () => actions.showAbout() },
+      { type: 'separator' },
+      { role: 'services', label: '服务' },
+      { type: 'separator' },
+      { role: 'hide', label: `隐藏 ${DISPLAY_NAME}` },
+      { role: 'hideOthers', label: '隐藏其他' },
+      { role: 'unhide', label: '显示全部' },
+      { type: 'separator' },
+      { role: 'quit', label: `退出 ${DISPLAY_NAME}` }
+    ]
+  }
+}
+
 // buildMenuTemplate 生成应用菜单。“重新加载”重新探测并打开已保存地址，不使用 Chromium 的 reload 角色；
-// macOS 使用标准应用菜单（含退出），其他平台在“文件”中提供退出。
+// macOS 使用自建应用菜单（含关于与退出），其他平台在“文件”中提供退出、“帮助”中提供关于。
 export function buildMenuTemplate(platform: NodeJS.Platform, actions: MenuActions): MenuItemConstructorOptions[] {
   const view: MenuItemConstructorOptions = {
     label: '视图',
     submenu: [{ label: RELOAD_LABEL, accelerator: RELOAD_ACCELERATOR, click: () => actions.reload() }]
   }
   if (platform === 'darwin') {
-    return [{ role: 'appMenu' }, editMenu(platform), view, MAC_WINDOW_MENU]
+    return [macAppMenu(actions), editMenu(platform), view, MAC_WINDOW_MENU]
   }
-  return [{ label: '文件', submenu: [{ role: 'quit', label: '退出' }] }, editMenu(platform), view]
+  return [
+    { label: '文件', submenu: [{ role: 'quit', label: '退出' }] },
+    editMenu(platform),
+    view,
+    { label: '帮助', submenu: [{ label: ABOUT_TITLE, click: () => actions.showAbout() }] }
+  ]
 }
