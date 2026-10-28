@@ -6,9 +6,9 @@ lesson:
   id: wails-v3-0-0-linux-init-c87c5b
   title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
 category: tooling
-status: active
+status: obsolete
 created_at: '2026-10-27T09:45:17.873Z'
-updated_at: '2026-10-27T09:45:17.873Z'
+updated_at: '2026-10-28T14:02:15.297Z'
 context: project-scaffold 按路线图假设用 wails3 init -t vanilla-ts 生成骨架，并以 GTK3 / WebKit2GTK 4.1 为 Linux 构建依赖。
 observation: Wails v3.0.0 在 Linux 上默认链接 GTK4 / WebKitGTK 6.0（GTK3 需 -tags gtk3），连 go install wails3 都会因缺 gtk4 失败；模板名是 vanilla（即 TypeScript），没有 vanilla-ts；init 还会生成 build/android、build/ios（含无 main 函数的 package main，破坏 go build ./...）和 server/docker 任务；模板自带的 TypeScript 4.9 不支持其 tsconfig，vite build 不做类型检查所以不会暴露。
 takeaway: 使用 wails3 前先用 wails3 init -l 和 go list -f '{{.CgoPkgConfig}}' github.com/wailsapp/wails/v3/pkg/application 确认实际模板名与 cgo 依赖；生成后删除非目标平台目录，并单独运行 tsc --noEmit 检查模板。
@@ -17,3 +17,5 @@ occurrences:
   - origin: project-scaffold
     date: '2026-10-27'
     evidence: go install wails3@latest 报 Package gtk4 not found；wails3 init -l 只列出 vanilla；tsc --noEmit 报 TS6046/TS5070；安装 libgtk-4-dev libwebkitgtk-6.0-dev 后构建通过。
+obsoleted_reason: Wails v3.0.0 及其 init 模板/文档随 Go 栈整体移除，仓库不再有 Wails Linux 构建路径
+obsoleted_at: '2026-10-28T14:02:15.297Z'

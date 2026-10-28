@@ -1,0 +1,18 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: ci-regression
+operations:
+  ADDED: {}
+  MODIFIED:
+    ci-regression-verbatim:
+      strength: MUST
+      statement: 回归 CI 工作流必须在 ubuntu、macos、windows 三个平台的矩阵 job 中逐字执行 config.yaml review_evidence.project_regression.command 的完整回归命令，不得拆分、改写或省略覆盖率门槛
+      rationale: CI 与本地回归门槛必须完全一致，任何口径漂移都会让平台特定回归逃逸
+      enforcement:
+        method: ci
+        detail: 覆盖三平台矩阵与完整命令（npm ci、typecheck、electron-vite 构建、Vitest 覆盖率不低于 80%、Playwright 端到端）；TypeScript 侧断言测试锁定 regression.yml 逐字包含 config 中的回归命令
+  REMOVED:
+    ci-linux-gui-deps:
+      reason: Wails v3.0.0 在 Linux 链接 GTK4/WebKitGTK 6.0 的依赖随 Go 栈移除；Electron 回归不需要系统 GUI 开发库，保留该步骤只会拖慢 CI

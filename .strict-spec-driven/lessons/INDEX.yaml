@@ -6,28 +6,28 @@ categories:
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/architecture/dom-2a8261.yaml
     wails-80aace:
       title: Wails 多窗口应用的主窗口关闭后进程仍存活，副作用作用于已销毁窗口
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/architecture/wails-80aace.yaml
   security:
     wails-seturl-token-e08b6a:
       title: Wails SetURL 会在内存中保留并可能重放带 token 的地址
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/security/wails-seturl-token-e08b6a.yaml
     wails-webkitgtk-4669b9:
       title: Wails 窗口方法与 WebKitGTK 跨源行为不能凭文档或常识假设
-      status: active
+      status: obsolete
       occurrences: 5
       path: .strict-spec-driven/lessons/security/wails-webkitgtk-4669b9.yaml
     wails-samesite-strict-cookie-1a13f2:
       title: 从 wails:// 本地页面发起的导航，重定向中不携带 SameSite=Strict cookie
-      status: active
+      status: obsolete
       occurrences: 2
       path: .strict-spec-driven/lessons/security/wails-samesite-strict-cookie-1a13f2.yaml
     electron-loadurl-samesite-strict-cookie-wails-39e30f:
@@ -64,7 +64,7 @@ categories:
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/wails-v3-0-0-linux-init-c87c5b.yaml
     wslg-weston-7217b7:
@@ -74,17 +74,17 @@ categories:
       path: .strict-spec-driven/lessons/tooling/wslg-weston-7217b7.yaml
     wails3-update-build-assets-build-ios-plist-72a1b8:
       title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/wails3-update-build-assets-build-ios-plist-72a1b8.yaml
     macos-xcode-select-xcode-clt-sdk-tapi-78e77f:
       title: macOS 回归链接失败：xcode-select 指向外置 Xcode 与新版 CLT SDK 的 tapi 错配
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/macos-xcode-select-xcode-clt-sdk-tapi-78e77f.yaml
     wails-build-config-yml-98c650:
       title: wails 生成资产中的脚手架值可能无法经 build/config.yml 修正，只能手改并测试锁定
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/wails-build-config-yml-98c650.yaml
     electron-session-fetch-redirect-manual-net-reque-e3fc5d:
@@ -94,6 +94,6 @@ categories:
       path: .strict-spec-driven/lessons/tooling/electron-session-fetch-redirect-manual-net-reque-e3fc5d.yaml
     windows-go-test-race-msys2-mingw64-gcc-swift-cla-344a60:
       title: Windows 原生跑 go test -race 需要 msys2 mingw64 gcc，Swift clang 不行
-      status: active
+      status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/windows-go-test-race-msys2-mingw64-gcc-swift-cla-344a60.yaml

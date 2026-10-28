@@ -1,0 +1,23 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: go-package-layout
+operations:
+  ADDED: {}
+  MODIFIED: {}
+  REMOVED:
+    main-assembly-only:
+      reason: Go/Wails 代码随本变更整体移除，仓库不再有 main.go 与 internal/ 包，规则无约束对象
+    inject-window-effects:
+      reason: Go/Wails 代码随本变更整体移除，internal 包与 Wails 窗口副作用注入模式不复存在
+    window-lifecycle-ownership:
+      reason: Wails 多窗口生命周期语义随 Go 栈移除，Electron 版窗口生命周期由 src/main 现有实现与测试约束
+    first-navigation-after-window-ready:
+      reason: Wails v3.0.0 原生窗口创建覆盖 SetURL 的问题随 Go 栈移除，Electron 无此行为
+    platform-errno-classification:
+      reason: Go syscall 错误码分类随 Go 网络探测代码移除，Electron 探测在 src/main/probe.ts 并有自己的错误分类
+    defer-window-effects-until-ready:
+      reason: Wails app.Run 前窗口方法 panic 与 WindowRuntimeReady 补做机制随 Go 栈移除
+    inject-wails-global-dependencies:
+      reason: Wails globalApplication 依赖注入模式随 Go 栈移除，Electron 菜单与窗口构造不受该约束

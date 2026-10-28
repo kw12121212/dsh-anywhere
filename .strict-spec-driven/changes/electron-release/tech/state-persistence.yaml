@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: state-persistence
+operations:
+  ADDED: {}
+  MODIFIED:
+    atomic-tolerant-state-read:
+      strength: MUST
+      statement: 写入应用配置目录的持久化状态（harness 配置之外的状态，如窗口几何）必须以临时文件加重命名的原子替换写入；读取端把文件缺失、无法读取、内容损坏与数值无效一律当作没有保存状态，回退到默认值继续，不得阻断启动、不得因此清除其他状态，也不得使其他配置被判定为无效。
+      rationale: window-state-persistence 需要保存窗口几何，而配置目录已有 config.json，其保存语义是整文件覆盖。原子写入保证写入中断不会留下半截 JSON；容错读取保证状态损坏只丢一次状态而不是启动失败，也不会让 harness 配置被连带判定为无效。
+      enforcement:
+        method: review
+        detail: 审查新增的持久化是否以临时文件加重命名写入，读取失败是否回退默认值而不是抛错；参考 src/main/window-state.ts 与 src/main/config.ts 的写入实现。
+      examples:
+        good:
+          - src/main/window-state.ts 读写 window-state.json，loadState 对缺失、损坏、非正与超大尺寸统一返回无状态，按默认几何启动
+        bad:
+          - 直接写目标文件，写入中断留下半截 JSON，下次启动因为没有保存状态而丢失几何
+    separate-state-files:
+      strength: SHOULD
+      statement: 与既有配置文件语义不同的状态默认存放在配置目录下的独立文件；确实需要共用文件时，写入必须读改写并保留其他字段。
+      rationale: 独立文件让不同状态的写入、损坏与测试互不影响，也避免一个功能的保存逻辑清除另一个功能的状态；本条是默认做法，允许在需要原子地一起更新多份状态时用共用文件，并在 design 中记录理由。
+      enforcement:
+        method: review
+        detail: 审查新增状态是否使用独立文件，或共用文件时是否保留其他字段；偏离默认做法时审查 design.yaml 是否记录理由。
+      examples:
+        good:
+          - src/main/window-state.ts 使用 window-state.json，与 src/main/config.ts 的 config.json 互不读写
+        bad:
+          - 窗口几何与 harness 地址写在同一个 JSON 对象里，保存任一状态时整体覆盖文件
+  REMOVED: {}

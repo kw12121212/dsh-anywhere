@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: electron-release
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 迁移尚未完成：仓库中 Go/Wails 与 Electron 两套实现并存，打包与发布管线仍是 wails3/Taskfile，回归命令同时跑两套工具链；维护者每个后续变更都要维护双栈回归，发布路径与实际应用技术栈脱节，Electron 版无法发布安装包。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 推送 v* tag 后发布页出现 electron-builder 产出的 Windows NSIS 安装包、macOS dmg、Linux AppImage 与 deb 及 SHA256SUMS；仓库不再有 go.mod、*.go、Taskfile.yml 与 wails 依赖；ubuntu、macos、windows 三平台 CI 只用 Node 工具链通过且覆盖率不低于 80%；三平台安装后应用可启动、完成首次设置并加载 harness（里程碑 done criteria 原文）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: electron-migration 里程碑的最后一个计划变更：前置 electron-setup-settings 与 electron-desktop-experience 均已归档，Electron 版已按主规格逐项复刻，完成发布管线迁移与旧栈清除即达成里程碑完成标准。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 全部十个主规格的可观察行为不变（behavior-parity 已确认：功能行为完全不变，只做技术栈迁移）；配置文件与窗口状态文件的位置与格式不变；发布原子性（草稿先行、四类安装包齐全才转正式、失败删草稿）不变；不做 Windows 代码签名与 macOS 签名公证，不加自动更新、托盘等新能力。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 唯一读法：技术栈迁移的收尾——发布与 CI 管线切换到 electron-builder 并删除 Go/Wails 代码；不是新增功能，也不改变任何对外可观察行为（计划变更原文：不改变任何主规格）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: macos-linux-install-verification
+    question: 三平台安装级验收中，macOS 与 Linux 由谁、在哪里执行？
+    context: 里程碑完成标准要求在 Windows、macOS、Linux 上分别安装产物并验证首次设置、加载 harness、外部链接与会话失效；Windows 已由里程碑 intake（windows-verification）确认为用户在 GAMEPC 真机执行。macOS/Linux 无安排时，可依赖三平台 CI 的 Playwright e2e（已覆盖应用行为）加发布产物齐全性与 SHA256 校验作为证据，或由用户安排真机。影响本变更 Verification 任务的验收证据范围与归档 review evidence 口径，不影响实现文件、测试与规格。推荐：三平台 CI（regression + package + release workflow）通过与 Windows 真机验收作为本变更验收证据，macOS/Linux 真机安装验证由用户在推送首个 v* tag 发布后按需执行并反馈；如需在归档前完成，请给出可用机器与方式。
+    answer: 用户确认（2026-10-28）选项 1：以三平台 CI（regression、package、release workflow）全绿与 Windows GAMEPC 真机安装验收作为本变更归档证据；macOS/Linux 真机安装验证由用户在推送首个 v* tag 发布后按需执行并反馈，不阻塞本变更归档。
+    status: resolved
+    answered_by: human

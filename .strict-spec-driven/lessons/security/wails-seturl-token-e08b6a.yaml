@@ -6,9 +6,9 @@ lesson:
   id: wails-seturl-token-e08b6a
   title: Wails SetURL 会在内存中保留并可能重放带 token 的地址
 category: security
-status: active
+status: obsolete
 created_at: '2026-10-27T10:07:01.164Z'
-updated_at: '2026-10-27T10:07:01.164Z'
+updated_at: '2026-10-28T14:01:58.355Z'
 context: first-run-setup 用 dsh web 打印的带启动令牌地址调用一次主窗口 SetURL 以换取会话 cookie，设计假设原始地址只存在于调用栈上。
 observation: Wails v3.0.0 的 WebviewWindow.SetURL 把地址写入 options.URL；Windows 实现还记录 lastNavigatedURL，并在 WebView2 进程崩溃恢复时用它重新导航，等于带旧 token 再请求一次 dsh。
 takeaway: 把带凭据的地址交给 Wails 窗口后，要假设它会保留在窗口状态中；不要声称“只在栈上”，需要时在会话建立后用干净地址覆盖，并在设计风险中记录。
@@ -17,3 +17,5 @@ occurrences:
   - origin: first-run-setup
     date: '2026-10-27'
     evidence: wails v3.0.0 pkg/application/webview_window.go:542 w.options.URL = url；webview_window_windows.go:390 lastNavigatedURL = url，并在崩溃恢复路径中重新导航。
+obsoleted_reason: Wails SetURL API 及其地址重放行为随 Go 栈移除；Electron 导航用 loadURL 且带 token 地址清理由 removeTokenEntries 在导航事件中完成
+obsoleted_at: '2026-10-28T14:01:58.355Z'

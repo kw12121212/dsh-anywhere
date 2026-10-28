@@ -6,9 +6,9 @@ lesson:
   id: wails-80aace
   title: Wails 多窗口应用的主窗口关闭后进程仍存活，副作用作用于已销毁窗口
 category: architecture
-status: active
+status: obsolete
 created_at: '2026-10-27T12:13:20.308Z'
-updated_at: '2026-10-27T12:13:20.308Z'
+updated_at: '2026-10-28T14:01:57.511Z'
 context: settings-window 新增独立设置窗口，保存时经主窗口导航回调让主窗口打开新地址。
 observation: Wails v3.0.0 在 Linux 与 Windows 上只在窗口数为 0 时退出；设置窗口打开时关闭主窗口，进程继续运行，之后保存对已销毁的主窗口 SetURL（只检查 impl 非空），WSLg 实测已销毁的 webview 仍发出带 token 的请求。
 takeaway: 新增第二个窗口时同时决定主窗口关闭后的生命周期（本项目选择退出应用），并在真实窗口中验证关闭主窗口后的进程状态。
@@ -17,3 +17,5 @@ occurrences:
   - origin: settings-window
     date: '2026-10-27'
     evidence: 审查 mainclosed 探针：主窗口关闭后 windows=1，保存后 http.log 出现 GET /links.html?token=abc123；修复后关闭主窗口 0.1 秒内进程以 0 退出。
+obsoleted_reason: Wails 多窗口生命周期机制随 Go 栈整体移除，仓库不再包含 Wails 代码，该经验的前提（Wails v3.0.0 窗口数为 0 才退出）不复存在
+obsoleted_at: '2026-10-28T14:01:57.511Z'

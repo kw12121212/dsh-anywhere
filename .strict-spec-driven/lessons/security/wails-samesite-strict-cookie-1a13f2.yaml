@@ -6,9 +6,9 @@ lesson:
   id: wails-samesite-strict-cookie-1a13f2
   title: 从 wails:// 本地页面发起的导航，重定向中不携带 SameSite=Strict cookie
 category: security
-status: active
+status: obsolete
 created_at: '2026-10-27T12:25:22.777Z'
-updated_at: '2026-10-27T12:42:49.252Z'
+updated_at: '2026-10-28T14:01:59.231Z'
 context: first-run-setup、settings-window 让主窗口从本地页面用 Go 侧 SetURL 打开 dsh 带 token 地址，期望 dsh 签发 SameSite=Strict 会话 cookie 后 302 到干净地址即可进入。
 observation: 用模拟 dsh 在 WSLg 实测：token 请求成功签发 cookie，但随后的重定向请求不带 cookie 而得到 401；重启应用后 cookie 有效。主窗口当前文档位于 harness 源时发起同样的导航则重定向带 cookie。之前的变更只验证了配置只保存干净地址，没有用真实的 cookie 流程端到端验证。
 takeaway: 涉及 SameSite cookie 的导航要用模拟服务端完整走一遍签发、重定向与后续请求，并区分导航发起时的当前文档是本地页面还是远程页面；从本地页面进入 harness 后需要一次同站的再导航。
@@ -20,3 +20,5 @@ occurrences:
   - origin: dsh-session-auth
     date: '2026-10-27'
     evidence: 复测发现不只带 token 的重定向：从重新认证提示页（wails://）重新加载 harness 的请求同样不带已有 cookie（REQ / cookie=none）；改为每次导航后允许一次同站重试后，会话有效时直接进入 harness，失效时重试仍为 401 再显示提示页。
+obsoleted_reason: wails:// 本地页面导航链路随 Wails 移除；Electron 主进程 loadURL 携带 SameSite=Strict cookie 的结论已由 electron-loadurl-samesite-strict-cookie-wails-39e30f 记录并取代
+obsoleted_at: '2026-10-28T14:01:59.231Z'

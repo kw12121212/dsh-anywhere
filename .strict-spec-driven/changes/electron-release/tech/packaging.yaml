@@ -1,0 +1,38 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: packaging
+operations:
+  ADDED:
+    ci-calls-electron-builder-package:
+      strength: MUST
+      statement: CI 打包与发布步骤只允许调用仓库封装的 npm 打包 script（内部依次执行 electron-vite build 与 electron-builder），不得在 CI 工作流中复制编译或打包命令
+      rationale: 打包权威源单一（仓库根 electron-builder.yml 与 npm script），本地与 CI 产物才可能一致；CI 复制打包逻辑必然漂移，这是原 wails3 任务约束在 Electron 工具链下的等价物
+      enforcement:
+        method: ci
+        detail: 评审 package.yml 与 release.yml：打包步骤只出现 npm run dist 之类入口，不出现 electron-vite/electron-builder 的直接调用与参数复制
+  MODIFIED:
+    package-version-from-tag:
+      strength: MUST
+      statement: 安装包元数据与文件名中的版本号必须与应用内显示的版本同源：由 CI 用 git describe --tags --exact-match 派生（去 v 前缀，未命中为 dev），同一值注入 electron-vite 的 APP_VERSION 环境变量与 electron-builder 的 extraMetadata.version
+      rationale: 版本不同源会让包管理器显示的版本与关于页不一致，升级排查困难；单一 VERSION 变量同时喂给运行时注入与包元数据是唯一不漂移的接法
+      enforcement:
+        method: test
+        detail: Vitest 断言打包脚本由同一 VERSION 计算 APP_VERSION 与 extraMetadata.version；评审检查 CI 中无第二处版本来源
+    ci-full-fetch-for-tag-version:
+      strength: SHOULD
+      statement: '依赖 git describe --tags --exact-match 计算版本（缺省静默回退 dev）的 CI 作业（package 与 release），checkout 必须设置 fetch-depth: 0 或 fetch-tags: true'
+      rationale: 浅克隆取不到 tag 时精确匹配静默失败，产物会被错命名为 dev 版而 CI 仍绿灯；该风险与打包工具链无关，迁移到 electron-builder 后同样存在
+      enforcement:
+        method: review
+    workflow-structure-assertion-tests:
+      strength: SHOULD
+      statement: 无法直接单测的 CI/发布工作流结构，必须由 Vitest 纳管的仓库 TypeScript 测试断言锁定：关键片段正向断言，至少一条负向断言，并锁定被复用上游的关键前提（如 package.yml 的 workflow_call 触发器）
+      rationale: 原 internal 包 Go 断言测试随 Go 栈删除，断言能力必须先迁移为 TypeScript 再删 Go，否则上游工作流改动会让发布断链而测试全绿
+      enforcement:
+        method: test
+        detail: 迁移后的测试覆盖 package.yml workflow_call 前提、release.yml 四类产物齐全断言与 regression.yml 逐字包含回归命令，各含至少一条负向断言
+  REMOVED:
+    ci-calls-wails-package-tasks:
+      reason: wails3 Taskfile 打包任务随 Go 栈移除，CI 打包入口切换为 npm script 封装的 electron-builder 管线

@@ -70,7 +70,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* 地址表单（初始化界面与设置窗口），样式与 Wails 版一致。 */
+/* 地址表单（初始化界面与设置窗口）。 */
 #setup-form,
 #settings-form {
   display: flex;

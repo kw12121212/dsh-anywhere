@@ -13,6 +13,7 @@ describe('FUSE_CONFIG', () => {
   it('关闭 RunAsNode、NODE_OPTIONS 与调试参数', () => {
     expect(FUSE_CONFIG).toEqual({
       version: FuseVersion.V1,
+      resetAdHocDarwinSignature: true,
       [FuseV1Options.RunAsNode]: false,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false

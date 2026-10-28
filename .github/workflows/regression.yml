@@ -22,22 +22,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            frontend/package-lock.json
-            package-lock.json
-      - name: Install Linux GUI dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev xvfb
+          cache-dependency-path: package-lock.json
       # Electron 端到端测试需要显示服务器与可用的沙箱；不改动回归命令本身（技术标准 ci-regression/ci-linux-display）。
       - name: Prepare Linux display for Electron
         if: runner.os == 'Linux'
@@ -47,4 +37,4 @@ jobs:
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
       - name: Full project regression
         run: |
-          (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+          npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e

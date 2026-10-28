@@ -2,7 +2,9 @@
   "name": "dsh-anywhere",
   "version": "0.0.0",
   "private": true,
-  "description": "dsh-anywhere desktop client (Electron)",
+  "description": "接入远程 DeepSeek harness 的桌面客户端",
+  "author": "Keepwriting",
+  "desktopName": "dsh-anywhere",
   "main": "out/main/index.js",
   "engines": {
     "node": ">=22.18"
@@ -14,7 +16,11 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "flip-fuses": "node scripts/flip-fuses.mts"
+    "flip-fuses": "node scripts/flip-fuses.mts",
+    "dist": "node scripts/dist.mts",
+    "dist:win": "node scripts/dist.mts --win",
+    "dist:mac": "node scripts/dist.mts --mac",
+    "dist:linux": "node scripts/dist.mts --linux"
   },
   "devDependencies": {
     "@electron/fuses": "^2.1.3",
@@ -22,6 +28,7 @@
     "@types/node": "^24.19.2",
     "@vitest/coverage-v8": "^5.0.5",
     "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",

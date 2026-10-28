@@ -19,68 +19,39 @@ jobs:
       run:
         shell: bash
     steps:
-      # fetch-depth 0 保证 Taskfile 的 VERSION 变量（git describe --tags --exact-match）能取到 tag。
+      # fetch-depth 0 保证打包脚本能用 git describe --tags --exact-match 精确匹配
+      # tag 派生版本号；浅克隆取不到 tag 时会静默回退 dev 版产物。
       - name: Check out repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install wails3 CLI
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-      - name: Install NSIS (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install nsis -y
-          echo "C:\\Program Files (x86)\\NSIS" >> "$GITHUB_PATH"
-      - name: Install Linux GUI dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      # 打包只经 npm 打包 script（内部执行 electron-vite build 与 electron-builder，
+      # 含 APP_VERSION / extraMetadata.version 注入与 afterPack fuses），不得在工作流
+      # 复制打包命令（技术标准 packaging/ci-calls-electron-builder-package）。
       - name: Package (macOS)
         if: runner.os == 'macOS'
-        run: wails3 task darwin:package:universal:dmg
+        run: npm run dist:mac
       - name: Package (Linux)
         if: runner.os == 'Linux'
-        run: |
-          wails3 task linux:create:appimage
-          wails3 task linux:create:deb
+        run: npm run dist:linux
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        run: wails3 task windows:package
-      - name: Normalize artifact names
-        run: |
-          VERSION=$(v=$(git describe --tags --match "v*" --exact-match 2>/dev/null) && echo "${v#v}" || echo dev)
-          case "${{ runner.os }}" in
-            macOS)
-              mv bin/dsh-anywhere.dmg "bin/dsh-anywhere_${VERSION}_macos_universal.dmg"
-              ;;
-            Linux)
-              mv bin/*.AppImage "bin/dsh-anywhere_${VERSION}_linux_amd64.AppImage"
-              mv bin/*.deb "bin/dsh-anywhere_${VERSION}_linux_amd64.deb"
-              ;;
-            Windows)
-              mv bin/*-installer.exe "bin/dsh-anywhere_${VERSION}_windows_amd64_installer.exe"
-              ;;
-          esac
-          ls -l bin/
+        run: npm run dist:win
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dsh-anywhere-${{ runner.os }}
           path: |
-            bin/*.dmg
-            bin/*.AppImage
-            bin/*.deb
-            bin/*_installer.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*_installer.exe
           if-no-files-found: error

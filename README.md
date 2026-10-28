@@ -2,7 +2,7 @@
 
 多平台（Windows / macOS / Linux）桌面客户端，接入用户指定的远程 DeepSeek harness URL，在本地提供交互界面。
 
-- 技术栈：Go 1.27 + Wails 3.0，前端为 npm 构建的 Web UI，嵌入单一可执行文件。
+- 技术栈：Electron + TypeScript（electron-vite 构建，electron-builder 打包三平台安装包）。
 - 远程 harness URL 与凭据只来自用户配置，不内置任何地址或密钥。
 
 ## 安装
@@ -26,7 +26,7 @@
 1. **右键打开**：在「应用程序」中对 DSH Anywhere 右键，选择「打开」，再在弹窗中确认「打开」；
 2. **系统设置放行**：先双击启动一次（弹窗中点「完成」或关闭），然后打开「系统设置 → 隐私与安全性」，在底部找到关于 DSH Anywhere 的提示，点「仍要打开」。
 
-命令行等价方式（可选）：`xattr -cr /Applications/dsh-anywhere.app`
+命令行等价方式（可选）：`xattr -cr /Applications/DSH\ Anywhere.app`
 
 ### Windows（SmartScreen）
 
@@ -34,11 +34,13 @@
 
 ## 从源码构建
 
+需要 Node.js 22+（`engines` 约束见 `package.json`）：
+
 ```bash
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0   # 需先安装 Go 1.27 与 Node.js
-wails3 dev                     # 开发模式
-wails3 build                   # 生产构建
-wails3 task darwin:package:universal:dmg   # macOS 通用 dmg（示例，各平台见 build/<platform>/Taskfile.yml）
+npm install    # 安装依赖
+npm run dev    # 开发模式（electron-vite）
+npm run build  # 生产构建（输出 out/）
+npm run dist:win   # 打包当前版本 Windows NSIS 安装包（dist:mac / dist:linux 同理）
 ```
 
-Linux 构建需要 GTK4 / WebKitGTK 6.0 开发库（Ubuntu：`libgtk-4-dev libwebkitgtk-6.0-dev`）。完整回归与打包流程见 `.github/workflows/` 与 `Taskfile.yml`。
+打包版本号来自 git tag 精确匹配（去 `v` 前缀，未打标签时为 `dev`），同一版本号注入应用内关于页、安装包元数据与文件名。完整回归与打包流程见 `.github/workflows/`。

@@ -1,0 +1,65 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: electron-release
+sections:
+  Implementation:
+    electron-builder-config:
+      text: 新增仓库根 electron-builder.yml（appId work.keepwriting.dsh-anywhere、productName DSH Anywhere、Windows NSIS、macOS universal dmg、Linux AppImage 与 deb 目标、artifactName 命名模板、afterPack 钩子复用 scripts/fuses.mts）与 npm 打包 script，安装 electron-builder devDependency
+      status: complete
+    icons-buildresources:
+      text: 整理 build/ 图标为 electron-builder buildResources 约定（icon.icns、icon.ico、icons/*.png），删除 Wails 生成资产（Info.plist、Info.dev.plist、info.json、wails.exe.manifest、nfpm、nsis、msix、desktop、docker、平台 Taskfile、dmg 背景等模板资产）
+      status: complete
+    version-injection-wiring:
+      text: 接通版本注入：打包脚本由 git describe --tags --exact-match 计算 VERSION（去 v 前缀，缺省 dev），同一值注入 APP_VERSION 环境变量与 electron-builder extraMetadata.version
+      status: complete
+    workflow-structure-tests-migrate:
+      text: 把 internal/ 下断言 workflow 结构的 Go 测试迁移为 TypeScript Vitest 测试（package.yml workflow_call 前提、regression.yml 逐字包含回归命令、release.yml 产物断言的正负向断言），先于删除 Go 代码落地
+      status: complete
+    workflow-package:
+      text: '改写 package.yml 为 electron-builder 管线：删除 Go、wails3、choco NSIS 与 GTK/WebKitGTK 安装步骤，npm ci 后调用打包 npm script，checkout 保持 fetch-depth: 0，产物名与 release.yml 断言一致'
+      status: complete
+    workflow-release:
+      text: 更新 release.yml：产物齐全性断言与上传路径对齐 electron-builder 产物命名，保持草稿先行、失败删草稿与发布说明中的未签名绕过步骤
+      status: complete
+    remove-go-wails:
+      text: 删除 go.mod、go.sum、main.go、internal/、frontend/、Taskfile.yml 及残留 Wails 引用（确认 workflow 结构断言测试已迁移为 TypeScript）
+      status: complete
+    config-node-regression:
+      text: 更新 config.yaml（context 改 Electron 技术栈、code 规则删 Wails bindings 条目、回归命令去 Go 部分、coverage scope 去 Go 条目）与 regression.yml（删 setup-go 与 GTK/WebKitGTK 安装步骤）
+      status: complete
+    docs-update:
+      text: 更新 AGENTS.md 与 README：技术栈说明、常用命令、Linux 构建依赖说明改为 Node/Electron 工具链，保留未签名安装包绕过步骤
+      status: complete
+    lessons-obsolete:
+      text: 用 lesson-obsolete 把 Wails/Go 专属 lessons 标记过时（wails-80aace、wails-seturl-token、wails-webkitgtk、wails-samesite-strict-cookie、wails-v3-0-0-linux-init、wails3-update-build-assets、wails-build-config-yml、windows-go-test-race、dom-2a8261 等，逐条确认无 Electron 实现引用其结论）
+      status: complete
+  Testing:
+    unit-tests:
+      text: 运行 Vitest 单元测试，覆盖迁移后的 workflow 结构断言测试与新增的打包配置、版本接线测试
+      status: complete
+      command: npm run test
+    full-regression:
+      text: 运行 config.yaml 更新后的完整回归命令（npm ci、typecheck、electron-vite 构建、Vitest 覆盖率不低于 80%、Playwright e2e）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    actionlint-workflows:
+      text: 对 .github/workflows/ 下全部工作流文件运行 actionlint 本地校验
+      status: complete
+      command: actionlint
+    windows-install-acceptance:
+      text: 用户在 GAMEPC Windows 真机安装 NSIS 产物，验证首次设置、加载 harness、外部链接交系统浏览器与会话失效重新认证（人工验收，对应里程碑 Windows 完成标准）
+      status: pending
+    verify-change:
+      text: strict-spec-cli verify electron-release 通过
+      status: pending
+      command: strict-spec-cli verify electron-release
+    archive-readiness:
+      text: strict-spec-cli ready electron-release 通过，并确认归档证据齐备：完整回归通过、三平台 CI（regression 与 package）通过、Windows 真机验收记录、开放问题已解决
+      status: pending
+      command: strict-spec-cli ready electron-release
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: unit-tests

@@ -1,0 +1,25 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: webview-isolation
+operations:
+  ADDED: {}
+  MODIFIED: {}
+  REMOVED:
+    mark-remote-before-navigate:
+      reason: Electron 版用主进程 will-navigate、setWindowOpenHandler 与导航响应状态码控制导航，不再向远程页面注入脚本，无 Wails guard 与远程标记机制
+    no-cors-reliance-custom-scheme:
+      reason: wails://、http://wails.localhost 与 /wails/runtime 本地服务访问控制随 Wails 移除；Electron 本地页面经 app:// 自定义协议加载，远程页面不暴露任何本地 IPC
+    service-routes-under-wails-prefix:
+      reason: Wails HTTP Route 服务与 /wails/ 前缀约定随 Wails 移除
+    native-message-revalidate:
+      reason: Wails RawMessageHandler 原生消息通道随 Wails 移除；Electron 版远程页面不挂 preload、无任何本地 IPC 通道
+    injected-js-behavior-test:
+      reason: Electron 版不再向第三方页面注入 JS（导航控制改用原生事件），注入脚本测试要求无对象
+    secondary-local-window:
+      reason: Wails guard 按窗口 ID 放行的模型随 Wails 移除；Electron 版设置窗口等本地辅助窗口的安全边界由不向远程页面暴露 IPC 与 settings-policy 约束
+    native-message-frame-origin:
+      reason: Wails 原生消息不分 frame 的风险随原生消息通道移除而不复存在
+    serialize-navigation-effects:
+      reason: Wails 导航控制器代次比较与 SetRemote 互斥随 guard 机制移除；Electron 导航由 src/main/navigator 的现有串行化实现约束
