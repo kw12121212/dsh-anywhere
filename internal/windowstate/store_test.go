@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -85,12 +86,9 @@ func TestStoreLoadRejectsUnusableFiles(t *testing.T) {
 }
 
 func TestStoreLoadUnreadableFileReportsNoState(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root 可以读取任意权限的文件")
-	}
 	store, path := tempStore(t)
-	writeRaw(t, path, `{"x": 1, "y": 2, "width": 1000, "height": 700}`)
-	if err := os.Chmod(path, 0o000); err != nil {
+	// 目录占位使 ReadFile 在各平台都失败：Windows 上 chmod 000 不阻止读取
+	if err := os.MkdirAll(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Load(); !errors.Is(err, ErrNoState) {
@@ -170,16 +168,19 @@ func TestStoreSaveInterruptedKeepsPreviousState(t *testing.T) {
 }
 
 func TestDefaultStoreUsesConfigDir(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("HOME", home)
+	base := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", base)
+	t.Setenv("APPDATA", base)
+	t.Setenv("HOME", base)
 
 	store, err := DefaultStore()
 	if err != nil {
 		t.Fatalf("DefaultStore() error = %v", err)
 	}
-	want := filepath.Join(home, ".config", "dsh-anywhere", FileName)
-	if store.path != want {
-		t.Fatalf("DefaultStore() path = %q, want %q", store.path, want)
+	if !strings.HasSuffix(store.path, filepath.Join("dsh-anywhere", FileName)) {
+		t.Fatalf("DefaultStore() path = %q, want suffix %q", store.path, filepath.Join("dsh-anywhere", FileName))
+	}
+	if rel, err := filepath.Rel(base, store.path); err != nil || !filepath.IsLocal(rel) {
+		t.Fatalf("DefaultStore() path = %q, want a path under %q", store.path, base)
 	}
 }
