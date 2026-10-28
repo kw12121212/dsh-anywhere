@@ -14,6 +14,7 @@ dsh-anywhere 是一个多平台（Windows / macOS / Linux）桌面客户端，�
 
 ## 约定与约束
 
+- 分支模型：主力开发在 `dev` 分支进行；`main` 为生产分支，仅通过从 `dev` 合入变更，禁止直接在 `main` 上开发提交。
 - 远程 DeepSeek harness URL 与凭据只能来自用户配置，禁止硬编码、提交到仓库或输出到日志。
 - `frontend/bindings/` 为自动生成代码，不得手改；修改 Go 服务后用 `wails3 generate bindings` 重新生成。
 - 平台相关代码放在对应构建标签 / `build/<platform>/` 下，保持三平台均可构建。
