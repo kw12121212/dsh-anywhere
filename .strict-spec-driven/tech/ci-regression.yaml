@@ -13,7 +13,7 @@ rules:
     rationale: CI 与本地回归门槛必须完全一致，任何口径漂移都会让平台特定回归逃逸
     enforcement:
       method: ci
-      detail: 覆盖三平台矩阵与完整命令（前端构建、go vet、go build、go test -race、覆盖率 ≥80% awk 门槛）
+      detail: 覆盖三平台矩阵与完整命令：Go 部分（前端构建、go vet、go build、go test -race、覆盖率 ≥80% awk 门槛）与 Electron 部分（npm ci、typecheck、electron-vite 构建、Vitest 覆盖率 ≥80%、Playwright 端到端）；internal/appinfo/regression_test.go 断言 regression.yml 逐字包含 config 中的回归命令
   ci-bash-shell:
     strength: MUST
     statement: '回归 CI 工作流的所有步骤必须统一使用 bash shell（defaults.run.shell: bash），使 Windows runner 通过 Git Bash 提供 grep/awk'
@@ -32,3 +32,9 @@ rules:
     rationale: 工作流 YAML 是治理盲区文件（无编译器、无单测），语法或矩阵/shell 结构错误只有推送到 GitHub 后才暴露；actionlint 在本地拦截
     enforcement:
       method: lint
+  ci-linux-display:
+    strength: MUST
+    statement: Linux 回归 CI job 必须在执行回归命令前以独立步骤启动 Xvfb 并导出 DISPLAY，并保证 Electron 沙箱可用；不得把 xvfb-run 或 --no-sandbox 写进回归命令。
+    rationale: Playwright 端到端测试需要显示服务器，而回归命令必须三平台逐字一致；用前置步骤提供环境既保持命令一致，也不以关闭沙箱的方式削弱安全基线。
+    enforcement:
+      method: ci

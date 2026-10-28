@@ -1,0 +1,42 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: electron-scaffold
+  status: proposed
+summary:
+  what:
+    - 在仓库根建立 Electron + TypeScript 应用骨架（根 package.json，src/main、src/preload、src/renderer），用 electron-vite 构建 main、preload、本地页面三部分，开发模式可启动一个只显示本地页面的窗口
+    - 落实 Electron 安全基线：contextIsolation 开启、sandbox 开启、nodeIntegration 关闭、本地页面以打包文件加载并设置 CSP、用 @electron/fuses 关闭 RunAsNode 等不需要的能力
+    - 建立测试栈：Vitest（v8 覆盖率，main 入口文件按 Go 版排除 main.go 的惯例排除）与 Playwright 的 Electron 支持，端到端测试纳入回归命令
+    - 把完整回归命令改为“现有 Go 回归 && Electron 回归（npm ci、tsc 类型检查、electron-vite 构建、Vitest 覆盖率 ≥ 80%、Playwright 端到端）”，扩展 coverage scope 包含 src/ 下的 TypeScript 源文件，并同步三平台 CI regression workflow
+    - 新增描述 Electron 工程布局与安全基线的技术标准，并更新 CI 回归与前端依赖标准以覆盖 Electron 部分
+    - 按审查结果补充：端到端测试隔离 userData，回归工作流结构由仓库文件断言测试锁定，fuses 翻转以真实 Electron 二进制副本自动化测试
+  why:
+    - electron-migration 里程碑要求把应用整体迁移到 Electron；后续 electron-setup-settings、electron-main-window、electron-desktop-experience、electron-release 都依赖本变更提供的工程骨架、安全基线与回归门槛
+    - 迁移期间 Go 与 Electron 两套实现在 dev 分支并存，每个变更归档时回归命令都必须同时覆盖两者并各自满足 80% 覆盖率门槛
+scope:
+  in:
+    - 根 package.json、package-lock.json（resolved 指向 registry.npmjs.org）、tsconfig、electron.vite.config、vitest 与 playwright 配置
+    - src/main（创建只显示本地页面的窗口、安全 webPreferences、CSP）、src/preload（最小占位，不暴露能力）、src/renderer（本地占位页面）
+    - 用 @electron/fuses 的配置脚本或构建钩子关闭 RunAsNode、EnableNodeOptionsEnvironmentVariable、EnableNodeCliInspectArguments 等不需要的能力
+    - Vitest 单元测试与 Playwright Electron 端到端冒烟测试（窗口启动、安全 webPreferences、CSP 生效）
+    - 通过 config-edit 修改 review_evidence.project_regression.command 与 coverage scope；修改 .github/workflows/regression.yml 使三平台逐字执行新回归命令，Linux 用 xvfb 运行端到端测试
+    - delta-tech：新增 electron-layout-security 标准，修改 ci-regression 与 frontend-dependencies 标准
+    - .gitignore 增加 Electron 构建产物与 node_modules、覆盖率输出
+    - internal/appinfo/regression_test.go：回归工作流结构断言测试
+    - delta-tech electron-layout-security 增加 e2e-isolated-user-data 规则，ipc-sender-validation 明确开发模式允许来源
+  out:
+    - 任何对外可观察行为的新增或改变；复刻 harness-url-config、first-run-setup、main-window 等主规格行为属于后续 electron-* 变更
+    - electron-builder 打包、release workflow、package workflow 的迁移（属于 electron-release）
+    - 删除 Go/Wails 代码、frontend/、Taskfile.yml，退役 go-package-layout 与 webview-isolation 标准（属于 electron-release）
+    - AGENTS.md、README、config.yaml context 与 code 规则的技术栈说明改写（属于 electron-release）
+    - 代码签名、公证、自动更新
+unchanged_behavior:
+  - 现有 Go/Wails 应用的全部行为、构建方式（wails3 build、Taskfile）与 Go 回归部分及其 80% 覆盖率门槛
+  - specs/ 下全部主规格不变，本变更没有 delta spec
+  - release.yml 与 package.yml 发布打包流程不变
+roadmap:
+  milestone: electron-migration
+  planned_change: electron-scaffold

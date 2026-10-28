@@ -7,3 +7,9 @@
 # 打包前由 build/linux/Taskfile.yml 的 generate:dotdesktop 重新生成
 /build/linux/*.desktop
 coverage*.out
+# Electron 工程（仓库根）
+/node_modules
+/out
+/coverage
+/test-results
+/playwright-report

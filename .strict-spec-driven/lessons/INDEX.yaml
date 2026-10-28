@@ -30,6 +30,17 @@ categories:
       status: active
       occurrences: 2
       path: .strict-spec-driven/lessons/security/wails-samesite-strict-cookie-1a13f2.yaml
+  testing:
+    playwright-page-evaluate-cdp-csp-eval-7bf922:
+      title: Playwright page.evaluate 经 CDP 执行会绕过 CSP 的 eval 检查
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/playwright-page-evaluate-cdp-csp-eval-7bf922.yaml
+    electron-userdata-dsh-anywhere-19fbdd:
+      title: Electron 默认 userData 与 dsh-anywhere 配置目录重合，测试和开发运行会写入真实配置目录
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/electron-userdata-dsh-anywhere-19fbdd.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

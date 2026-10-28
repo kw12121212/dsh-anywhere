@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: playwright-page-evaluate-cdp-csp-eval-7bf922
+  title: Playwright page.evaluate 经 CDP 执行会绕过 CSP 的 eval 检查
+category: testing
+status: active
+created_at: '2026-10-28T08:02:43.264Z'
+updated_at: '2026-10-28T08:02:43.264Z'
+context: electron-scaffold 的端到端测试要证明本地页面的 CSP（不含 unsafe-eval）生效，最初在 page.evaluate 内直接调用 eval 并断言抛出 EvalError。
+observation: WSLg 下 Electron 45 + Playwright 1.64 实测：page.evaluate 中的 eval('1 + 1') 正常执行；同一页面里字符串形式的 setTimeout 与动态插入的内联 script 都被 CSP 拦截，并触发 securitypolicyviolation。CDP Runtime.evaluate 发起的求值不受页面 CSP 的 eval 限制。
+takeaway: 断言 CSP 拦截字符串求值时，要在页面自身的任务中触发（例如字符串 setTimeout），并监听 securitypolicyviolation；不要依赖 evaluate 回调里同步 eval 的结果。
+applies_when: 用 Playwright/CDP（page.evaluate、Runtime.evaluate）编写测试，断言 Electron 或 Chromium 页面的 CSP 拦截 eval、new Function、字符串定时器或内联脚本
+occurrences:
+  - origin: electron-scaffold
+    date: '2026-10-28'
+    evidence: e2e/smoke.spec.ts 的测试“本地页面的 CSP 拒绝字符串求值与内联脚本”；首次运行时 evalBlocked 为 false。

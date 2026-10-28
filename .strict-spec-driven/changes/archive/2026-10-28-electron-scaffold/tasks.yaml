@@ -1,0 +1,79 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: electron-scaffold
+sections:
+  Implementation:
+    add-electron-deps:
+      text: 在仓库根新增 package.json（electron、electron-vite、vite、typescript、vitest、@vitest/coverage-v8、@playwright/test、@electron/fuses 等开发依赖与 typecheck/build/dev/test:coverage/test:e2e 脚本），用 npm install --registry=https://registry.npmjs.org 生成 package-lock.json，并确认 resolved 只指向 registry.npmjs.org
+      status: complete
+    add-build-config:
+      text: 新增 tsconfig.json（strict，覆盖 src/main、src/preload、scripts 与配置文件）、e2e/tsconfig.json（继承根配置并加入 DOM lib）与 electron.vite.config.ts，构建 src/main、src/preload、src/renderer 到 out/；.gitignore 增加 /node_modules、/out、/coverage 与 Playwright 输出目录
+      status: complete
+    implement-main-window:
+      text: 实现 src/main：可单测的窗口选项函数（contextIsolation、sandbox 开启，nodeIntegration 关闭，preload 为占位脚本）与入口 src/main/index.ts，开发模式加载 electron-vite 开发服务器，生产模式加载 app:// 本地页面
+      status: complete
+    implement-app-protocol:
+      text: 实现 app:// 特权协议：在 app ready 前注册 scheme，路径解析函数拒绝解析到 out/renderer 之外的路径，响应附加 CSP 头；renderer 的 index.html 同时以 meta 写入相同 CSP
+      status: complete
+    implement-preload-renderer:
+      text: 实现 src/preload 最小占位（不经 contextBridge 暴露任何 API）与 src/renderer 本地占位页面
+      status: complete
+    implement-fuses:
+      text: 新增 scripts/fuses.mts（FUSE_CONFIG 关闭 RunAsNode、EnableNodeOptionsEnvironmentVariable、EnableNodeCliInspectArguments，applyFuses 调用 flipFuses）与命令行入口 scripts/flip-fuses.mts（npm run flip-fuses -- <路径>），暂不接入打包
+      status: complete
+    add-vitest-playwright-config:
+      text: 新增 vitest.config.mts（environment node，v8 覆盖率，thresholds.lines 80，覆盖 src/**/*.ts 与 scripts/**/*.mts，排除 src/main/index.ts、scripts/flip-fuses.mts 与测试文件）与 playwright.config.ts（只运行 e2e/，启动 out/ 构建产物）
+      status: complete
+    update-regression-config:
+      text: 用 strict-spec-cli config-edit --regression-command 把完整回归命令改为现有 Go 回归命令原文接 && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e，并用 --coverage-include 追加 src/**/*.ts、scripts/**/*.mts，--coverage-exclude 追加 src/main/index.ts、scripts/flip-fuses.mts、**/*.test.ts、**/*.test.mts、e2e/**
+      status: complete
+    update-ci-workflow:
+      text: 修改 .github/workflows/regression.yml：setup-node 的 cache-dependency-path 加入根 package-lock.json；Linux job 在回归步骤前安装并后台启动 Xvfb、导出 DISPLAY，并放开 Ubuntu 的 apparmor_restrict_unprivileged_userns 以启用 Electron 沙箱；回归步骤逐字替换为新的完整回归命令（actionlint 校验见 verify-workflow-lint）
+      status: complete
+    isolate-e2e-user-data:
+      text: 审查修复：端到端测试为每个测试使用临时 --user-data-dir 并断言 userData 指向它；app:// 越界判定改为 '..' 或 '..'+sep 以免误拒 ..foo.js，单元测试改为确定性断言；loadURL 失败时记录固定文本；package.json 声明 engines.node >=22.18
+      status: complete
+    add-regression-workflow-test:
+      text: 审查修复：新增 internal/appinfo/regression_test.go 锁定回归工作流结构，新增 fuses 真实二进制副本翻转的 Vitest 用例（macOS 跳过）
+      status: complete
+  Testing:
+    write-unit-tests:
+      text: 编写 Vitest 单元测试：窗口选项安全字段、app:// 路径解析拒绝路径穿越与正常文件映射、CSP 响应头内容、fuse 配置三项均为关闭
+      status: complete
+      command: npm run test:coverage
+    write-e2e-tests:
+      text: 编写 Playwright Electron 端到端冒烟测试：启动构建产物后出现窗口并渲染本地占位页面，页面 URL 为 app:// 来源，渲染进程中 require 与 process 不可用，eval 被 CSP 拒绝
+      status: complete
+      command: npm run build && npm run test:e2e
+    run-electron-validation:
+      text: 运行 Electron 部分校验：依赖安装、类型检查、electron-vite 构建
+      status: complete
+      command: npm ci && npm run typecheck && npm run build
+    run-full-regression:
+      text: 运行 config.yaml 中更新后的完整回归命令（Go 回归与 Electron 回归，各自覆盖率 ≥ 80%），在 WSLg 下执行
+      status: complete
+      command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    verify-fuses-flip:
+      text: 把 node_modules 中的 Electron 可执行文件复制到临时目录，用 fuses 脚本翻转后以 npx @electron/fuses read 确认 RunAsNode、EnableNodeOptionsEnvironmentVariable、EnableNodeCliInspectArguments 均为关闭，且不修改 node_modules 中的原文件
+      status: complete
+    verify-dev-launch:
+      text: 在 WSLg 下运行 npm run dev，确认开发模式窗口能启动并显示本地占位页面，且现有 wails3 build 构建不受影响
+      status: complete
+    verify-lockfile-registry:
+      text: 检查 package-lock.json 与 frontend/package-lock.json 的 resolved 地址只指向 registry.npmjs.org
+      status: complete
+      command: '! grep ''"resolved"'' package-lock.json frontend/package-lock.json | grep -v ''https://registry.npmjs.org/'''
+    verify-workflow-lint:
+      text: 用 actionlint 校验修改后的 regression.yml，并确认其回归步骤与 config.yaml 中的回归命令逐字一致
+      status: complete
+      command: actionlint .github/workflows/regression.yml
+    verify-change:
+      text: 运行 strict ready 与 verify，确认任务、delta tech 与 config 一致，并检查归档时 delta tech 能合并为新标准 electron-layout-security 与更新后的 ci-regression、frontend-dependencies
+      status: complete
+      command: strict-spec-cli ready electron-scaffold && strict-spec-cli verify electron-scaffold
+testing_gates:
+  validation_task: run-electron-validation
+  unit_test_task: run-full-regression

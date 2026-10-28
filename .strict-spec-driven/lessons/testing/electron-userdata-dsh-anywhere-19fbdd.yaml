@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-userdata-dsh-anywhere-19fbdd
+  title: Electron 默认 userData 与 dsh-anywhere 配置目录重合，测试和开发运行会写入真实配置目录
+category: testing
+status: active
+created_at: '2026-10-28T08:02:43.445Z'
+updated_at: '2026-10-28T08:02:43.445Z'
+context: electron-scaffold 中，package.json 的 name 为 dsh-anywhere，Electron 默认 userData 为系统用户配置目录下的 dsh-anywhere，与 Go 版 appinfo.ConfigDir() 相同；里程碑也要求 Electron 版配置文件沿用该目录。
+observation: Playwright 端到端测试、npm run dev 和每次回归都会把 Chromium profile（Cookies、Local Storage、Preferences、Cache、DevToolsActivePort 等）写进开发者真实的 ~/.config/dsh-anywhere，与 Go 版 window-state.json 和 config.json 放在一起，测试之间共享 cookie 与存储状态。
+takeaway: 启动 Electron 的测试一律传入每个测试独立的临时 --user-data-dir，并断言 app.getPath('userData') 指向它；决定配置文件位置时，要明确 Chromium profile 与 config.json 是否共用一个目录。
+applies_when: 用 Playwright 或脚本启动 dsh-anywhere 的 Electron 应用（含 npm run dev），或决定 Electron 版配置文件、窗口状态、会话 cookie 的存放目录
+occurrences:
+  - origin: electron-scaffold
+    date: '2026-10-28'
+    evidence: 审查发现 ~/.config/dsh-anywhere 下出现由 e2e 运行写入的 Chromium profile 文件；修复后 e2e/smoke.spec.ts 断言 userData 等于临时目录。

@@ -27,7 +27,7 @@ rules:
 review_evidence:
   project_regression:
     method: complete_project_regression
-    command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }'
+    command: (cd frontend && npm ci && npm run build) && go vet ./... && go build ./... && go test -race -covermode=atomic -coverprofile=coverage.out ./... && grep -v -E '^[^:]*/main\.go:' coverage.out > coverage.filtered.out && go tool cover -func=coverage.filtered.out | awk '/^total:/ { found = 1; pct = $3; sub(/%/, "", pct); if (pct + 0 < 80) { printf "coverage %s%% is below 80%%\n", pct; status = 1 } else { printf "coverage %s%% meets 80%%\n", pct } } END { if (!found) { print "coverage total not found"; exit 1 } exit status }' && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
     meaning: Passing this command is required review evidence before strict-spec-review recommends archive or strict-spec-auto performs archive. This command represents the complete project-level regression suite, not only the Testing section tasks for an individual change. When a coverage declaration is present, this command also enforces the minimum coverage threshold, so insufficient coverage is a blocking workflow failure rather than advisory output.
     unavailable_behavior: If the command cannot run because required dependencies, services, credentials, fixtures, or other test conditions are unavailable, review or auto archive is blocked until a human prepares the environment or explicitly provides the missing evidence.
     coverage:
@@ -36,8 +36,17 @@ review_evidence:
       scope:
         include:
           - '**/*.go'
+          - src/**/*.ts
+          - scripts/**/*.mts
         exclude:
           - main.go
           - '**/*_test.go'
           - frontend/**
           - build/**
+          - src/main/index.ts
+          - scripts/flip-fuses.mts
+          - '**/*.test.ts'
+          - '**/*.test.mts'
+          - e2e/**
+          - node_modules/**
+          - out/**

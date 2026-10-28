@@ -1,0 +1,68 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: electron-layout-security
+standard:
+  title: Electron 工程布局与安全基线
+  category: security
+operations:
+  ADDED:
+    electron-project-layout:
+      strength: MUST
+      statement: Electron 应用代码必须位于仓库根的 src/main、src/preload、src/renderer，由 electron-vite 构建到 out/；打包等构建期脚本放在 scripts/ 并使用 .mts；单元测试与源码同目录命名为 *.test.ts 或 *.test.mts，端到端测试放在 e2e/；tsconfig 开启 strict。
+      rationale: 固定的三段布局让 main、preload、渲染进程的权限边界在目录上可见，也让回归命令与覆盖率范围可以按路径稳定声明。
+      enforcement:
+        method: review
+        detail: 审查新增 TypeScript 文件的位置与 tsconfig 的 strict 设置；npm run typecheck 属于回归命令。
+    secure-webpreferences:
+      strength: MUST
+      statement: '每个 BrowserWindow 与 WebContentsView 必须使用 contextIsolation: true、sandbox: true、nodeIntegration: false，且不得关闭 webSecurity、不得开启 allowRunningInsecureContent 或 experimentalFeatures。'
+      rationale: 这是 Electron 安全清单的基线；任一项放开都会让渲染进程中的页面脚本获得 Node 或跨源能力。
+      enforcement:
+        method: test
+        detail: 生成窗口选项的函数有单元测试断言这些字段；端到端测试断言渲染进程中 require 与 process 不可用。
+      examples:
+        good:
+          - new BrowserWindow(createMainWindowOptions(preloadPath))
+        bad:
+          - 'new BrowserWindow({ webPreferences: { nodeIntegration: true } })'
+    local-page-protocol-csp:
+      strength: MUST
+      statement: 生产模式下本地页面必须经应用注册的 app:// 特权协议从构建产物加载，协议处理必须拒绝解析到渲染产物目录之外的路径，并在响应头上附加不含 unsafe-eval 与内联脚本许可的 Content-Security-Policy；不得用 file:// 加载本地页面。
+      rationale: file:// 来源为 null 且可触达整个文件系统；自定义协议提供稳定的本地 origin 供来源校验，并统一下发 CSP。
+      enforcement:
+        method: test
+        detail: 路径解析与响应头构造的单元测试覆盖路径穿越被拒与 CSP 内容；端到端测试断言本地页面中 eval 被 CSP 拒绝。
+    electron-fuses:
+      strength: MUST
+      statement: 打包产物必须用 @electron/fuses 关闭 RunAsNode、EnableNodeOptionsEnvironmentVariable 与 EnableNodeCliInspectArguments；fuse 配置集中在一个模块中并有单元测试。
+      rationale: 这些能力让任何能启动应用的人以 Node 方式执行任意代码或附加调试器，桌面客户端不需要它们。
+      enforcement:
+        method: test
+        detail: 单元测试断言 fuse 配置；接入打包后审查打包钩子调用该配置，并可用 npx @electron/fuses read 检查产物。
+      exceptions:
+        - 开发模式与 Playwright 端到端测试使用未翻转的 node_modules Electron，因为 Playwright 依赖调试参数启动。
+    remote-content-no-preload:
+      strength: MUST
+      statement: 显示远程内容的 webContents 不得挂载 preload，也不得暴露任何 IPC 通道或 contextBridge API。
+      rationale: 远程 harness 页面及其中的第三方 iframe 不可信；不挂 preload 让远程页面在结构上无法调用本地能力，取代 Wails 时期的 guard。
+      enforcement:
+        method: review
+        detail: 审查加载远程地址的窗口或视图的 webPreferences 与 preload 设置。
+    ipc-sender-validation:
+      strength: MUST
+      statement: 主进程的每个 ipcMain 处理函数必须先校验 event.senderFrame 是主 frame 且其来源是允许的本地页面来源，校验失败即拒绝；允许来源由一个纯函数判定：打包后只接受 app://local，未打包且设置了 ELECTRON_RENDERER_URL 时额外接受该开发服务器的来源。参数按白名单校验，日志不记录参数原文。
+      rationale: IPC 是本地页面调用主进程能力的唯一入口，只有逐次校验发送方与参数才能防止被导航到其他内容的 webContents 或子 frame 冒用；开发模式本地页面由 electron-vite 开发服务器提供，允许来源必须随运行模式确定，且打包产物绝不接受开发来源。
+      enforcement:
+        method: test
+        detail: 允许来源判定函数的单元测试覆盖打包模式拒绝开发服务器来源；处理函数的单元测试覆盖非本地来源、子 frame 与非白名单参数被拒。
+    e2e-isolated-user-data:
+      strength: MUST
+      statement: Playwright 启动 Electron 的端到端测试必须为每个测试传入独立的临时 --user-data-dir 并在测试后删除，不得读写真实用户的 userData 或配置目录。
+      rationale: Electron 默认 userData 为系统用户配置目录下的 dsh-anywhere，与 Go 版及后续 Electron 版的配置文件目录重合；共享真实目录会污染开发者配置并让测试之间共享状态。
+      enforcement:
+        method: test
+        detail: 端到端测试断言 app.getPath('userData') 等于本测试创建的临时目录。
+  MODIFIED: {}
+  REMOVED: {}

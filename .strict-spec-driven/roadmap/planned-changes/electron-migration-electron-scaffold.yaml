@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: electron-scaffold
   milestone: electron-migration
-status: planned
+status: complete
 summary: 建立 Electron + TypeScript 应用骨架与安全基线，并把 Electron 部分（含端到端测试）纳入完整回归命令与 80% 覆盖率门槛
 details: 默认布局：Electron 工程放在仓库根（根 package.json，src/main、src/preload、src/renderer），与现有 Go 代码和 frontend/（Wails 前端）并存，直到 electron-release 移除后者。用 electron-vite 构建 main、preload、本地页面三部分，能在开发模式启动一个只显示本地页面的窗口。落实安全基线：contextIsolation 开启、sandbox 开启、nodeIntegration 关闭、本地页面以打包文件或自定义协议加载并设置 CSP、通过 @electron/fuses 关闭 RunAsNode 等不需要的能力。测试栈：Vitest（v8 覆盖率，main 入口文件按 Go 版排除 main.go 的惯例排除）与 Playwright 的 Electron 支持；端到端测试属于回归命令的一部分，Linux CI 用 xvfb 提供显示，本地在 WSLg 下运行。用 config-edit 把 review_evidence.project_regression.command 改为“现有 Go 回归 && Electron 回归（npm ci、tsc 类型检查、electron-vite 构建、Vitest 覆盖率 ≥ 80%、Playwright 端到端）”，并扩展 coverage scope 包含 src/ 下的 TypeScript 源文件；三平台 CI regression workflow 同步执行。用 strict-tech-edit 新增描述 Electron 工程布局与安全基线的技术标准（与现有 go-package-layout、webview-isolation 并列，后者在 electron-release 中退役）。本变更不改变任何对外行为，不需要 delta spec。
 depends_on: []

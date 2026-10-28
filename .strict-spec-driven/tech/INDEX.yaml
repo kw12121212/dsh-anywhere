@@ -11,6 +11,10 @@ standards:
     title: CI 回归矩阵
     category: tooling
     path: .strict-spec-driven/tech/ci-regression.yaml
+  - id: electron-layout-security
+    title: Electron 工程布局与安全基线
+    category: security
+    path: .strict-spec-driven/tech/electron-layout-security.yaml
   - id: frontend-dependencies
     title: 前端依赖管理
     category: tooling

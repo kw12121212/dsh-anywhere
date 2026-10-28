@@ -1,0 +1,53 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: electron-scaffold
+approach:
+  - Electron 工程放在仓库根：根 package.json 与 package-lock.json、tsconfig（strict）、electron.vite.config.ts；源码分 src/main、src/preload、src/renderer 三部分，由 electron-vite 分别构建到 out/。与现有 Go 代码、frontend/（Wails 前端）并存，二者互不引用，直到 electron-release 删除 Go/Wails。
+  - 'src/main 创建一个只显示本地占位页面的 BrowserWindow：webPreferences 固定为 contextIsolation: true、sandbox: true、nodeIntegration: false、webSecurity 保持默认开启，preload 指向最小占位脚本且不经 contextBridge 暴露任何能力。窗口选项由一个可单测的纯函数生成，入口文件 src/main/index.ts 只做装配，按 Go 版排除 main.go 的惯例从覆盖率中排除。'
+  - 生产模式下本地页面经应用注册的特权自定义协议（app://）从 out/renderer 读取，协议处理函数拒绝路径穿越并在响应头上附加 CSP（default-src 'self'，不含 unsafe-eval / unsafe-inline 脚本）；开发模式加载 electron-vite 开发服务器地址，CSP 同时以 meta 标签写入 index.html 作为兜底。路径解析与响应头构造为纯函数，由 Vitest 覆盖。
+  - fuses 配置集中在一个模块中（关闭 RunAsNode、EnableNodeOptionsEnvironmentVariable、EnableNodeCliInspectArguments），提供对指定 Electron 可执行文件执行 flipFuses 的脚本；本变更只用单测校验配置并在验证任务中对一份 Electron 二进制副本翻转后用 @electron/fuses read 确认，接入 electron-builder afterPack 留给 electron-release。开发与端到端测试使用未翻转的 node_modules Electron，因为 Playwright 依赖调试参数启动。
+  - 测试：Vitest（environment node，v8 覆盖率，thresholds.lines = 80，排除入口文件、测试文件、e2e 与配置文件）测 src/ 下纯逻辑；Playwright 的 _electron.launch 启动 out/ 构建产物做端到端冒烟（窗口出现、本地页面渲染、渲染进程中 require/process 不可用、CSP 拒绝 eval）。npm scripts：typecheck、build、test:coverage、test:e2e。
+  - 回归命令通过 config-edit 改为“现有 Go 回归命令 && npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e”，Go 部分保持逐字不变；coverage scope 追加 src/**/*.ts 并排除入口与测试文件。.github/workflows/regression.yml 三平台逐字执行新命令，setup-node 的缓存依赖路径加入根 package-lock.json；Linux job 在回归步骤前启动 Xvfb 并导出 DISPLAY，而不是给命令包 xvfb-run，以保持命令逐字一致。
+decisions:
+  root-layout:
+    decision: Electron 工程放在仓库根，src/main、src/preload、src/renderer 三分，单元测试与源码同目录 *.test.ts，端到端测试放 e2e/
+    rationale: 里程碑结束时仓库只剩 Electron 工程，放在根目录可避免 electron-release 再整体搬迁目录；与 frontend/ 分开目录让两套实现并存期间互不干扰
+  app-protocol:
+    decision: '生产模式本地页面用特权自定义协议 app:// 加载并在协议响应头上设置 CSP，而不是 loadFile 的 file:// '
+    rationale: file:// 页面的来源是不透明的 null 且可读取任意本地文件；自定义协议给本地页面一个稳定、可做来源校验的 origin（后续 IPC 发送方校验与 navigation-scope 判定都依赖它），并能在响应头上统一下发 CSP，这是 Electron 安全清单推荐的做法
+  fuses-at-package-time:
+    decision: fuses 配置与翻转脚本在本变更建立并测试，真正翻转发生在 electron-release 的打包阶段
+    rationale: fuses 只能写入具体的 Electron 二进制；翻转 node_modules 中的 Electron 会关闭 Playwright 启动所需的调试参数，使端到端测试无法运行，且本变更尚无打包产物
+  regression-composition:
+    decision: 完整回归命令为 Go 回归原文接 && 再接 Electron 回归，两部分各自执行 80% 覆盖率门槛（Go 由 awk，Electron 由 Vitest thresholds）
+    rationale: 里程碑 details 要求迁移期间两套实现都受回归保护；Go 部分保持逐字不变避免误伤现有门槛，electron-release 删除 Go 时只需去掉前半段
+  linux-display-in-ci:
+    decision: Linux CI 在回归步骤前启动 Xvfb 并设置 DISPLAY，必要时放开 Ubuntu 对非特权 user namespace 的 AppArmor 限制，让 Electron 沙箱可用
+    rationale: ci-regression 要求三平台逐字执行同一命令，把 xvfb-run 写进命令会改变 macOS/Windows 的命令或破坏逐字一致；以前置步骤提供显示既满足标准又让本地 WSLg 直接运行同一命令
+  no-delta-spec:
+    decision: 本变更不产生 delta spec，specs/ 保持为空
+    rationale: 里程碑已确认迁移期间对外行为完全不变；本变更只新增并存的 Electron 骨架、安全基线与回归门槛，现有应用的可观察行为由 Go/Wails 实现继续提供，没有任何主规格需求被新增、修改或移除；工程约束的变化以 delta tech 记录
+  e2e-user-data-isolation:
+    decision: 端到端测试以每个测试独立的临时 --user-data-dir 启动 Electron，并断言 userData 指向该目录
+    rationale: 审查实测 Electron 默认 userData 与 Go 版配置目录（系统用户配置目录下的 dsh-anywhere）重合，未隔离时每次回归都会把 Chromium profile 写进开发者真实配置目录并在测试间共享状态，违反测试独立规则
+  workflow-structure-test:
+    decision: 回归工作流结构由 internal/appinfo/regression_test.go 的仓库文件断言测试锁定：逐字包含 config 回归命令、Electron 步骤、三平台矩阵、根 lockfile 缓存路径、Linux 显示与沙箱前置步骤先于回归步骤，并负向断言不出现 xvfb-run 与 --no-sandbox
+    rationale: 遵循现行 SHOULD 规则 packaging/workflow-structure-assertion-tests；actionlint 只校验语法，不能锁定命令与 config 逐字一致
+  dev-launch-manual-check:
+    decision: 开发模式（npm run dev）能否启动窗口以手工验证记录（verify-dev-launch），不加入自动化回归
+    rationale: 开发模式依赖 electron-vite 开发服务器与端口，放进回归会引入端口与时序不稳定；生产构建的同一窗口与安全设置已由端到端测试覆盖，开发模式只多出 rendererEntryURL 的地址选择，已有单元测试
+alternatives:
+  - option: loadFile 加载 file:// 本地页面并只用 meta 标签设置 CSP
+    reason: file:// 来源为 null，后续无法据此校验 IPC 发送方，且可访问整个文件系统，不满足里程碑的安全基线
+  - option: Electron 工程放在 electron/ 子目录
+    reason: electron-release 删除 Go 后需再次搬迁到根目录，产生一次无行为价值的大范围路径改动
+  - option: 把端到端测试留在回归命令之外单独运行
+    reason: 里程碑与 planned change 明确要求端到端测试属于回归命令，否则 Windows 等平台的行为回归无法被 CI 拦截
+risks:
+  - Ubuntu 24.04 runner 默认限制非特权 user namespace，Electron 沙箱可能启动失败；需在 CI 前置步骤调整 sysctl 或改用 SUID chrome-sandbox，不能用 --no-sandbox 绕过安全基线
+  - 回归命令执行两次 npm ci（frontend/ 与根目录）并下载 Electron 二进制，CI 时长与网络依赖增加
+  - 本机 npm 配置了镜像，安装依赖时必须指定 --registry=https://registry.npmjs.org 以保证 lockfile resolved 地址合规
+  - WSLg 下 Electron 的 GPU/沙箱行为可能与 CI 不同，本地端到端失败需区分环境问题与代码问题
+  - 开发模式（npm run dev）仍使用默认 userData，会把 Chromium profile 写入系统用户配置目录下的 dsh-anywhere，与配置文件同目录；Chromium profile 与 config.json 的目录关系由 electron-setup-settings 决定
