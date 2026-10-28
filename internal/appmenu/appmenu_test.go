@@ -1,6 +1,7 @@
 package appmenu
 
 import (
+	"runtime"
 	"testing"
 
 	"dsh-anywhere/internal/appinfo"
@@ -157,7 +158,16 @@ func TestOnClickCallsAction(t *testing.T) {
 }
 
 func TestBuildUsesHostPlatform(t *testing.T) {
-	if Build(noop, noop, noop).FindByLabel(SettingsLabel) == nil {
+	menu := Build(noop, noop, noop)
+	if menu.FindByLabel(SettingsLabel) == nil {
 		t.Errorf("Build() has no %q item", SettingsLabel)
+	}
+	// macOS 宿主上真实 Build 会构建应用菜单；Hide/Quit 自建项不能依赖 Wails 全局应用实例。
+	if runtime.GOOS == "darwin" {
+		for _, role := range []application.Role{application.Hide, application.Quit} {
+			if menu.FindByRole(role) == nil {
+				t.Errorf("Build() on darwin has no item with role %v", role)
+			}
+		}
 	}
 }

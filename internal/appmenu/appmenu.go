@@ -46,8 +46,18 @@ var appMenuRoles = []roleEntry{
 type roleAdder func(*application.Menu, application.Role)
 
 // addRoleTo 是 roleAdder 的生产实现。
+// Wails 对 Hide 与 Quit 角色的构造器在构建菜单时读取全局应用实例取应用名，
+// 没有运行中的应用时（如单元测试）会空指针崩溃；这里改为等价的自建菜单项，
+// 标签用显示名与应用菜单标题保持一致，两个角色在 macOS 上都有原生 selector。
 func addRoleTo(menu *application.Menu, role application.Role) {
-	menu.AddRole(role)
+	switch role {
+	case application.Hide:
+		menu.Add("Hide " + appinfo.DisplayName).SetAccelerator("CmdOrCtrl+h").SetRole(application.Hide)
+	case application.Quit:
+		menu.Add("Quit " + appinfo.DisplayName).SetAccelerator("CmdOrCtrl+q").SetRole(application.Quit)
+	default:
+		menu.AddRole(role)
+	}
 }
 
 // Build 返回应用菜单；reload、openSettings 与 showAbout 分别在用户选择对应命令时被调用。
