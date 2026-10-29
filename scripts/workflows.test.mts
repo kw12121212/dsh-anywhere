@@ -68,7 +68,7 @@ describe('package.yml', () => {
       'npm run dist:mac',
       'npm run dist:linux',
       'npm run dist:win',
-      'upload-artifact',
+      'uses: actions/upload-artifact@v7',
       'if-no-files-found: error',
       'dist/*.dmg',
       'dist/*.AppImage',
@@ -87,7 +87,9 @@ describe('package.yml', () => {
       'libgtk-4-dev',
       'libwebkitgtk-6.0-dev',
       'npx electron-builder',
-      'fetch-depth: 0'
+      'fetch-depth: 0',
+      // 上传 action 锁定在 Node 24 运行时的大版本，不得回退到 Node 20 的 v4。
+      'actions/upload-artifact@v4'
     ]) {
       expect(workflow).not.toContain(forbidden)
     }
@@ -100,13 +102,21 @@ describe('release.yml', () => {
     for (const fragment of [
       "tags: ['v*']",
       'uses: ./.github/workflows/package.yml',
+      'uses: actions/download-artifact@v8',
       'needs: package',
       'merge-multiple: true'
     ]) {
       expect(workflow).toContain(fragment)
     }
     // 发布工作流不得复制打包命令。
-    for (const forbidden of ['wails3 task', 'go build', 'electron-builder', 'npm run dist']) {
+    for (const forbidden of [
+      'wails3 task',
+      'go build',
+      'electron-builder',
+      'npm run dist',
+      // 下载 action 锁定在 Node 24 运行时的大版本，不得回退到 Node 20 的 v4。
+      'actions/download-artifact@v4'
+    ]) {
       expect(workflow).not.toContain(forbidden)
     }
     // 复用的前提是 package.yml 保留 workflow_call 触发器，上游删掉它则发布断链。
