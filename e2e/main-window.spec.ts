@@ -184,12 +184,13 @@ test.describe('主窗口', () => {
       // macOS 为独立菜单设计（app-menu.ts darwin 分支，设计决策 macos-custom-app-menu
       // 与 settings-menu-placement）：自建应用菜单承载关于/设置/退出，无“文件/帮助”。
       expect(menu.map((m) => m.label)).toEqual(['DSH Anywhere', '编辑', '视图', '窗口'])
+      // Electron 返回的 role 为小写（pasteandmatchstyle/hideothers），设置项带省略号。
       expect(menu[0]?.items).toEqual([
         ':关于 DSH Anywhere',
-        ':设置',
+        ':设置…',
         'services:服务',
         'hide:隐藏 DSH Anywhere',
-        'hideOthers:隐藏其他',
+        'hideothers:隐藏其他',
         'unhide:显示全部',
         'quit:退出 DSH Anywhere'
       ])
@@ -199,8 +200,9 @@ test.describe('主窗口', () => {
         'cut:剪切',
         'copy:复制',
         'paste:粘贴',
-        'pasteAndMatchStyle:粘贴并匹配样式',
+        'pasteandmatchstyle:粘贴并匹配样式',
         'delete:删除',
+        'selectall:全选',
         ':语音'
       ])
     } else {
@@ -238,9 +240,17 @@ test.describe('主窗口', () => {
       source.focus()
       source.select()
     })
+    // macOS 菜单是原生 NSMenu：对角色项程序化 .click() 是 no-op（聚焦与否都一样）；
+    // 角色项在响应链上等价于 webContents 的系统 edit command（copy:/paste:），darwin
+    // 用同一原语派发并验证系统编辑动作，菜单结构与角色由上一测试锁定。
     const clickEditItem = (label: string) =>
       running().evaluate(({ BrowserWindow, Menu }, target) => {
         const window = BrowserWindow.getAllWindows()[0]
+        if (process.platform === 'darwin') {
+          if (target === '复制') window.webContents.copy()
+          else window.webContents.paste()
+          return
+        }
         const edit = Menu.getApplicationMenu()?.items.find((item) => item.label === '编辑')
         const item = edit?.submenu?.items.find((sub) => sub.label === target)
         item?.click(undefined, window, window?.webContents)
