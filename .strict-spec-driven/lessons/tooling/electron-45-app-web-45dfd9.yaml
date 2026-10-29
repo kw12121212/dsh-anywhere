@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-45-app-web-45dfd9
+  title: Electron 45 首个 app:// 请求懒加载 Web 全局会与主进程启动竞态
+category: tooling
+status: active
+created_at: '2026-10-29T08:43:04.597Z'
+updated_at: '2026-10-29T08:43:04.597Z'
+context: 本地用 Playwright 重复启动 Electron 应用，验证 app:// 本地页能否在 5 秒内出现
+observation: '修复前 25 次重复启动中 2–4 次主窗口不出现，失败窗口停在 chrome-error://chromewebdata/，主进程 stderr 打印 TypeError: Cannot read properties of undefined (reading markResourceTiming)；把协议处理器改为 fs.readFile 后仍 2/30 失败，说明触发点在 Electron 的 app:// 分发器而不是处理器；启动时构造一个空 Response 预热 Web 全局后 40/40 通过。'
+takeaway: Electron 45 下在创建窗口前预热 Web 全局（构造一个空 Response），避免首个 app:// 请求触发 undici 懒加载竞态；排查本地页偶发加载失败时先看主进程 stderr 是否出现 markResourceTiming TypeError。
+applies_when: 在 Electron 45 上用 app:// 或自定义协议加载本地页面、主窗口偶发 5 秒内不出现、或升级 Electron 后评估是否可移除预热 workaround 时。
+occurrences:
+  - origin: fix-local-page-undici-race
+    date: '2026-10-29'
+    evidence: 修复前重复 25 次 2–4 次失败；fs.readFile 对照组 2/30 失败；预热后重复 40 次全部通过；完整回归 39 passed / 2 skipped / 0 failed。

@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-local-page-undici-race
+approach:
+  - 在主进程脚本顶部、创建窗口与注册 app:// 协议之前调用 warmUpWebGlobals()：该函数构造一个空 Response，促使 Node 的 Web 全局模块（Response/Headers/fetch 同属 undici）在没有请求压力、performance 已就绪的启动阶段完成初始化。之后 Electron 的 app:// 分发器在首个请求时直接复用已初始化模块，不再触发懒加载竞态。
+decisions:
+  warmup-before-window:
+    decision: 预热放在 requestSingleInstanceLock 与 app.whenReady 之前同步执行
+    rationale: 竞态发生在首个 app:// 请求触发 undici 懒加载时；在窗口创建前完成初始化，才能保证分发器的第一次调用命中已加载模块，同时也覆盖设置窗口等后续 app:// 请求
+  keep-net-fetch-handler:
+    decision: 保留 createAppProtocolHandler 现有的 net.fetch(file://) 实现不变
+    rationale: 改用 fs.readFile 的对照实验失败率不变（2/30），说明触发点在 Electron 的协议分发器而不是处理器；改处理器既不能修复问题，又会引入 MIME 映射等无关改动
+  no-delta-spec:
+    decision: 不新增 delta spec：这是既有主规格行为的实现回归，不是规格缺口
+    rationale: first-run-setup 与 main-window 已要求应用启动后显示本地页面或初始化界面；本次修复只恢复该行为，需求文本与场景不变，因此 specs/ 保持为空。
+alternatives:
+  - option: 改用 fs.readFile + 手写 MIME 映射提供本地文件
+    reason: 对照实验仍以相同频率失败，说明问题不在 net.fetch(file://)；同时需要维护内容类型映射，属于超出目标缺陷的改动
+  - option: 放宽 e2e 的 findPage 超时或在本地启用重试
+    reason: 失败是页面加载被拒绝（ERR_UNEXPECTED）而不是慢，放宽超时无效；本地重试会掩盖真实失败，违背仓库只在 CI 重试的既有策略
+  - option: 升级 Electron 到修复版本
+    reason: 45.1.0 是当前 45.x 最新版本，46 仅有 alpha，没有可用的稳定修复版本；升级还会牵动打包与 fuses 验证
+risks:
+  - 预热是针对 Electron 45 缺陷的 workaround，上游修复后应移除；若未来有人删除 warmUpWebGlobals() 调用，竞态会回归
+  - warmUpWebGlobals 的单元测试只保护函数自身行为，无法确定性复现启动竞态；回归证据依赖重复启动的端到端统计

@@ -112,3 +112,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/macos-e2e-b4fbcc.yaml
+    electron-45-app-web-45dfd9:
+      title: Electron 45 首个 app:// 请求懒加载 Web 全局会与主进程启动竞态
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/electron-45-app-web-45dfd9.yaml

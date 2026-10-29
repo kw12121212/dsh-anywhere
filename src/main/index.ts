@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, WebContentsView, app, dialog, ipcMain, net, protoc
 import { ABOUT_TITLE, aboutMessage } from './app-info'
 import { buildMenuTemplate } from './app-menu'
 import { APP_SCHEME, createAppProtocolHandler } from './app-protocol'
+import { warmUpWebGlobals } from './web-globals'
 import { APP_VERSION } from './version'
 import { CONFIG_FILE_NAME, ensurePrivateDir, loadConfig, saveConfig } from './config'
 import { URLValidationError, redactURL } from './url-validation'
@@ -206,6 +207,9 @@ function createMainWindow(): void {
   })
   void nav.open()
 }
+
+// 先预热 Web 全局，避免第一个 app:// 请求触发 undici 懒加载竞态（见 web-globals.ts）。
+warmUpWebGlobals()
 
 // requestSingleInstanceLock 必须在 app ready 之前调用；未获锁的进程随即以成功状态退出，
 // 只有获锁的实例继续初始化（single-instance 主规格）。

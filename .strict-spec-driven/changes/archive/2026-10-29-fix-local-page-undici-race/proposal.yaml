@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-local-page-undici-race
+  status: proposed
+summary:
+  what:
+    - 修复主进程首次 app:// 请求偶发以 ERR_UNEXPECTED 失败、本地页停在 chrome-error 的启动缺陷：创建窗口前预热 Node 的 Web 全局（Response），让 undici 模块在启动阶段完成初始化。
+  why:
+    - '本地重复启动可复现：修复前 25 次重复运行中 2–4 次主窗口 5 秒内不出现，主进程打印 TypeError: Cannot read properties of undefined (reading ''markResourceTiming'')，窗口 URL 停在 chrome-error://chromewebdata/；Electron 45.1.0 的 app:// 分发器在首个请求才懒加载 Web 全局，与主进程启动末段竞态时 undici 读到尚未就绪的 performance。'
+scope:
+  in:
+    - src/main/web-globals.ts：新增 warmUpWebGlobals()，构造一个空 Response 以触发 Web 全局模块初始化
+    - src/main/index.ts：在创建窗口与注册 app:// 协议前调用 warmUpWebGlobals()
+    - src/main/web-globals.test.ts：断言重复调用不抛错且 Response 仍可构造
+  out:
+    - 升级 Electron：45.1.0 是当前 45.x 最新版本，暂无可用修复版本
+    - 放宽 e2e findPage 超时或在本地启用重试：失败是加载失败而非慢，重试会掩盖确定性失败，违背仓库「本地零重试」策略
+    - 把协议处理器改为 fs.readFile：实测失败率不变，触发点在 Electron 分发器而非处理器
+unchanged_behavior:
+  - app:// 本地页面的 URL、CSP、协议处理与页面行为
+  - 全部主规格的可观察行为与配置、窗口状态格式
+  - 打包、CI 与发布流程

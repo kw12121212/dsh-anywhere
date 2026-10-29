@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: fix-local-page-undici-race
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 本地运行端到端时，主窗口偶发在 5 秒内不出现，测试误报失败。
+    answer: 'xvfb 下重复启动 25 次有 2–4 次本地页以 ERR_UNEXPECTED 加载失败，窗口停在 chrome-error://chromewebdata/，主进程打印 TypeError: Cannot read properties of undefined (reading ''markResourceTiming'')。影响本地回归的可信度。'
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 需要一个可观察的成功条件。
+    answer: 同一重复启动用例修复后 40 次全部通过，窗口正常显示 app://local/index.html，主窗口立即可见。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 为什么会在此刻处理。
+    answer: 推送 electron-release 相关提交后在本地跑完整回归时暴露，阻塞本地验证结论。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 哪些相邻行为必须保持不变。
+    answer: 不改变本地页面 URL、CSP、协议处理与页面行为；不改打包、CI、发布流程；不升级 Electron。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 短请求可能有多种解读。
+    answer: 唯一读法：修复启动期本地页加载失败这一缺陷，而不是通过放宽超时或在本地启用重试掩盖它。
+    status: resolved
+    kind: requirement
+    answered_by: human
