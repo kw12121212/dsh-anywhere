@@ -9,13 +9,8 @@ standard:
 rules:
   electron-identity-single-source:
     strength: MUST
-    statement: Electron 侧运行时显示名称、关于文案与版本号只定义在 src/main/app-info.ts 与 src/main/version.ts：显示名称与关于文案取自 app-info 常量与函数，菜单、窗口标题与对话框代码不得重复身份字面量；版本号默认 dev，经 electron-vite 的 define（__APP_VERSION__，读取环境变量 APP_VERSION）在构建期注入，打包时 CI 把 git tag（去 v 前缀）派生的同一版本写入 APP_VERSION 与 electron-builder extraMetadata.version，不得改用 app.getVersion() 或在源码写死发布版本
-    rationale: 窗口标题、菜单关于项与关于对话框必须同源，否则打包后互相矛盾且只在打包后暴露；app.getVersion() 返回 package.json 的私有占位版本（0.0.0），既无法表达未打标签构建的 dev 语义，也会与文件名版本脱钩
+    statement: Electron 侧运行时显示名称、关于文案与版本号只定义在 src/main/app-info.ts 与 src/main/version.ts：显示名称与关于文案取自 app-info 常量与函数，菜单、窗口标题与对话框代码不得重复身份字面量；版本号的唯一登记处是 package.json 的 version 字段，构建期经 electron-vite 的 define（__APP_VERSION__，构建配置直接读取 package.json）注入 version.ts 的 APP_VERSION，打包时同一值经 scripts/dist.mts 写入 electron-builder 的 extraMetadata.version；不得改用 app.getVersion()、在源码写死发布版本或引入第二个版本登记处。
+    rationale: 保留原单一来源精神并把登记处从 git tag 改为 package.json：define 注入链与打包元数据注入链读取同一文件，关于页、安装包元数据与文件名的版本号在任何构建方式下都一致。
     enforcement:
       method: test
-      detail: 单元测试断言 APP_VERSION 默认 dev（version.test.ts）、关于标题与正文由 app-info 派生且窗口标题等于同一显示名称常量（app-menu.test.ts、window.test.ts）；Vitest 断言打包脚本把同一 VERSION 注入 APP_VERSION 与 extraMetadata.version；评审检查菜单模板与 index.ts 不含身份字面量
-    examples:
-      good:
-        - index.ts 的关于对话框与 window.ts 的标题都取自 app-info/version 模块导出，CI 用同一 VERSION 注入运行时与包元数据
-      bad:
-        - 在菜单模板里再写一份 DSH Anywhere 字面量，或改用 app.getVersion() 显示版本、让安装包元数据另用一份版本号
+      detail: electron.vite.config.ts 与 scripts/dist.mts 都经 scripts/package-version.mts 读取 package.json；由 scripts/package-version.test.mts、scripts/workflows.test.mts 与 e2e 关于页断言（运行时读取 package.json）锁定。

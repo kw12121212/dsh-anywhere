@@ -8,6 +8,7 @@ import { FuseV1Options } from '@electron/fuses'
 import { describe, expect, it } from 'vitest'
 import { DISPLAY_NAME } from '../src/main/app-info'
 import { FUSE_CONFIG } from './fuses.mts'
+import { VERSION_PATTERN, readPackageVersion } from './package-version.mts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
@@ -62,7 +63,6 @@ describe('package.yml', () => {
     const workflow = repoFile('.github', 'workflows', 'package.yml')
     for (const fragment of [
       'workflow_call',
-      'fetch-depth: 0',
       'node-version: 22',
       'npm ci',
       'npm run dist:mac',
@@ -77,7 +77,8 @@ describe('package.yml', () => {
     ]) {
       expect(workflow).toContain(fragment)
     }
-    // 负向断言：Go/Wails/GTK 与 NSIS choco 步骤不得回流，也不得直接调 electron-builder。
+    // 负向断言：Go/Wails/GTK 与 NSIS choco 步骤不得回流，也不得直接调 electron-builder；
+    // 版本号来自 package.json，不再需要为 git describe 深拉取标签。
     for (const forbidden of [
       'go build',
       'wails3',
@@ -85,7 +86,8 @@ describe('package.yml', () => {
       'choco install nsis',
       'libgtk-4-dev',
       'libwebkitgtk-6.0-dev',
-      'npx electron-builder'
+      'npx electron-builder',
+      'fetch-depth: 0'
     ]) {
       expect(workflow).not.toContain(forbidden)
     }
@@ -109,16 +111,33 @@ describe('release.yml', () => {
     }
     // 复用的前提是 package.yml 保留 workflow_call 触发器，上游删掉它则发布断链。
     expect(repoFile('.github', 'workflows', 'package.yml')).toContain('workflow_call')
-    // 唯一允许的外部 action 是官方 download-artifact；发布步骤只用 gh CLI。
+    // 允许的外部 action 只有官方 checkout（verify-tag 前置校验）与 download-artifact；
+    // 发布步骤只用 gh CLI。
     for (const line of workflow.split('\n')) {
       if (
         line.includes('uses:') &&
         !line.includes('actions/download-artifact') &&
+        !line.includes('actions/checkout') &&
         !line.includes('uses: ./.github/workflows/package.yml')
       ) {
         throw new Error(`release.yml uses a third-party action instead of gh CLI: ${line.trim()}`)
       }
     }
+  })
+
+  it('打包前校验发布 tag 等于 v + package.json version（release-tag-guard）', () => {
+    const workflow = repoFile('.github', 'workflows', 'release.yml')
+    for (const fragment of [
+      'Verify tag matches package.json version',
+      'needs: verify-tag',
+      "node -p \"require('./package.json').version\"",
+      'v${VERSION}" != "${GITHUB_REF_NAME}'
+    ]) {
+      expect(workflow).toContain(fragment)
+    }
+    // 打包 job 必须依赖校验 job：guard 失败时不得产出任何安装包。
+    const packageJobNeeds = workflow.split('  package:')[1]?.split('  release:')[0] ?? ''
+    expect(packageJobNeeds).toContain('needs: verify-tag')
   })
 
   it('先草稿、校验四类产物、再发布，失败只删草稿', () => {
@@ -186,6 +205,45 @@ describe('electron-builder.yml', () => {
       expect(config).toContain(`dsh-anywhere_\${version}_${name}`)
       expect(release).toContain(`dsh-anywhere_\${VERSION}_${name}`)
     }
+  })
+})
+
+describe('版本号单一来源（package.json）', () => {
+  it('version 是 x.y.z 且 major ≥ 1（自 1.0.0 起步，不回落 0.x 线）', () => {
+    const version = readPackageVersion(join(repoRoot, 'package.json'))
+    expect(version).toMatch(VERSION_PATTERN)
+    expect(Number(version.split('.')[0])).toBeGreaterThanOrEqual(1)
+  })
+
+  it('package-lock.json 根版本与 package.json 同步（npm ci 逐字校验该同步）', () => {
+    const version = readPackageVersion(join(repoRoot, 'package.json'))
+    const lock = JSON.parse(repoFile('package-lock.json')) as {
+      version?: string
+      packages?: Record<string, { version?: string }>
+    }
+    expect(lock.version).toBe(version)
+    expect(lock.packages?.['']?.version).toBe(version)
+  })
+
+  it('构建入口版本注入同源：vite define 与 dist.mts 都经 package-version.mts 读取 package.json', () => {
+    expect(repoFile('electron.vite.config.ts')).toContain("readPackageVersion(resolve(__dirname, 'package.json'))")
+    expect(repoFile('scripts', 'dist.mts')).toContain("readPackageVersion(resolve(repoRoot, 'package.json'))")
+    // extraMetadata 注入参数与 artifactName 的 ${version} 用同一版本值（tag guard 之外的双保险）。
+    expect(repoFile('scripts', 'dist.mts')).toContain('--config.extraMetadata.version=${version}')
+    // git describe 派生链与 APP_VERSION 环境变量注入不得回流（第二版本来源）。
+    for (const segments of [['electron.vite.config.ts'], ['scripts', 'dist.mts']] as const) {
+      const content = repoFile(...segments)
+      expect(content).not.toContain('DESCRIBE_ARGS')
+      expect(content).not.toContain("spawnSync('git'")
+      expect(content).not.toContain("process.env['APP_VERSION']")
+    }
+  })
+
+  it('electron npm 包 ≥44 不自带 postinstall，根包 postinstall 幂等补装平台二进制', () => {
+    // 没有该钩子，npm ci 后 e2e 与 dev 模式无 Electron 二进制，完整回归命令无法端到端通过。
+    const pkg = repoFile('package.json')
+    expect(pkg).toContain('"postinstall": "node scripts/install-electron.mts"')
+    expect(repoFile('scripts', 'install-electron.mts')).toContain('install.js')
   })
 })
 

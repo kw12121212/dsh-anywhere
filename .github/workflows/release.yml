@@ -8,8 +8,29 @@ permissions:
   contents: read
 
 jobs:
+  verify-tag:
+    name: Verify tag matches package.json version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # 版本号单一来源是 package.json（packaging/package-version-single-source）：
+      # 发布 tag 必须等于 v + package.json version，不一致在三平台打包前失败，
+      # 不得产出该 tag 下的任何安装包（packaging/release-tag-guard）。
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Fail unless tag equals v + package.json version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package.json version ${VERSION} (expected v${VERSION})" >&2
+            exit 1
+          fi
+
   package:
     name: Package all platforms
+    needs: verify-tag
     uses: ./.github/workflows/package.yml
 
   release:

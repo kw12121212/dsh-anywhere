@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: build-identity
+operations:
+  ADDED: {}
+  MODIFIED:
+    electron-identity-single-source:
+      strength: MUST
+      statement: Electron 侧运行时显示名称、关于文案与版本号只定义在 src/main/app-info.ts 与 src/main/version.ts：显示名称与关于文案取自 app-info 常量与函数，菜单、窗口标题与对话框代码不得重复身份字面量；版本号的唯一登记处是 package.json 的 version 字段，构建期经 electron-vite 的 define（__APP_VERSION__，构建配置直接读取 package.json）注入 version.ts 的 APP_VERSION，打包时同一值经 scripts/dist.mts 写入 electron-builder 的 extraMetadata.version；不得改用 app.getVersion()、在源码写死发布版本或引入第二个版本登记处。
+      rationale: 保留原单一来源精神并把登记处从 git tag 改为 package.json：define 注入链与打包元数据注入链读取同一文件，关于页、安装包元数据与文件名的版本号在任何构建方式下都一致。
+      enforcement:
+        method: test
+        detail: electron.vite.config.ts 与 scripts/dist.mts 都经 scripts/package-version.mts 读取 package.json；由 scripts/package-version.test.mts、scripts/workflows.test.mts 与 e2e 关于页断言（运行时读取 package.json）锁定。
+  REMOVED: {}

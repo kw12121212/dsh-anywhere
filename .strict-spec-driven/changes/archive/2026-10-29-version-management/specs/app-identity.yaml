@@ -1,0 +1,25 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: app-identity
+operations:
+  ADDED: {}
+  MODIFIED:
+    about-shows-name-and-version:
+      strength: MUST
+      statement: 应用菜单提供“关于 DSH Anywhere”命令，打开后显示应用显示名称 DSH Anywhere 与当前版本号：版本号在构建期取自 package.json 的 version（唯一版本来源），发布构建与未打标签的本地构建显示同一 package.json 版本号，不再区分 dev。
+      scenarios:
+        about-shows-package-version:
+          - GIVEN: 以 package.json version 为 1.0.0 的提交构建的应用正在运行
+          - WHEN: 用户选择应用菜单中的“关于 DSH Anywhere”
+          - THEN: 对话框同时显示名称 DSH Anywhere 与版本号 1.0.0
+        about-version-matches-artifacts:
+          - GIVEN: 维护者以 v1.0.0 标签发布该提交
+          - WHEN: 对照关于页、安装包文件名与 GitHub Release
+          - THEN: 三处版本号同为 1.0.0
+        about-keeps-current-page:
+          - GIVEN: 主窗口正在显示 harness 页面
+          - WHEN: 用户打开并关闭“关于 DSH Anywhere”
+          - THEN: 主窗口仍显示同一页面，配置文件与窗口状态不变
+  REMOVED: {}

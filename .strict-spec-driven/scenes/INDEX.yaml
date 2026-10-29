@@ -1,0 +1,10 @@
+schema: strict-spec-driven/scenes-index/v1
+schema_version: 1
+artifact_type: scenes_index
+schema_file: templates/strict-spec-driven/schemas/scenes-index.yaml
+areas:
+  release:
+    release-new-version:
+      title: 发布新版本
+      status: draft
+      path: .strict-spec-driven/scenes/release/release-new-version.yaml

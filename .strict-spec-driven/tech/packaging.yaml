@@ -19,19 +19,6 @@ rules:
     rationale: 里程碑明确不做签名公证，绕过步骤是用户能装起来的前置条件，缺失即安装体验断裂
     enforcement:
       method: test
-  package-version-from-tag:
-    strength: MUST
-    statement: 安装包元数据与文件名中的版本号必须与应用内显示的版本同源：由 CI 用 git describe --tags --exact-match 派生（去 v 前缀，未命中为 dev），同一值注入 electron-vite 的 APP_VERSION 环境变量与 electron-builder 的 extraMetadata.version
-    rationale: 版本不同源会让包管理器显示的版本与关于页不一致，升级排查困难；单一 VERSION 变量同时喂给运行时注入与包元数据是唯一不漂移的接法
-    enforcement:
-      method: test
-      detail: Vitest 断言打包脚本由同一 VERSION 计算 APP_VERSION 与 extraMetadata.version；评审检查 CI 中无第二处版本来源
-  ci-full-fetch-for-tag-version:
-    strength: SHOULD
-    statement: '依赖 git describe --tags --exact-match 计算版本（缺省静默回退 dev）的 CI 作业（package 与 release），checkout 必须设置 fetch-depth: 0 或 fetch-tags: true'
-    rationale: 浅克隆取不到 tag 时精确匹配静默失败，产物会被错命名为 dev 版而 CI 仍绿灯；该风险与打包工具链无关，迁移到 electron-builder 后同样存在
-    enforcement:
-      method: review
   release-draft-verify-then-publish:
     strength: MUST
     statement: tag 发布必须先创建草稿 Release 并上传全部产物与 SHA256SUMS，全部成功后才转为正式发布；任一步失败必须删除草稿，不得留下半成品 Release
@@ -64,3 +51,39 @@ rules:
     enforcement:
       method: ci
       detail: 评审 package.yml 与 release.yml：打包步骤只出现 npm run dist 之类入口，不出现 electron-vite/electron-builder 的直接调用与参数复制
+  package-version-single-source:
+    strength: MUST
+    statement: 安装包元数据、安装包文件名与应用内关于页显示的版本号必须同源于 package.json 的 version 字段：electron-vite 构建（__APP_VERSION__ define）与 electron-builder 打包（extraMetadata.version、artifactName 的 ${version}）在构建期读取同一 package.json 注入；版本号必须是 x.y.z 形式，读取或校验失败时打包入口直接报错退出，不得静默回退到 dev 或 0.0.0，也不得引入第二个版本登记处。
+    rationale: 版本号只登记在 package.json 一处，npm ci、关于页、安装包元数据、文件名与 Release tag 才能全部对齐；历史上的 0.0.0 安装包与 dev 关于页正是 git describe 未命中时的静默回退造成的漂移。
+    enforcement:
+      method: test
+      detail: 读取与校验集中在 scripts/package-version.mts（versionFromManifest 严格校验 x.y.z），electron.vite.config.ts 与 scripts/dist.mts 复用；由 scripts/package-version.test.mts 与 scripts/workflows.test.mts 断言锁定。
+    examples:
+      good:
+        - package.json version 为 1.0.0 时，关于页显示“版本 1.0.0”，产物名为 dsh-anywhere_1.0.0_macos_universal.dmg。
+      bad:
+        - package.json version 为 1.0.0 而关于页显示 dev，或产物名内嵌 0.0.0。
+  version-semver-policy:
+    strength: MUST
+    statement: 版本采用语义化版本（MAJOR.MINOR.PATCH）并自 1.0.0 起步（v0.1.0 为 Electron 迁移前的初始预览版，不延续 0.x 线）：不兼容行为变更升 MAJOR，向后兼容的新功能升 MINOR，缺陷修复升 PATCH；版本号只随发布准备提交到 dev 分支的 package.json（用 npm version --no-git-tag-version 同步 package-lock.json），dev 合入 main 后在 main 上打 v + 版本的发布 tag。
+    rationale: 用户要求合理而完整的版本管理与 1.0.0 起始；只有明确 bump 判据与唯一落点，各处统一才能长期维持而不是一次性对齐。
+    enforcement:
+      method: review
+      detail: 升版提交后完整回归的第一步 npm ci 会校验 package.json 与 package-lock.json 的版本同步，不同步立即失败。
+  release-tag-guard:
+    strength: MUST
+    statement: Release 工作流在三平台打包开始之前必须校验触发 tag 等于 v + package.json 的 version，不一致即整个工作流失败，不得产出该 tag 下的任何安装包。
+    rationale: 单一版本来源需要发布动作与之对齐；此前版本不符只能在发布 job 的产物文件名断言处发现，三平台已打包完毕。前置校验 fail fast，与发布 job 的四产物文件名校验形成双保险。
+    enforcement:
+      method: test
+      detail: release.yml 的 verify-tag job 在 package job 之前执行，结构由 scripts/workflows.test.mts 断言锁定。
+    examples:
+      bad:
+        - tag 为 v1.0.1 而 package.json version 仍为 1.0.0 时，Release 工作流在打包前失败。
+  electron-binary-provisioning:
+    strength: MUST
+    statement: 仓库必须在根包 package.json 的 postinstall 中幂等补装 Electron 平台二进制（electron npm 包自 44 起发布时不再携带 postinstall 脚本，npm ci / npm install 后不会自动下载）：补装脚本位于 scripts/install-electron.mts，node_modules/electron/dist 已存在时跳过，electron 不在依赖中时不阻断安装，补装失败即安装失败。
+    rationale: e2e（Playwright 启动 Electron）与 dev 模式都依赖 node_modules/electron/dist；没有该钩子，config.yaml 规定的完整回归命令（npm ci 起链、链尾 e2e）在任何机器都无法端到端通过，CI 之外无人能复现回归证据。
+    enforcement:
+      method: test
+      detail: 由 scripts/workflows.test.mts 断言锁定：package.json 含 postinstall 钩子且指向 scripts/install-electron.mts；完整回归命令的实际执行作为端到端证据。

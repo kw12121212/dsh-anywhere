@@ -19,12 +19,10 @@ jobs:
       run:
         shell: bash
     steps:
-      # fetch-depth 0 保证打包脚本能用 git describe --tags --exact-match 精确匹配
-      # tag 派生版本号；浅克隆取不到 tag 时会静默回退 dev 版产物。
+      # 版本号来自 package.json（packaging/package-version-single-source），浅克隆即可取到；
+      # 发布 tag 与版本的一致性由 release.yml 的 verify-tag 前置校验把关。
       - name: Check out repository
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
@@ -34,8 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       # 打包只经 npm 打包 script（内部执行 electron-vite build 与 electron-builder，
-      # 含 APP_VERSION / extraMetadata.version 注入与 afterPack fuses），不得在工作流
-      # 复制打包命令（技术标准 packaging/ci-calls-electron-builder-package）。
+      # 版本号从 package.json 注入 define 与 extraMetadata.version，fuses 由
+      # electron-builder 内建 electronFuses 配置），不得在工作流复制打包命令
+      # （技术标准 packaging/ci-calls-electron-builder-package）。
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: npm run dist:mac

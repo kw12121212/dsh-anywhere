@@ -1,0 +1,70 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: version-management
+sections:
+  Implementation:
+    version-baseline-1-0-0:
+      text: package.json 的 version 置为 1.0.0，并用 npm version --no-git-tag-version 同步 package-lock.json 的根版本（registry 用 https://registry.npmjs.org）
+      status: complete
+    package-version-module:
+      text: 新增 scripts/package-version.mts：versionFromManifest 严格校验 x.y.z（非法或 JSON 损坏直接抛错，不静默回退）、readPackageVersion 按 package.json 路径读取；新增 scripts/package-version.test.mts 并移除 scripts/dist.test.mts（git describe 派生测试随派生链删除）
+      status: complete
+    vite-define-reads-package-json:
+      text: electron.vite.config.ts 的 __APP_VERSION__ define 改为经 scripts/package-version.mts 读取 package.json version，移除 APP_VERSION 环境变量注入链
+      status: complete
+    dist-injection-single-source:
+      text: scripts/dist.mts 改用 readPackageVersion 注入 electron-builder extraMetadata.version（同一值），删除 git describe 派生（DESCRIBE_ARGS/versionFromDescribe/resolveVersion 的 git spawn）与 dev→0.0.0 回退，更新头注释与技术标准引用
+      status: complete
+    release-tag-guard-workflow:
+      text: 'release.yml 新增 verify-tag 前置 job（checkout 后校验 GITHUB_REF_NAME == v + package.json version，package job needs 它）；package.yml 移除 fetch-depth: 0 与 git describe 注释，改为说明版本来自 package.json'
+      status: complete
+    version-assertions-sync:
+      text: 'scripts/workflows.test.mts 同步断言：release.yml 锁定 verify-tag 前置校验结构（tag == v + package.json version），package.yml 移除 fetch-depth: 0 正向断言并加负向断言，新增 package.json version 为 x.y.z 且 major ≥ 1 的统一性断言'
+      status: complete
+    about-e2e-reads-package-json:
+      text: e2e/desktop-experience.spec.ts 关于页断言从硬编码“版本 dev”改为运行时读取 package.json version；src/main/version.ts 与 version.test.ts 的注释按新注入来源更新（dev 仅作 define 未注入的防御兜底）
+      status: complete
+    agents-version-doc:
+      text: AGENTS.md 约定与约束增补版本管理：单一来源 package.json（起始 1.0.0、语义化版本）、发布准备流程（dev 升版 → 合入 main → 打 v tag）与 Release 工作流一致性校验
+      status: complete
+    electron-binary-postinstall:
+      text: electron npm 包自 44 起发布时不再携带 postinstall（发布包无 scripts 字段），npm ci 后不会自动下载平台二进制，而逐字回归命令链尾的 e2e 依赖 node_modules/electron/dist：新增 scripts/install-electron.mts 并挂为根包 postinstall，幂等补装（dist 已存在则跳过），使完整回归命令在任何机器端到端可跑
+      status: complete
+    review-hardening:
+      text: 评审发现修复：electron-builder.yml 头注释改为 package.json 单一来源表述（移除 git tag 派生残留）；workflows.test.mts 增加 dist.mts extraMetadata 注入参数与根包 postinstall 钩子断言；e2e 关于页断言改用 __dirname 定位 package.json；install-electron.mts 跳过分支输出诊断；proposal/design/delta-tech 同步 electron 补装与焦点门控的 scope
+      status: complete
+  Testing:
+    actionlint-workflows:
+      text: actionlint 本地校验 .github/workflows 变更（ci-workflow-lint）
+      status: complete
+      command: actionlint
+    unit-coverage:
+      text: 单元测试与覆盖率门槛（package-version 新测试、workflows 断言、既有套件）
+      status: complete
+      command: npm run test:coverage
+    e2e-about-version:
+      text: 端到端（含关于页版本号读取 package.json 的断言）
+      status: complete
+      command: npm run test:e2e
+    typecheck:
+      text: 三份 tsconfig 类型检查
+      status: complete
+      command: npm run typecheck
+    full-regression:
+      text: config.yaml 完整回归命令逐字执行（npm ci 会首先校验 package.json 与 lockfile 版本同步）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    strict-verify:
+      text: strict-spec-cli verify version-management 结构校验通过
+      status: complete
+      command: strict-spec-cli verify version-management
+    archive-readiness:
+      text: strict-spec-cli ready version-management 无阻塞；确认 delta-tech 覆盖 packaging 与 build-identity 的全部标准改动、delta-spec 覆盖 app-identity
+      status: complete
+      command: strict-spec-cli ready version-management
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: unit-coverage

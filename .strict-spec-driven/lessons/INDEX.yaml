@@ -102,3 +102,13 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/electron-builder-universal-afterpack-fuses-20577a.yaml
+    electron-npm-44-postinstall-npm-ci-275b5d:
+      title: electron npm 包自 44 起不自带 postinstall，npm ci 后必须自行补装平台二进制
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/electron-npm-44-postinstall-npm-ci-275b5d.yaml
+    macos-e2e-b4fbcc:
+      title: macOS 非交互会话拒绝应用激活：e2e 焦点断言必须带会话激活门控
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/macos-e2e-b4fbcc.yaml

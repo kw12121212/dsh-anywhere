@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: electron-npm-44-postinstall-npm-ci-275b5d
+  title: electron npm 包自 44 起不自带 postinstall，npm ci 后必须自行补装平台二进制
+category: tooling
+status: active
+created_at: '2026-10-29T06:33:53.991Z'
+updated_at: '2026-10-29T06:33:53.991Z'
+context: 本变更评审期发现：config.yaml 完整回归命令（npm ci 起、链尾 e2e）在全新安装后失败，Playwright 无法启动 Electron。
+observation: '实测 electron@45.1.0（44.x 同）发布 tarball 的 package.json 没有 scripts 字段（electron@33 仍有 postinstall: node install.js），npm ci / npm install 都不会下载平台二进制；npm 11 的 approve-scripts / allow-scripts 配置与 package.json allowScripts 字段均不能让它执行。CI 打包不受影响（electron-builder 自行下载发行包），只有本地 e2e/dev 需要 node_modules/electron/dist。'
+takeaway: 仓库在根包 postinstall 挂 scripts/install-electron.mts 幂等补装（dist 已存在跳过、electron 不在依赖不阻断、失败即失败），由 workflows.test.mts 断言锁定（技术标准 packaging/electron-binary-provisioning）。
+applies_when: 升级 electron、重装依赖后 e2e/dev 报 Electron failed to install correctly，或为仓库设计依赖安装钩子时。
+occurrences:
+  - origin: version-management
+    date: '2026-10-29'
+    evidence: 完整回归命令（npm ci && … && npm run test:e2e）端到端通过（2026-10-28，本机 darwin 27.2.0，41/41 e2e）；tarball 解包实测 scripts 缺失。

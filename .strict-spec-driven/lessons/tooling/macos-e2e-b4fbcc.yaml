@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: macos-e2e-b4fbcc
+  title: macOS 非交互会话拒绝应用激活：e2e 焦点断言必须带会话激活门控
+category: tooling
+status: active
+created_at: '2026-10-29T06:33:54.070Z'
+updated_at: '2026-10-29T06:33:54.070Z'
+context: 本变更完整回归在无人值守会话失败：单实例两处 focused===true 断言超时，基线 HEAD 同样失败（与变更无关）。
+observation: 锁屏/后台会话下窗口服务器拒绝给后台启动的应用激活，实测连 app.focus({steal:true}) 都无法让任何窗口成为 key window；交互会话下则正常。与 Linux WSLg 无窗口管理器（lesson wslg-weston-7217b7）同类的环境限制。
+takeaway: e2e 的窗口焦点类断言先用对照窗口探测 sessionGrantsActivation（新窗口 show+focus+app.focus steal 后 isFocused）：对照窗口也无法获焦即跳过 focused 断言并注记原因；对照窗口能获焦而目标窗口不能仍按失败处理，应用缺陷不会被掩盖。见 e2e/desktop-experience.spec.ts。
+applies_when: macOS 上 e2e 出现整类 focused/isFocused 断言超时而功能断言全绿，或计划在无人值守会话跑 Playwright Electron 套件时。
+occurrences:
+  - origin: version-management
+    date: '2026-10-29'
+    evidence: 2026-10-28 探针实测：second-instance 后 winFocused=false，app.focus({steal:true}) 后仍 false；加门控后同会话 41/41 通过。

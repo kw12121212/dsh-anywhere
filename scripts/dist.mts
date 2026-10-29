@@ -1,29 +1,15 @@
 // 打包入口（npm run dist / dist:win / dist:mac / dist:linux）。
-// 版本号单一来源（设计决策 version-single-source-via-ci）：git describe --tags
-// --exact-match 精确匹配 v 前缀标签（去前缀，未命中为 dev），同一 VERSION 先经
-// APP_VERSION 环境变量注入 electron-vite 构建（__APP_VERSION__ define），再经
-// extraMetadata.version 注入 electron-builder 包元数据，保证关于页、安装包元数据
-// 与文件名三者同源（技术标准 packaging/package-version-from-tag、
-// build-identity/electron-identity-single-source）。
+// 版本号单一来源（技术标准 packaging/package-version-single-source）：package.json
+// 的 version 字段。同一 VERSION 经 electron-vite 构建配置的 __APP_VERSION__ define
+// 注入关于页（两者都读同一 package.json），再经 extraMetadata.version 注入
+// electron-builder 包元数据与 artifactName 文件名；发布 tag 必须等于 v + 版本号，
+// 由 release.yml 的 verify-tag job 在打包前校验。
 import { spawnSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { readPackageVersion } from './package-version.mts'
 
-// 与 workflow 结构断言测试锁定的版本派生公式保持字符级一致。
-export const DESCRIBE_ARGS = ['describe', '--tags', '--match', 'v*', '--exact-match']
-
-export function versionFromDescribe(status: number | null, stdout: string): string {
-  const tag = status === 0 ? stdout.trim() : ''
-  const version = tag.startsWith('v') ? tag.slice(1) : ''
-  return version !== '' ? version : 'dev'
-}
-
-export function resolveVersion(): string {
-  const result = spawnSync('git', DESCRIBE_ARGS, {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore']
-  })
-  return versionFromDescribe(result.status, result.stdout ?? '')
-}
+const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv): void {
   // Windows 上 npm/npx 是 .cmd 脚本，必须经 shell 调用。
@@ -38,16 +24,14 @@ function run(command: string, args: string[], env: NodeJS.ProcessEnv): void {
 }
 
 function main(): void {
-  const version = resolveVersion()
-  // electron-builder 要求包元数据版本为合法 semver：未打标签的本地/分支构建
-  // 回退 0.0.0（产物只作 CI 工件，发布产物只来自 tag 构建）；应用内关于页
-  // 仍显示 APP_VERSION 注入的 dev（app-identity/about-shows-dev-for-untagged-build）。
-  const packageVersion = version === 'dev' ? '0.0.0' : version
+  // 版本非法（非 x.y.z、package.json 损坏）时 readPackageVersion 直接抛错退出，
+  // 不再有 dev/0.0.0 静默回退：回退正是版本漂移的来源。
+  const version = readPackageVersion(resolve(repoRoot, 'package.json'))
   const targets = process.argv.slice(2)
-  run('npm', ['run', 'build'], { APP_VERSION: version })
+  run('npm', ['run', 'build'], {})
   run(
     'npx',
-    ['electron-builder', ...targets, '--publish', 'never', `--config.extraMetadata.version=${packageVersion}`],
+    ['electron-builder', ...targets, '--publish', 'never', `--config.extraMetadata.version=${version}`],
     {}
   )
 }

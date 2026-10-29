@@ -1,8 +1,9 @@
 # electron-builder 打包配置（设计决策 electron-builder-config-file）。
 # 身份元数据沿用 Go 版定稿文案（主规格 app-identity / 技术标准 build-identity）：
 # 显示名称 DSH Anywhere、包标识 work.keepwriting.dsh-anywhere、版权与描述保持一致。
-# 版本号不在本文件出现：由 scripts/dist.mts 从 git tag 派生后经
-# extraMetadata.version 注入，与运行时 APP_VERSION 同源（设计决策 version-single-source-via-ci）。
+# 版本号不在本文件出现：package.json 的 version 是唯一登记处（技术标准
+# packaging/package-version-single-source），由 scripts/dist.mts 经 extraMetadata.version
+# 注入，与 electron-vite define 注入运行时的 APP_VERSION 同源。
 appId: work.keepwriting.dsh-anywhere
 productName: DSH Anywhere
 copyright: © 2026 Keepwriting

@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: version-management
+open: []
+resolved:
+  - id: requirement-problem
+    question: 今天具体哪里出了问题、对谁造成困扰？
+    context: 现状：版本号只登记在 git tag，package.json 恒为 0.0.0，未打标签构建的关于页显示 dev，且无成文版本升级策略；影响维护者的发布与排查、用户对照关于页与安装包版本。
+    answer: 版本管理不完整且各处不一致，需要以 1.0.0 为起始、所有位置统一（用户原话：我需要一个合理而完整的版本管理，起始版本为1.0.0，注意版本号要各个地方都统一）。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: 什么可观察差异证明问题已解决？
+    context: 验收口径需覆盖版本号出现的全部位置，否则统一无判定标准。
+    answer: package.json version 为 1.0.0；关于页、安装包元数据、安装包文件名、git 发布 tag 与 GitHub Release 显示同一版本号；tag 与 package.json 不一致时 Release 工作流在打包前失败。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: 为什么是现在？
+    context: 判断需求时机，避免为重构而重构。
+    answer: 仓库刚公开并发布首个版本 v0.1.0，用户了解现状（版本只在 tag、package.json 为 0.0.0 占位）后立即提出本需求。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: 哪些事明确不能变？
+    context: 防止统一版本号时顺带改动发布形态或既有用户决策。
+    answer: CI 只做打包、完整回归只在本地执行；main 只接受 dev 合入；发布仍由 v* tag 触发且先草稿后正式；不改打包矩阵、产物形态与发布说明；不做代码签名（均为本会话既有决策与仓库约束）。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: 版本号各个地方都统一指哪种读法？
+    context: 两种读法：A. package.json 承载真实版本并作为单一来源，注入链与 tag 都对齐它；B. 维持 tag 为唯一来源、package.json 继续占位 0.0.0，仅既有显示保持一致。B 即现状，用户在听取现状说明后提出需求，故取 A。
+    answer: 读法 A：package.json version（起始 1.0.0）为单一版本来源，关于页、安装包元数据、文件名与发布 tag 全部与它一致；下一个发布 tag 为 v1.0.0，v0.1.0 保留为历史预览版。
+    status: resolved
+    kind: requirement
+    answered_by: human

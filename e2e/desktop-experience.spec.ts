@@ -116,6 +116,30 @@ function running(): ElectronApplication {
 // 相关断言只在真实桌面平台执行。
 const canVerifyWindowManagement = process.platform !== 'linux'
 
+// macOS 非交互会话（锁屏/后台无人值守运行）会拒绝给后台启动的应用激活，实测连
+// app.focus({steal:true}) 都无法让任何窗口成为 key window，此时 focused 断言对任何
+// 实现都不可能成立。与 Linux 门控同理，用独立对照窗口探测会话是否允许激活：对照
+// 窗口也无法获焦说明是会话限制，跳过焦点断言；对照窗口能获焦而主窗口不能仍按失败
+// 处理，应用缺陷不会被掩盖。
+async function sessionGrantsActivation(): Promise<boolean> {
+  return running().evaluate(
+    async ({ app, BrowserWindow }) => {
+      const control = new BrowserWindow({ show: false })
+      control.show()
+      control.focus()
+      app.focus({ steal: true })
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      const granted = control.isFocused()
+      control.destroy()
+      return granted
+    }
+  )
+}
+
+function noteSkippedFocusAssertion(reason: string): void {
+  test.info().annotations.push({ type: 'skip-focus', description: reason })
+}
+
 test.describe('单实例（single-instance）', () => {
   test('再次启动不出现第二个主窗口，已有窗口被带到前台，新进程以成功状态退出', async () => {
     await launch()
@@ -125,7 +149,11 @@ test.describe('单实例（single-instance）', () => {
 
     await expect.poll(async () => (await mainWindow()).count).toBe(1)
     if (canVerifyWindowManagement) {
-      await expect.poll(async () => (await mainWindow()).focused).toBe(true)
+      if (await sessionGrantsActivation()) {
+        await expect.poll(async () => (await mainWindow()).focused).toBe(true)
+      } else {
+        noteSkippedFocusAssertion('会话拒绝应用激活（如锁屏/后台运行），focused 断言跳过')
+      }
     }
   })
 
@@ -139,7 +167,11 @@ test.describe('单实例（single-instance）', () => {
 
     await expect.poll(async () => (await mainWindow()).minimised).toBe(false)
     await expect.poll(async () => (await mainWindow()).count).toBe(1)
-    await expect.poll(async () => (await mainWindow()).focused).toBe(true)
+    if (await sessionGrantsActivation()) {
+      await expect.poll(async () => (await mainWindow()).focused).toBe(true)
+    } else {
+      noteSkippedFocusAssertion('会话拒绝应用激活（如锁屏/后台运行），focused 断言跳过')
+    }
   })
 
   test('再次启动后主窗口仍显示 harness 页面，配置与窗口状态不被改写', async () => {
@@ -281,7 +313,10 @@ test.describe('关于菜单（app-identity）', () => {
       }
     })
     const about = await running().evaluate(() => (globalThis as unknown as { __about: { title: string; message: string }[] }).__about)
-    expect(about).toEqual([{ title: '关于 DSH Anywhere', message: 'DSH Anywhere\n版本 dev' }])
+    // 版本号单一来源是 package.json（packaging/package-version-single-source）：关于页
+    // 显示构建期注入的同一版本号，断言运行时读取 package.json，升版不需要改本测试。
+    const version = (JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }).version
+    expect(about).toEqual([{ title: '关于 DSH Anywhere', message: `DSH Anywhere\n版本 ${version}` }])
     expect(page.url()).toBe(urlBefore)
     expect((await mainWindow()).count).toBe(1)
   })

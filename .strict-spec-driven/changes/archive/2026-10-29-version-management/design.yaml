@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: version-management
+approach:
+  - package.json 的 version 成为唯一版本登记处（起始 1.0.0）。新增 scripts/package-version.mts：versionFromManifest 严格校验 x.y.z 并在非法时抛错（不静默回退），readPackageVersion 供两个构建入口复用。electron.vite.config.ts 的 __APP_VERSION__ define 与 scripts/dist.mts 的 extraMetadata.version 注入都读取同一 package.json，移除 APP_VERSION 环境变量与 git describe 派生链。release.yml 在 package job 前新增 verify-tag job：checkout 后比较 GITHUB_REF_NAME 与 v + package.json version，不一致即整个发布失败。版本策略固化为语义化版本：不兼容变更升 MAJOR、向后兼容新功能升 MINOR、缺陷修复升 PATCH；发布准备时在 dev 分支 npm version --no-git-tag-version（同步 lockfile）→ 合入 main → 打 v + 版本 tag → push 触发 Release。
+decisions:
+  package-json-single-source:
+    decision: 版本单一来源从 git tag（git describe 派生）改为 package.json 的 version 字段，e2e 关于页断言也运行时读取它而不是硬编码。
+    rationale: 用户要求版本号各处统一；tag 派生方案下 package.json 恒 0.0.0、本地构建关于页显示 dev，天然不统一。package.json 是 Node 生态的标准版本位（npm ci 校验 lockfile 同步、electron-builder 默认读取），以它为源使 package.json、关于页、安装包元数据、文件名与 Release tag 全部对齐；build-identity/electron-identity-single-source 的单一来源精神保留，条文经 delta-tech 改写为指向 package.json。
+  release-tag-guard:
+    decision: Release 工作流新增 verify-tag 前置 job：tag 不等于 v + package.json version 时在三平台打包开始前失败。
+    rationale: 单一来源仍需发布动作与之对齐；现状只在发布 job 的产物文件名断言处发现版本不符，此时三平台已打包完毕。前置校验 fail fast，且与既有四产物文件名校验形成双保险。
+  semver-from-1-0-0:
+    decision: 版本策略固化为语义化版本并自 1.0.0 起步：v0.1.0 保留为 Electron 迁移前的初始预览版，不继续 0.x 线。
+    rationale: 用户明确起始 1.0.0；语义化版本给出 MAJOR/MINOR/PATCH 的可执行 bump 判据，使版本管理完整而非只有注入链。策略作为 packaging 新增技术标准规则长期生效。
+  fail-loud-version-validation:
+    decision: 打包入口对非法版本号（非 x.y.z、package.json 损坏）直接抛错失败，不再有 dev/0.0.0 静默回退路径。
+    rationale: 静默回退正是历史版本漂移的来源（0.0.0 安装包与 dev 关于页）；package.json 是受 git 管理的仓库文件，非法值应在构建入口报错而不是被吞掉。
+  electron-binary-postinstall-hook:
+    decision: electron npm 包自 44 起发布时不再携带 postinstall（发布包无 scripts 字段，实测 45.1.0 tarball），npm ci 后不会自动下载平台二进制；新增根包 postinstall（scripts/install-electron.mts）幂等补装（dist 已存在则跳过），使 config.yaml 完整回归命令（npm ci 起链）在任何机器端到端可跑。
+    rationale: 评审发现：逐字回归命令链尾的 e2e 依赖 node_modules/electron/dist，无此钩子时命令在该环境必失败且无法靠环境配置修复（npm 11 的 allow-scripts 机制与该字段均无效）；仓库自带补装是对上游包行为变化的唯一确定性兜底，CI（npm 10）上同样幂等无害。
+  e2e-focus-session-gating:
+    decision: e2e 单实例的两处 focused 断言增加会话激活门控 sessionGrantsActivation：用独立对照窗口尝试激活（show+focus+app.focus steal），对照窗口也无法获焦即会话拒绝激活（锁屏/后台无人值守，实测此时任何实现都无法聚焦），跳过 focused 断言并注记原因；对照窗口能获焦而主窗口不能仍按失败处理。
+    rationale: 实测本机非交互会话下连 app.focus({steal:true}) 都无法激活任何窗口，基线 HEAD 同样失败，属环境而非应用缺陷；与既有 Linux 无窗口管理器门控（lesson wslg-weston-7217b7）同一模式，对照组设计保证不掩盖真实聚焦缺陷。
+alternatives:
+  - option: 保留 git tag 派生（git describe），仅把 dev 回退改为显示 package.json 版本
+    reason: 不彻底：package.json 仍非权威、tag 与 package.json 可能不一致，保留两个版本来源，不满足用户各处统一的要求。
+  - option: 用 npm version 自动创建并推送 tag
+    reason: npm version 的 tag 打在 dev 分支当前提交上，与既有分支模型（tag 只打在 main、main 仅接受 dev 合入）冲突。
+risks:
+  - package.json 与 package-lock.json 版本不同步会让 CI 与回归的 npm ci 直接失败。缓解：bump 统一用 npm version --no-git-tag-version 同时更新两者，且完整回归第一步即 npm ci。
+  - 移除 APP_VERSION 环境变量注入链后存在绕过注入的构建路径。评估为低风险：应用构建必经 electron.vite.config.ts 的 define，version.ts 保留 define 未注入时的 dev 兜底作为类型安全的防御。
+  - 焦点门控依赖对照窗口探测的准确性：对照窗口能获焦而主窗口不能时仍失败，应用侧聚焦缺陷不会被跳过掩盖；探测自身 300ms 等待对交互会话足够（实测激活即时生效）。

@@ -1,0 +1,49 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: packaging
+operations:
+  ADDED:
+    package-version-single-source:
+      strength: MUST
+      statement: 安装包元数据、安装包文件名与应用内关于页显示的版本号必须同源于 package.json 的 version 字段：electron-vite 构建（__APP_VERSION__ define）与 electron-builder 打包（extraMetadata.version、artifactName 的 ${version}）在构建期读取同一 package.json 注入；版本号必须是 x.y.z 形式，读取或校验失败时打包入口直接报错退出，不得静默回退到 dev 或 0.0.0，也不得引入第二个版本登记处。
+      rationale: 版本号只登记在 package.json 一处，npm ci、关于页、安装包元数据、文件名与 Release tag 才能全部对齐；历史上的 0.0.0 安装包与 dev 关于页正是 git describe 未命中时的静默回退造成的漂移。
+      enforcement:
+        method: test
+        detail: 读取与校验集中在 scripts/package-version.mts（versionFromManifest 严格校验 x.y.z），electron.vite.config.ts 与 scripts/dist.mts 复用；由 scripts/package-version.test.mts 与 scripts/workflows.test.mts 断言锁定。
+      examples:
+        good:
+          - package.json version 为 1.0.0 时，关于页显示“版本 1.0.0”，产物名为 dsh-anywhere_1.0.0_macos_universal.dmg。
+        bad:
+          - package.json version 为 1.0.0 而关于页显示 dev，或产物名内嵌 0.0.0。
+    version-semver-policy:
+      strength: MUST
+      statement: 版本采用语义化版本（MAJOR.MINOR.PATCH）并自 1.0.0 起步（v0.1.0 为 Electron 迁移前的初始预览版，不延续 0.x 线）：不兼容行为变更升 MAJOR，向后兼容的新功能升 MINOR，缺陷修复升 PATCH；版本号只随发布准备提交到 dev 分支的 package.json（用 npm version --no-git-tag-version 同步 package-lock.json），dev 合入 main 后在 main 上打 v + 版本的发布 tag。
+      rationale: 用户要求合理而完整的版本管理与 1.0.0 起始；只有明确 bump 判据与唯一落点，各处统一才能长期维持而不是一次性对齐。
+      enforcement:
+        method: review
+        detail: 升版提交后完整回归的第一步 npm ci 会校验 package.json 与 package-lock.json 的版本同步，不同步立即失败。
+    release-tag-guard:
+      strength: MUST
+      statement: Release 工作流在三平台打包开始之前必须校验触发 tag 等于 v + package.json 的 version，不一致即整个工作流失败，不得产出该 tag 下的任何安装包。
+      rationale: 单一版本来源需要发布动作与之对齐；此前版本不符只能在发布 job 的产物文件名断言处发现，三平台已打包完毕。前置校验 fail fast，与发布 job 的四产物文件名校验形成双保险。
+      enforcement:
+        method: test
+        detail: release.yml 的 verify-tag job 在 package job 之前执行，结构由 scripts/workflows.test.mts 断言锁定。
+      examples:
+        bad:
+          - tag 为 v1.0.1 而 package.json version 仍为 1.0.0 时，Release 工作流在打包前失败。
+    electron-binary-provisioning:
+      strength: MUST
+      statement: 仓库必须在根包 package.json 的 postinstall 中幂等补装 Electron 平台二进制（electron npm 包自 44 起发布时不再携带 postinstall 脚本，npm ci / npm install 后不会自动下载）：补装脚本位于 scripts/install-electron.mts，node_modules/electron/dist 已存在时跳过，electron 不在依赖中时不阻断安装，补装失败即安装失败。
+      rationale: e2e（Playwright 启动 Electron）与 dev 模式都依赖 node_modules/electron/dist；没有该钩子，config.yaml 规定的完整回归命令（npm ci 起链、链尾 e2e）在任何机器都无法端到端通过，CI 之外无人能复现回归证据。
+      enforcement:
+        method: test
+        detail: 由 scripts/workflows.test.mts 断言锁定：package.json 含 postinstall 钩子且指向 scripts/install-electron.mts；完整回归命令的实际执行作为端到端证据。
+  MODIFIED: {}
+  REMOVED:
+    package-version-from-tag:
+      reason: 版本号单一来源从 git tag（git describe --exact-match 派生）改为 package.json 的 version 字段，由新规则 package-version-single-source 取代；git describe 派生链与 dev 回退一并移除。
+    ci-full-fetch-for-tag-version:
+      reason: 'CI 打包不再运行 git describe 派生版本（版本改为构建期读取 package.json，浅克隆即可取得），深拉取约束失去对象，package.yml 移除 fetch-depth: 0。'

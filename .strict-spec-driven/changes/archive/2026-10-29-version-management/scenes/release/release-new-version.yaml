@@ -1,0 +1,42 @@
+schema: strict-spec-driven/delta-scene/v1
+schema_version: 1
+artifact_type: delta_scene
+schema_file: templates/strict-spec-driven/schemas/delta-scene.yaml
+target_scene: release-new-version
+scene:
+  title: 发布新版本
+  area: release
+  actors:
+    - name: 维护者
+      role: 项目维护者，负责版本升级与发布
+  preconditions:
+    - dev 分支上目标变更已完成，且完整回归命令（npm ci 及后续五步）在本地通过。
+operations:
+  ADDED:
+    exception_flows:
+      tag-mismatch:
+        trigger: 维护者推送了与 package.json version 不一致的 tag
+        steps:
+          fail-before-package:
+            action: 一致性校验 job 失败，工作流在打包前终止，不产出该 tag 的安装包，也不创建 Release
+            no_coverage_reason: CI 失败路径，由技术标准 packaging/release-tag-guard 与工作流结构断言锁定，不属于主规格需求
+    main_flow:
+      bump-version:
+        action: 按语义化版本策略在 dev 分支用 npm version --no-git-tag-version 更新 package.json 的 version（同步 package-lock.json）并提交
+        no_coverage_reason: 发布准备流程步骤，由技术标准 packaging/version-semver-policy 约束，不属于主规格需求
+      merge-to-main:
+        action: 把 dev 合入 main（main 不接受直接提交）
+        no_coverage_reason: 分支模型流程步骤，由仓库约定约束，不属于主规格需求
+      push-release-tag:
+        action: 在 main 上打 v + package.json version 形式的 tag 并推送，触发 Release 工作流
+        no_coverage_reason: 发布触发流程步骤，由技术标准 packaging 约束，不属于主规格需求
+      verify-tag-consistency:
+        action: Release 工作流在打包前校验 tag 等于 v + package.json version
+        no_coverage_reason: CI 发布前置校验，由技术标准 packaging/release-tag-guard 与工作流结构断言锁定，不属于主规格需求
+      package-unified-version:
+        action: 三平台打包：安装包元数据与文件名内嵌同一版本号，用户打开关于页看到的版本号与安装包文件名、Release tag 相同
+        covered_by:
+          - spec_id: app-identity
+            requirement_id: about-shows-name-and-version
+  MODIFIED: {}
+  REMOVED: {}

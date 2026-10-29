@@ -15,6 +15,7 @@ dsh-anywhere 是一个多平台（Windows / macOS / Linux）桌面客户端，�
 ## 约定与约束
 
 - 分支模型：主力开发在 `dev` 分支进行；`main` 为生产分支，仅通过从 `dev` 合入变更，禁止直接在 `main` 上开发提交。
+- 版本管理：版本号唯一登记处是 `package.json` 的 `version`（语义化版本，自 1.0.0 起步；不兼容变更升 MAJOR、新功能升 MINOR、修复升 PATCH），构建期同一版本注入关于页、安装包元数据与文件名。发布流程：在 `dev` 升版（`npm version <版本> --no-git-tag-version` 同步 lockfile）→ 合入 `main` → 打 `v` + 版本的 tag；Release 工作流在打包前校验 tag 与 `package.json` 一致，不得引入第二版本来源。
 - 远程 DeepSeek harness URL 与凭据只能来自用户配置，禁止硬编码、提交到仓库或输出到日志。
 - 需求与变更走 strict spec 流程，规范位于 `.strict-spec-driven/`；通过 `strict-spec-cli` 修改其中的 YAML，不要手工编辑。
 - 对 `.github/workflows/` 的每次变更需通过 actionlint 本地校验；工作流结构由 `scripts/workflows.test.mts` 断言锁定。

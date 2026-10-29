@@ -1,12 +1,13 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
+import { readPackageVersion } from './scripts/package-version.mts'
 
 export default defineConfig({
   main: {
     define: {
-      // 版本号构建期注入（设计决策 version-injection）：默认 dev，发布构建用
-      // APP_VERSION 环境变量注入，由 electron-release 计划变更接线。
-      __APP_VERSION__: JSON.stringify(process.env['APP_VERSION'] ?? 'dev')
+      // 版本号构建期注入（packaging/package-version-single-source）：唯一登记处是
+      // package.json 的 version，define 与 electron-builder 元数据读取同一文件。
+      __APP_VERSION__: JSON.stringify(readPackageVersion(resolve(__dirname, 'package.json')))
     },
     build: {
       rollupOptions: {

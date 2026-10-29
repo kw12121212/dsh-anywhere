@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: version-management
+  status: proposed
+summary:
+  what:
+    - 建立以 package.json version 为单一来源、起始 1.0.0 的完整版本管理：构建期把同一版本号注入关于页（electron-vite 的 __APP_VERSION__ define）、安装包元数据（electron-builder extraMetadata.version）与产物文件名；Release 工作流在打包前校验发布 tag 等于 v + package.json version；移除 git describe 派生链与 dev/0.0.0 静默回退，并固化语义化版本策略。
+  why:
+    - 现状版本号只登记在 git tag：package.json 恒为 0.0.0 占位，未打标签构建的关于页显示 dev，各处版本互不一致，也没有成文的版本升级策略。用户明确要求：起始版本 1.0.0，版本号在所有位置统一。
+scope:
+  in:
+    - package.json version 置 1.0.0 并同步 package-lock.json；新增 scripts/package-version.mts（读取并严格校验 x.y.z，非法即失败）；electron.vite.config.ts 的 __APP_VERSION__ define 改读 package.json；scripts/dist.mts 同源注入 extraMetadata.version 并删除 git describe；release.yml 新增 verify-tag 前置校验 job；package.yml 移除 fetch-depth 0；e2e 关于页断言改读 package.json；scripts/workflows.test.mts 断言同步；AGENTS.md 记录版本管理约定；技术标准 packaging 与 build-identity、主规格 app-identity 经 delta 工件同步。
+    - 评审补正（2026-10-28）：electron npm 包自 44 起不再自带 postinstall，npm ci 后无平台二进制，新增根包 postinstall（scripts/install-electron.mts）幂等补装，使完整回归命令端到端可跑；e2e 单实例焦点断言增加会话激活门控（对照窗口探测：锁屏/后台会话跳过 focused 断言，应用缺陷仍失败）；electron-builder.yml 头注释与 dist.mts 的 extraMetadata 注入断言同步单一来源表述
+  out:
+    - 不改变三平台打包矩阵、产物形态、发布说明与草稿发布流程；不做代码签名；不做自动版本 bump（发布准备时人工执行 npm version）；不迁移或改动历史 v0.1.0 Release。
+unchanged_behavior:
+  - 发布仍由 v* tag 触发，先草稿后正式、失败只删草稿（packaging/release-draft-verify-then-publish）
+  - CI 只做打包：package.yml 仅 main 分支 push 触发，完整回归仍在本地逐字执行，不上 GitHub Actions（ci-regression-verbatim、ci-packaging-only）
+  - 应用菜单结构、窗口标题与关于对话框文案除版本号来源外不变；显示名称仍为 DSH Anywhere（app-identity、menu-labels-explicit）
+  - 四类安装包文件名模板 dsh-anywhere_${version}_… 与发布产物校验流程不变（installer-filename-scheme）
+  - 打包与发布只经仓库封装的 npm dist:* script 调用，工作流不复制打包命令（ci-calls-electron-builder-package）
