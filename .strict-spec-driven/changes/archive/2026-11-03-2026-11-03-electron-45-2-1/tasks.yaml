@@ -1,0 +1,27 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: 2026-11-03-electron-45-2-1
+sections:
+  Implementation:
+    upgrade-electron-dep:
+      text: 把 package.json devDependencies.electron 从 ^45.1.0 改为 ^45.2.1，用 npm install --registry=https://registry.npmjs.org 刷新 package-lock.json；确认 lock 中 electron 锁定 45.2.1 且 resolved 指向 registry.npmjs.org，根包 postinstall（scripts/install-electron.mts）补装平台二进制成功（node_modules/electron 存在）
+      status: complete
+  Testing:
+    unit-test-coverage:
+      text: 升级后运行单元测试与覆盖率门槛（80% 行覆盖）
+      status: complete
+      command: npm run test:coverage
+    full-regression:
+      text: 完整回归命令逐字执行（npm ci 起、链尾 e2e，含 typecheck/build/覆盖率），作为归档证据；e2e 覆盖窗口出现、app:// 本地页加载与远程导航，可验证 45.2.1 下行为不变与预热 workaround 仍有效
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+  Verification:
+    strict-verify:
+      text: strict-spec-cli verify 2026-11-03-electron-45-2-1 通过，无阻断诊断
+      status: complete
+      command: strict-spec-cli verify 2026-11-03-electron-45-2-1
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: unit-test-coverage

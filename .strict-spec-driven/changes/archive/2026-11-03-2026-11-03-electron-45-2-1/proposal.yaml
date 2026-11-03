@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: 2026-11-03-electron-45-2-1
+  status: proposed
+summary:
+  what:
+    - 把开发依赖 electron 从 ^45.1.0（lock 锁定 45.1.0）升级到 ^45.2.1 并更新 package-lock.json：仅改 package.json 的 devDependencies.electron 与 lockfile，不改任何应用源码、构建脚本或工作流
+  why:
+    - '45.2.1（2026-10-30）把 Chromium 从 156.0.8078.49 升到 156.0.8078.75 并回移上游 Chromium 修复（PR #55523/#55419）；本应用核心用途是加载用户指定的远程 harness URL，渲染不可信远程内容，跟进 Chromium 安全补丁直接降低攻击面。45.2.0 另含 net.fetch() 无 body 请求与重复 file: URL 请求的性能改进，与 app:// 本地页加载路径相关。同 major 补丁级升级、Node 不变（24.22.1），无 API 变更，风险低'
+scope:
+  in:
+    - package.json devDependencies.electron 改为 ^45.2.1；package-lock.json 经 npm install --registry=https://registry.npmjs.org 重新生成（electron 与 @types/electron 相关条目）；node_modules/electron 平台二进制经既有根包 postinstall（scripts/install-electron.mts）幂等补装
+  out:
+    - 不升级到 46（仍处 alpha，仅到 46.0.0-alpha.5）；不改 src/ 应用源码；不移除 src/main/web-globals.ts 的 Web 全局预热 workaround（45.2.x 发行说明未修复 undici 懒加载竞态）；不改 electron-builder/electron-vite 版本；不改 .github/workflows/（CI 打包由 electron-builder 自行下载发行包，与 lockfile 版本无关）；不改任何技术标准
+unchanged_behavior:
+  - 应用全部用户可观察行为不变（窗口、菜单、设置、远程页面加载、导航策略）；install-electron.mts 补装机制与 workflows.test.mts 对它的断言不变；完整回归命令不变：npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e；lockfile resolved 地址全部指向 https://registry.npmjs.org

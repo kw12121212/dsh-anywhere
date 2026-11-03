@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: 2026-11-03-electron-45-2-1
+open: []
+resolved:
+  - id: requirement-problem
+    question: 今天具体有什么问题，对谁有影响？
+    context: 升级动机：lock 锁定的 electron 45.1.0（Chromium 156.0.8078.49）落后 npm latest 45.2.1（Chromium 156.0.8078.75，含上游 Chromium 修复回移）
+    answer: 应用以加载用户指定的远程 harness URL 为核心用途，Chromium 安全补丁落后即攻击面落后；用户检查版本后确认要升（会话中回复：升吧）
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: 什么可观察差异证明完成了？
+    context: 验收口径：依赖与 lock 升级且完整回归通过
+    answer: package.json devDependencies.electron 为 ^45.2.1、package-lock.json 锁定 45.2.1（resolved 指向 registry.npmjs.org），npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e 全绿（用户已批准此范围）
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: 为什么是现在？
+    context: 触发时机
+    answer: 用户今天要求更新仓库并检查 electron 版本，对比发现 45.2.1 已发布（2026-10-30）且含 Chromium 安全补丁
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: 什么必须保持不变？
+    context: 非目标边界
+    answer: 不升 46 alpha；不改应用源码与用户可观察行为；不移除 web-globals 预热 workaround；不动 electron-builder/electron-vite 与 CI 工作流；不改技术标准
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: 升到最新指哪种读法？
+    context: 唯一歧义点：latest 稳定版还是含预发布的最新版本
+    answer: 最新稳定版 45.2.1（dist-tag latest），不含 alpha/beta/nightly（用户批准的分析即按此口径）
+    status: resolved
+    kind: requirement
+    answered_by: human

@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: 2026-11-03-electron-45-2-1
+approach:
+  - 单点依赖升级：package.json devDependencies.electron ^45.1.0 → ^45.2.1，随后用 npm install --registry=https://registry.npmjs.org 刷新 package-lock.json（遵守 frontend-dependencies/lockfile-public-registry MUST），使 lock 只重写 electron 相关条目。安装后由根包 postinstall（scripts/install-electron.mts）幂等补装平台二进制（机制已由 packaging/electron-binary-provisioning MUST 锁定，无需改动）。验证完全依赖既有测试资产：单测覆盖 web-globals 预热与 install 脚本行为，e2e 覆盖窗口出现、本地页 app:// 加载与远程导航；最终以 config.yaml 完整回归命令逐字执行作为归档证据。纯技术变更：不触碰用户可观察行为，specs/ 与 scenes/ 留空；不修改任何技术标准，tech/ 留空
+decisions:
+  patch-only-within-45:
+    decision: 只升到 45.x 线内最新 45.2.1，不追 46 alpha：45.2.1 是 dist-tag latest 的稳定版，同 major 补丁升级 Node 不变（24.22.1）、无 API 变更；46 仅有 alpha 预发布（46.0.0-alpha.5，Chromium 158/node 26 变动大），等其进入稳定后再评估
+    rationale: 用户请求为升到最新；npm latest 即 45.2.1，46 未稳定不满足最新稳定版的语义
+  keep-web-globals-warmup:
+    decision: 保留 src/main/web-globals.ts 的 Web 全局预热 workaround：核对 45.2.0/45.2.1 发行说明，仅有 Chromium 回移与 net.fetch 性能改进，无 undici 懒加载竞态（markResourceTiming TypeError）修复记录，预热逻辑必须原样保留
+    rationale: lesson electron-45-app-web-45dfd9 记录该竞态在 45 线存在，移除预热会重新引入主窗口偶发不出现的回归；其 applies_when 明确要求升级 Electron 后先核对再评估是否可移除
+  lockfile-registry-rewrite:
+    decision: lockfile 刷新必须带 --registry=https://registry.npmjs.org，并检查 electron 条目 resolved 指向 registry.npmjs.org
+    rationale: 技术标准 frontend-dependencies/lockfile-public-registry 为 MUST 规则
+  regression-verbatim:
+    decision: 升级后完整回归命令 npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e 在本地逐字执行一次作为归档证据，npm ci 会先验证 lockfile 与 package.json 一致并重装依赖
+    rationale: 技术标准 ci-regression/ci-regression-verbatim 为 MUST 规则；npm ci 同时验证 lock 变更的可安装性
+  no-delta-spec:
+    decision: 本变更为纯依赖升级，不修改任何用户可观察行为，也不改写任何主 spec 需求：specs/ 目录保持为空，不创建 delta scene 与 delta spec
+    rationale: 升级仅触及 package.json devDependencies 与 package-lock.json；应用行为由既有 spec 约束且保持不变；无场景（scene）可描述的演员流程变化
+alternatives: []
+risks:
+  - 45.2.1 引入未知行为回归导致 e2e 失败：同 major 补丁级 + Node 不变，概率低；若失败，用失败用例定位，必要时回退版本并在 questions.yaml 记录
+  - npm 镜像源导致 lockfile resolved 指向非 npmjs.org：用 --registry 显式指定并抽查 lock；本机 npm 配置未知，属可自动修复项
+  - e2e 在 Windows 本机环境偶发（历史 lesson 记录过 macOS 焦点类环境问题）：e2e 已有平台适配；若环境性失败，按 lesson 提示重跑确认，不复原代码
