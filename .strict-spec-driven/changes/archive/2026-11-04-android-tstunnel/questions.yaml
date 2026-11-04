@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: android-tstunnel
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: App 无法访问 tailnet 上的 harness：无内嵌节点、无隧道状态展示，设置页 Tailscale 卡片只是占位；proxy-routing 无 SOCKS5 端点可分流
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: AAR 构建产出且 App 集成；设置页卡片五态（未配置/连接中/已连接/需要key/失败）与 key 粘连/清除；无 key 无状态时隧道完全不启动（不调 Up）；core 状态机 JUnit 随回归命令锁定；Go 测试与 GOOS=android 交叉编译通过；带 key 链路待 key 提供
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 照搬参考项目真机验证形态的 Go 薄包装；状态机判定在 core；App 单例按需启动、无前台服务；hostinfo.SetApp=dsh-tstunnel、节点主机名 dsh-anywhere-android 与 pca 节点区分
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不做 WebView 代理分流（proxy-routing）、发布上传（release）、自更新；不做交互式登录、出口节点、公网代理、常驻前台服务；不改官方 Tailscale App 与桌面端
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: scaffold 已交付 AAR 约定（libs 不入库）与签名；proxy-routing/release/self-update 依赖本变更的 SOCKS5 端点、状态机与隧道状态
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: tagged-auth-key
+    question: android-tstunnel 的带 key 验收（spike 与设备生命周期取证）需要 tag:pca-client tagged auth key，如何提供？
+    context: 影响范围：验证 spike（用 key 起 tsnet 节点经 tailnet 访问 gamepc:13080）、模拟器/真机的粘贴 key 入网、强杀免 key 重连、换 key 重建取证，以及 android-proxy-routing 的 tailnet 分流验收。planned change 规定：spike 不通过（通常 ACL 未允许 tag:pca-client 访问 13080）则停止并请用户在 Tailscale 管理后台调整 ACL。备选：1) 交互中直接提供 key（凭据只进本机 App 私有存储与模拟器，不进仓库与日志）；2) 用户自行在真机验收并把证据反馈；3) 先跳过带 key 验收（open question 保持 open，本变更以无 key 路径验收 + 工程完成为准，带 key 验收待 key 到位后补）。推荐 1。
+    answer: 用户已提供 tag:pca-client tagged auth key（2026-11-04 交互提供，凭据只进本机 spike 环境变量与 App 私有存储，不进仓库与日志）；执行 spike 与带 key 设备验收
+    status: resolved
+    answered_by: human

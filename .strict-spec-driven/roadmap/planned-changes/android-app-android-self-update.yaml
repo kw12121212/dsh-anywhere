@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: android-self-update
   milestone: android-app
-status: planned
+status: complete
 summary: App 检查 GitHub Releases 的最新版本，下载 APK 并校验 sha256 后调起系统安装器完成覆盖升级
 details: App 在启动后与设置页手动触发时查询公开仓库 kw12121212/dsh-anywhere 的最新 Release（GitHub REST API，匿名访问，经手机网络直连，不经隧道）；只有 Release 中存在 APK 资产、且由 tag 按 android-scaffold 相同派生公式得到的 versionCode 高于本机安装版本时才提示（只有桌面安装包、尚未上传 APK 的 Release 视为没有新版本）。下载 APK 到 App 私有目录（支持断点续传），读取 android-release 上传的同名 .sha256 文件比对，一致才允许安装，不一致或缺少 .sha256 时删除文件并提示、不调起安装器；开始下载新版本前清理旧 APK，安装完成前不删除。安装入口经 FileProvider 与 REQUEST_INSTALL_PACKAGES 在前台调起系统安装器；下载完成时 App 已在后台则推送“新版本已就绪”通知，点击后调起安装器；每个进程会话自动调起至多一次，设置页保留手动安装按钮。版本比较、tag 解析、.sha256 解析与 Release 资产选择放在 core 并以 JUnit 覆盖（用录制的 GitHub API 响应作为测试夹具）。失败（网络、限流、校验失败）不打扰用户，只在设置页显示原因。主规格：android-app 主规格新增检查更新、校验与安装场景。验收：安装旧版本 APK 后发布更高版本，真机上完成提示、下载、校验与覆盖安装；构造损坏 APK 验证拒绝路径，留证。
 depends_on:

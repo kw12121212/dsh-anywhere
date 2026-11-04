@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-tstunnel
+  status: proposed
+summary:
+  what:
+    - 以 gomobile 把 tsnet 打包为 AAR 并在 App 内按需启动单例 Tailscale 节点：android/tstunnel Go 模块薄包装 tailscale.com/tsnet（NewNode(hostname,dir,authKey)、Start、带期限阻塞 Up、Loopback SOCKS5 端点与凭据、StatusJSON、Close、SetInterfacesJSON 与 SetDefaultRouteIfname 平台注入；GOOS 拆分符号并以 GOOS=android 交叉编译验证；gomobile/gobind 钉在 go.mod tool 指令）；scripts/build-android-tstunnel.mts 构建脚本产出 AAR 同步 android/app/libs/（不入库，stamp 缓存）；core 新增隧道状态机（未配置/连接中/已连接/需要key/失败的状态转移判定：无 key 无持久状态→未配置且不调 Up、有持久状态无 key→尝试重连、Up 失败分类）并以 JUnit 随回归命令覆盖；:app TunnelManager 进程内单例、按需启动、ensureUp 幂等、tsnet 启动前注入 Java 网卡快照与默认路由、阻塞调用只在后台线程、无前台服务、节点状态持久 filesDir/tstunnel、auth key 不进日志；设置页 Tailscale 卡片显示状态与节点名（dsh-anywhere-android），未配置/需要key/失败时可粘贴 key 重试，可清除 key 与状态回未配置；未配置时 App 其他功能照常
+  why:
+    - milestone 核心交付：内嵌 tailnet 节点是访问 tailnet 上 harness 的唯一通道（android-proxy-routing 依赖 Loopback SOCKS5 端点与状态机）；设置页卡片与可选隧道是 milestone 目标的一部分
+scope:
+  in:
+    - android/tstunnel 新 Go 模块与单测；scripts/build-android-tstunnel.mts；android/core 新增 TunnelStateMachine 与 JUnit；android/app 新增 TunnelManager 与设置页 Tailscale 卡片、AAR 依赖装配；android-app 主规格新增隧道引导、状态与重连场景；.gitignore 已覆盖 app/libs
+  out:
+    - WebView 经代理分流（android-proxy-routing，本变更只提供 SOCKS5 端点与状态）；发布与上传（android-release）；桌面端与官方 Tailscale App；交互式登录；出口节点与公网代理
+unchanged_behavior:
+  - 前序全部 Android 行为不变（保存/探测/错误页/会话/导航范围/明文拦截）；未配置隧道时 App 行为与本变更前完全一致；桌面端零变化；auth key 不进日志、配置与界面的约束与 token 一致
+roadmap:
+  milestone: android-app
+  planned_change: android-tstunnel

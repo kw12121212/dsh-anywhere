@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-main-webview
+  status: proposed
+summary:
+  what:
+    - Android 主页面以 WebView 承载 harness：有有效配置时先显示本地「正在连接」提示并对干净地址做可达性探测（默认 10 秒超时，任何 HTTP 响应含 401、5xx、重定向都视为可达），可达则在 WebView 中打开干净地址；DNS 失败、连接被拒、超时、TLS 错误显示本地错误页（不含 token 的地址与按原因分类的说明，提供「重试」与「修改地址」）。界面内提供刷新入口（重新探测并打开已保存地址，无有效配置回首次设置页）；系统返回键在网页可后退时先在网页历史后退，否则退出 App。导航范围复刻桌面 navigation-scope：shouldOverrideUrlLoading 与 onCreateWindow 以同源（协议、主机、端口）判定——同源链接与 window.open 留在 WebView，非同源 http/https 经 Intent 交给系统浏览器且当前页不变，其他协议忽略。远程页面隔离：不注册 JavascriptInterface、禁用文件与内容访问、cookie 与存储在 App 私有目录。明文策略（intake 问题 cleartext-http）：清单允许明文，运行时经 shouldInterceptRequest 只放行已保存 harness 源的 http 请求，其他主机的 http 子资源被拦截；App 侧探测同样只对 harness 源发 http。本变更只走手机网络直连（tailnet 地址待 android-proxy-routing）。同源判定与明文放行判定放 core 并以 JUnit 覆盖
+  why:
+    - android-app 里程碑的核心交付：桌面端主窗口行为（main-window、load-failure、navigation-scope）在 Android 上的对应物；android-session-auth 依赖 WebView 会话建立，android-proxy-routing 依赖 WebView 与探测路径的分流挂点
+scope:
+  in:
+    - android/core 新增 OriginPolicy（同源/打开分类）与 CleartextPolicy（明文放行）及 JUnit；android/app 以 WebView 主页面替换占位页（连接探测、本地错误页与重试/修改地址、刷新入口、返回键网页后退、shouldOverrideUrlLoading/onCreateWindow 导航范围、shouldInterceptRequest 明文拦截、WebView 安全设置、INTERNET 权限与清单明文允许）；android-app 主规格新增主页面加载、错误页、刷新、返回键、导航范围、明文限制与远程隔离的 Android requirement
+  out:
+    - 隧道与 tailnet 分流（android-proxy-routing，本变更直连）；会话失效探测与重新认证页（android-session-auth）；token 换会话的首次加载语义细化（android-session-auth）；桌面端任何行为变化；桌面主规格的平台限定语修改
+unchanged_behavior:
+  - 桌面端全部主规格行为与实现不变；android-setup-settings 已交付的首次设置页/设置页/配置三态行为不变（错误页的「修改地址」进入同一设置页）；harness-url-config 主规格不变；token 不出现在配置、日志、错误页与界面的约束不变
+roadmap:
+  milestone: android-app
+  planned_change: android-main-webview

@@ -2,7 +2,7 @@ schema: strict-spec-driven/config/v1
 schema_version: 1
 artifact_type: workflow_config
 preferred_human_language: Chinese
-context: dsh-anywhere 是一个多平台（Windows / macOS / Linux）桌面客户端，用于接入用户指定的远程 DeepSeek harness URL，并在本地提供交互界面。技术栈：Electron + TypeScript；主进程、preload 与本地页面位于 src/，由 electron-vite 构建到 out/，electron-builder 打包三平台安装包；单元测试用 Vitest，端到端用 Playwright。约定：远程 harness URL 必须可配置、不得硬编码；API key / 令牌等凭据不得提交到仓库或写入日志。
+context: dsh-anywhere 是一个多平台（Windows / macOS / Linux）桌面客户端，用于接入用户指定的远程 DeepSeek harness URL，并在本地提供交互界面。技术栈：Electron + TypeScript；主进程、preload 与本地页面位于 src/，由 electron-vite 构建到 out/，electron-builder 打包三平台安装包；单元测试用 Vitest，端到端用 Playwright。Android 客户端在 android/ 下以自成一体的 Gradle 多模块工程并存（:app 为 Kotlin + Jetpack Compose，core 为不依赖 android.* 的纯 JVM Kotlin 模块），core 的 JUnit 测试以 android/gradlew -p android/core test（只需 JDK 17+）接在完整回归命令尾部，:app/AAR 构建与设备验收不进回归命令也不上 CI。约定：远程 harness URL 必须可配置、不得硬编码；API key / 令牌等凭据不得提交到仓库或写入日志。
 rules:
   specs:
     - Describe observable behavior only — no implementation details, technology choices, or internal structure
@@ -26,7 +26,7 @@ rules:
 review_evidence:
   project_regression:
     method: complete_project_regression
-    command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e
+    command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
     meaning: Passing this command is required review evidence before strict-spec-review recommends archive or strict-spec-auto performs archive. This command represents the complete project-level regression suite, not only the Testing section tasks for an individual change. When a coverage declaration is present, this command also enforces the minimum coverage threshold, so insufficient coverage is a blocking workflow failure rather than advisory output.
     unavailable_behavior: If the command cannot run because required dependencies, services, credentials, fixtures, or other test conditions are unavailable, review or auto archive is blocked until a human prepares the environment or explicitly provides the missing evidence.
     coverage:

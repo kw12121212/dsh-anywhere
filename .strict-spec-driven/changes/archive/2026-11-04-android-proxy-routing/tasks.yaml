@@ -1,0 +1,56 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-proxy-routing
+sections:
+  Implementation:
+    core-tailnet-routing:
+      text: 'core 新增 TailnetRouting：isTailnetTarget（100.64.0.0/10 字面、fd7a:115c:a1e0: 前缀、*.ts.net、无点短名，不 DNS）与 isLoopbackTarget（127/8、::1、0.0.0.0、localhost/.localhost）；JUnit 覆盖边界（100.63.255.255/100.64.0.0/100.127.255.255/100.128.0.0、主机大小写与末尾点、IPv6 简写、ts.net 子域、多标签公网域名）'
+      status: complete
+    core-socks5-dialer:
+      text: core 新增 Socks5Dialer：RFC1928/1929 自实现（no-auth+userpass 问候、userpass 认证、域名 ADDRTYPE=0x03 交代理侧解析、回复解析与 skip），从参考项目移植；JUnit 用本地假 SOCKS5 服务覆盖（认证成功/失败、域名直传、坏版本）
+      status: complete
+    core-connect-bridge:
+      text: core 新增 ConnectBridge：127.0.0.1 随机端口、CONNECT 与绝对 URI 两形态、随机 Basic 凭据 407（无/错凭据不连任何目标）、回环目标拒绝、并发上限 64 超限关闭、明文转发经 CleartextPolicy 门控（harness 源）、CONNECT 不受限、字节纪律（分块即时下发+flush、close 定界、TE 透传）、stop 拆全部；JUnit 协议级覆盖（假 dial/真 socket：401/407、回环 403、明文拒绝、CONNECT 透传、转发流式）
+      status: complete
+    core-dial-probe:
+      text: core 新增 DialProbe：经注入 dial 的可达性探测（手写 GET、任何状态码即可达、ProbeFailure 分类）与会话判定（带 Cookie 头、读正文比对 EXPIRED_MARKER）；JUnit 假桩 dial + 本地假 HTTP 服务覆盖（含 https 形态 TLS 分层可选）
+      status: complete
+    app-proxy-bridge:
+      text: ':app 新增 ProxyBridge：桥生命周期随隧道（CONNECTED 起听 dial=splitDial(节点 SOCKS5, 直连)、断开/清除停）；随机凭据；WebViewFeature.PROXY_OVERRIDE 不支持时置不可用标志；ProxyController.setProxyOverride(127.0.0.1:port, removeImplicitRules) 回调确认后才允许加载'
+      status: complete
+    app-webview-auth-proxy:
+      text: ':app WebView 代理认证应答与依赖：WebViewClient.onReceivedHttpAuthRequest 在 host 为 127.0.0.1 且端口为桥端口时 proceed(桥凭据)，其他 host 取消不应答；androidx.webkit 依赖加入 app；WebResourceRequest 侧明文拦截保留（纵深防御）'
+      status: complete
+    app-probe-over-dial:
+      text: ':app 探测改道：HarnessProbe 探测与会话失效探测（MainWebScreen 的 confirmSessionExpired）改经 DialProbe（隧道在役时 dial=splitDial、否则直连），判定语义与错误分类不变；探测仍只对已保存干净地址发请求'
+      status: complete
+    app-tunnel-gated-load:
+      text: ':app MainWebScreen 隧道联动：加载状态机前置检查 cleanUrl 是否 tailnet 目标（core 判定）——是且隧道 NOT_CONFIGURED→TunnelPrompt 相位（需要接入 tailnet 说明+去设置）；CONNECTING/NEEDS_KEY/FAILED→TunnelWait 相位（隧道状态+「重试连接」ensureUp+去设置），观察 tunnel.state 变 CONNECTED 自动重载；非 tailnet 目标原路径不变；strings 新文案'
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: 单元测试全部通过：npm run test、android/gradlew -p android/core test（TailnetRouting/Socks5Dialer/ConnectBridge/DialProbe 协议级与表驱动全过）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    emulator-acceptance:
+      text: 模拟器验收完成——非 tailnet 回归：mock harness 直连照常（前序变更复验）；tailnet 联动：未配置隧道+tailnet 地址→「需要接入 tailnet」面板（去设置入口，不白屏）✓；隧道连接后自动加载 ✓；全链路：WebView 经桥 CONNECT→节点 SOCKS5→serve TLS（ts.net 证书校验过）→407 自动应答→到达真实 dsh web（收到 HTTP 响应码；http 形态收到 dsh web 的明文拒绝页）✓；公网 https 经桥直连正常（CONNECT 隧道）✓；同机隔离：adb shell nc 无凭据访问桥端口→407（Proxy-Authenticate Basic realm=dsh-anywhere）、错凭据→407 ✓、另一回环端口（33913 桥/38101 其他）行为区分 ✓；凭据/回环拒绝/明文门控/上限在 core 协议级测试全覆盖。实页会话交换：宿主（用户节点）同 token 303 成功 vs App（tagged 节点）401——dsh web 应用层对 tagged 身份的策略（lesson tailscale-serve-tagged-tsnet-d320bd），网络层与本变更代码无缺陷；待 dsh web 侧允许 tag:pca-client 后实页验收补齐（用户已知悉）
+      status: complete
+      command: node scripts/build-android-tstunnel.mts && android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令本地逐字通过
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: strict-spec-cli ready android-proxy-routing 与 verify 通过
+      status: complete
+      command: strict-spec-cli ready android-proxy-routing && strict-spec-cli verify android-proxy-routing
+    archive-readiness:
+      text: 归档就绪检查：delta-spec 与实现一致、无 delta-tech、模拟器验收（含 tailnet/407 隔离）证据齐备、git status 干净
+      status: complete
+      command: strict-spec-cli verify android-proxy-routing
+testing_gates:
+  validation_task: emulator-acceptance
+  unit_test_task: unit-test-suite

@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-main-webview
+approach:
+  - core 承载全部可单测判定（pure-logic-in-core）：OriginPolicy.classifyOpen(harnessUrl, target) 镜像桌面 navigation-policy.ts——先解析为 http/https URL（解析失败或非 web 协议返回 IGNORE），同源（协议+主机+端口，含默认端口归一）返回 STAY，否则 EXTERNAL；同源判定用与 HarnessUrl 相同的 java.net.URI 组件比较（scheme 小写、host 小写、显式端口与默认端口 80/443 归一）。CleartextPolicy.isAllowed(harnessUrl, requestUrl)：非 http 请求（https）一律放行；http 请求仅当与 harness 地址同源（经 OriginPolicy）时放行，其余拒绝——即「明文只放行已保存 harness 源」。ProbeFailure.classify(exception) 把探测异常映射为 DNS/REFUSED/TIMEOUT/TLS/OTHER（UnknownHostException→DNS、ConnectException→REFUSED、SocketTimeoutException→TIMEOUT、SSLException→TLS）。:app 以 Compose 状态机组织主页面：Connecting（本地提示）→探测→WebView（可达，加载干净地址）或 ErrorPage（本地 Compose 错误页：不含 token 的地址 + 原因文案 + 重试/修改地址按钮，后者导航到设置页）；刷新入口在主页面顶部（AppBar 图标），行为=重新走加载状态机，无有效配置回首次设置页。探测用 HttpURLConnection（不跟随重定向，收到任何响应码即可达，不读正文，10 秒超时，工作线程执行）。WebView：javaScriptEnabled、domStorageEnabled、allowFileAccess=false、allowContentAccess=false、不注册 JavascriptInterface；WebChromeClient.onCreateWindow 需要 setSupportMultipleWindows(true) 配合，从 transport 取出目标 URL 后按 classifyOpen 处理（STAY→主 WebView loadUrl，EXTERNAL→Intent 系统浏览器，IGNORE→不处理），一律不创建新窗口；WebViewClient.shouldOverrideUrlLoading 对主框架导航按 classifyOpen 处理（STAY 返回 false 留在 WebView，EXTERNAL 发 Intent 返回 true，IGNORE 返回 true）。shouldInterceptRequest：请求为 http 且 CleartextPolicy 拒绝时返回空 502 响应拦截（主框架导航不会走到这里，已由 shouldOverrideUrlLoading 处理；这里覆盖子资源）。返回键：OnBackPressedCallback 依 webView.canGoBack() 决定 goBack 或交回系统默认（退出 App）；返回键优先级在 Settings 页返回 Main 之上保持既有行为。Manifest 增加 INTERNET 权限与 android:usesCleartextTraffic="true"（运行时拦截兜底）
+decisions:
+  webview-compose-statemachine:
+    decision: 主页面用 Compose 状态机（Connecting/WebView/ErrorPage）而非 WebView 内嵌本地页：错误页与连接提示是纯 Compose 界面，可达后才挂载 AndroidView WebView
+    rationale: 桌面端本地错误页承载重试/修改地址交互；Compose 实现免 WebView↔本地页切换的 JS 桥接，且错误文案天然不涉 WebView 上下文
+  intercept-empty-response:
+    decision: shouldInterceptRequest 对明文越界请求返回固定空 502 WebResourceResponse（不破坏页面其余加载），不抛错不断链
+    rationale: 返回错误响应让页面子资源失败可见且可测（模拟器验收断言请求被拦截），比静默 null（等价放行）安全、比断整个连接稳定
+  probe-httpurlconnection:
+    decision: 探测用 HttpURLConnection 直发（redirect 不跟随、任何响应码即可达、10 秒超时、异常经 ProbeFailure 分类），不经 WebView 发探测
+    rationale: WebView 无法表达「任何 HTTP 响应都可达」的判定（onReceivedError 只报失败），App 侧探测与桌面 net.request 语义同构；android-proxy-routing 后续在同一探测路径接分流
+alternatives: []
+risks:
+  - onCreateWindow 从 transport 提取 URL 依赖 WebView 内部消息约定（各家实现用 handler.obtainMessage 再 getUrl），需在模拟器上实测 window.open 三分支
+  - 模拟器验收依赖宿主 http 模拟 dsh 服务端（node 脚本监听 127.0.0.1，模拟器经 10.0.2.2 访问）；宿主防火墙需放行回环段端口
+  - 部分 ROM 的自定义 WebView 对 shouldInterceptRequest 的行为略有差异；验收以 API 36.1 模拟器为准，异常记录 lesson

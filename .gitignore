@@ -6,3 +6,19 @@
 /coverage
 /test-results
 /playwright-report
+
+# Android 工程（android/，构建产物与本地配置不入库）
+# ** 覆盖根与各独立构建（core 是 includeBuild，自带 .gradle/ 与 .kotlin/）
+android/**/.gradle/
+android/**/.kotlin/
+android/local.properties
+# 各模块构建输出（:app、core 及后续 tstunnel 等纯 JVM 模块）
+android/*/build/
+android/build/
+# tstunnel AAR 由 scripts/ 构建脚本产出，不入库（tech/android-client 的
+# aar-script-built-not-committed 规则）
+android/app/libs/
+# 构建脚本本地安装的 gomobile/gobind 工具链二进制
+android/tstunnel/.gobin/
+# 模拟器/真机验收截图等本机证据（android-build-outside-gate：设备验收在回归之外）
+android/evidence/

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: android-webview-loadurl-302-samesite-strict-cook-f1ee7e
+  title: Android WebView 在 loadUrl→302 重定向链中会发送 SameSite=Strict cookie
+category: security
+status: active
+created_at: '2026-11-04T13:02:14.245Z'
+updated_at: '2026-11-04T13:02:14.245Z'
+context: android-session-auth 需要带 token 地址只加载一次：WebView loadUrl(带 token 原始地址) → dsh 服务 Set-Cookie(HttpOnly; SameSite=Strict) + 302 干净地址。SameSite=Strict 理论上限制跨站请求携带 cookie，而这条重定向链是否会带上首响应刚签发的 cookie 是设计前提，milestone risks 要求实测确认。
+observation: API 36.1 模拟器（Android WebView 当代 Chromium）实测：302 重定向后的干净地址请求确实携带了首响应签发的 SameSite=Strict cookie（mock server 日志显示重定向后 GET / 带 session 得到 200 harness 页，否则会再收 401）；同链路中 token URL 本身与目标地址同源，SameSite 约束按同站导航处理。
+takeaway: 在 Android WebView 中实现『带一次性凭证 URL 换 HttpOnly SameSite=Strict 会话 cookie 再 302』的模式可行：302 落定后 cookie 已在 CookieManager，后续同源请求自动携带；无需为重定向链放宽 SameSite。结论对其他内嵌 WebView（Tauri、Capacitor 等）同类实现可参考，但不同 WebView 内核需各自实测。
+applies_when: 在任何 WebView/内嵌浏览器中实现『一次性凭证 URL → 服务端 Set-Cookie(SameSite=Strict) → 302 干净地址』的会话建立链路，评估重定向后请求是否携带 cookie 时
+occurrences:
+  - origin: android-session-auth
+    date: '2026-11-04'
+    evidence: 2026-11-04 API 36.1 模拟器实测：保存 http://10.0.2.2:13081/?token=emu-token-1 后 server 日志 GET /?token=... → 302+Set-Cookie(session=s1; Path=/; HttpOnly; SameSite=Strict) → 重定向 GET / 200 harness 页（同轮次无第二次 401）；强杀重启后干净地址+cookie 仍 200

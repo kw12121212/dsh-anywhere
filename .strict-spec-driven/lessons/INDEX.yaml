@@ -35,6 +35,16 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/security/electron-loadurl-samesite-strict-cookie-wails-39e30f.yaml
+    android-webview-loadurl-302-samesite-strict-cook-f1ee7e:
+      title: Android WebView 在 loadUrl→302 重定向链中会发送 SameSite=Strict cookie
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/security/android-webview-loadurl-302-samesite-strict-cook-f1ee7e.yaml
+    tailscale-serve-tagged-tsnet-d320bd:
+      title: tailscale serve 后端按身份放行时，tagged tsnet 节点会被应用层拒绝（网络层全通）
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/security/tailscale-serve-tagged-tsnet-d320bd.yaml
   testing:
     playwright-page-evaluate-cdp-csp-eval-7bf922:
       title: Playwright page.evaluate 经 CDP 执行会绕过 CSP 的 eval 检查
@@ -61,6 +71,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/playwright-electron-45-fast-fail-403086.yaml
+    lesson-0d4784:
+      title: 手写解析器的接受集必须以对端参考实现为契约并配负向测试
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/lesson-0d4784.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
@@ -117,3 +132,13 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/electron-45-app-web-45dfd9.yaml
+    java-util-properties-properties-windows-6ce7e6:
+      title: java.util.Properties 把反斜杠当转义符：生成 .properties 里的 Windows 路径必须写正斜杠
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/java-util-properties-properties-windows-6ce7e6.yaml
+    httpurlconnection-connect-tcp-responsecode-c3bf75:
+      title: HttpURLConnection.connect() 只等 TCP 握手——可达性探测必须读 responseCode
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/httpurlconnection-connect-tcp-responsecode-c3bf75.yaml

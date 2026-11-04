@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED:
+    update-check-and-verify:
+      strength: MUST
+      statement: App 在启动后与设置页手动触发时检查公开 GitHub 仓库的最新 Release（匿名、经手机网络）：仅当 Release 含 DSH-Anywhere-<版本>.apk 资产且其 tag 派生的版本号高于本机安装版本时提示更新（无 APK 资产的 Release 视为无新版本）；下载到 App 私有目录支持断点续传，下载完成后读取同名 .sha256 校验：一致才允许安装，不一致或缺失 .sha256 时删除文件、提示失败且不调起安装器；开始下载新版本前清理旧 APK，安装完成前不删除已下载文件；更新检查与下载失败（网络、限流）不打扰用户，只在设置页显示原因。
+      scenarios:
+        newer-release-prompted:
+          - GIVEN: 本机安装 1.0.0，最新 Release v1.1.0 含 DSH-Anywhere-1.1.0.apk 与 .sha256
+          - WHEN: 启动后自动检查或手动触发
+          - THEN: 设置页显示新版本 1.1.0 可下载，下载进度可见，校验通过后提供安装入口
+        checksum-mismatch-rejected:
+          - GIVEN: 下载完成但 APK 内容与 .sha256 不一致（或 Release 缺 .sha256）
+          - WHEN: 校验执行
+          - THEN: 已下载文件被删除、提示校验失败，系统安装器没有被调起
+        no-apk-release-silent:
+          - GIVEN: 最新 Release 只含桌面安装包（无 APK 资产）
+          - WHEN: 检查更新
+          - THEN: 视为无新版本，不提示更新
+    update-install-flow:
+      strength: MUST
+      statement: 校验通过的更新包经系统安装器完成覆盖升级：App 在前台时直接调起安装器，在后台时发送「新版本已就绪」通知、点击通知后调起安装器；每个进程会话自动调起至多一次，设置页始终保留手动安装入口；安装调起需要用户在系统安装器中确认，App 不静默安装。
+      scenarios:
+        foreground-install-invoked:
+          - GIVEN: 下载与校验完成，App 在前台
+          - WHEN: 用户点击安装（或本会话首次自动触发）
+          - THEN: 系统安装器被调起并显示升级确认，用户确认后完成覆盖升级，新版 versionName 高于旧版
+        background-notification:
+          - GIVEN: 下载与校验完成时 App 已在后台
+          - WHEN: 下载完成
+          - THEN: 收到「新版本已就绪」通知，点击通知后系统安装器被调起
+  MODIFIED: {}
+  REMOVED: {}

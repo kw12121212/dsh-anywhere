@@ -1,0 +1,41 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-self-update
+sections:
+  Implementation:
+    core-updatecheck:
+      text: core 新增 UpdateCheck：parseTagName、versionCodeOf（VersionSpec 公式）、pickApkAsset（DSH-Anywhere-<ver>.apk 精确名）、parseSha256（sha256sum 兼容格式）、isNewer（tag+资产+派生 code>当前 组合判定）；JUnit 以录制 GitHub API latest Release JSON 夹具覆盖正常/无 APK/桌面 only/tag 非法/sha256 损坏形态
+      status: complete
+    app-update-manager:
+      text: ':app UpdateManager：GitHub API 匿名查询（HttpURLConnection 直连、15s 超时、失败静默记录）、下载断点续传到 filesDir/updates（Range 头+进度状态流）、sha256 恒时校验（一致才安装；不一致/缺 .sha256 删文件提示）、新下载前清旧 APK、FileProvider+ACTION_VIEW 调起安装器、后台经通知点击调起、每会话自动调起一次标志'
+      status: complete
+    app-update-card-manifest:
+      text: ':app 设置页更新卡片（当前版本/检查更新/新版本+进度+安装/失败原因）与 Manifest（REQUEST_INSTALL_PACKAGES、POST_NOTIFICATIONS、FileProvider 与 file_paths）及 strings 文案'
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: npm run test 与 android/gradlew -p android/core test（UpdateCheckTest 录制夹具全过）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    emulator-acceptance:
+      text: 模拟器验收完成——真实 GitHub API 检查：启动自动检查（失败静默不打扰）✓；设置页更新卡片显示当前版本 1.0.1、自动检查结果「已是最新版本」（当前最新 Release v1.0.1 无 APK 资产→正确视为无新版本）✓；手动检查更新按钮工作 ✓；无 APK Release 不提示 ✓（当前真实仓库状态即此形态）；组装链路 assembleDebug+安装运行 ✓。下载/校验/安装链路的判定核心在 core JUnit（tag/资产/sha256/版本比较全覆盖）；调起安装器 intent 层代码就绪；「旧版本→更高版本覆盖升级 + 损坏 APK 拒绝」的完整真机链路留给用户执行（需要真实发布新版 APK，模拟器无完整安装器流程），已在 questions 记录
+      status: complete
+      command: android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令本地逐字通过
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli ready android-self-update && strict-spec-cli verify android-self-update
+    archive-readiness:
+      text: 归档就绪：delta-spec 对照实现、无 delta-tech、模拟器验收证据齐备、真机覆盖升级验收留给用户并在 questions 记录、git status 干净
+      status: complete
+      command: strict-spec-cli verify android-self-update
+testing_gates:
+  validation_task: emulator-acceptance
+  unit_test_task: unit-test-suite

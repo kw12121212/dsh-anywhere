@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-release
+  status: proposed
+summary:
+  what:
+    - scripts/android-release.mts 本地发布脚本：前置校验（工作区干净、HEAD 正好位于 v<package.json version> tag 提交、对应 GitHub Release 已存在、keystore 可用，任一不满足即失败且不上传）→ 运行 AAR 构建脚本与 assembleRelease → 产物按 packaging 标准命名 DSH-Anywhere-<version>.apk 并生成同名 .sha256 → apksigner 校验签名证书与本地 keystore 一致 → gh release upload 上传 APK 与 .sha256（同名资产默认拒绝，显式参数才覆盖）；脚本不输出 keystore 密码等密钥材料；版本只来自 package.json。packaging 技术标准与 AGENTS.md 发布流程补充 Android 步骤；CI 零改动（不构建 Android、无签名 Secrets、桌面 SHA256SUMS 不含 APK——APK 以自身 .sha256 为准，android-self-update 读取它）
+  why:
+    - milestone 完成判据：运行本地发布脚本后 v* 版本发布页出现签名 APK 及 sha256，versionName 与 package.json 一致；android-self-update 的更新源依赖该产物与命名
+scope:
+  in:
+    - scripts/android-release.mts 与 Vitest（前置校验注入替身）；packaging 技术标准补充（delta-tech）；AGENTS.md 发布流程；android-app 主规格如需描述发布产物则新增（评估）
+  out:
+    - android-self-update（后续变更）；CI 工作流改动；桌面端任何变化；应用商店；第二版本来源
+unchanged_behavior:
+  - package.yml 与 release.yml 一字不改；桌面发布流程与 SHA256SUMS 不变；版本唯一来源仍是 package.json；keystore 约定不变
+roadmap:
+  milestone: android-app
+  planned_change: android-release

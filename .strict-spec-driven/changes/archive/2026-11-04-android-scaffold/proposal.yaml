@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-scaffold
+  status: proposed
+summary:
+  what:
+    - 建立 android/ Gradle 多模块工程并接入门禁：android/ 下 :app（Kotlin + Jetpack Compose Material3 单 Activity 占位应用）与 android/core（不依赖 android.* 的纯 JVM Kotlin 独立构建，经根设置 includeBuild 引用）；应用身份 applicationId work.keepwriting.dshanywhere、显示名 DSH Anywhere、启动图标由 build/appicon.png 生成；debug 与 release 统一用 ~/.config/dsh-anywhere/keys/ 下不入库的专用 release keystore 签名，缺失时出包构建失败并提示 scripts/android-keystore.mts 用法；versionName 构建期读取仓库根 package.json 的 version，versionCode 按 MAJOR*10000+MINOR*100+PATCH 派生，Gradle 中不出现第二个版本号；config.yaml 完整回归命令追加 android/gradlew -p android/core test（只需 JDK 17）；新增 android 技术标准并扩展 packaging 版本单一来源规则到 Android；AGENTS.md、README 与 config.yaml context 补充 Android 端说明
+  why:
+    - android-app 里程碑的其余 7 个 planned change 全部直接或间接依赖 android-scaffold：没有工程骨架、身份、统一签名与版本派生，主 WebView、tstunnel、设置页、发布与自更新都无法落地；core 纯 JVM 模块与回归命令接入是后续共享测试向量与门禁信号的前提
+scope:
+  in:
+    - android/ 新增 Gradle 多模块工程（settings.gradle.kts、Gradle wrapper、gradle.properties、:app 与 android/core 独立构建）；scripts/ 新增 keystore 生成脚本与图标生成脚本；.gitignore 新增 android 构建产物、local.properties、app/libs；config.yaml 回归命令与 context；.strict-spec-driven/tech/ 新增 android 标准并修改 packaging 标准；AGENTS.md 与 README
+  out:
+    - iOS 客户端；:app 的任何业务功能（WebView、隧道、设置页由后续变更交付）；AAR/tstunnel（android-tstunnel 变更）；CI 工作流（Android 不上 GitHub Actions）；桌面端任何行为与三平台打包流程
+unchanged_behavior:
+  - 桌面端全部主规格行为不变；package.json 仍为版本唯一登记处；CI 工作流仍只含 package.yml 与 release.yml；80% 行覆盖率门槛的 scope 仍为 src/**/*.ts 与 scripts/**/*.mts，Kotlin 不设覆盖率门槛
+roadmap:
+  milestone: android-app
+  planned_change: android-scaffold

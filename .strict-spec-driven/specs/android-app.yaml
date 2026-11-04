@@ -1,0 +1,328 @@
+schema: strict-spec-driven/main-spec/v1
+schema_version: 1
+artifact_type: main_spec
+schema_file: templates/strict-spec-driven/schemas/main-spec.yaml
+spec:
+  id: android-app
+  title: Android App
+requirements:
+  first-run-setup-page:
+    strength: MUST
+    statement: App 启动时如果从未保存过 harness URL，或已有配置损坏、其中地址无效，显示首次设置页：包含欢迎说明、提示文字为「粘贴 dsh-url 或 dsh web 输出的地址」的输入框和「开始使用」按钮；已有配置无效时额外显示已有配置无效、需要重新填写的提示。输入时实时校验：地址不合法时「开始使用」按钮不可用并显示说明原因，地址合法时按钮可用且不显示错误。
+    scenarios:
+      fresh-launch:
+        - GIVEN: 应用数据被清除（从未保存过配置）
+        - WHEN: 启动 App
+        - THEN: 显示首次设置页，输入框为空，没有已有配置无效提示
+      invalid-config-notice:
+        - GIVEN: App 私有存储中的配置文件内容损坏或其中的地址为 ftp://dsh.example.test/
+        - WHEN: 启动 App
+        - THEN: 显示首次设置页和已有配置无效提示
+      live-validation-invalid:
+        - GIVEN: 首次设置页已打开
+        - WHEN: 输入 ftp://dsh.example.test/
+        - THEN: 「开始使用」按钮不可用，并显示只支持 http 或 https 的提示
+      live-validation-valid:
+        - GIVEN: 首次设置页已打开
+        - WHEN: 输入 http://127.0.0.1:13080/?token=abc123
+        - THEN: 「开始使用」按钮可用，不显示错误提示
+  first-run-complete:
+    strength: MUST
+    statement: 在首次设置页点击「开始使用」后，App 保存去掉 token 的干净地址到私有存储，界面进入主页面：主页面以 WebView 承载，可达性探测通过后加载干净地址，不可达时显示本地错误页；用户输入的原始地址（含 token）只作为主页面加载的输入之一留存内存，不写入配置，也不在界面上显示 token。保存失败时首次设置页显示可读的错误信息并保持打开，错误信息中不含 token 值。
+    scenarios:
+      paste-token-url:
+        - GIVEN: 用户在首次设置页输入 http://127.0.0.1:13080/?token=abc123，该地址可达
+        - WHEN: 点击「开始使用」
+        - THEN: 私有存储配置中为 http://127.0.0.1:13080/ 且不含 abc123，界面进入主页面并显示该地址的 harness 页面，abc123 不出现在任何界面文本
+      no-token-url:
+        - GIVEN: 用户在首次设置页输入 https://dsh.example.test/
+        - WHEN: 点击「开始使用」
+        - THEN: 配置保存 https://dsh.example.test/，界面进入主页面
+      save-failure-stays:
+        - GIVEN: 私有存储无法写入
+        - WHEN: 输入合法地址并点击「开始使用」
+        - THEN: 首次设置页显示保存失败的错误且不含 token，停留在首次设置页
+  settings-page:
+    strength: MUST
+    statement: 主页面提供「设置」入口，打开设置页显示当前已保存的干净地址；编辑时实时校验：地址不合法时「保存」不可用并显示原因，合法时可用。点击「保存」后保存去掉 token 的干净地址、返回主页面并重新加载已保存地址（可达时显示 harness 页面，不可达时显示本地错误页）；「取消」或系统返回不修改配置并返回主页面。设置页包含 Tailscale 卡片（隧道状态、节点名、auth key 连接与清除，见隧道相关 requirement）。
+    scenarios:
+      open-shows-current:
+        - GIVEN: 已保存 http://127.0.0.1:13080/，界面在主页面
+        - WHEN: 打开设置页
+        - THEN: 输入框中为 http://127.0.0.1:13080/，页面包含 Tailscale 卡片
+      save-new-token-url:
+        - GIVEN: 设置页已打开，已保存地址可达
+        - WHEN: 把地址改为 http://127.0.0.1:13080/?token=def456 并点击「保存」
+        - THEN: 配置中为 http://127.0.0.1:13080/ 且不含 def456，返回主页面重新加载并显示 harness 页面，def456 不出现在任何界面文本
+      cancel-keeps-config:
+        - GIVEN: 已保存 https://a.example.test/，设置页已打开且地址被改为 https://b.example.test/
+        - WHEN: 点击「取消」或按系统返回
+        - THEN: 返回主页面，配置仍为 https://a.example.test/
+  config-persistence:
+    strength: MUST
+    statement: 已保存的 harness URL 保存在 App 私有存储中：读取时区分「从未保存过配置」「已有配置无效」（内容损坏或地址不符合 harness-url-config 的校验规则）与「有效」三种情况；保存以原子方式写入，写入中断不会留下内容不完整的配置；App 重启后读取到同一个干净地址；token 查询参数的值不得出现在配置文件、日志或错误信息中。
+    scenarios:
+      read-after-restart:
+        - GIVEN: 用户已保存 http://127.0.0.1:13080/ 并进入主页面
+        - WHEN: 强杀 App 后重新启动
+        - THEN: 无需再输入地址，直接进入主页面并显示同一干净地址
+      overwrite-previous:
+        - GIVEN: 已保存 https://a.example.test/
+        - WHEN: 在设置页保存 https://b.example.test/ 后重启 App
+        - THEN: 读取到 https://b.example.test/，私有存储中没有残留的临时文件
+      token-never-in-config:
+        - GIVEN: 用户通过首次设置页保存带 token 的地址 http://127.0.0.1:13080/?token=abc123
+        - WHEN: 检查 App 私有存储中的配置文件
+        - THEN: 内容为 http://127.0.0.1:13080/，不含 abc123
+  main-page-load:
+    strength: MUST
+    statement: App 已保存有效 harness URL 时，主页面先显示本地「正在连接」提示并对干净地址做可达性检查：地址返回任何 HTTP 响应（包括 401、5xx 与重定向）视为可达并在 WebView 中打开干净地址；DNS 解析失败、连接被拒绝、超时（默认 10 秒）或 TLS 错误时显示本地错误页；两种结果都不显示首次设置页。
+    scenarios:
+      reachable-opens-webview:
+        - GIVEN: 已保存 http://10.0.2.2:13080/，该地址有服务响应
+        - WHEN: 启动 App（或刷新）
+        - THEN: 主页面先显示「正在连接」，随后 WebView 打开 http://10.0.2.2:13080/ 显示远程内容
+      http-errors-reachable:
+        - GIVEN: 已保存地址返回 502
+        - WHEN: 启动 App
+        - THEN: WebView 打开该地址显示远程返回的内容，不显示本地错误页
+      connecting-then-error:
+        - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
+        - WHEN: 启动 App
+        - THEN: 主页面先显示「正在连接」，随后显示本地错误页，不显示首次设置页
+  load-error-page:
+    strength: MUST
+    statement: harness 地址不可达时主页面显示本地错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），并提供「重试」与「修改地址」按钮；点击「重试」重新检查地址，恢复可达时打开 harness 页面，仍不可达时继续显示错误页；点击「修改地址」进入设置页并回显当前地址。
+    scenarios:
+      refused-error-page:
+        - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
+        - WHEN: 启动 App
+        - THEN: 错误页包含 http://10.0.2.2:13080/ 与连接被拒绝的说明，以及「重试」「修改地址」按钮
+      retry-recovers:
+        - GIVEN: 错误页显示后该地址的服务已启动
+        - WHEN: 点击「重试」
+        - THEN: 主页面打开 harness 页面
+      change-address-opens-settings:
+        - GIVEN: 主页面显示错误页
+        - WHEN: 点击「修改地址」
+        - THEN: 进入设置页，输入框回显当前已保存地址
+  refresh-entry:
+    strength: MUST
+    statement: 主页面提供刷新入口：点击后重新检查并打开已保存的干净 harness 地址——可达时重新加载 harness 页面，不可达时显示本地错误页；没有有效配置时回到首次设置页。
+    scenarios:
+      refresh-reloads:
+        - GIVEN: 主页面正在显示已保存的 harness 页面
+        - WHEN: 点击刷新入口
+        - THEN: 主页面重新加载已保存地址并显示该页面
+      refresh-unreachable:
+        - GIVEN: 已保存地址的服务已停止
+        - WHEN: 点击刷新入口
+        - THEN: 主页面显示本地错误页
+      refresh-without-config:
+        - GIVEN: 配置文件已损坏，主页面显示 harness 页面
+        - WHEN: 点击刷新入口
+        - THEN: 回到首次设置页并提示已有配置无效
+  back-key-web-history:
+    strength: MUST
+    statement: 系统返回键在 WebView 网页历史可后退时先在网页历史中后退，没有可后退的网页历史时退出 App；设置页的返回行为不受影响。
+    scenarios:
+      back-navigates-web:
+        - GIVEN: WebView 显示 harness 站内第二个页面（历史中已有前一页）
+        - WHEN: 按系统返回键
+        - THEN: WebView 后退到前一页面，App 不退出
+      back-exits:
+        - GIVEN: WebView 没有可后退的网页历史
+        - WHEN: 按系统返回键
+        - THEN: App 退出（系统默认行为）
+  navigation-scope-android:
+    strength: MUST
+    statement: WebView 中与已保存 harness 地址同源（协议、主机、端口均相同）的链接，包括 target=_blank 与 window.open 请求，都在 WebView 内打开；指向非同源 http/https 地址的链接与 window.open 请求交给系统默认浏览器打开，WebView 仍停留在当前页面；其他协议（如 file:、javascript:）的打开请求被忽略，不创建任何新窗口。
+    scenarios:
+      same-origin-link-stays:
+        - GIVEN: WebView 显示 harness 页面 http://10.0.2.2:13080/
+        - WHEN: 点击指向 http://10.0.2.2:13080/sessions/1 的链接
+        - THEN: WebView 打开 http://10.0.2.2:13080/sessions/1，系统浏览器没有被打开
+      external-link-to-browser:
+        - GIVEN: WebView 显示 harness 页面 http://10.0.2.2:13080/
+        - WHEN: 点击指向 https://example.org/docs 的链接
+        - THEN: 系统默认浏览器打开该地址，WebView 仍显示原 harness 页面
+      window-open-same-origin:
+        - GIVEN: WebView 显示 harness 页面
+        - WHEN: 页面调用 window.open("/sessions/2")
+        - THEN: WebView 打开同源地址，没有弹出新窗口
+      window-open-external:
+        - GIVEN: WebView 显示 harness 页面
+        - WHEN: 页面调用 window.open("https://example.org/popup")
+        - THEN: 系统浏览器打开该地址，WebView 仍显示原页面，没有新窗口
+      other-protocol-ignored:
+        - GIVEN: WebView 显示 harness 页面
+        - WHEN: 页面请求打开 file:///etc/passwd
+        - THEN: 系统浏览器没有被打开，WebView 不变
+  cleartext-restriction:
+    strength: MUST
+    statement: App 只对已保存 harness 源放行明文 http 请求：WebView 中对其他主机的 http 子资源请求被拦截（不发出网络请求），页面其余内容继续加载；App 自身发出的探测请求只针对已保存的干净地址；https 请求不受限制。
+    scenarios:
+      cross-host-http-blocked:
+        - GIVEN: 已保存 http://10.0.2.2:13080/，harness 页面引用 http://other.example.test/pixel.js
+        - WHEN: WebView 加载该页面
+        - THEN: 对 other.example.test 的 http 请求被拦截失败，harness 页面其余内容正常显示
+      harness-http-allowed:
+        - GIVEN: 已保存 http://10.0.2.2:13080/
+        - WHEN: 加载 harness 页面及其同源子资源
+        - THEN: 全部正常加载，不被拦截
+      https-not-restricted:
+        - GIVEN: 已保存 https://dsh.example.test/
+        - WHEN: 页面引用任意主机的 https 资源
+        - THEN: 请求按正常网络行为发出，不受明文限制影响
+  remote-isolation-android:
+    strength: MUST
+    statement: WebView 中的远程 harness 页面无法调用 App 的任何本地能力：不注册任何 JavascriptInterface、不暴露任何本地服务接口，禁用文件与内容 URL 访问；远程页面的脚本尝试改写配置或调用本地接口全部失败；cookie 与本地存储保存在 App 私有数据目录，不与其他应用共享。
+    scenarios:
+      no-js-interface:
+        - GIVEN: WebView 显示远程 harness 页面
+        - WHEN: 页面脚本枚举 window 上的注入对象并尝试调用任何本地保存接口
+        - THEN: 不存在任何注入对象，调用失败，App 配置文件内容不变，WebView 不被导航到其他地址
+      no-file-access:
+        - GIVEN: WebView 显示远程页面
+        - WHEN: 页面尝试加载 file:// 或 content:// 资源
+        - THEN: 访问被禁用失败
+  session-establish:
+    strength: MUST
+    statement: 在首次设置页、设置页保存带有效 token 的地址后，App 把原始地址（含 token）交给 WebView 只加载一次：dsh 服务签发会话 cookie 并重定向到干净地址后，WebView 停留在干净地址；带 token 地址不残留在 WebView 导航历史、配置文件或日志中；会话建立时机把 cookie 持久化到磁盘（强杀后仍保留）。
+    scenarios:
+      token-url-redirects-clean:
+        - GIVEN: 已保存配置为空，mock/真实 dsh 服务在 http://10.0.2.2:13080/，用户粘贴 http://10.0.2.2:13080/?token=abc123 并保存
+        - WHEN: 首次设置页点击「开始使用」（或设置页保存）
+        - THEN: WebView 先加载带 token 地址，经服务端重定向后显示干净地址的 harness 页面，配置只存干净地址，导航历史中没有含 abc123 的条目
+      history-cleared:
+        - GIVEN: 会话建立完成，WebView 显示干净地址的 harness 页面
+        - WHEN: 检查 WebView 导航历史
+        - THEN: 历史中不存在任何含 token 查询参数的条目，当前地址为干净地址
+  session-persist-restart:
+    strength: MUST
+    statement: 会话建立后强杀并重启 App：无需重新输入地址，直接显示干净地址的 harness 页面（会话 cookie 已持久化）；只要会话仍有效，重启后不出现首次设置页或重新认证页。
+    scenarios:
+      kill-restart-keeps-session:
+        - GIVEN: 用户已通过带 token 地址建立会话，WebView 显示 harness 页面
+        - WHEN: 强杀 App 后重新启动
+        - THEN: App 直接显示干净地址的 harness 页面（会话 cookie 生效），不出现首次设置页或重新认证页
+  session-expired-reauth:
+    strength: MUST
+    statement: 会话失效时（dsh 对干净地址返回 401 且正文为 dsh 的固定提示文本），App 先以当前干净地址自动重试一次，仍失效则把主页面切换为本地重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供「打开设置」按钮；提示页不显示 token，也不显示 dsh 返回的 401 原文。在重新认证提示页经设置页粘贴新的带 token 地址并保存后，无需重启 App 即恢复显示 harness 页面。
+    scenarios:
+      expired-shows-reauth:
+        - GIVEN: 已建立会话并显示 harness 页面，之后 dsh 服务重启使会话失效
+        - WHEN: 刷新或重新加载 harness 页面
+        - THEN: App 自动重试一次后显示本地重新认证提示页（含运行 dsh-url 的说明与「打开设置」按钮），不显示 401 原文，不含 token
+      reauth-recovers:
+        - GIVEN: 主页面显示重新认证提示页
+        - WHEN: 点击「打开设置」，粘贴 dsh-url 输出的新带 token 地址并保存
+        - THEN: 设置页关闭，主页面经一次带 token 加载后恢复显示干净地址的 harness 页面，配置只存干净地址
+  tunnel-optional-onboarding:
+    strength: MUST
+    statement: App 内嵌可选的 Tailscale 隧道（进程内 userspace 节点）：从未配置 auth key 且无已注册节点状态时，隧道完全不启动（不发起登录），App 的 harness 配置、首次设置、设置页与主页面行为与无隧道时完全一致；设置页提供 Tailscale 卡片，未配置时显示未配置状态并允许粘贴 tagged auth key 发起连接，可清除 key 与节点状态回到未配置。
+    scenarios:
+      unconfigured-no-tunnel:
+        - GIVEN: 从未提供 auth key，也无节点状态
+        - WHEN: 启动 App 并使用全部既有功能
+        - THEN: 隧道不启动、不发起任何登录，设置页 Tailscale 卡片显示未配置，其余功能与之前完全一致
+      clear-back-to-unconfigured:
+        - GIVEN: 已配置 key 且节点处于任意状态
+        - WHEN: 在 Tailscale 卡片点击「清除」
+        - THEN: 节点关停、key 与节点状态被删除，卡片回到未配置，隧道不再启动
+  tunnel-states:
+    strength: MUST
+    statement: 隧道状态为五种并在设置页 Tailscale 卡片实时显示：未配置、连接中、已连接（含节点名）、需要 key（已有节点状态但被 tailnet 拒绝或 key 过期，提示重新输入 key）、失败（附原因说明）；粘贴 auth key 后进入连接中，成功进入已连接，被拒绝或过期进入需要 key，其他错误进入失败；auth key 不出现在界面回显、日志与错误信息中。
+    scenarios:
+      connect-with-key:
+        - GIVEN: 卡片处于未配置或需要 key
+        - WHEN: 粘贴 tagged auth key 并点击连接
+        - THEN: 卡片进入连接中，节点注册成功后显示已连接与节点名，key 不被回显
+      needs-key-on-rejection:
+        - GIVEN: 已有节点状态，节点在 tailnet 被删除或 key 过期
+        - WHEN: 隧道尝试连接
+        - THEN: 卡片显示需要 key，提示重新输入，不显示 key 值
+      failed-with-reason:
+        - GIVEN: 连接因网络或其他错误失败
+        - WHEN: 连接尝试结束
+        - THEN: 卡片显示失败与原因说明（不含 key）
+  tunnel-reconnect-after-restart:
+    strength: MUST
+    statement: 节点状态持久化在 App 私有存储：已连接后强杀并重启 App，无需重新输入 auth key 即凭持久状态重连并回到已连接；重连期间卡片显示连接中；仅当 tailnet 侧拒绝（节点被删除或 key 失效）时才进入需要 key。
+    scenarios:
+      kill-restart-reconnects:
+        - GIVEN: 节点已连接（曾用 key 注册，状态已持久化）
+        - WHEN: 强杀 App 后重新启动
+        - THEN: 隧道凭持久状态自动重连，卡片先显示连接中随后回到已连接，全程无需输入 key
+  proxy-split-routing:
+    strength: MUST
+    statement: WebView 的全部网络请求经 App 进程内的本地代理桥按目标分流：tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）经内嵌 Tailscale 节点转发，其他目标经手机网络直连；harness 的流式回答与 WebSocket 经桥正常工作；非 tailnet 的 harness 地址在隧道任何状态下都照常直连，不受隧道影响。
+    scenarios:
+      tailnet-harness-loads:
+        - GIVEN: 已配置 tailnet 上的 harness 地址（如 http://gamepc:13080/），隧道已连接
+        - WHEN: 打开主页面
+        - THEN: WebView 经内嵌节点加载 harness 页面，流式回答持续渲染
+      non-tailnet-unaffected:
+        - GIVEN: 已配置公网/局域网 harness 地址，隧道处于任意状态（含未配置）
+        - WHEN: 打开主页面并使用
+        - THEN: 请求经手机网络直连，行为与无隧道时一致
+  proxy-isolation:
+    strength: MUST
+    statement: 本地代理桥只监听手机本机回环的随机端口并要求本进程随机生成的代理凭据：不带或带错凭据的访问得到 407 且不连接任何目标；手机本机回环目标（127.0.0.0/8、::1、localhost）经桥的访问被拒绝；明文 http 转发只允许已保存 harness 的源，其他主机的明文请求被拒绝（https 的 CONNECT 隧道不受此限）；在役连接数有上限，超限直接关闭。
+    scenarios:
+      no-credential-407:
+        - GIVEN: 代理桥在役（端口 P）
+        - WHEN: 同机其他进程（如 adb shell 下 curl）不带凭据访问 127.0.0.1:P
+        - THEN: 得到 407，且桥没有向任何目标发起连接
+      loopback-rejected:
+        - GIVEN: WebView 经桥请求 127.0.0.1:任意端口 或 localhost 目标
+        - WHEN: 请求到达桥
+        - THEN: 请求被拒绝，不拨号
+      cleartext-gated:
+        - GIVEN: 已保存 harness 源 http://gamepc:13080/
+        - WHEN: 经桥请求其他主机的明文 http 地址
+        - THEN: 请求被拒绝；对 harness 源的明文请求正常转发
+  tunnel-gated-tailnet-load:
+    strength: MUST
+    statement: 配置的 harness 地址为 tailnet 目标时，主页面按隧道状态联动：隧道未配置时显示需要接入 tailnet 的本地说明与「去设置」入口，不加载网页；隧道连接中、需要 key 或失败时显示隧道状态与「重试连接」「去设置」入口，不加载网页；隧道变为已连接后自动加载 harness；连接探测与会话失效探测经与 WebView 相同的分流路径发出（tailnet 目标经节点），保证可达性判定一致。
+    scenarios:
+      unconfigured-tailnet-prompt:
+        - GIVEN: 已配置 http://gamepc:13080/（tailnet 目标），隧道未配置
+        - WHEN: 打开主页面
+        - THEN: 显示需要接入 tailnet 的说明与去设置入口，不出现空白页或连接错误页
+      tunnel-not-ready-waits:
+        - GIVEN: 配置同上，隧道处于连接中/需要 key/失败
+        - WHEN: 打开主页面
+        - THEN: 显示隧道状态与重试连接、去设置入口，不加载网页
+      auto-load-on-connected:
+        - GIVEN: 配置同上，主页面显示隧道等待面板
+        - WHEN: 隧道变为已连接
+        - THEN: 主页面自动探测并加载 harness 页面
+  update-check-and-verify:
+    strength: MUST
+    statement: App 在启动后与设置页手动触发时检查公开 GitHub 仓库的最新 Release（匿名、经手机网络）：仅当 Release 含 DSH-Anywhere-<版本>.apk 资产且其 tag 派生的版本号高于本机安装版本时提示更新（无 APK 资产的 Release 视为无新版本）；下载到 App 私有目录支持断点续传，下载完成后读取同名 .sha256 校验：一致才允许安装，不一致或缺失 .sha256 时删除文件、提示失败且不调起安装器；开始下载新版本前清理旧 APK，安装完成前不删除已下载文件；更新检查与下载失败（网络、限流）不打扰用户，只在设置页显示原因。
+    scenarios:
+      newer-release-prompted:
+        - GIVEN: 本机安装 1.0.0，最新 Release v1.1.0 含 DSH-Anywhere-1.1.0.apk 与 .sha256
+        - WHEN: 启动后自动检查或手动触发
+        - THEN: 设置页显示新版本 1.1.0 可下载，下载进度可见，校验通过后提供安装入口
+      checksum-mismatch-rejected:
+        - GIVEN: 下载完成但 APK 内容与 .sha256 不一致（或 Release 缺 .sha256）
+        - WHEN: 校验执行
+        - THEN: 已下载文件被删除、提示校验失败，系统安装器没有被调起
+      no-apk-release-silent:
+        - GIVEN: 最新 Release 只含桌面安装包（无 APK 资产）
+        - WHEN: 检查更新
+        - THEN: 视为无新版本，不提示更新
+  update-install-flow:
+    strength: MUST
+    statement: 校验通过的更新包经系统安装器完成覆盖升级：App 在前台时直接调起安装器，在后台时发送「新版本已就绪」通知、点击通知后调起安装器；每个进程会话自动调起至多一次，设置页始终保留手动安装入口；安装调起需要用户在系统安装器中确认，App 不静默安装。
+    scenarios:
+      foreground-install-invoked:
+        - GIVEN: 下载与校验完成，App 在前台
+        - WHEN: 用户点击安装（或本会话首次自动触发）
+        - THEN: 系统安装器被调起并显示升级确认，用户确认后完成覆盖升级，新版 versionName 高于旧版
+      background-notification:
+        - GIVEN: 下载与校验完成时 App 已在后台
+        - WHEN: 下载完成
+        - THEN: 收到「新版本已就绪」通知，点击通知后系统安装器被调起

@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: android-main-webview
+open: []
+resolved:
+  - id: cleartext-http-runtime
+    question: Android 明文 http 策略如何在运行时收紧？
+    context: 里程碑 intake 问题 cleartext-http 已确认：清单允许明文，运行时把明文 http 限定为已保存 harness 的源（主页面与子资源、探测），其他主机的 http 被拦截或拒绝。
+    answer: Manifest usesCleartextTraffic=true；WebView shouldInterceptRequest 对 http 且非 harness 源的请求返回固定空 502 响应拦截；App 侧探测只对已保存干净地址（即 harness 源）发请求
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: android-setup-settings 后主页面仍是占位页：没有 WebView、没有连接探测与错误页、没有导航范围与隔离，手机上无法显示 harness；桌面 main-window/load-failure/navigation-scope 的 Android 对应物缺失
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 有配置启动→「正在连接」→探测可达 WebView 打开 harness（流式可用）；不可达→本地错误页（地址+原因+重试/修改地址）；刷新入口重走加载；返回键先网页后退；同源留内、外链交系统浏览器、其他协议忽略；跨主机 http 子资源被拦截；无 JavascriptInterface 且禁文件访问
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change android-main-webview 执行：本变更只走手机网络直连，tailnet 目标与隧道分流留给 android-proxy-routing；token 换会话的细化留给 android-session-auth
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不做隧道/分流（android-proxy-routing）、会话失效探测与重新认证页（android-session-auth）、多窗口、下载管理、桌面端任何变化；不改 android-setup-settings 已交付行为与桌面主规格
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: android-setup-settings 已归档，android-main-webview 是其直接后继；session-auth 与 proxy-routing 都依赖 WebView 与探测路径存在
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

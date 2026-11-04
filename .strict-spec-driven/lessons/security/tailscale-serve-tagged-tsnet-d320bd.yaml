@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: tailscale-serve-tagged-tsnet-d320bd
+  title: tailscale serve 后端按身份放行时，tagged tsnet 节点会被应用层拒绝（网络层全通）
+category: security
+status: active
+created_at: '2026-11-04T15:18:04.250Z'
+updated_at: '2026-11-04T15:18:04.250Z'
+context: android-proxy-routing 验收：宿主（用户身份节点）直连 serve 的 TLS 层用 dsh-url token 交换得 303；App 内 tsnet 节点（tag:pca-client）同 token 同地址被 dsh web 应用层 401。
+observation: 网络层全通：CONNECT 隧道、TLS（ts.net 证书校验过）、407 代理认证、节点 SOCKS5 都正常，WebView 收到的是 dsh web 的 HTTP 响应；但 token 端点对 tagged 身份返回 401+EXPIRED_MARKER。参考项目 private-content-assistant 的 access-control 场景正是此形：服务端按 WhoIs 的 Tags 命中 allowed_tags 放行——dsh web 需要同样允许 tag:pca-client，或该端点只接受用户身份。
+takeaway: 内嵌 tagged 节点访问 serve 后端时，spike 的判据应是「网络层得到响应」（milestone 设计正确）；应用层的身份放行是服务端配置（allowed_tags），被拒时区分网络 ACL（连不上）与应用层身份（401），后者要在服务端配置解决而非客户端代码
+applies_when: 用 tagged tsnet/gomobile 内嵌节点访问经 tailscale serve 暴露、且后端按 tailnet 身份（WhoIs/Tags/登录用户）做访问控制的服务时
+occurrences:
+  - origin: android-proxy-routing
+    date: '2026-11-04'
+    evidence: 2026-11-04 三组对照实测：宿主 curl https token 303 成功；宿主 curl 干净地址 401；App（tagged 节点）WebView 全链路 401+marker（网络层 ERR_HTTP_RESPONSE_CODE_FAILURE 前探测可达）

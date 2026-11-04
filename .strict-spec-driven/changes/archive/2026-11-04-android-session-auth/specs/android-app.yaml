@@ -1,0 +1,41 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED:
+    session-establish:
+      strength: MUST
+      statement: 在首次设置页、设置页保存带有效 token 的地址后，App 把原始地址（含 token）交给 WebView 只加载一次：dsh 服务签发会话 cookie 并重定向到干净地址后，WebView 停留在干净地址；带 token 地址不残留在 WebView 导航历史、配置文件或日志中；会话建立时机把 cookie 持久化到磁盘（强杀后仍保留）。
+      scenarios:
+        token-url-redirects-clean:
+          - GIVEN: 已保存配置为空，mock/真实 dsh 服务在 http://10.0.2.2:13080/，用户粘贴 http://10.0.2.2:13080/?token=abc123 并保存
+          - WHEN: 首次设置页点击「开始使用」（或设置页保存）
+          - THEN: WebView 先加载带 token 地址，经服务端重定向后显示干净地址的 harness 页面，配置只存干净地址，导航历史中没有含 abc123 的条目
+        history-cleared:
+          - GIVEN: 会话建立完成，WebView 显示干净地址的 harness 页面
+          - WHEN: 检查 WebView 导航历史
+          - THEN: 历史中不存在任何含 token 查询参数的条目，当前地址为干净地址
+    session-persist-restart:
+      strength: MUST
+      statement: 会话建立后强杀并重启 App：无需重新输入地址，直接显示干净地址的 harness 页面（会话 cookie 已持久化）；只要会话仍有效，重启后不出现首次设置页或重新认证页。
+      scenarios:
+        kill-restart-keeps-session:
+          - GIVEN: 用户已通过带 token 地址建立会话，WebView 显示 harness 页面
+          - WHEN: 强杀 App 后重新启动
+          - THEN: App 直接显示干净地址的 harness 页面（会话 cookie 生效），不出现首次设置页或重新认证页
+    session-expired-reauth:
+      strength: MUST
+      statement: 会话失效时（dsh 对干净地址返回 401 且正文为 dsh 的固定提示文本），App 先以当前干净地址自动重试一次，仍失效则把主页面切换为本地重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供「打开设置」按钮；提示页不显示 token，也不显示 dsh 返回的 401 原文。在重新认证提示页经设置页粘贴新的带 token 地址并保存后，无需重启 App 即恢复显示 harness 页面。
+      scenarios:
+        expired-shows-reauth:
+          - GIVEN: 已建立会话并显示 harness 页面，之后 dsh 服务重启使会话失效
+          - WHEN: 刷新或重新加载 harness 页面
+          - THEN: App 自动重试一次后显示本地重新认证提示页（含运行 dsh-url 的说明与「打开设置」按钮），不显示 401 原文，不含 token
+        reauth-recovers:
+          - GIVEN: 主页面显示重新认证提示页
+          - WHEN: 点击「打开设置」，粘贴 dsh-url 输出的新带 token 地址并保存
+          - THEN: 设置页关闭，主页面经一次带 token 加载后恢复显示干净地址的 harness 页面，配置只存干净地址
+  MODIFIED: {}
+  REMOVED: {}

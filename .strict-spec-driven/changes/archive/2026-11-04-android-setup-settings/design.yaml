@@ -1,0 +1,21 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-setup-settings
+approach:
+  - 'core 纯 JVM 承载全部逻辑（tech/android-client 的 pure-logic-in-core）：HarnessUrl 对象镜像桌面 url-validation.ts 的算法——trim、scheme 正则、非 http/https 拒绝、非法百分号转义拒绝、解析失败拒绝、空主机名拒绝，错误类别与桌面 URL_ERRORS 一一对应（empty/malformed/notAbsolute/unsupportedScheme，Kotlin 为 enum）；序列化用 java.net.URI 的 raw 组件重建：scheme 小写、ASCII 主机小写、默认端口 80/443 去除、空路径补 /、查询按 & 保留原序原编码重建（剥 token 后）、片段原样，使输出与 WHATWG url.href 在向量用例上逐字节一致；token 参数按解码后的键名匹配（%74oken 等同 token，大小写敏感 Token 不剥）。HarnessConfig 以注入目录为参数：读取区分 missing/invalid/ok（JSON 损坏、harnessURL 非 String、地址校验失败均 invalid），保存经临时文件+ATOMIC_MOVE 重命名原子落盘、内容与桌面同为 {"harnessURL": "..."}\n 格式、只存干净地址，redact 供日志使用。共享向量 testdata/harness-url-vectors.json：字段为 input/valid/errorCategory/stripped，覆盖合法（空白、端口、token、多 token、其他参数、片段、编码保留、主机小写化、默认端口去除、空路径补斜杠）与四类拒绝，另含 readConfig 三态用例组；桌面端 url-validation.test.ts 与 core 的 HarnessUrlTest/HarnessConfigTest 读同一文件断言，两端无差异项，任一端改行为必须同步改向量。:app 侧 AppGraph 持有配置目录（filesDir/config）、持久化状态经 StateFlow 暴露；MainActivity 以简单导航状态组织三个界面：FirstRunScreen（无有效配置时；欢迎说明、粘贴地址输入框、实时校验与原因、开始使用按钮、已有配置无效提示条）、SettingsScreen（当前干净地址回显、实时校验、保存/取消）、主页面占位（显示已配置干净地址与设置入口，接收原始带 token 地址仅留存内存用于后续 android-main-webview 接管，不显示 token）；保存动作调用 HarnessConfig.save，失败显示固定文本错误且不含 token。设置页预留 Tailscale 卡片空位（本变更显示占位文案，android-tstunnel 填充）'
+decisions:
+  shared-vector-byte-identical:
+    decision: 共享向量断言两端输出逐字节一致（stripped 字段为期望字符串），不做每端各自的期望值；序列化差异（WHATWG 归一化 vs java.net.URI raw 组件）由 core 的重建逻辑吸收
+    rationale: 向量若允许两端各表会退化为两份实现各自为政，'两端无差异项'的里程碑要求就失去强制力；把归一化收在 core 一处，向量才能单一期望
+  config-store-in-core:
+    decision: 配置三态读取与原子写入放 core（HarnessConfig 以目录参数注入），:app 只负责把 filesDir 交给它；存储格式与桌面 config.json 完全一致
+    rationale: core 是门禁内唯一测试面，三态读取与原子性需要 JUnit 回归覆盖；格式与桌面一致让未来排查可共用工具
+  placeholder-main-passes-raw-url:
+    decision: 首次设置保存成功后把原始带 token 地址以内存状态交给主页面占位（占位界面只显示干净地址），不落盘不显示 token
+    rationale: 桌面 complete-setup 语义（打开原始地址一次建立会话）需要在 Android 保留接力点，android-main-webview 到来时直接换成 WebView 加载，本变更不留持久化痕迹
+alternatives: []
+risks:
+  - WHATWG 与 java.net.URI 的序列化差异面大（IDNA、非 ASCII、path 归一化），core 的重建逻辑只保证向量用例覆盖的形态逐字节一致；向量刻意收录易漂移形态（默认端口、空路径、主机大小写、参数编码）作为回归锚点，超出向量的极端地址允许两端实现各自的自然行为
+  - Android 私有存储的原子性依赖 Files.move ATOMIC_MOVE，个别文件系统不支持时会退化为非原子重命名；与桌面 renameSync 同级风险，向量外的极端断电场景两端都不承诺

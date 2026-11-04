@@ -1,0 +1,23 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-release
+approach:
+  - 脚本 scripts/android-release.mts（node 直跑，spawnSync 子命令注入化以便测试）：步骤序列——1) 前置校验（全部纯函数化判定＋可注入执行器）：工作区干净（git status --porcelain 为空）、HEAD 是 tag v<version> 指向的提交（git rev-parse v<ver>^{commit} == git rev-parse HEAD；version 经 scripts/package-version.mts 的 readPackageVersion 严格 x.y.z）、GitHub Release v<version> 存在（gh release view <tag>）、keystore 可用（DSH_KEYSTORE_PROPS 或缺省 properties 文件存在）；任一失败打印原因退出非零且不上传。2) 构建：node scripts/build-android-tstunnel.mts（stamp 幂等）→ gradlew -p android assembleRelease。3) 产物：复制 app-release.apk 为 dist 之外的发布名 DSH-Anywhere-<version>.apk（放 android/app/build/outputs/apk/release/ 下），crypto sha256 写 .sha256 文件。4) 签名核验：spawnSync apksigner verify --print-certs 比对证书 DN 与 keystore 的 keytool -list 证书一致（都含 CN=DSH Anywhere, O=Keepwriting）。5) 上传：gh release upload v<version> <apk> <sha256> --clobber 与否由 --overwrite 参数控制（默认拒绝：先 gh release view --json assets 查同名）。密钥纪律：不回显 keystore.properties 内容；错误信息不含密码。测试 Vitest：把每步外部命令抽为注入 Runner（默认 spawnSync），用例覆盖四类前置失败（脏工作区/tag 不符/Release 缺失/资产已存在）与成功路径的命令序列断言（不真跑 gradle/gh）。文档：packaging delta-tech 新规则 android-local-release（本地脚本唯一入口、命名、sha256、不覆盖语义、CI 不构建）；AGENTS.md 发布流程补三步（升版打 tag→等 Release 工作流→node scripts/android-release.mts）。主规格：不新增 requirement（发布流程是工程约定非用户可观察行为，android-self-update 的更新检查才消费它）
+decisions:
+  script-with-injected-runner:
+    decision: 全部外部命令经可注入 Runner（默认 spawnSync），Vitest 以假 Runner 断言命令序列与失败分支，不真跑 git/gradle/gh
+    rationale: 发布脚本依赖本机 git/gh/Android 环境，回归命令只覆盖判定逻辑与序列；参考项目同形态（test-ops-scripts 假仓库验证）
+  apk-side-sha256:
+    decision: APK 的 sha256 是独立 .sha256 文件（与 APK 同名），不进桌面的 SHA256SUMS（Release 工作流产物不动）
+    rationale: CI 不构建 Android，SHA256SUMS 只含桌面三平台产物；android-self-update 按 APK 自身的 .sha256 校验，语义单一
+  apksigner-cert-match:
+    decision: 上传前 apksigner verify --print-certs 与 keystore 侧证书 DN 比对，不一致即失败（防错 keystore 产出不可升级包）
+    rationale: android-uniform-signing 的价值在于所有构建同签名；发布是最后一道闸门
+  no-delta-spec:
+    decision: android-release 不产生主规格 delta：发布脚本是工程约定（构建/上传流程），无用户可观察的应用行为变化；发布产物由 android-self-update 消费时才成为规格场景
+    rationale: 规格规则要求可观察行为；本地维护者脚本的用户是维护者本人，属于技术标准（packaging）管辖而非主规格
+alternatives: []
+risks:
+  - gh CLI 未登录或无权限时失败退出，提示 gh auth status；验收需真实 v* tag 环境，本地以脚本单测+构建链路验证为主

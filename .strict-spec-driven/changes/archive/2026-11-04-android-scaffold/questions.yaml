@@ -1,0 +1,56 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: android-scaffold
+open: []
+resolved:
+  - id: android-identity
+    question: Android 包名、显示名称与签名 keystore 如何确定？
+    context: 里程碑 intake 问题 android-identity 已确认（2026-11-04）：包名与签名一旦发布不宜修改，App 内更新要求所有构建同一签名。影响 android-scaffold 的 applicationId 与签名配置。
+    answer: 包名 work.keepwriting.dshanywhere（Android 包名不允许连字符），显示名 DSH Anywhere；专用 release keystore 存放在 ~/.config/dsh-anywhere/keys/（不入库，用户自行备份），debug 与 release 统一用它签名，只在本机构建使用
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: regression-scope-android
+    question: Android 哪些部分进入完整回归命令与覆盖率门槛？
+    context: 里程碑 intake 问题 regression-scope 已确认（2026-11-04）：现有回归命令只调用 Node 工具链；AAR 与 APK 构建依赖 Go、Android SDK 与 NDK 的本机状态。影响 config.yaml 回归命令与 android/core 模块划分。
+    answer: 只把纯 JVM 模块（core）的测试以 android/gradlew -p android/core test 接入回归命令（需 JDK 17）；AAR 与 APK 构建、设备验收不进回归命令也不上 CI；80% 行覆盖率门槛 scope 维持 src/**/*.ts 与 scripts/**/*.mts，Kotlin 不设覆盖率门槛
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 今天仓库只有桌面 Electron 客户端，android/ 下没有任何 Android 工程：android-app 里程碑的其余 7 个 planned change（主 WebView、tstunnel、设置页、会话认证、分流、发布、自更新）全部因 dependency-incomplete 无法开工（roadmap-recommend 2026-11-04 实况：唯一 eligible 的是 android-scaffold）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: android/ 下存在可构建的 Gradle 多模块工程：assembleDebug 产出用专用 keystore 统一签名的 APK，versionName 等于 package.json version、versionCode 按 MAJOR*10000+MINOR*100+PATCH 派生；移除 keystore 配置后出包构建失败并提示生成脚本；完整回归命令尾部可跑通 android/gradlew -p android/core test（只需 JDK 17）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change android-scaffold 的定义执行：只建工程骨架（:app + core 纯 JVM 模块）、身份与签名、版本派生、回归门禁接入、技术标准与文档；:app 业务功能一律留给后续变更
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不做 iOS 客户端；不做 :app 业务功能（WebView、隧道、设置页、发布、自更新）；tstunnel AAR 留给 android-tstunnel；Android 不上 GitHub Actions；桌面端任何对外行为与三平台打包流程不变（milestone scope.out + proposal out 全文）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: android-app 里程碑（roadmap 提交 9642c9b 落地）的首个变更：其余 7 个 planned change 全部直接或间接 depends_on android-scaffold，不先建骨架整个里程碑无法推进
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

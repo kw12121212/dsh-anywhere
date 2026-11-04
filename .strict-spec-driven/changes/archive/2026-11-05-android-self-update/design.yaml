@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-self-update
+approach:
+  - core 承载全部可单测判定：UpdateCheck——parseTagName（v1.2.3→1.2.3，非法 null）、versionCodeOf（复用 VersionSpec 公式）、pickApkAsset(assets)（DSH-Anywhere-<tag ver>.apk 精确名匹配，无则 null）、parseSha256(content)（sha256sum 兼容格式 '<hash>  <name>'，hash 64 hex）、isNewer(currentVersionCode, tagName, assets)（组合判定：tag 合法+资产存在+派生 code>当前）；JUnit 以录制的 GitHub API latest Release JSON 夹具覆盖（正常/无 APK/桌面 only/tag 非法/sha256 损坏）。:app UpdateManager：检查（HttpURLConnection 直连 api.github.com/repos/kw12121212/dsh-anywhere/releases/latest，Accept json，超时 15s，失败静默记录原因）；下载（app 私存 filesDir/updates/，HttpURLConnection Range 断点续传，进度状态流）；校验（下载完成后读 .sha256 同名文件，MessageDigest.isEqual 恒时比较）；调起（FileProvider content URI + Intent ACTION_VIEW application/vnd.android-package-archive + FLAG_GRANT_READ；REQUEST_INSTALL_PACKAGES 权限与运行时引导；下载完成且 App 在后台→NotificationChannel 推送点击调起，前台直接调起；每进程会话自动调起一次的标志）；清理策略（开始新下载删旧 APK；安装调起后保留）。设置页更新卡片：当前版本+检查更新按钮+可用新版本（版本号+下载进度+安装按钮）+失败原因文案。Manifest：REQUEST_INSTALL_PACKAGES、POST_NOTIFICATIONS、FileProvider 与 file_paths。明文/API 流量直连不经隧道（github.com 非 tailnet 目标，分流天然直连）
+decisions:
+  core-updatecheck-with-fixtures:
+    decision: 全部判定纯函数化在 core，JUnit 用录制的 GitHub API JSON 夹具（不真实联网）
+    rationale: pure-logic-in-core：版本比较/资产选择/sha256 解析是更新链路的正确性核心，必须随回归命令锁定
+  resume-download:
+    decision: 下载支持 Range 断点续传到 filesDir/updates（私有目录），进度以状态流暴露
+    rationale: APK 约 60MB（含 tsnet），移动网络中断常见；续传避免重复流量
+  session-once-auto-prompt:
+    decision: 自动调起安装器每进程会话至多一次（标志位），设置页保留手动安装按钮
+    rationale: planned change 明确要求：避免反复打断用户
+  verify-then-install:
+    decision: sha256 一致才调起安装器；不一致或缺 .sha256 删 APK 并提示，绝不安装
+    rationale: milestone 完成判据：校验失败时删除文件且不调起安装器
+  updatecheck-fixture-form:
+    decision: UpdateCheck 的 JUnit 以表驱动参数（资产名列表/JSON 字段值）覆盖 design 列举的全部形态；GitHub API latest Release JSON 的 6 行提取留在 :app（org.json），以模拟器实测覆盖（真实 API 检查通过）——不引入录制 JSON 文件夹具
+    rationale: 提取逻辑极薄且结构稳定，录制夹具的维护成本大于收益；判定核心（tag/资产/版本/sha256）已全量表驱动锁定
+alternatives: []
+risks:
+  - Android 12+ 后台调起安装器会被静默丢弃（milestone risks）：前台直接调起+后台经通知点击（用户手势）规避，真机验收覆盖
+  - GitHub API 匿名限流（60/h/IP）：失败静默只在设置页显示原因，不影响其他功能

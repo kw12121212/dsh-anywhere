@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-setup-settings
+  status: proposed
+summary:
+  what:
+    - 在 Android 上复刻 harness URL 配置链路：core 模块以 Kotlin 实现与桌面端一致的 URL 校验（带主机名的 http/https 绝对地址、忽略首尾空白、同样接受 http）、token 查询参数剥离（只剥 token，其他参数、路径、片段与编码不变）与配置读取三态（从未保存/配置无效/有效）；新增一份共享 JSON 测试向量，桌面端 Vitest 与 core JUnit 读取同一文件断言结果一致、两端无差异项；:app 配置保存在 App 私有存储（临时文件加重命名的原子写入）且只保存剥离后的干净地址，token 不进配置、日志与错误提示；首次设置页（无有效配置时显示欢迎说明、粘贴地址输入框、开始使用按钮、实时校验与配置无效提示）与设置页（查看修改 harness URL，规则同首次设置，预留 Tailscale 卡片位置）；保存成功后把原始带 token 地址交给主页面加载一次（主页面本变更以占位接通，android-main-webview 后续替换）；新建 android-app 主规格描述上述可观察行为
+  why:
+    - android-app 里程碑的会话建立链路（android-session-auth）与主页面（android-main-webview）都以可用配置与设置界面为前提；harness-url-config 主规格平台无关、同时约束两端，共享测试向量是把两端行为一致性变成可回归验证的唯一手段
+scope:
+  in:
+    - android/core 新增 HarnessUrl（校验/剥离/序列化）与 HarnessConfig（三态读取、原子写入、token 脱敏），JUnit 覆盖；testdata/harness-url-vectors.json 新增共享向量，src/main/url-validation.test.ts 追加向量驱动断言；android/app 新增 Compose 首次设置页、设置页、主页面占位与配置存储绑定；.strict-spec-driven/specs 新建 android-app 主规格（delta-spec）
+  out:
+    - 主页面加载真实 harness 页面与 WebView（android-main-webview）；隧道状态卡片内容（android-tstunnel）；会话失效探测与重新认证页（android-session-auth）；tailnet 分流（android-proxy-routing）；桌面端任何行为变化；harness-url-config 主规格修改
+unchanged_behavior:
+  - 桌面端全部主规格行为与实现不变（url-validation.ts 行为不变，测试追加向量断言）；harness-url-config 主规格平台无关、要求不变，由共享向量保证两端一致；Android 端暂不做网络请求与 WebView；token 不得出现在配置、日志与错误提示的约束在两端一致
+roadmap:
+  milestone: android-app
+  planned_change: android-setup-settings

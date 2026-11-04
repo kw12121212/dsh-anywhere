@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: packaging
+operations:
+  ADDED: {}
+  MODIFIED:
+    package-version-single-source:
+      strength: MUST
+      statement: 安装包元数据、安装包文件名与应用内关于页显示的版本号必须同源于 package.json 的 version 字段：electron-vite 构建（__APP_VERSION__ define）与 electron-builder 打包（extraMetadata.version、artifactName 的 ${version}）在构建期读取同一 package.json 注入；Android APK 同样以 package.json 为唯一版本来源——versionName 构建期直接取该值，versionCode 按 MAJOR*10000+MINOR*100+PATCH 派生，读取、解析或校验失败时 Android 构建直接报错退出，Gradle 文件中不得登记第二个版本号；版本号必须是 x.y.z 形式，任何一侧读取或校验失败时打包入口直接报错退出，不得静默回退到 dev 或 0.0.0，也不得引入第二个版本登记处。
+      rationale: 版本号只登记在 package.json 一处，npm ci、关于页、安装包元数据、文件名、Release tag 与 Android APK 的 versionName/versionCode 才能全部对齐；Android 自更新（android-self-update）按版本比较决定升级，versionCode 派生公式必须唯一且确定
+      enforcement:
+        method: test
+        detail: 桌面侧沿用 scripts/package-version.mts 及其测试；Android 侧由 :app 的 printVersion 任务与 core 的 VersionSpecTest（回归命令内）锁定，验收以 APK 元数据核对为证据
+      examples:
+        good:
+          - package.json version 为 1.0.1 时，APK versionName 为 1.0.1、versionCode 为 10001
+        bad:
+          - Gradle 文件里硬编码 versionName "1.2.0"，或 package.json 为 1.0.1 时 versionCode 用时间戳派生
+  REMOVED: {}

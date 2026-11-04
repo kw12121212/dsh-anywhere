@@ -1,0 +1,61 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED:
+    tunnel-optional-onboarding:
+      strength: MUST
+      statement: App 内嵌可选的 Tailscale 隧道（进程内 userspace 节点）：从未配置 auth key 且无已注册节点状态时，隧道完全不启动（不发起登录），App 的 harness 配置、首次设置、设置页与主页面行为与无隧道时完全一致；设置页提供 Tailscale 卡片，未配置时显示未配置状态并允许粘贴 tagged auth key 发起连接，可清除 key 与节点状态回到未配置。
+      scenarios:
+        unconfigured-no-tunnel:
+          - GIVEN: 从未提供 auth key，也无节点状态
+          - WHEN: 启动 App 并使用全部既有功能
+          - THEN: 隧道不启动、不发起任何登录，设置页 Tailscale 卡片显示未配置，其余功能与之前完全一致
+        clear-back-to-unconfigured:
+          - GIVEN: 已配置 key 且节点处于任意状态
+          - WHEN: 在 Tailscale 卡片点击「清除」
+          - THEN: 节点关停、key 与节点状态被删除，卡片回到未配置，隧道不再启动
+    tunnel-states:
+      strength: MUST
+      statement: 隧道状态为五种并在设置页 Tailscale 卡片实时显示：未配置、连接中、已连接（含节点名）、需要 key（已有节点状态但被 tailnet 拒绝或 key 过期，提示重新输入 key）、失败（附原因说明）；粘贴 auth key 后进入连接中，成功进入已连接，被拒绝或过期进入需要 key，其他错误进入失败；auth key 不出现在界面回显、日志与错误信息中。
+      scenarios:
+        connect-with-key:
+          - GIVEN: 卡片处于未配置或需要 key
+          - WHEN: 粘贴 tagged auth key 并点击连接
+          - THEN: 卡片进入连接中，节点注册成功后显示已连接与节点名，key 不被回显
+        needs-key-on-rejection:
+          - GIVEN: 已有节点状态，节点在 tailnet 被删除或 key 过期
+          - WHEN: 隧道尝试连接
+          - THEN: 卡片显示需要 key，提示重新输入，不显示 key 值
+        failed-with-reason:
+          - GIVEN: 连接因网络或其他错误失败
+          - WHEN: 连接尝试结束
+          - THEN: 卡片显示失败与原因说明（不含 key）
+    tunnel-reconnect-after-restart:
+      strength: MUST
+      statement: 节点状态持久化在 App 私有存储：已连接后强杀并重启 App，无需重新输入 auth key 即凭持久状态重连并回到已连接；重连期间卡片显示连接中；仅当 tailnet 侧拒绝（节点被删除或 key 失效）时才进入需要 key。
+      scenarios:
+        kill-restart-reconnects:
+          - GIVEN: 节点已连接（曾用 key 注册，状态已持久化）
+          - WHEN: 强杀 App 后重新启动
+          - THEN: 隧道凭持久状态自动重连，卡片先显示连接中随后回到已连接，全程无需输入 key
+  MODIFIED:
+    settings-page:
+      strength: MUST
+      statement: 主页面提供「设置」入口，打开设置页显示当前已保存的干净地址；编辑时实时校验：地址不合法时「保存」不可用并显示原因，合法时可用。点击「保存」后保存去掉 token 的干净地址、返回主页面并重新加载已保存地址（可达时显示 harness 页面，不可达时显示本地错误页）；「取消」或系统返回不修改配置并返回主页面。设置页包含 Tailscale 卡片（隧道状态、节点名、auth key 连接与清除，见隧道相关 requirement）。
+      scenarios:
+        open-shows-current:
+          - GIVEN: 已保存 http://127.0.0.1:13080/，界面在主页面
+          - WHEN: 打开设置页
+          - THEN: 输入框中为 http://127.0.0.1:13080/，页面包含 Tailscale 卡片
+        save-new-token-url:
+          - GIVEN: 设置页已打开，已保存地址可达
+          - WHEN: 把地址改为 http://127.0.0.1:13080/?token=def456 并点击「保存」
+          - THEN: 配置中为 http://127.0.0.1:13080/ 且不含 def456，返回主页面重新加载并显示 harness 页面，def456 不出现在任何界面文本
+        cancel-keeps-config:
+          - GIVEN: 已保存 https://a.example.test/，设置页已打开且地址被改为 https://b.example.test/
+          - WHEN: 点击「取消」或按系统返回
+          - THEN: 返回主页面，配置仍为 https://a.example.test/
+  REMOVED: {}

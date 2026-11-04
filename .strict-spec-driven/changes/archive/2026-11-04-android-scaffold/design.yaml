@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-scaffold
+approach:
+  - android/ 是自成一体的 Gradle 多模块工程，依赖解析全部由仓库内文件钉死：根 settings.gradle.kts 以 pluginManagement 与 FAIL_ON_PROJECT_REPOS 锁定仓库来源，AGP 采用当时稳定版（与参考项目一致的 AGP 9 内置 Kotlin），compileSdk/targetSdk 36、minSdk 26、JDK 17。core 是 android/core 下带独立 settings 的纯 JVM Kotlin 构建（maven 坐标 work.keepwriting:core），根设置 includeBuild 引用、:app 以坐标依赖，使 android/gradlew -p android/core test 只需 JDK 17、不需要 Android SDK 与 NDK；core 内置 VersionSpec 一个真实 JUnit 测试（校验 package.json 版本派生公式 MAJOR*10000+MINOR*100+PATCH 与源文件一致性）作为回归命令内的首个 Android 信号。版本注入在 Gradle 侧：android/app/build.gradle.kts 以 JsonSlurper 读取仓库根 package.json 的 version，格式非 x.y.z 或读取失败即构建报错退出，versionName 直接取该值、versionCode 按公式派生，另提供 printVersion 任务供验收断言。签名遵循参考项目形态：keystore.properties 优先取环境变量 DSH_KEYSTORE_PROPS，缺省 ~/.config/dsh-anywhere/keys/keystore.properties（不入库），debug 与 release 统一使用；编译与单元测试不需要签名，assemble*/bundle*/package* 出包任务在 keystore 缺失时经 taskGraph whenReady 判定失败并提示 scripts/android-keystore.mts 的生成方法；keystore 生成脚本为 scripts/android-keystore.mts（shells out keytool）。启动图标经 scripts/android-icons.mts（sharp）从 build/appicon.png 生成各密度 mipmap PNG 并提交入库，脚本配 Vitest 测试。门禁：config.yaml 回归命令尾部追加 android/gradlew -p android/core test，coverage scope 不变；.gitignore 忽略 android/.gradle、各 build/、local.properties、app/libs。文档与技术标准同步：新增 android 技术标准（模块边界、纯逻辑下沉 core、core 测试进门禁、:app/AAR 出门禁、AAR 不入库、统一签名），packaging 的 package-version-single-source 规则扩展覆盖 Android versionName/versionCode
+decisions:
+  version-derivation-in-gradle:
+    decision: versionName/versionCode 派生放在 android/app/build.gradle.kts（JsonSlurper 读 package.json），不引入 Node 依赖到 Android 构建，也不经 .mts 生成中间文件；派生公式本身以 core 的 JUnit 测试（VersionSpecTest 读同一 package.json 断言公式）与验收任务 printVersion/assembleDebug 双重锁定
+    rationale: Android 构建机不一定有 Node；Gradle 直读 package.json 保证任何 gradlew 调用都拿到最新版本且不存在过期生成物；公式测试放 core 使回归命令无需 Android SDK 即可锁定公式语义
+  uniform-signing-release-keystore:
+    decision: debug 与 release 一律使用 ~/.config/dsh-anywhere/keys/ 下不入库的专用 release keystore，路径与密码经 DSH_KEYSTORE_PROPS 环境变量或该缺省 properties 文件读取；出包任务缺 keystore 即失败并提示 scripts/android-keystore.mts 用法，编译与单元测试不受影响
+    rationale: 里程碑 intake 问题 android-identity 已确认：App 内自更新要求所有构建同一签名，debug.keystore 各机不同份会导致覆盖升级被系统安装器拒绝；参考项目同形态已验证
+  icons-committed-generated-by-script:
+    decision: 启动图标由 scripts/android-icons.mts（sharp devDependency）从 build/appicon.png 一次性生成各密度 mipmap 并提交入库，图标源变化时重新运行脚本
+    rationale: 构建期动态生成图标会把 sharp 拖进每次 assemble 且无法离线构建；提交生成物配合可重复执行的生成脚本与 Vitest 测试，兼顾可追溯与构建自包含
+  no-delta-spec:
+    decision: android-scaffold 不产生任何主规格 delta：它建立 android/ Gradle 工程骨架、应用身份、统一签名、版本派生、门禁接入与文档，全部是工程与技术标准层面的变更；:app 启动后只有占位页，无用户可观察行为需入规格；android-app 主规格由后续 android-setup-settings 变更新建，桌面端主规格平台限定语不改
+    rationale: 规格规则要求只描述可观察行为；脚手架阶段没有 Android 端可观察行为可验证，强行造 delta-spec 会违反 specs 目录留空的约定（roadmap 明确 android-app 主规格由 android-setup-settings 新建）
+alternatives: []
+risks:
+  - AGP 9 起不再单独声明 org.jetbrains.kotlin.android（内置 Kotlin），Compose 编译器插件版本必须等于 AGP 内置 Kotlin 版本，升级时需同步核对
+  - gradlew shell 脚本在 Windows 上需 Git Bash 执行；回归命令追加的 android/gradlew 段以回归命令本身运行在 bash 环境为前提（与本仓库现有 npm run 链一致）

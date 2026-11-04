@@ -43,4 +43,16 @@ npm run build  # 生产构建（输出 out/）
 npm run dist:win   # 打包当前版本 Windows NSIS 安装包（dist:mac / dist:linux 同理）
 ```
 
-打包版本号来自 git tag 精确匹配（去 `v` 前缀，未打标签时为 `dev`），同一版本号注入应用内关于页、安装包元数据与文件名。完整回归与打包流程见 `.github/workflows/`。
+打包版本号取自 `package.json` 的 `version`（唯一版本来源），同一版本号注入应用内关于页、安装包元数据与文件名。完整回归与打包流程见 `.github/workflows/`。
+
+## Android 客户端
+
+`android/` 下是自成一体的 Gradle 多模块工程（`:app` 为 Kotlin + Jetpack Compose 应用，`android/core` 为纯 JVM 逻辑模块）。构建 APK 需要 JDK 17+ 与 Android SDK：
+
+```bash
+node scripts/android-keystore.mts   # 一次性：生成统一签名 keystore（~/.config/dsh-anywhere/keys/，不入库，请自行备份）
+android/gradlew -p android assembleDebug   # 构建调试 APK（versionName 取 package.json，versionCode 按 MAJOR*10000+MINOR*100+PATCH 派生）
+android/gradlew -p android/core test       # 只跑 core 纯 JVM 测试（无需 Android SDK）
+```
+
+debug 与 release 构建统一使用同一份专用 release keystore 签名（`DSH_KEYSTORE_PROPS` 环境变量可指向已有配置）；keystore 缺失时出包构建失败并提示生成方法。Android 构建不上 GitHub Actions；签名 APK 的本地构建与 Release 上传流程由后续变更交付（规划见 android-release）。

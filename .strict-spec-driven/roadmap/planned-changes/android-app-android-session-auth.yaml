@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: android-session-auth
   milestone: android-app
-status: planned
+status: complete
 summary: Android 上复刻 dsh 会话：带 token 地址只加载一次建立会话、cookie 跨重启保留、会话失效显示本地重新认证页并经设置页恢复
 details: 首次设置、设置页保存或重新认证后，原始带 token 地址只用于一次 WebView 加载，dsh 签发 HttpOnly、SameSite=Strict 会话 cookie 并重定向到干净地址后，清除 WebView 导航历史，确认带 token 地址不残留在历史、配置与日志中；CookieManager 在会话建立与进入后台时 flush，保证强杀后 cookie 仍在。会话失效识别：WebView 不能读取主框架响应正文，故在 onReceivedHttpError 收到主框架 401 时，由 App 侧经与 WebView 相同的网络路径、带 CookieManager 中该地址的 cookie 探测干净地址，正文为 dsh 固定提示文本才判定失效；先用干净地址重试一次，仍失效再显示本地重新认证页（说明需在 DSH 主机运行 dsh-url 获取新地址，提供“打开设置”按钮，不显示 token）。在设置页粘贴新带 token 地址保存后无需重启 App 即恢复 harness 页面。需实测 SameSite=Strict cookie 在从本地页面跳转与重定向时是否随请求发送，结论写入 lesson。主规格：只在 android-app 主规格中新增会话保留、失效提示与恢复的 Android 场景，桌面 session-auth 主规格不改。测试：core JUnit 覆盖失效判定（状态码与正文匹配）与重试决策；Windows 宿主模拟器上以模拟 dsh 服务端（签发 cookie 后 302、过期返回 401 与固定正文）验收 cookie 签发与重定向、强杀后保留、失效提示与恢复、历史中无 token，留证。
 depends_on:

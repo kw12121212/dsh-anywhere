@@ -1,0 +1,59 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-setup-settings
+sections:
+  Implementation:
+    core-harness-url:
+      text: core 新增 HarnessUrl：镜像桌面 url-validation.ts——trim、scheme 正则提取、非 http/https 拒绝、非法百分号转义拒绝、解析失败或空 authority/主机名拒绝；错误类别 enum（EMPTY/MALFORMED/NOT_ABSOLUTE/UNSUPPORTED_SCHEME）与桌面 URL_ERRORS 一一对应；stripToken 按解码后键名匹配（区分大小写）；序列化以 java.net.URI raw 组件重建（scheme 小写、ASCII 主机小写、默认端口 80/443 去除、空路径补 /、查询原序原编码重建、片段原样），输出与 WHATWG url.href 在向量用例上逐字节一致
+      status: complete
+    core-harness-config:
+      text: 'core 新增 HarnessConfig（目录参数注入）：读取区分 MISSING/INVALID/OK（文件缺失、JSON 损坏、harnessURL 非法、地址校验失败均 INVALID）；保存经临时文件 + Files.move(ATOMIC_MOVE) 原子落盘，格式与桌面 config.json 一致（{"harnessURL": "..."}\n），只存干净地址；redactUrl 供日志脱敏（去 token、隐藏密码、解析失败不回显原文）'
+      status: complete
+    shared-vectors:
+      text: 新增 testdata/harness-url-vectors.json：normalize 组（input/valid/errorCategory/stripped）覆盖空白忽略、端口、token 剥离、多 token、其他参数与片段保留、参数编码保留（%74oken 剥、q=a%20b 保、%E0 保）、主机小写化、默认端口 80/443 去除、空路径补斜杠，以及 empty/notAbsolute（/chat、dsh.example.test/chat）、unsupportedScheme（ftp/file/javascript）、malformed（%zz 转义、http://）四类拒绝；readConfig 组（fileContent/expectedStatus/expectedUrl）覆盖三态；向量是两端唯一期望来源，任一端改行为必须同步改
+      status: complete
+    core-vector-tests:
+      text: core JUnit：HarnessUrlTest 与 HarnessConfigTest 读取 testdata/harness-url-vectors.json（从 android/core 相对定位 ../../testdata），逐条断言校验结果、错误类别、剥离后地址与读取三态，两端无差异项；JSON 解析用 core 内置轻量解析（与 VersionSpec 同风格，不引第三方依赖）
+      status: complete
+    desktop-vector-assert:
+      text: 桌面端向量接线：src/main/url-validation.test.ts 追加读 testdata/harness-url-vectors.json 的 describe，逐条断言 normalizeHarnessURL 结果/错误信息与 stripped 一致；src/main/config.test.ts 追加 readConfig 组三态断言；现有用例保留（行为不变）
+      status: complete
+    app-config-binding:
+      text: ':app 新增 AppGraph 进程单例：持有配置目录（Context.filesDir/config）、经 HarnessConfig 暴露配置读取/保存，配置状态以 StateFlow 暴露（首次加载为 missing/invalid 时映射为待设置状态）；保存失败以异常上抛给界面显示固定文本错误（不含 token）'
+      status: complete
+    app-firstrun-screen:
+      text: ':app FirstRunScreen（Compose）：无有效配置时显示欢迎说明、提示「粘贴 dsh-url 或 dsh web 输出的地址」的输入框与「开始使用」按钮；输入实时经 HarnessUrl 校验，非法时按钮禁用并显示对应原因（固定文本），合法时可用且无错误；已有配置无效时额外显示「已有配置无效」提示条；点击开始使用保存干净地址并把原始地址交给主页面占位加载一次；保存失败显示错误并停留'
+      status: complete
+    app-settings-screen:
+      text: ':app SettingsScreen（Compose）：从主页面入口进入；回显当前干净地址，编辑实时校验（非法禁用保存并显示原因）、「保存」保存干净地址并把原始地址交给主页面占位加载一次后返回，「取消」或返回键放弃修改返回；预留 Tailscale 卡片占位（本变更显示「Tailscale：将由后续版本提供」占位文案，android-tstunnel 填充）'
+      status: complete
+    app-main-placeholder:
+      text: ':app 主页面占位与导航：MainActivity 以导航状态组织 FirstRun/Main/Settings 三界面；有效配置时进入 Main 占位页（显示已配置的干净地址与「设置」入口，不显示 token）；首次设置/设置页保存成功后以内存状态把原始带 token 地址交给占位页（仅留存内存、不落盘不显示，android-main-webview 接管）；返回键在 Settings 返回 Main'
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: 单元测试全部通过：npm run test（Vitest，含共享向量驱动的 url-validation 与 config 三态断言）与 android/gradlew -p android/core test（HarnessUrlTest/HarnessConfigTest 向量断言全部通过，两端无差异项）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    emulator-acceptance:
+      text: Windows 宿主模拟器验收（android-build-outside-gate：设备验收在回归命令之外）：assembleDebug 安装启动——冷启动（清数据）显示首次设置页且无配置无效提示；粘贴 http://10.0.2.2:13080/?token=emu123 点击开始使用后进入占位主页面显示干净地址（adb shell run-as 或 dumpsys 核对 config.json 不含 emu123）；重新启动 App 无需再输入直接进入占位页；设置页改地址保存生效、取消不生效；手工写入损坏 config.json 后启动显示已有配置无效提示；截图留证
+      status: complete
+      command: android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令（config.yaml 现行命令）本地逐字通过：npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: strict-spec-cli ready android-setup-settings 与 strict-spec-cli verify android-setup-settings 通过
+      status: complete
+      command: strict-spec-cli ready android-setup-settings && strict-spec-cli verify android-setup-settings
+    archive-readiness:
+      text: 归档就绪检查：delta-spec（android-app 新建）场景与实现一致、无 delta-tech（纯遵守现行标准）、模拟器验收证据齐备、git status 干净，供 strict-spec-review/archive 使用
+      status: complete
+      command: strict-spec-cli verify android-setup-settings
+testing_gates:
+  validation_task: emulator-acceptance
+  unit_test_task: unit-test-suite

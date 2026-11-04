@@ -22,4 +22,4 @@ milestones:
   android-app:
     title: Android App（内嵌 Tailscale）
     path: roadmap/milestones/android-app.yaml
-    status: proposed
+    status: complete

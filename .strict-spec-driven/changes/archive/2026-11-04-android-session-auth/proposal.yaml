@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-session-auth
+  status: proposed
+summary:
+  what:
+    - Android 复刻 dsh 会话链路：首次设置/设置页保存后，原始带 token 地址只用于一次 WebView 加载——dsh 签发 HttpOnly、SameSite=Strict 会话 cookie 并重定向到干净地址后清除 WebView 导航历史，带 token 地址不残留在历史、配置与日志；CookieManager 在会话建立（onPageFinished）与进入后台（onPause）时 flush，保证强杀后 cookie 仍在、重启直达 harness。会话失效识别：onReceivedHttpError 收到主框架 401 时，由 App 侧经同一网络路径、带 CookieManager 中该地址的 cookie 探测干净地址，状态码 401 且正文为 dsh 固定提示文本（与桌面 EXPIRED_MARKER 一致）才判定失效；先用当前干净地址重试一次，仍失效显示本地重新认证页（说明需在 DSH 主机运行 dsh-url 获取新地址、提供「打开设置」按钮、不显示 token 与 401 原文）；设置页粘贴新带 token 地址保存后无需重启 App 即恢复 harness 页面
+  why:
+    - milestone 完成判据的核心链路：会话跨强杀保留、失效时提示重新认证、粘贴新地址即恢复；android-app 主规格的会话场景是 App 可用性的根基
+scope:
+  in:
+    - android/core 新增 SessionAuth（EXPIRED_MARKER、isSessionExpired(status, contentType, body)、失效后重试决策）及 JUnit；android/app 的 MainWebScreen 增加 Reauth 相位与 onReceivedHttpError 探测路径、保存后以原始地址加载一次并清历史、CookieManager flush（onPageFinished 与 Activity onPause）、AppGraph 保存接力原始地址；scripts/mock-dsh-server.mjs 扩展会话语义（有效 token 签发 HttpOnly SameSite=Strict cookie 后 302、无/失效 cookie 返回 401+固定正文、/invalidate 模拟 dsh 重启）；android-app 主规格新增会话保留、失效提示、恢复场景
+  out:
+    - 隧道与 tailnet 分流（android-proxy-routing）；iOS；桌面端任何变化（桌面 session-auth 主规格不改）；token 出现在配置/日志/历史的任何路径
+unchanged_behavior:
+  - 桌面端全部主规格行为与实现不变；android-setup-settings 与 android-main-webview 已交付行为不变（保存流程、探测/错误页/刷新/返回键/导航范围/明文拦截）；harness-url-config 与桌面 session-auth 主规格一字不改；token 不进配置、日志、历史与界面
+roadmap:
+  milestone: android-app
+  planned_change: android-session-auth

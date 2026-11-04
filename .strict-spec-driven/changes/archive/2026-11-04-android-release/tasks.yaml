@@ -1,0 +1,41 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-release
+sections:
+  Implementation:
+    release-script:
+      text: scripts/android-release.mts：注入化 Runner 的发布脚本——前置校验（工作区干净、HEAD==v<version> tag 提交、gh release view <tag> 存在、keystore 可用）→ build-android-tstunnel.mts + assembleRelease → 产物命名 DSH-Anywhere-<version>.apk（android/app/build/outputs/apk/release/）+ crypto sha256 生成 .sha256 → apksigner verify --print-certs 证书 DN 与 keystore keytool -list 比对 → gh release upload（默认拒绝同名资产，--overwrite 才 --clobber）；密钥材料不回显
+      status: complete
+    release-script-tests:
+      text: scripts/android-release.test.mts（Vitest）：假 Runner 覆盖——脏工作区拒绝、tag 不符拒绝、Release 不存在拒绝、同名资产已存在拒绝（无 --overwrite 时不出现 upload 命令）、--overwrite 时含 --clobber、成功路径的完整命令序列断言、错误信息不含 keystore 密码
+      status: complete
+    packaging-standard-and-docs:
+      text: delta-tech：packaging 新规则 android-local-release（本地脚本唯一发布入口、DSH-Anywhere-<version>.apk 命名、同名 .sha256、默认不覆盖资产、CI 不构建 Android 无签名 Secrets）；AGENTS.md 发布流程补 Android 三步（升版打 tag→等 Release 工作流完成→node scripts/android-release.mts）
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: npm run test（含 android-release.test.mts 全部断言通过）与 android/gradlew -p android/core test
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    local-build-acceptance:
+      text: 本地构建链路验收（不需真实 tag）：assembleRelease 成功产出签名 APK；重命名副本 DSH-Anywhere-<package.json version>.apk；apksigner verify --print-certs 显示 CN=DSH Anywhere, O=Keepwriting；sha256 计算正确；前置校验在当前非 tag 工作区上真实拒绝（HEAD 不在 v<version> tag）且提示可读
+      status: complete
+      command: android/gradlew -p android assembleRelease && node scripts/android-release.mts
+  Verification:
+    full-regression:
+      text: 完整回归命令本地逐字通过
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli ready android-release && strict-spec-cli verify android-release
+    archive-readiness:
+      text: 归档就绪检查：delta-tech 正确、脚本测试与本地构建验收齐备、CI 零改动确认（git status .github 为空）、git status 干净
+      status: complete
+      command: strict-spec-cli verify android-release
+testing_gates:
+  validation_task: local-build-acceptance
+  unit_test_task: unit-test-suite

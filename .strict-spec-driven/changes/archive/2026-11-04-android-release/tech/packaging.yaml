@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: packaging
+operations:
+  ADDED:
+    android-local-release:
+      strength: MUST
+      statement: 签名 APK 只能由 scripts/android-release.mts 在本地构建并上传到对应 v* 版本的 GitHub Release：脚本依次校验工作区干净、HEAD 位于 v<package.json version> tag 提交、对应 Release 已存在、keystore 可用（任一不满足即失败且不上传），产物命名 DSH-Anywhere-<version>.apk 并附同名 .sha256 文件，上传前以 apksigner 校验签名证书与本地 keystore 一致；同名资产默认拒绝覆盖（显式 --overwrite 才 --clobber）；CI 不构建 Android、不需要签名 Secrets，Release 工作流的桌面 SHA256SUMS 不含 APK（APK 以自身 .sha256 为准）；脚本不输出 keystore 密码等密钥材料
+      rationale: 里程碑 intake 问题 distribution 已确认本地构建上传；APK 自更新（android-self-update）按该命名与 .sha256 校验，产物形态错一处更新链路即断
+      enforcement:
+        method: test
+        detail: scripts/android-release.test.mts 以注入 Runner 断言四类前置失败、资产冲突与命令序列；完整发布由真实 v* tag 环境验收（发布页出现签名 APK 与 sha256、versionName 与 package.json 一致）
+  MODIFIED: {}
+  REMOVED: {}

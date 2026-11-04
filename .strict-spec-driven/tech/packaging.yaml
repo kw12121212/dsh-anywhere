@@ -53,16 +53,16 @@ rules:
       detail: 评审 package.yml 与 release.yml：打包步骤只出现 npm run dist 之类入口，不出现 electron-vite/electron-builder 的直接调用与参数复制
   package-version-single-source:
     strength: MUST
-    statement: 安装包元数据、安装包文件名与应用内关于页显示的版本号必须同源于 package.json 的 version 字段：electron-vite 构建（__APP_VERSION__ define）与 electron-builder 打包（extraMetadata.version、artifactName 的 ${version}）在构建期读取同一 package.json 注入；版本号必须是 x.y.z 形式，读取或校验失败时打包入口直接报错退出，不得静默回退到 dev 或 0.0.0，也不得引入第二个版本登记处。
-    rationale: 版本号只登记在 package.json 一处，npm ci、关于页、安装包元数据、文件名与 Release tag 才能全部对齐；历史上的 0.0.0 安装包与 dev 关于页正是 git describe 未命中时的静默回退造成的漂移。
+    statement: 安装包元数据、安装包文件名与应用内关于页显示的版本号必须同源于 package.json 的 version 字段：electron-vite 构建（__APP_VERSION__ define）与 electron-builder 打包（extraMetadata.version、artifactName 的 ${version}）在构建期读取同一 package.json 注入；Android APK 同样以 package.json 为唯一版本来源——versionName 构建期直接取该值，versionCode 按 MAJOR*10000+MINOR*100+PATCH 派生，读取、解析或校验失败时 Android 构建直接报错退出，Gradle 文件中不得登记第二个版本号；版本号必须是 x.y.z 形式，任何一侧读取或校验失败时打包入口直接报错退出，不得静默回退到 dev 或 0.0.0，也不得引入第二个版本登记处。
+    rationale: 版本号只登记在 package.json 一处，npm ci、关于页、安装包元数据、文件名、Release tag 与 Android APK 的 versionName/versionCode 才能全部对齐；Android 自更新（android-self-update）按版本比较决定升级，versionCode 派生公式必须唯一且确定
     enforcement:
       method: test
-      detail: 读取与校验集中在 scripts/package-version.mts（versionFromManifest 严格校验 x.y.z），electron.vite.config.ts 与 scripts/dist.mts 复用；由 scripts/package-version.test.mts 与 scripts/workflows.test.mts 断言锁定。
+      detail: 桌面侧沿用 scripts/package-version.mts 及其测试；Android 侧由 :app 的 printVersion 任务与 core 的 VersionSpecTest（回归命令内）锁定，验收以 APK 元数据核对为证据
     examples:
       good:
-        - package.json version 为 1.0.0 时，关于页显示“版本 1.0.0”，产物名为 dsh-anywhere_1.0.0_macos_universal.dmg。
+        - package.json version 为 1.0.1 时，APK versionName 为 1.0.1、versionCode 为 10001
       bad:
-        - package.json version 为 1.0.0 而关于页显示 dev，或产物名内嵌 0.0.0。
+        - Gradle 文件里硬编码 versionName "1.2.0"，或 package.json 为 1.0.1 时 versionCode 用时间戳派生
   version-semver-policy:
     strength: MUST
     statement: 版本采用语义化版本（MAJOR.MINOR.PATCH）并自 1.0.0 起步（v0.1.0 为 Electron 迁移前的初始预览版，不延续 0.x 线）：不兼容行为变更升 MAJOR，向后兼容的新功能升 MINOR，缺陷修复升 PATCH；版本号只随发布准备提交到 dev 分支的 package.json（用 npm version --no-git-tag-version 同步 package-lock.json），dev 合入 main 后在 main 上打 v + 版本的发布 tag。
@@ -87,3 +87,10 @@ rules:
     enforcement:
       method: test
       detail: 由 scripts/workflows.test.mts 断言锁定：package.json 含 postinstall 钩子且指向 scripts/install-electron.mts；完整回归命令的实际执行作为端到端证据。
+  android-local-release:
+    strength: MUST
+    statement: 签名 APK 只能由 scripts/android-release.mts 在本地构建并上传到对应 v* 版本的 GitHub Release：脚本依次校验工作区干净、HEAD 位于 v<package.json version> tag 提交、对应 Release 已存在、keystore 可用（任一不满足即失败且不上传），产物命名 DSH-Anywhere-<version>.apk 并附同名 .sha256 文件，上传前以 apksigner 校验签名证书与本地 keystore 一致；同名资产默认拒绝覆盖（显式 --overwrite 才 --clobber）；CI 不构建 Android、不需要签名 Secrets，Release 工作流的桌面 SHA256SUMS 不含 APK（APK 以自身 .sha256 为准）；脚本不输出 keystore 密码等密钥材料
+    rationale: 里程碑 intake 问题 distribution 已确认本地构建上传；APK 自更新（android-self-update）按该命名与 .sha256 校验，产物形态错一处更新链路即断
+    enforcement:
+      method: test
+      detail: scripts/android-release.test.mts 以注入 Runner 断言四类前置失败、资产冲突与命令序列；完整发布由真实 v* tag 环境验收（发布页出现签名 APK 与 sha256、versionName 与 package.json 一致）

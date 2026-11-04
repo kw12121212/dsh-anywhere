@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: android-main-webview
   milestone: android-app
-status: planned
+status: complete
 summary: Android 主页面以 WebView 承载 harness：连接探测与本地加载失败页、刷新入口、返回键网页后退、导航范围与远程页面隔离
 details: 有有效配置时先显示本地“正在连接”提示并探测地址（默认 10 秒超时，任何 HTTP 响应含 401、5xx、重定向都视为可达），可达则在 WebView 中打开干净地址，DNS 失败、连接被拒、超时、TLS 错误时显示本地错误页（展示不含 token 的地址与按原因分类的说明，提供“重试”与“修改地址”，后者进入设置页）。界面提供刷新入口，行为与桌面“重新加载”一致（重新探测并打开已保存地址，无有效配置时回到首次设置页）。系统返回键在网页可后退时先在网页历史中后退，否则退出 App。导航范围：shouldOverrideUrlLoading 与 onCreateWindow 实现同源（协议、主机、端口）链接与 window.open 留在 WebView，非同源 http/https 经 Intent 交给系统默认浏览器且当前页不变，其他协议忽略；同源判定放在 core 并以 JUnit 覆盖。明文策略（里程碑 intake 问题 cleartext-http）：清单允许明文，运行时只放行已保存 harness 源的 http 请求，WebView 中对其他主机的 http 子资源请求经 shouldInterceptRequest 拦截，App 侧探测同样只对 harness 源发明文请求；明文放行判定放在 core 并以 JUnit 覆盖。远程页面隔离：不注册任何 JavascriptInterface、不暴露本地服务，禁用文件访问与内容 URL 访问。WebView 启用 JavaScript、DOM 存储，确保 harness 的流式响应与 WebSocket 可用；cookie 与本地存储保存在 App 私有数据目录。本变更只走手机网络直连（不经隧道），tailnet 地址在 android-proxy-routing 之后可达。主规格：android-app 主规格新增主页面、加载失败、导航范围、明文限制与刷新的 Android 场景。测试：core JUnit 覆盖同源判定、明文放行判定与探测结果分类；Windows 宿主模拟器上以 http 模拟 dsh 服务端（模拟器经 10.0.2.2 访问宿主）验收可达、不可达与重试、外部链接、window.open、返回键、流式响应，以及 harness 页面引用其他主机 http 资源被拦截，留证。
 depends_on:

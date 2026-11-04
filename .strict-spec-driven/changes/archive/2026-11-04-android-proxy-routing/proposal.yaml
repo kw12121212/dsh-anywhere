@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-proxy-routing
+  status: proposed
+summary:
+  what:
+    - WebView 经进程内本地代理桥按目标分流：core 实现代理桥（CONNECT 隧道与绝对 URI 明文转发、127.0.0.1 随机端口、随机 Basic 凭据 407 质询、回环目标拒绝、并发上限）、tailnet 分流判定（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、无点 MagicDNS 短名）、SOCKS5 拨号客户端（域名交节点 MagicDNS 解析）与平台直连——tailnet 目标经内嵌节点 SOCKS5、其他经手机网络；明文转发只放行已保存 harness 源（共用 core CleartextPolicy），CONNECT 不受此限；连接探测与会话失效探测改走同一分流路径（经分流 socket 手写 HTTP 请求，判定语义不变）；:app 以 androidx.webkit ProxyController（removeImplicitRules）把 WebView 指向桥并以 onReceivedHttpAuthRequest 应答桥凭据，系统 WebView 不支持代理覆盖时不加载并提示升级；隧道状态联动——harness 地址为 tailnet 目标且隧道未配置时显示需要接入 tailnet 的说明与去设置，隧道连接中/需要key/失败时显示隧道状态与「重试连接」「去设置」，连上后自动加载；非 tailnet 地址照常直连不受隧道影响
+  why:
+    - milestone 目标的核心：粘贴一次 key 后经内嵌节点访问 tailnet 上的 harness；探测与 WebView 同路径保证可达性判定一致（否则 tailnet 地址在探测段就解析失败）
+scope:
+  in:
+    - android/core 新增代理桥（CONNECT/绝对 URI、407、回环拒绝、上限）、TailnetRouting（分流与回环判定）、Socks5Dialer、DialProbe（经分流的探测与会话判定）及 JUnit；android/app 新增 ProxyBridge 装配（桥生命周期、凭据、ProxyController、WebView 认证应答）、MainWebScreen 隧道状态联动面板、HarnessProbe/会话探测改走分流路径、androidx.webkit 依赖；android-app 主规格新增分流、代理隔离与隧道未连接场景
+  out:
+    - 出口节点与经节点访问公网（milestone out）；发布上传（android-release）；自更新（android-self-update）；桌面端任何变化
+unchanged_behavior:
+  - 前序全部行为不变：非 tailnet 地址直连行为与现状一致、隧道未配置时非 tailnet harness 照常可用；harness-url-config 与既有 android-app 主规格 requirement 不改（新增）；代理凭据与 auth key 一样不进日志
+roadmap:
+  milestone: android-app
+  planned_change: android-proxy-routing

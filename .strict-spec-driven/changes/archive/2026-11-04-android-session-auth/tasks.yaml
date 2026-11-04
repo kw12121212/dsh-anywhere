@@ -1,0 +1,47 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-session-auth
+sections:
+  Implementation:
+    core-session-auth:
+      text: core 新增 SessionAuth：EXPIRED_MARKER（与桌面 session.ts 逐字一致）、isSessionExpired(status, contentType, body)（401 + text/plain + trim 正文等于 marker）、tokenInHistory(urls, currentIndex)（判定导航历史中是否有含 token 的非当前条目，token 判定复用 HarnessUrl 语义）；SessionAuthTest 表驱动覆盖（401+marker 命中、401 其他正文/其他 contentType/其他状态码不命中、历史 token 条目判定）
+      status: complete
+    app-raw-url-once:
+      text: ':app 带 token 地址只加载一次：MainWebScreen 加载 URL 来源改为 AppGraph.consumePendingRawUrl()（有则用原始地址一次性加载，否则干净地址）；onPageFinished 中经 core 判定历史含 token 条目时 clearHistory()，并在该时机 CookieManager.flush()（会话建立点）'
+      status: complete
+    app-cookie-persist:
+      text: ':app cookie 持久化：CookieManager.getInstance().setAcceptCookie(true)（默认）并接受第三方由分区默认；MainActivity.onPause 时 CookieManager.flush()，与 onPageFinished 的 flush 双保险，强杀后 cookie 仍在'
+      status: complete
+    app-reauth-page:
+      text: ':app 会话失效识别与重新认证页：WebViewClient.onReceivedHttpError（isForMainFrame && 401）触发 App 侧带 cookie 探测干净地址（HttpURLConnection、重定向不跟随、读正文、isSessionExpired 判定）；确认失效后先 webView.reload() 一次（一次性标志防循环），仍失效切 Reauth 相位——本地重新认证页（标题「会话已失效」、说明需在 DSH 主机运行 dsh-url 获取新地址、「打开设置」按钮进设置页）；文案不含 token 与 401 原文'
+      status: complete
+    mock-session-server:
+      text: scripts/mock-dsh-server.mjs 扩展会话语义：/?token=<t>（匹配服务端当前有效 token）→ Set-Cookie session=<id>; Path=/; HttpOnly; SameSite=Strict + 302 /；/ 依 cookie 有效性返回 200 harness 页或 401 text/plain 固定正文（EXPIRED_MARKER 同文案）；/invalidate 使服务端 token 与既有 cookie 失效（模拟 dsh web 重启）；/whoami 返回当前会话 id 供验收断言
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: 单元测试全部通过：npm run test 与 android/gradlew -p android/core test（SessionAuthTest 表驱动全过）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    emulator-acceptance:
+      text: Windows 宿主模拟器验收（mock server 会话语义）：保存带 token 地址 → WebView 经 302 落在干净地址显示 harness；config.json 无 token、WebView copyBackForwardList 无 token 条目；强杀重启直达 harness（cookie 保留，/whoami 断言）；/invalidate 后刷新 → 重试一次仍失效 → 本地重新认证页（dsh-url 说明+打开设置、无 401 原文无 token）；设置页粘贴新带 token 地址保存 → 无重启恢复 harness；SameSite=Strict cookie 在重定向链的实测结论留证（截图+server 日志）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令本地逐字通过
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: strict-spec-cli ready android-session-auth 与 verify 通过
+      status: complete
+      command: strict-spec-cli ready android-session-auth && strict-spec-cli verify android-session-auth
+    archive-readiness:
+      text: 归档就绪检查：delta-spec 与实现一致、无 delta-tech、模拟器验收证据齐备、SameSite lesson 已记、git status 干净
+      status: complete
+      command: strict-spec-cli verify android-session-auth
+testing_gates:
+  validation_task: emulator-acceptance
+  unit_test_task: unit-test-suite

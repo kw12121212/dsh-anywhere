@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-tstunnel
+approach:
+  - Go 模块照搬参考项目 private-content-assistant/android/tstunnel 的真机验证形态（2026-09 实测教训已内化）：tstunnel.go（hostinfo.SetApp 改 dsh-tstunnel、NewNode 把 XDG_CACHE_HOME 指到 dir 兄弟 cache 并预建 Tailscale 子目录防 logpolicy panic、Up 60 秒期限防 NeedsLogin 永久等待、Loopback/ProxyCredential/StatusJSON/Errmsg/Close）、interfaces.go（GOOS=android 才 RegisterInterfaceGetter 注入 Java 网卡快照、AltAddrs 必填防 netlink EACCES、桌面不接管防 magicsock SetNetworkUp(false)）、defaultroute_android.go/darwin 与 _other.go 按 GOOS 拆符号（netmon.UpdateLastKnownDefaultRouteInterface 只在 android/darwin 存在）；tailscale.com 与 gomobile 版本钉在与参考项目一致的 go.mod。构建脚本 scripts/build-android-tstunnel.mts（仓库 .mts 约定）：校验 go/ANDROID_HOME/NDK 与 llvm-strip、源哈希 stamp 缓存免重建、GOBIN 本地安装 tool 指令钉的 gomobile/gobind、gomobile bind -target android -androidapi 26 带 16KB page-size ldflags、AAR 同步 android/app/libs/tstunnel.aar。core 状态机 TunnelStateMachine：输入（是否有 auth key、是否有持久节点状态、Up 结果），五态 NOT_CONFIGURED/CONNECTING/CONNECTED/NEEDS_KEY/FAILED——decideStart(hasKey, hasPersistedState) 返回 NOT_CONFIGURED（不启动）或 CONNECTING（带 key 或凭持久状态重连）；classifyUpFailure(errText) 按错误文本分类 NEEDS_KEY（needs-login/invalid auth key/denied）或 FAILED；JUnit 表驱动。:app TunnelManager：单例、state 经 TunnelStateMachine 判定后暴露 Compose 状态；ensureUp 幂等（CONNECTED 直接返回、在役不重建）；启动前 SetInterfacesJSON（java.net.NetworkInterface 枚举）与 SetDefaultRouteIfname（ConnectivityManager 默认网络）；所有 tstunnel 调用在单后台线程；节点目录 filesDir/tstunnel、主机名 dsh-anywhere-android；auth key 只存内存（会话级）与私有 preferences（是否已配置标记与 key 本身加密与否按参考项目口径：key 明文存私有存储不进日志——与 milestone『auth key 是否已配置』一致）。设置页 Tailscale 卡片：状态文案+节点名+key 输入（未配置/需要key/失败时）+连接按钮+清除按钮（回未配置并删节点状态目录）。spike 与带 key 设备验收依赖用户提供 tag:pca-client tagged auth key，作为 open question 记录
+decisions:
+  reuse-reference-tstunnel:
+    decision: Go 包装照搬参考项目真机验证形态，仅改 hostinfo.SetApp 与注释；版本钉在同一组（tailscale v1.94.1 + x/mobile 同 reference go.mod）
+    rationale: 参考项目的 SELinux netlink 注入、XDG_CACHE_HOME、Up 期限、netmon GOOS 拆分全部来自真机实测教训，重写无收益风险高；milestone notes 明确要求参考
+  statemachine-in-core:
+    decision: 五态状态机的转移判定放 core（decideStart/classifyUpFailure 纯函数），:app 只做装配与线程纪律
+    rationale: pure-logic-in-core：判定逻辑需要回归命令内的 JUnit 锁定（无 key 不调 Up、持久状态重连、失败分类），设备取证昂贵而判定必须日常回归
+  build-script-mts:
+    decision: 构建脚本用 scripts/build-android-tstunnel.mts（node 直跑，spawn go/gomobile），保留 stamp 缓存、NDK 校验与 16KB 对齐 ldflags
+    rationale: 仓库约定打包脚本用 .mts；逻辑与参考 bash 版等价（校验/stamp/bind/strip 可选）
+alternatives: []
+risks:
+  - 验证 spike 与带 key 的设备生命周期取证依赖用户提供 tagged auth key 与 tailnet ACL（tag:pca-client 访问 gamepc:13080），不满足时按 planned change 停止并请用户调整——作为 open question 记录，不阻塞无 key 路径的工程与验收
+  - gomobile bind 依赖 Go 工具链与 NDK 本机状态（aar-script-built-not-committed），构建不进回归命令；Windows 侧 Go 1.27.3 与 NDK 已确认可用
+  - 同进程关闭再重建节点的行为在 Android 上未经构造性验证（参考项目遗留边界）：TunnelManager 失败后不重建在役节点，换 key 走清除（删状态目录）后全新建

@@ -1,0 +1,47 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-tstunnel
+sections:
+  Implementation:
+    go-tstunnel-module:
+      text: android/tstunnel Go 模块：tstunnel.go（SetApp=dsh-tstunnel、NewNode+XDG_CACHE_HOME、Up 60s 期限、Loopback/ProxyCredential/StatusJSON/Errmsg/Close）、interfaces.go（GOOS=android 才注入、AltAddrs 必填）、defaultroute_android.go/_other.go GOOS 拆分、tstunnel_test.go（JSON 口径、cache env、Errmsg、Up 期限）；go.mod 钉 tailscale v1.94.1 与 golang.org/x/mobile tool 指令；go test 通过、GOOS=android go build ./... 交叉编译通过
+      status: complete
+    build-aar-script:
+      text: scripts/build-android-tstunnel.mts：校验 go/ANDROID_HOME/NDK；源哈希 stamp（android/app/libs/aar.stamp）缓存；GOBIN 本地安装 tool 钉的 gomobile/gobind；gomobile bind -target android -androidapi 26（16KB page-size ldflags）；产出 android/app/libs/tstunnel.aar；实际在本机完成一次构建产出 AAR
+      status: complete
+    core-tunnel-statemachine:
+      text: core 新增 TunnelStateMachine：五态枚举与纯函数判定——decideStart(hasAuthKey, hasPersistedState)（无 key 无状态→NOT_CONFIGURED 且 hasState 返回 false 不调 Up；有状态无 key→凭持久状态重连；有 key→注册）、classifyUpFailure(errText)（needs-login/invalid key/denied 类→NEEDS_KEY，其余→FAILED）、onUpSuccess/onUpStart 转移；TunnelStateMachineTest 表驱动（覆盖三入口、失败分类、清除回未配置）
+      status: complete
+    app-tunnel-manager:
+      text: ':app TunnelManager：进程内单例、状态经 core 状态机暴露；ensureUp 幂等（CONNECTED 直返、在役不重建）；启动前 SetInterfacesJSON（NetworkInterface 枚举 JSON）与 SetDefaultRouteIfname；阻塞调用只在单后台线程；节点目录 filesDir/tstunnel、主机名 dsh-anywhere-android；auth key 不进日志（key 是否已配置的标记与 key 存 App 私有存储）；清除=关节点+删状态目录+清 key 回未配置'
+      status: complete
+    app-settings-card:
+      text: ':app 设置页 Tailscale 卡片替换占位：显示当前状态（未配置/连接中/已连接/需要key/失败+原因）与节点名；未配置/需要key/失败时提供 key 输入与「连接」按钮（key 输入为密码型、不回显）；「清除」按钮回到未配置；已配置时显示已连接状态；卡片状态变化实时刷新'
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: 单元测试全部通过：npm run test、android/gradlew -p android/core test（TunnelStateMachineTest 全过）、cd android/tstunnel && go test ./...（Go 单测）、GOOS=android go build ./...（交叉编译）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test && cd android/tstunnel && go test ./... && GOOS=android go build ./...
+    emulator-acceptance:
+      text: 模拟器验收全通过——无 key 路径：卡片未配置显示、无 key 不启动、假 key 真实失败（暴露并修复 invalid key 分类）、清除回未配置（目录+prefs 清空）。带 key 路径（用户 2026-11-04 提供 tag:pca-client key）：宿主 Go spike PASS（tag:pca-client 经节点 SOCKS5 访问 gamepc:13080 收到 HTTP 响应，7.3s 注册、tags 命中）；粘贴 key 入网 15s 已连接；强杀重启 onCreate ensureUp 免 key 自动重连已连接；清除后重连 15s 已连接（换 key 重建等价）。App 数据已清（pm clear），key 不落仓库
+      status: complete
+      command: node scripts/build-android-tstunnel.mts && android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令本地逐字通过
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: strict-spec-cli ready android-tstunnel 与 verify 通过
+      status: complete
+      command: strict-spec-cli ready android-tstunnel && strict-spec-cli verify android-tstunnel
+    archive-readiness:
+      text: 归档就绪检查：delta-spec 与实现一致、无 delta-tech、模拟器无 key 验收证据齐备、带 key 验收的 open question 已向用户呈现、git status 干净
+      status: complete
+      command: strict-spec-cli verify android-tstunnel
+testing_gates:
+  validation_task: emulator-acceptance
+  unit_test_task: unit-test-suite

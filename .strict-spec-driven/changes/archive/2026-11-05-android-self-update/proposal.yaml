@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-self-update
+  status: proposed
+summary:
+  what:
+    - App 内检查并安装新版本：启动后与设置页手动触发时以 GitHub REST API 匿名查询公开仓库 kw12121212/dsh-anywhere 的最新 Release（经手机网络直连，不经隧道）；仅当 Release 存在 DSH-Anywhere-<ver>.apk 资产且 tag 按派生公式（MAJOR*10000+MINOR*100+PATCH）得到的 versionCode 高于本机时提示更新（无 APK 资产的 Release 视为无新版本）；下载到 App 私有目录（断点续传），读同名 .sha256 比对一致才允许安装，不一致或缺失时删文件并提示且不调起安装器；下载新版本前清理旧 APK、安装完成前不删；经 FileProvider 与 REQUEST_INSTALL_PACKAGES 前台调起系统安装器，App 在后台时推送「新版本已就绪」通知点击调起；每进程会话自动调起至多一次，设置页保留手动安装按钮；版本比较、tag 解析、.sha256 解析与 Release 资产选择放 core（JUnit，录制 API 响应夹具）；失败（网络/限流/校验失败）只在设置页显示原因不打扰
+  why:
+    - milestone 完成判据：安装旧版本 APK 后发布更高版本，App 检查到新版本、下载并校验 sha256 后调起系统安装器完成覆盖升级；校验失败删除文件且不调起安装器
+scope:
+  in:
+    - android/core 新增 UpdateCheck（版本比较/tag 解析/资产选择/sha256 解析）与 JUnit（录制夹具）；android/app 新增 UpdateManager（查询/下载续传/校验/通知/调起安装器）、设置页更新卡片、Manifest 权限与 FileProvider；android-app 主规格新增检查更新、校验与安装场景
+  out:
+    - F-Droid 或应用商店；强制升级；iOS；桌面端变化；隧道内更新流量（直连）
+unchanged_behavior:
+  - 前序全部行为不变；GitHub API 匿名访问不携带任何凭据；失败路径不影响其他功能；桌面端与 CI 零变化
+roadmap:
+  milestone: android-app
+  planned_change: android-self-update

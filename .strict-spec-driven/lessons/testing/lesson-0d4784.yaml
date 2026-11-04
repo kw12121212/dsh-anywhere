@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: lesson-0d4784
+  title: 手写解析器的接受集必须以对端参考实现为契约并配负向测试
+category: testing
+status: active
+created_at: '2026-11-04T09:17:52.464Z'
+updated_at: '2026-11-04T09:17:52.464Z'
+context: android-setup-settings 为 core 写了极简 Kotlin JSON 解析器，声称与桌面 JSON.parse 接受集对齐（配置三态判定两端一致的承诺）。
+observation: '独立评审发现 parseNumber 接受裸负号、1.、1e、-.5 与前导零，而 JSON.parse 全部拒绝：{"harnessURL": 合法地址, "x": 01} 在桌面判 invalid、Android 判 ok，三态分歧且共享向量当时没有覆盖损坏数字形态；递归解析器还缺深度上限，病态深嵌套会 StackOverflowError 而非判 invalid。'
+takeaway: 在跨端复刻既有语义时，手写实现的可接受输入集本身就是契约：除了双方都接受的用例，必须为『对端拒绝』的形态写负向向量/测试（语法边界：裸符号、前导零、缺尾数字、超深嵌套），并给递归解析设深度上限把病态输入变成普通失败。
+applies_when: 为本仓库写第二份（Kotlin/Go/其他语言）解析或协议实现、与既有 TS/JS 参考实现做行为对齐时——尤其当判定结果（如三态）会进入规格场景
+occurrences:
+  - origin: android-setup-settings
+    date: '2026-11-04'
+    evidence: 评审发现 Json.kt parseNumber 缺陷（2026-11-04）；修复后 jsonNumberGrammarMatchesJsonParse 负向断言、readConfig 向量新增 3 条损坏数字用例、MAX_DEPTH=512 深度测试两端全绿

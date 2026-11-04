@@ -1,0 +1,53 @@
+schema: strict-spec-driven/main-tech/v1
+schema_version: 1
+artifact_type: main_tech
+schema_file: templates/strict-spec-driven/schemas/main-tech.yaml
+standard:
+  id: android-client
+  title: Android 客户端工程约定
+  category: tooling
+rules:
+  android-module-layout:
+    strength: MUST
+    statement: android/ 是自成一体的 Gradle 多模块工程，依赖解析必须完全由仓库内文件钉死：根 settings.gradle.kts 以 pluginManagement 仓库过滤与 FAIL_ON_PROJECT_REPOS 锁定来源，插件与依赖版本写在与 AGP 匹配的仓库内构建文件中，不依赖开发机全局 Gradle 配置；core（android/core）是不依赖 android.* 框架类的纯 JVM Kotlin 独立构建（带自己的 settings.gradle.kts，maven 坐标 work.keepwriting:core），根设置以 includeBuild 引用、:app 以该坐标依赖
+    rationale: 里程碑决定 android 工程与桌面 Node 工具链并存且门禁分层：只有仓库内钉死的依赖解析才能在任何验证机上复现构建；core 独立构建是『core 测试只需 JDK 17』的结构前提
+    enforcement:
+      method: review
+      detail: 评审检查 android/settings.gradle.kts 的仓库锁定与 includeBuild、android/core/settings.gradle.kts 独立存在、:app 以 work.keepwriting:core 坐标而非 project 路径依赖
+  pure-logic-in-core:
+    strength: SHOULD
+    statement: Android 功能中不依赖 android.* 的判定与协议逻辑（URL 校验与 token 剥离、同源判定、tailnet 分流、代理协议、版本派生公式等）应放在 core 纯 JVM 模块并以 JUnit 覆盖，:app 只保留框架装配与 UI；不下沉时 design.yaml 必须说明理由
+    rationale: core 是唯一进门禁的 Android 测试面：逻辑留在 :app 就没有回归信号；桌面端共享测试向量（URL 校验等）也要求逻辑位于纯 JVM 层
+    enforcement:
+      method: review
+      detail: 评审检查 :app 新增的纯逻辑类是否可下沉
+    exceptions:
+      - 依赖 Context、SharedPreferences、WebView 等框架类型的装配与 UI 代码
+  core-jvm-tests-in-regression:
+    strength: MUST
+    statement: core 的 JUnit 测试必须以 android/gradlew -p android/core test 接入 config.yaml review_evidence.project_regression.command 的完整回归命令，且该命令只依赖 JDK 17、不需要 Android SDK 与 NDK；Kotlin 代码不设覆盖率门槛（review_evidence.coverage.scope 维持 src/**/*.ts 与 scripts/**/*.mts）
+    rationale: 里程碑 intake 问题 regression-scope 已确认：纯 JVM 模块测试进回归（需 JDK 17），AAR 与 APK 构建不进；覆盖率门槛维持现有 Node scope 是同一决定的另一半
+    enforcement:
+      method: test
+      detail: config.yaml 回归命令逐字包含该 gradlew 段，由 scripts/workflows.test.mts 的回归命令片段断言间接锁定；门禁实际执行作为归档证据
+  android-build-outside-gate:
+    strength: MUST
+    statement: ':app 的 Gradle 构建、tstunnel AAR 构建与模拟器/真机验收不得进入 config.yaml 完整回归命令，也不得上 GitHub Actions；这些验收由各变更的 Testing/Verification 任务与证据覆盖'
+    rationale: AAR 与 APK 构建依赖 Go、Android SDK 与 NDK 的本机状态，进门禁会让门禁结果取决于开发机当下环境；CI 只承担桌面打包（ci-packaging-only）
+    enforcement:
+      method: review
+      detail: 评审检查回归命令与 .github/workflows 不出现 :app/AAR 构建步骤
+  aar-script-built-not-committed:
+    strength: MUST
+    statement: tstunnel AAR 只能由 scripts/ 下的构建脚本产出（gomobile/gobind 版本钉在 android/tstunnel go.mod 的 tool 指令），输出同步到 android/app/libs/ 且该目录不入库（.gitignore 覆盖）
+    rationale: AAR 是本机工具链产物，提交入库会让升级 gomobile/NDK 后的产物漂移无迹可寻；脚本钉版本保证可重建
+    enforcement:
+      method: review
+      detail: android/app/libs/ 在 .gitignore；评审检查 AAR 不经手工拷贝入库
+  android-uniform-signing:
+    strength: MUST
+    statement: Android 的 debug 与 release 构建一律用专用 release keystore（~/.config/dsh-anywhere/keys/ 下，不入库，由 scripts/android-keystore.mts 生成）签名；keystore 路径与密码经环境变量 DSH_KEYSTORE_PROPS 或该缺省 properties 文件读取；出包任务（assemble*/bundle*/package*）在 keystore 缺失时必须失败并提示生成脚本的用法，编译与单元测试不需要签名
+    rationale: App 内自更新（android-self-update）要求所有构建同一签名：debug.keystore 各机不同份会导致覆盖升级被系统安装器拒绝；里程碑 intake 问题 android-identity 已确认此约定
+    enforcement:
+      method: test
+      detail: 验收任务覆盖正路径（assembleDebug 成功）与负路径（移除 DSH_KEYSTORE_PROPS 且缺省文件改名后 assembleDebug 失败并带提示）

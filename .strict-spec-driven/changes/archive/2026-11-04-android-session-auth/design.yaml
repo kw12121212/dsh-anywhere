@@ -1,0 +1,21 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-session-auth
+approach:
+  - core 承载会话判定（pure-logic-in-core）：SessionAuth.EXPIRED_MARKER 与桌面 session.ts 完全一致（'dsh web authentication required; reopen the URL printed by dsh web.'）；isSessionExpired(status, contentType, body) 判定 401 + text/plain + trim 后正文等于 marker（参数化三输入，与桌面 isSessionExpired 语义逐条对齐）；RetryDecision 描述失效后处置（RETRY_CLEAN_ONCE → 仍失效 → SHOW_REAUTH）。:app 的 MainWebScreen 扩展：Phase 新增 Reauth（本地重新认证页：标题、运行 dsh-url 的说明、「打开设置」按钮，无 token 无 401 原文）；加载 URL 来源改为「保存后的 pendingRawUrl（一次性）否则 cleanUrl」——带 token 地址只在 WebView 初始加载用一次，探测仍对干净地址（无 cookie 时 dsh 的 401 也是 HTTP 响应=可达，与桌面语义一致）；onPageFinished 里检查 copyBackForwardList 含 token 条目（经 core 的 hasToken 语义——core 新增 tokenEntryUrls 辅助）则 webView.clearHistory() 并 CookieManager.flush()；MainActivity.onPause 再 flush 一次保证强杀持久。会话失效识别：WebViewClient.onReceivedHttpError 只对 request.isForMainFrame && statusCode==401 触发——先经 App 侧 HttpURLConnection 带 CookieManager cookie GET 干净地址（重定向不跟随、10 秒超时、读正文），isSessionExpired 判定；确认失效后先 webView.reload() 重试一次（一次性标志防循环），重试后仍失效再切 Reauth 相位；非 401 或正文不匹配不打扰当前页面。设置页保存恢复链路沿用 android-main-webview 的 requestReload：AppGraph.save 已置 pendingRawUrl，MainWebScreen 的 LaunchedEffect 消费它作为初始加载地址。mock server 扩展：/?token=<t>（t 匹配当前有效 token）Set-Cookie session=<id>; Path=/; HttpOnly; SameSite=Strict + 302 /；/ 依 cookie 有效性返回 200 harness 页或 401 text/plain EXPIRED_MARKER；/invalidate 令服务端 token 失效（模拟 dsh web 重启）；/whoami 供验收断言 cookie 生效。SameSite=Strict 在 WebView 重定向链（loadUrl(raw) → 302 clean）中是否随请求发送是关键实测点，结论写入 lesson
+decisions:
+  raw-url-load-once-clear-history:
+    decision: 带 token 地址仅作 WebView 初始 loadUrl 一次；onPageFinished 后若当前地址无 token 且历史含 token 条目则 clearHistory()（会话建立点同时 flush cookie）
+    rationale: WebView 的 clearHistory 清全部条目，发生在 302 落定干净地址之后等效于历史只含当前页；带 token 地址从历史、配置（只存干净）、日志（不打印 URL）三处根除
+  appside-probe-with-cookie:
+    decision: 401 失效确认由 App 侧 HttpURLConnection 带 CookieManager cookie 探测干净地址（读正文比对 marker），WebView 侧不读主框架响应正文（平台限制）
+    rationale: WebView 无法读取主框架 401 响应正文（milestone risks 已登记）；App 侧探测经与 WebView 相同的明文策略（干净地址即 harness 源）与 cookie 供应，判定与桌面 isSessionExpired 同构
+  reload-once-before-reauth:
+    decision: 确认失效后先 reload 一次（一次性标志），重试后仍 401+marker 才进入 Reauth 相位
+    rationale: planned change 要求「先用干净地址重试一次」：避免 cookie 瞬时未 flush 等瞬时态把用户直接推进重新认证页
+alternatives: []
+risks:
+  - SameSite=Strict cookie 在 loadUrl(raw)→302(clean) 重定向链中的发送行为因 WebView 版本而异，需实测（mock server 302 链路验收覆盖），结论记 lesson
+  - onReceivedHttpError 部分机型对主框架错误不回调（平台差异），验收以 API 36.1 模拟器为准；探测路径独立于该回调存在（启动探测经同一判定）

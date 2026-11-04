@@ -72,7 +72,7 @@ risks:
   - 签名 keystore 只在本机，丢失会导致后续版本无法覆盖升级、泄漏会让他人可签发可升级的 APK；本地构建发布依赖发布人工作区干净且位于 tag 提交上，由发布脚本强制校验
   - 与 private-content-assistant 共用 tag:pca-client：任一 App 的 key 泄漏都获得该 tag 在 ACL 中的全部访问权，两个 App 的 ACL 需求变化会互相影响
   - WebView 只能经 androidx.webkit ProxyController 覆盖代理，旧版系统 WebView 不支持；WebView 无法读取主框架 401 响应正文，会话失效识别改由 App 侧带 WebView cookie 经同一网络路径探测干净地址，需实测
-status: proposed
+status: complete
 notes:
   - 参考 ../private-content-assistant：android/tstunnel（tstunnel.go、interfaces.go、defaultroute_android.go 与 defaultroute_other.go）、android/loopback（LoopbackProxy、Socks5、ConnectBridge、BrowserRouting）、scripts/ops/build-android-tstunnel.sh、android-keystore.sh、android-release.sh，以及 .strict-spec-driven/tech/android-client.yaml、specs/android-app.yaml、changes/archive/2026-10-26-android-tstunnel 与 2026-11-03-android-tailnet-browser
   - 参考项目的 lessons 必须核对原始平台再引用（其 lesson-a8cde8）：tsnet-up-key-20f857（Up 前分流）、tailscale-netmon-goos-linux-0d714f（按 GOOS 拆分 netmon 符号）

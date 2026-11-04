@@ -56,6 +56,11 @@ describe('config.yaml 完整回归口径', () => {
       expect(command).toContain(fragment)
     }
   })
+
+  it('回归命令尾部包含 Android core 纯 JVM 测试段（tech/android-client 的 core-jvm-tests-in-regression）', () => {
+    // 删掉 android 段会让 Android 门禁信号静默消失，此断言负责拦住。
+    expect(regressionCommand()).toContain('android/gradlew -p android/core test')
+  })
 })
 
 describe('package.yml', () => {

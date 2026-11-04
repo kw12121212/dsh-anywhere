@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: httpurlconnection-connect-tcp-responsecode-c3bf75
+  title: HttpURLConnection.connect() 只等 TCP 握手——可达性探测必须读 responseCode
+category: tooling
+status: active
+created_at: '2026-11-04T12:33:34.102Z'
+updated_at: '2026-11-04T12:33:34.102Z'
+context: android-main-webview 的 HarnessProbe 复刻桌面 probe.ts「收到任何 HTTP 响应头即视为可达」的语义，用 HttpURLConnection 实现。
+observation: 首版调用 conn.connect() 后即返回可达：模拟器验收中 4 秒延迟响应的服务端在 TCP 握手（毫秒级）后就被判可达，「正在连接」提示从未出现；桌面 net.request 是收到 response/redirect 事件才算可达。
+takeaway: 用 HttpURLConnection 做『服务是否返回 HTTP 响应』判定时，必须读 conn.responseCode（阻塞到响应头到达）而不是停在 connect()；connect() 成功只代表端口有 TCP 服务在听
+applies_when: 任何语言/平台实现『可达性=收到 HTTP 响应』语义的探测（连通性、健康检查、错误页判定），尤其是从另一平台的网络 API 迁移语义时
+occurrences:
+  - origin: android-main-webview
+    date: '2026-11-04'
+    evidence: 修复后模拟器复测：4s 延迟服务端探测期间「正在连接」可见（dump 抓到文本），4s 后 responseCode 返回才进入 WebView；HarnessProbe.kt 注释言明语义

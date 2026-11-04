@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-proxy-routing
+approach:
+  - 'core 承载桥与全部分流判定（pure-logic-in-core，参考项目 loopback 模块的真机验证形态移植）：ConnectBridge——只听 127.0.0.1 随机端口，CONNECT 与绝对 URI 两形态（Chromium 对 http 代理的既定行为）；随机 Basic 凭据（SecureRandom），无/错凭据 407 且不连接任何目标（WebView 侧由 WebViewClient.onReceivedHttpAuthRequest 自动应答——host 为 127.0.0.1:桥端口时 proceed 凭据，其他 host 不应答）；回环目标（127.0.0.0/8、::1、localhost）拒绝且不拨号；并发上限 64 超限直接关闭；明文（绝对 URI http）转发仅当 CleartextPolicy 放行（harness 源），CONNECT 隧道不受限；明文转发与 CONNECT 的字节纪律照参考实现（按到达分块即时下发+flush、Connection: close 定界、transfer-encoding 响应透传）。TailnetRouting——isTailnetTarget（字面 IPv4 在 100.64.0.0/10、IPv6 前缀 fd7a:115c:a1e0:、*.ts.net 结尾、无点短名；不做 DNS）；isLoopbackTarget（127/8、::1、0.0.0.0、localhost 及 .localhost）；splitDial(tailnet, direct)。Socks5Dialer——RFC1928/1929 自实现（平台 SocksSocketImpl 不支持口令认证，真机实证），域名 ADDRTYPE=0x03 交节点 MagicDNS。DialProbe——经注入 dial 的探测：拨目标后手写 GET（Host 头、Connection: close），任何状态码即可达（读响应头即可），异常经 ProbeFailure 分类；会话判定变体带 Cookie 头并读正文比对 EXPIRED_MARKER——HarnessProbe 与 confirmSessionExpired 的语义等价实现，供 :app 在隧道在役时替换直连路径。:app ProxyBridge——桥随隧道 CONNECTED 起听（dial=splitDial(节点 SOCKS5, 直连)）、隧道清除/断开时停；ProxyController.setProxyOverride(127.0.0.1:port, removeImplicitRules)（回环也进桥被拒→127.0.0.1 上的质询只可能来自桥，自动应答安全）；WebViewFeature.PROXY_OVERRIDE 不支持时不加载并提示升级系统 WebView。MainWebScreen 联动：加载状态机前置检查 cleanUrl 是否 tailnet 目标——是且隧道 NOT_CONFIGURED→TunnelPrompt 相位（需要接入 tailnet 说明+去设置）；CONNECTING/NEEDS_KEY/FAILED→TunnelWait 相位（隧道状态+重试连接+去设置，观察 tunnel.state 变 CONNECTED 自动重载）；非 tailnet 目标走原路径不受隧道影响。探测与失效探测改经 DialProbe（隧道在役时 dial=splitDial，否则直连——非 tailnet 目标两种 dial 行为一致）；探测段明文判定不变（只对 harness 源发明文）'
+decisions:
+  bridge-in-core-reuse:
+    decision: 代理桥、SOCKS5 客户端、分流与回环判定、DialProbe 全部放 core（从参考项目 loopback 真机验证形态移植，按 dsh 差异改造：明文门控接 CleartextPolicy、407 realm、去掉出口门控与 teardown），协议级 JUnit 覆盖（假桩 dial/假上游）
+    rationale: 桥的字节纪律是流式 harness 的生命线（参考项目真机 unexpected_response 教训）；协议级回归进 config.yaml 回归命令是唯一日常守护，必须纯 JVM
+  probe-over-dial:
+    decision: 连接探测与会话失效探测统一为 DialProbe（经分流 socket 手写 HTTP），隧道在役时 tailnet 目标经节点、其他直连；判定语义与桌面/前序完全一致（任何响应码=可达、401+marker=失效）
+    rationale: 探测与 WebView 不同路径会导致 tailnet harness 在探测段 UnknownHostException（平台栈系统 DNS 解析不了 MagicDNS），分流必须从探测就开始
+  tunnel-gated-load:
+    decision: 主页面加载前置检查：tailnet 目标且隧道非 CONNECTED 时不进 WebView，显示隧道状态面板（未配置=接入说明+去设置；其他=状态+重试+去设置），CONNECTED 自动加载
+    rationale: milestone done_criteria：tailnet 地址在隧道未接入时给出提示与入口而不是空白页/错误页
+alternatives: []
+risks:
+  - WebView onReceivedHttpAuthRequest 对代理质询的触达形态在个别 ROM 上有差异（参考项目 spike A7 真机验证过 WebView 会触发并续行）；验收以 API 36.1 为准，异常记 lesson
+  - ProxyController 代理覆盖是异步生效：回调确认后才 loadUrl（参考实现同款纪律），否则首个请求绕桥
+  - 桥停启循环（隧道断连重连）与在役隧道复用：桥 stop 拆全部连接；WebView 侧每次 setProxyOverride 幂等

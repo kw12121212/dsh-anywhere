@@ -1,0 +1,153 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED:
+    main-page-load:
+      strength: MUST
+      statement: App 已保存有效 harness URL 时，主页面先显示本地「正在连接」提示并对干净地址做可达性检查：地址返回任何 HTTP 响应（包括 401、5xx 与重定向）视为可达并在 WebView 中打开干净地址；DNS 解析失败、连接被拒绝、超时（默认 10 秒）或 TLS 错误时显示本地错误页；两种结果都不显示首次设置页。
+      scenarios:
+        reachable-opens-webview:
+          - GIVEN: 已保存 http://10.0.2.2:13080/，该地址有服务响应
+          - WHEN: 启动 App（或刷新）
+          - THEN: 主页面先显示「正在连接」，随后 WebView 打开 http://10.0.2.2:13080/ 显示远程内容
+        http-errors-reachable:
+          - GIVEN: 已保存地址返回 502
+          - WHEN: 启动 App
+          - THEN: WebView 打开该地址显示远程返回的内容，不显示本地错误页
+        connecting-then-error:
+          - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
+          - WHEN: 启动 App
+          - THEN: 主页面先显示「正在连接」，随后显示本地错误页，不显示首次设置页
+    load-error-page:
+      strength: MUST
+      statement: harness 地址不可达时主页面显示本地错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），并提供「重试」与「修改地址」按钮；点击「重试」重新检查地址，恢复可达时打开 harness 页面，仍不可达时继续显示错误页；点击「修改地址」进入设置页并回显当前地址。
+      scenarios:
+        refused-error-page:
+          - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
+          - WHEN: 启动 App
+          - THEN: 错误页包含 http://10.0.2.2:13080/ 与连接被拒绝的说明，以及「重试」「修改地址」按钮
+        retry-recovers:
+          - GIVEN: 错误页显示后该地址的服务已启动
+          - WHEN: 点击「重试」
+          - THEN: 主页面打开 harness 页面
+        change-address-opens-settings:
+          - GIVEN: 主页面显示错误页
+          - WHEN: 点击「修改地址」
+          - THEN: 进入设置页，输入框回显当前已保存地址
+    refresh-entry:
+      strength: MUST
+      statement: 主页面提供刷新入口：点击后重新检查并打开已保存的干净 harness 地址——可达时重新加载 harness 页面，不可达时显示本地错误页；没有有效配置时回到首次设置页。
+      scenarios:
+        refresh-reloads:
+          - GIVEN: 主页面正在显示已保存的 harness 页面
+          - WHEN: 点击刷新入口
+          - THEN: 主页面重新加载已保存地址并显示该页面
+        refresh-unreachable:
+          - GIVEN: 已保存地址的服务已停止
+          - WHEN: 点击刷新入口
+          - THEN: 主页面显示本地错误页
+        refresh-without-config:
+          - GIVEN: 配置文件已损坏，主页面显示 harness 页面
+          - WHEN: 点击刷新入口
+          - THEN: 回到首次设置页并提示已有配置无效
+    back-key-web-history:
+      strength: MUST
+      statement: 系统返回键在 WebView 网页历史可后退时先在网页历史中后退，没有可后退的网页历史时退出 App；设置页的返回行为不受影响。
+      scenarios:
+        back-navigates-web:
+          - GIVEN: WebView 显示 harness 站内第二个页面（历史中已有前一页）
+          - WHEN: 按系统返回键
+          - THEN: WebView 后退到前一页面，App 不退出
+        back-exits:
+          - GIVEN: WebView 没有可后退的网页历史
+          - WHEN: 按系统返回键
+          - THEN: App 退出（系统默认行为）
+    navigation-scope-android:
+      strength: MUST
+      statement: WebView 中与已保存 harness 地址同源（协议、主机、端口均相同）的链接，包括 target=_blank 与 window.open 请求，都在 WebView 内打开；指向非同源 http/https 地址的链接与 window.open 请求交给系统默认浏览器打开，WebView 仍停留在当前页面；其他协议（如 file:、javascript:）的打开请求被忽略，不创建任何新窗口。
+      scenarios:
+        same-origin-link-stays:
+          - GIVEN: WebView 显示 harness 页面 http://10.0.2.2:13080/
+          - WHEN: 点击指向 http://10.0.2.2:13080/sessions/1 的链接
+          - THEN: WebView 打开 http://10.0.2.2:13080/sessions/1，系统浏览器没有被打开
+        external-link-to-browser:
+          - GIVEN: WebView 显示 harness 页面 http://10.0.2.2:13080/
+          - WHEN: 点击指向 https://example.org/docs 的链接
+          - THEN: 系统默认浏览器打开该地址，WebView 仍显示原 harness 页面
+        window-open-same-origin:
+          - GIVEN: WebView 显示 harness 页面
+          - WHEN: 页面调用 window.open("/sessions/2")
+          - THEN: WebView 打开同源地址，没有弹出新窗口
+        window-open-external:
+          - GIVEN: WebView 显示 harness 页面
+          - WHEN: 页面调用 window.open("https://example.org/popup")
+          - THEN: 系统浏览器打开该地址，WebView 仍显示原页面，没有新窗口
+        other-protocol-ignored:
+          - GIVEN: WebView 显示 harness 页面
+          - WHEN: 页面请求打开 file:///etc/passwd
+          - THEN: 系统浏览器没有被打开，WebView 不变
+    cleartext-restriction:
+      strength: MUST
+      statement: App 只对已保存 harness 源放行明文 http 请求：WebView 中对其他主机的 http 子资源请求被拦截（不发出网络请求），页面其余内容继续加载；App 自身发出的探测请求只针对已保存的干净地址；https 请求不受限制。
+      scenarios:
+        cross-host-http-blocked:
+          - GIVEN: 已保存 http://10.0.2.2:13080/，harness 页面引用 http://other.example.test/pixel.js
+          - WHEN: WebView 加载该页面
+          - THEN: 对 other.example.test 的 http 请求被拦截失败，harness 页面其余内容正常显示
+        harness-http-allowed:
+          - GIVEN: 已保存 http://10.0.2.2:13080/
+          - WHEN: 加载 harness 页面及其同源子资源
+          - THEN: 全部正常加载，不被拦截
+        https-not-restricted:
+          - GIVEN: 已保存 https://dsh.example.test/
+          - WHEN: 页面引用任意主机的 https 资源
+          - THEN: 请求按正常网络行为发出，不受明文限制影响
+    remote-isolation-android:
+      strength: MUST
+      statement: WebView 中的远程 harness 页面无法调用 App 的任何本地能力：不注册任何 JavascriptInterface、不暴露任何本地服务接口，禁用文件与内容 URL 访问；远程页面的脚本尝试改写配置或调用本地接口全部失败；cookie 与本地存储保存在 App 私有数据目录，不与其他应用共享。
+      scenarios:
+        no-js-interface:
+          - GIVEN: WebView 显示远程 harness 页面
+          - WHEN: 页面脚本枚举 window 上的注入对象并尝试调用任何本地保存接口
+          - THEN: 不存在任何注入对象，调用失败，App 配置文件内容不变，WebView 不被导航到其他地址
+        no-file-access:
+          - GIVEN: WebView 显示远程页面
+          - WHEN: 页面尝试加载 file:// 或 content:// 资源
+          - THEN: 访问被禁用失败
+  MODIFIED:
+    first-run-complete:
+      strength: MUST
+      statement: 在首次设置页点击「开始使用」后，App 保存去掉 token 的干净地址到私有存储，界面进入主页面：主页面以 WebView 承载，可达性探测通过后加载干净地址，不可达时显示本地错误页；用户输入的原始地址（含 token）只作为主页面加载的输入之一留存内存，不写入配置，也不在界面上显示 token。保存失败时首次设置页显示可读的错误信息并保持打开，错误信息中不含 token 值。
+      scenarios:
+        paste-token-url:
+          - GIVEN: 用户在首次设置页输入 http://127.0.0.1:13080/?token=abc123，该地址可达
+          - WHEN: 点击「开始使用」
+          - THEN: 私有存储配置中为 http://127.0.0.1:13080/ 且不含 abc123，界面进入主页面并显示该地址的 harness 页面，abc123 不出现在任何界面文本
+        no-token-url:
+          - GIVEN: 用户在首次设置页输入 https://dsh.example.test/
+          - WHEN: 点击「开始使用」
+          - THEN: 配置保存 https://dsh.example.test/，界面进入主页面
+        save-failure-stays:
+          - GIVEN: 私有存储无法写入
+          - WHEN: 输入合法地址并点击「开始使用」
+          - THEN: 首次设置页显示保存失败的错误且不含 token，停留在首次设置页
+    settings-page:
+      strength: MUST
+      statement: 主页面提供「设置」入口，打开设置页显示当前已保存的干净地址；编辑时实时校验：地址不合法时「保存」不可用并显示原因，合法时可用。点击「保存」后保存去掉 token 的干净地址、返回主页面并重新加载已保存地址（可达时显示 harness 页面，不可达时显示本地错误页）；「取消」或系统返回不修改配置并返回主页面。设置页预留 Tailscale 卡片位置，本版本显示后续提供的占位说明。
+      scenarios:
+        open-shows-current:
+          - GIVEN: 已保存 http://127.0.0.1:13080/，界面在主页面
+          - WHEN: 打开设置页
+          - THEN: 输入框中为 http://127.0.0.1:13080/
+        save-new-token-url:
+          - GIVEN: 设置页已打开，已保存地址可达
+          - WHEN: 把地址改为 http://127.0.0.1:13080/?token=def456 并点击「保存」
+          - THEN: 配置中为 http://127.0.0.1:13080/ 且不含 def456，返回主页面重新加载并显示 harness 页面，def456 不出现在任何界面文本
+        cancel-keeps-config:
+          - GIVEN: 已保存 https://a.example.test/，设置页已打开且地址被改为 https://b.example.test/
+          - WHEN: 点击「取消」或按系统返回
+          - THEN: 返回主页面，配置仍为 https://a.example.test/
+  REMOVED: {}

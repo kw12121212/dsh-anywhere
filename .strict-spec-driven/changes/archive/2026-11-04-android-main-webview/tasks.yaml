@@ -1,0 +1,59 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-main-webview
+sections:
+  Implementation:
+    core-origin-policy:
+      text: core 新增 OriginPolicy：classifyOpen(harnessUrl, target) 返回 STAY/EXTERNAL/IGNORE——非 http/https 或解析失败 IGNORE，同源（scheme+host+port，默认端口 80/443 归一，大小写不敏感）STAY，否则 EXTERNAL；镜像桌面 navigation-policy.ts 语义；OriginPolicyTest 以表驱动覆盖（同路径/同源不同路径、不同端口、不同协议、http↔https、大小写主机、非 web 协议、相对/坏输入 IGNORE）
+      status: complete
+    core-cleartext-policy:
+      text: core 新增 CleartextPolicy：isAllowed(harnessUrl, requestUrl)——https 或非 http 一律放行；http 请求仅当与 harness 地址同源（复用 OriginPolicy 的同源判定）放行；CleartextPolicyTest 覆盖 http 同源放行、http 跨源拒绝、https 任意主机放行、harness 为 https 时所有 http 拒绝
+      status: complete
+    core-probe-classify:
+      text: core 新增 ProbeFailure：classify(exception) 映射 UnknownHostException→DNS、ConnectException→REFUSED、SocketTimeoutException→TIMEOUT、SSLException→TLS、其余→OTHER；错误类别到界面文案的映射留在 :app；ProbeFailureTest 覆盖五类异常映射
+      status: complete
+    app-probe-engine:
+      text: ':app 新增探测引擎 HarnessProbe：HttpURLConnection 对干净地址发不跟随重定向的请求（任何响应码即可达，不读正文），10 秒超时，工作线程执行；异常经 ProbeFailure 分类返回；结果驱动主页面状态机（Connecting→WebView/ErrorPage）'
+      status: complete
+    app-webview-screen:
+      text: ':app 以 WebView 主页面替换占位页：Compose 状态机 Connecting（正在连接提示）→ 可达挂载 AndroidView WebView 加载干净地址 / 不可达显示本地错误页（不含 token 的地址 + 原因文案 + 重试与修改地址按钮，修改地址进入设置页）；WebView 设置 javaScriptEnabled、domStorageEnabled、allowFileAccess=false、allowContentAccess=false、不注册 JavascriptInterface；cookie 与本地存储在 App 私有数据目录（默认）'
+      status: complete
+    app-navigation-scope:
+      text: ':app 导航范围：WebViewClient.shouldOverrideUrlLoading 按OriginPolicy.classifyOpen 处理主框架导航（STAY false 留 WebView、EXTERNAL Intent 系统浏览器 true、IGNORE true）；WebChromeClient.onCreateWindow（setSupportMultipleWindows(true)）从 transport 提取目标 URL 后同策略处理且不创建新窗口；不同源 http/https 打开时当前页不变'
+      status: complete
+    app-cleartext-intercept:
+      text: ':app 明文拦截与清单：Manifest 增加 INTERNET 权限与 usesCleartextTraffic=true（允许清单层明文，运行时收紧）；shouldInterceptRequest 对 http 且 CleartextPolicy 拒绝的请求返回固定空 502 WebResourceResponse；App 侧探测只对 harness 源发 http（探测地址即已保存干净地址）'
+      status: complete
+    app-refresh-back:
+      text: ':app 刷新入口与返回键：主页面提供刷新入口（重新探测并打开已保存地址，不可达显示错误页，无有效配置回首次设置页）；OnBackPressedCallback 在 WebView 可后退时 goBack，否则交回系统默认退出；设置页返回行为保持 android-setup-settings 交付不变'
+      status: complete
+    emulator-mock-server:
+      text: 验收辅助：scripts/mock-dsh-server.mjs（node 直跑，监听 127.0.0.1 默认 13080，--port/--status/--delay 参数）：主页面返回 harness 样式页（流式 chunked、同源/外部链接、window.open 三分支、跨端口明文子资源引用与坐标上报），/sessions/* 会话页；跨源端口（port+1）提供真实 tracker2.js 供拦截验证；请求日志（含 CROSS-ORIGIN 标记）作为验收证据；不入 npm scripts，不进覆盖率 scope
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: 单元测试全部通过：npm run test 与 android/gradlew -p android/core test（OriginPolicyTest、CleartextPolicyTest、ProbeFailureTest 全部通过）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    emulator-acceptance:
+      text: 'Windows 宿主模拟器验收（宿主 node 模拟 dsh 服务端，模拟器经 10.0.2.2:13080 访问）：可达路径（保存 http://10.0.2.2:13080/ 后启动显示「正在连接」随后 WebView 加载 harness 页面含流式内容）；不可达路径（服务端停掉→本地错误页含地址与原因、重试按钮恢复、修改地址进设置页）；harness 页点击同源链接留在 WebView、外部链接交给系统浏览器且当前页不变、window.open 同策略、file: 忽略；返回键先网页后退；跨主机 http 子资源被拦截（页面资源加载失败但 harness 页保持）；HTTP 401/502 视为可达；截图与日志留证'
+      status: complete
+      command: android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令本地逐字通过
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: strict-spec-cli ready android-main-webview 与 verify android-main-webview 通过
+      status: complete
+      command: strict-spec-cli ready android-main-webview && strict-spec-cli verify android-main-webview
+    archive-readiness:
+      text: 归档就绪检查：delta-spec 与实现一致、无 delta-tech、模拟器验收证据齐备、git status 干净
+      status: complete
+      command: strict-spec-cli verify android-main-webview
+testing_gates:
+  validation_task: emulator-acceptance
+  unit_test_task: unit-test-suite

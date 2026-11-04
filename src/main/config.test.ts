@@ -92,3 +92,38 @@ describe('ensurePrivateDir', () => {
     expect(statSync(nested).isDirectory()).toBe(true)
   })
 })
+
+// 共享测试向量（testdata/harness-url-vectors.json）与 Android core 的 JUnit 读同一份
+// 文件：读取三态两端无差异项，任一端改行为必须同步改向量。
+describe('共享读取三态向量（与 Android core JUnit 同源）', () => {
+  it('readConfig 组逐条断言 missing/invalid/ok', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const vectors = JSON.parse(
+      readFileSync(
+        join(fileURLToPath(new URL('../..', import.meta.url)), 'testdata', 'harness-url-vectors.json'),
+        'utf8'
+      )
+    ) as { readConfig: Array<{ fileContent: string | null; expectedStatus: string; expectedUrl?: string }> }
+    expect(vectors.readConfig.length).toBeGreaterThanOrEqual(6)
+    for (const [index, c] of vectors.readConfig.entries()) {
+      const vectorDir = mkdtempSync(join(tmpdir(), 'config-vector-'))
+      const vectorPath = join(vectorDir, CONFIG_FILE_NAME)
+      try {
+        if (c.fileContent !== null) {
+          writeFileSync(vectorPath, c.fileContent, 'utf8')
+        }
+        const load = loadConfig(vectorPath)
+        if (c.expectedStatus === 'missing') {
+          expect(load, `向量 #${index}`).toEqual({ status: 'missing' })
+        } else if (c.expectedStatus === 'invalid') {
+          expect(load, `向量 #${index}`).toEqual({ status: 'invalid' })
+        } else {
+          expect(load, `向量 #${index}`).toEqual({ status: 'ok', url: c.expectedUrl })
+        }
+      } finally {
+        rmSync(vectorDir, { recursive: true, force: true })
+      }
+    }
+  })
+})

@@ -1,0 +1,60 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-scaffold
+sections:
+  Implementation:
+    gradle-root-project:
+      text: 建立 android/ 根 Gradle 工程：settings.gradle.kts（pluginManagement 仓库过滤、dependencyResolutionManagement FAIL_ON_PROJECT_REPOS、includeBuild("core")、include(":app")）、根 build.gradle.kts 钉死 AGP 与 Compose 编译器插件版本（AGP 内置 Kotlin，不声明 kotlin.android）、gradle.properties（jvmargs、useAndroidX、nonTransitiveRClass）与 Gradle wrapper（gradlew、gradlew.bat、gradle-wrapper.jar/properties）
+      status: complete
+    app-module-scaffold:
+      text: ':app 模块：build.gradle.kts（applicationId work.keepwriting.dshanywhere、namespace、compileSdk/targetSdk 36、minSdk 26、JDK 17、Compose + Material3、以 work.keepwriting:core 坐标依赖 includeBuild 的 core、versionName/versionCode 经 JsonSlurper 构建期读取仓库根 package.json 派生并加 printVersion 任务、版本非 x.y.z 即报错退出）、AndroidManifest.xml（显示名 DSH Anywhere、占位 MainActivity）、Compose 单 Activity 占位页与主题、strings/styles 资源'
+      status: complete
+    core-jvm-module:
+      text: android/core 纯 JVM Kotlin 独立构建：独立 settings.gradle.kts 与 build.gradle.kts（kotlin("jvm")、JUnit 5、maven 坐标 work.keepwriting:core、不依赖 android.* 与 Android SDK）、VersionSpec 对象（versionCode 派生公式 MAJOR*10000+MINOR*100+PATCH 与 package.json 版本读取）及真实 JUnit 测试 VersionSpecTest（读仓库根 package.json 断言 versionName 与公式结果），保证 android/gradlew -p android/core test 只需 JDK 17
+      status: complete
+    uniform-signing:
+      text: 统一签名与 keystore 脚本：:app 的 keystoreProps() 优先读环境变量 DSH_KEYSTORE_PROPS、缺省 ~/.config/dsh-anywhere/keys/keystore.properties（不入库），debug 与 release buildType 一律使用该 signingConfig；编译与单元测试不需要签名，assemble*/bundle*/package* 出包任务在 keystore 缺失时经 whenReady taskGraph 判定直接失败并提示生成方法；scripts/android-keystore.mts 生成脚本（keytool 生成专用 release keystore 并写出 properties 文件，路径参数化）
+      status: complete
+    launcher-icons:
+      text: 启动图标：scripts/android-icons.mts 以 sharp（devDependency）从 build/appicon.png 生成 android/app/src/main/res/mipmap-mdpi..xxxhdpi 的 ic_launcher.png（48/72/96/144/192）并提交入库；脚本可重复执行且配 scripts/android-icons.test.mts（Vitest：向临时目录生成、断言五个密度文件存在与像素尺寸）
+      status: complete
+    regression-gate-config:
+      text: 门禁接入：config.yaml review_evidence.project_regression.command 在现有命令尾部追加 " && android/gradlew -p android/core test"，context 补充 Android 端说明（android/ 多模块、core 纯 JVM 测试进回归、:app/AAR 构建在回归之外、Kotlin 不设覆盖率门槛）；coverage scope 保持不变；确认 scripts/workflows.test.mts 的回归命令断言（npm ci/typecheck/build/test:coverage/test:e2e 片段包含）仍然通过
+      status: complete
+    gitignore-android:
+      text: .gitignore 追加 android 构建产物与本地配置：android/.gradle/、android/*/build/、android/core/build/、android/local.properties、android/app/libs/（AAR 输出目录，不入库）、android/.kotlin/；确认 git status 在构建后仍保持干净
+      status: complete
+    docs-android-sections:
+      text: 文档补充：AGENTS.md 技术栈与常用命令补充 android/ Gradle 多模块工程、android/gradlew -p android/core test、签名 keystore 约定与 Android 不进 CI 的口径；README 增加 Android 构建章节（JDK 17 前置、keystore 生成脚本用法、assembleDebug 步骤、core 测试命令）
+      status: complete
+  Testing:
+    unit-test-suite:
+      text: 单元测试套件全部通过：npm run test（Vitest，含新增 scripts/android-icons.test.mts）与 android/gradlew -p android/core test（core 的 VersionSpecTest 等 JUnit）；core 测试在未设置 ANDROID_HOME 的机器上仍可运行（只依赖 JDK 17）
+      status: complete
+      command: npm run test && android/gradlew -p android/core test
+    build-acceptance:
+      text: 构建验收（Windows 宿主 Android 环境）：android/gradlew -p android assembleDebug 成功产出签名 APK；:app printVersion 任务输出 versionName 等于 package.json version、versionCode 等于 MAJOR*10000+MINOR*100+PATCH；用 aapt 或等价方式核对 APK 元数据 versionName/versionCode 与 applicationId work.keepwriting.dshanywhere、显示名 DSH Anywhere
+      status: complete
+      command: android/gradlew -p android assembleDebug :app:printVersion
+    negative-signing-path:
+      text: 负路径验收：临时移除 DSH_KEYSTORE_PROPS 环境变量并将缺省 keystore.properties 改名后，android/gradlew -p android assembleDebug 必须失败，且错误信息包含 scripts/android-keystore.mts 的生成提示；恢复后重新构建成功；core 的 test 任务在 keystore 缺失时不受影响
+      status: complete
+      command: android/gradlew -p android assembleDebug
+  Verification:
+    full-regression:
+      text: 完整回归命令（config.yaml 更新后的命令）本地逐字通过：npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test；覆盖率门槛 80% 仍按现有 scope 执行
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    ready-verify:
+      text: strict-spec-cli ready android-scaffold 与 strict-spec-cli verify android-scaffold 通过：工件齐备、delta-tech 与主标准一致、任务门禁已设置
+      status: complete
+      command: strict-spec-cli ready android-scaffold && strict-spec-cli verify android-scaffold
+    archive-readiness:
+      text: 归档就绪检查：确认 delta-tech（android 新标准 ADDED + packaging MODIFIED）覆盖 proposal 声明的技术标准变更、无 specs/ delta（技术型变更正当留空）、git status 干净且提交在 dev 分支，供 strict-spec-review/archive 使用
+      status: complete
+      command: strict-spec-cli verify android-scaffold
+testing_gates:
+  validation_task: build-acceptance
+  unit_test_task: unit-test-suite

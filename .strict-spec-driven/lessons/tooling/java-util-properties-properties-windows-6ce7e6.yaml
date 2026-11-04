@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: java-util-properties-properties-windows-6ce7e6
+  title: java.util.Properties 把反斜杠当转义符：生成 .properties 里的 Windows 路径必须写正斜杠
+category: tooling
+status: active
+created_at: '2026-11-04T08:28:30.648Z'
+updated_at: '2026-11-04T08:28:30.648Z'
+context: android-scaffold 的 scripts/android-keystore.mts 把 storeFile=C:\Users\... 写入 keystore.properties，android/app/build.gradle.kts 用 java.util.Properties 读取后传给 AGP 签名。
+observation: 首次 assembleDebug 在 validateSigningDebug 以 IOException「文件名、目录名或卷标语法不正确」失败：Properties.load 把 \U、\w 等当转义序列解析，路径变成乱码；参考项目在 Linux 上生成同样代码从未暴露该问题。
+takeaway: 任何脚本生成 .properties 文件时，路径一律写正斜杠（java.io.File 两种分隔符都接受），并在生成端测试中断言不出现反斜杠；同理适用于 Gradle 侧自产 properties。
+applies_when: 在 Windows 开发机上生成或手工编辑会被 java.util.Properties（或同类 \ 转义解析器，如 Flask、log4j properties）消费的配置文件，且值里含文件系统路径时
+occurrences:
+  - origin: android-scaffold
+    date: '2026-11-04'
+    evidence: 修复 commit 前后实测：反斜杠路径 assembleDebug 失败（2026-11-04 本机），改为 replaceAll('\','/') 后 assembleDebug 成功且 apksigner verify 通过；scripts/android-keystore.test.mts 断言正斜杠路径

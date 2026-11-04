@@ -1,0 +1,53 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED:
+    proxy-split-routing:
+      strength: MUST
+      statement: WebView 的全部网络请求经 App 进程内的本地代理桥按目标分流：tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）经内嵌 Tailscale 节点转发，其他目标经手机网络直连；harness 的流式回答与 WebSocket 经桥正常工作；非 tailnet 的 harness 地址在隧道任何状态下都照常直连，不受隧道影响。
+      scenarios:
+        tailnet-harness-loads:
+          - GIVEN: 已配置 tailnet 上的 harness 地址（如 http://gamepc:13080/），隧道已连接
+          - WHEN: 打开主页面
+          - THEN: WebView 经内嵌节点加载 harness 页面，流式回答持续渲染
+        non-tailnet-unaffected:
+          - GIVEN: 已配置公网/局域网 harness 地址，隧道处于任意状态（含未配置）
+          - WHEN: 打开主页面并使用
+          - THEN: 请求经手机网络直连，行为与无隧道时一致
+    proxy-isolation:
+      strength: MUST
+      statement: 本地代理桥只监听手机本机回环的随机端口并要求本进程随机生成的代理凭据：不带或带错凭据的访问得到 407 且不连接任何目标；手机本机回环目标（127.0.0.0/8、::1、localhost）经桥的访问被拒绝；明文 http 转发只允许已保存 harness 的源，其他主机的明文请求被拒绝（https 的 CONNECT 隧道不受此限）；在役连接数有上限，超限直接关闭。
+      scenarios:
+        no-credential-407:
+          - GIVEN: 代理桥在役（端口 P）
+          - WHEN: 同机其他进程（如 adb shell 下 curl）不带凭据访问 127.0.0.1:P
+          - THEN: 得到 407，且桥没有向任何目标发起连接
+        loopback-rejected:
+          - GIVEN: WebView 经桥请求 127.0.0.1:任意端口 或 localhost 目标
+          - WHEN: 请求到达桥
+          - THEN: 请求被拒绝，不拨号
+        cleartext-gated:
+          - GIVEN: 已保存 harness 源 http://gamepc:13080/
+          - WHEN: 经桥请求其他主机的明文 http 地址
+          - THEN: 请求被拒绝；对 harness 源的明文请求正常转发
+    tunnel-gated-tailnet-load:
+      strength: MUST
+      statement: 配置的 harness 地址为 tailnet 目标时，主页面按隧道状态联动：隧道未配置时显示需要接入 tailnet 的本地说明与「去设置」入口，不加载网页；隧道连接中、需要 key 或失败时显示隧道状态与「重试连接」「去设置」入口，不加载网页；隧道变为已连接后自动加载 harness；连接探测与会话失效探测经与 WebView 相同的分流路径发出（tailnet 目标经节点），保证可达性判定一致。
+      scenarios:
+        unconfigured-tailnet-prompt:
+          - GIVEN: 已配置 http://gamepc:13080/（tailnet 目标），隧道未配置
+          - WHEN: 打开主页面
+          - THEN: 显示需要接入 tailnet 的说明与去设置入口，不出现空白页或连接错误页
+        tunnel-not-ready-waits:
+          - GIVEN: 配置同上，隧道处于连接中/需要 key/失败
+          - WHEN: 打开主页面
+          - THEN: 显示隧道状态与重试连接、去设置入口，不加载网页
+        auto-load-on-connected:
+          - GIVEN: 配置同上，主页面显示隧道等待面板
+          - WHEN: 隧道变为已连接
+          - THEN: 主页面自动探测并加载 harness 页面
+  MODIFIED: {}
+  REMOVED: {}

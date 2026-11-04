@@ -1,0 +1,36 @@
+{
+  "comment": "harness URL 校验与 token 剥离的共享测试向量：桌面端 Vitest（src/main/url-validation.test.ts、src/main/config.test.ts）与 Android core JUnit（HarnessUrlTest、HarnessConfigTest）读同一份文件断言，两端无差异项。任一端要改行为，必须同步修改本文件并在两端同时通过。normalize 组字段：input（原始输入）、valid（是否合法）、errorCategory（非法时的类别，对应桌面 URL_ERRORS）、stripped（合法时剥离 token 后的期望地址，与 WHATWG URL.href 形态一致）。readConfig 组字段：fileContent（null 表示文件不存在）、expectedStatus（missing/invalid/ok）、expectedUrl（ok 时的期望地址）。",
+  "normalize": [
+    { "input": "  https://dsh.example.test:13080/  ", "valid": true, "stripped": "https://dsh.example.test:13080/" },
+    { "input": "http://127.0.0.1:13080/?token=abc123", "valid": true, "stripped": "http://127.0.0.1:13080/" },
+    { "input": "https://dsh.example.test/base/?lang=zh&token=abc123&token=def456#top", "valid": true, "stripped": "https://dsh.example.test/base/?lang=zh#top" },
+    { "input": "https://dsh.example.test/base/?lang=zh", "valid": true, "stripped": "https://dsh.example.test/base/?lang=zh" },
+    { "input": "https://dsh.example.test/?%74oken=abc&q=a%20b&&tokens=1", "valid": true, "stripped": "https://dsh.example.test/?q=a%20b&tokens=1" },
+    { "input": "https://dsh.example.test/?%E0=1&Token=2", "valid": true, "stripped": "https://dsh.example.test/?%E0=1&Token=2" },
+    { "input": "HTTP://DSH.EXAMPLE.TEST/", "valid": true, "stripped": "http://dsh.example.test/" },
+    { "input": "https://dsh.example.test:443/path", "valid": true, "stripped": "https://dsh.example.test/path" },
+    { "input": "http://dsh.example.test:80/x", "valid": true, "stripped": "http://dsh.example.test/x" },
+    { "input": "https://dsh.example.test", "valid": true, "stripped": "https://dsh.example.test/" },
+    { "input": "   ", "valid": false, "errorCategory": "empty" },
+    { "input": "/chat", "valid": false, "errorCategory": "notAbsolute" },
+    { "input": "dsh.example.test/chat", "valid": false, "errorCategory": "notAbsolute" },
+    { "input": "ftp://dsh.example.test/", "valid": false, "errorCategory": "unsupportedScheme" },
+    { "input": "file:///tmp/x", "valid": false, "errorCategory": "unsupportedScheme" },
+    { "input": "javascript:alert(1)", "valid": false, "errorCategory": "unsupportedScheme" },
+    { "input": "http://dsh.example.test/%zz?token=abc123", "valid": false, "errorCategory": "malformed" },
+    { "input": "http://", "valid": false, "errorCategory": "malformed" }
+  ],
+  "readConfig": [
+    { "fileContent": null, "expectedStatus": "missing" },
+    { "fileContent": "not json", "expectedStatus": "invalid" },
+    { "fileContent": "{\"harnessURL\": \"ftp://dsh.example.test/\"}", "expectedStatus": "invalid" },
+    { "fileContent": "{\"harnessURL\": 123}", "expectedStatus": "invalid" },
+    { "fileContent": "{}", "expectedStatus": "invalid" },
+    { "fileContent": "{\"harnessURL\": \"https://dsh.example.test/base/?lang=zh&token=abc123&token=def456#top\"}", "expectedStatus": "ok", "expectedUrl": "https://dsh.example.test/base/?lang=zh#top" },
+    { "fileContent": "{\"harnessURL\": \"http://127.0.0.1:13080/\"}", "expectedStatus": "ok", "expectedUrl": "http://127.0.0.1:13080/" },
+    { "fileContent": "{\"other\": true, \"harnessURL\": \"https://dsh.example.test/\"}", "expectedStatus": "ok", "expectedUrl": "https://dsh.example.test/" },
+    { "fileContent": "{\"harnessURL\": \"https://dsh.example.test/\", \"x\": 01}", "expectedStatus": "invalid" },
+    { "fileContent": "{\"harnessURL\": \"https://dsh.example.test/\", \"x\": -}", "expectedStatus": "invalid" },
+    { "fileContent": "{\"harnessURL\": \"https://dsh.example.test/\", \"x\": 1.5e}", "expectedStatus": "invalid" }
+  ]
+}

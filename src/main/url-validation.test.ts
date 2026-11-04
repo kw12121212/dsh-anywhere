@@ -1,5 +1,19 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { URLValidationError, URL_ERRORS, hasToken, normalizeHarnessURL, redactURL } from './url-validation'
+
+// 共享测试向量（testdata/harness-url-vectors.json）与 Android core 的 JUnit 读同一份
+// 文件：harness-url-config 主规格平台无关，两端无差异项，任一端改行为必须同步改向量。
+const vectors = JSON.parse(
+  readFileSync(join(fileURLToPath(new URL('../..', import.meta.url)), 'testdata', 'harness-url-vectors.json'), 'utf8')
+) as {
+  normalize: Array<{ input: string; valid: true; stripped: string } | { input: string; valid: false; errorCategory: keyof typeof URL_ERRORS }>
+  readConfig: Array<{ fileContent: string | null; expectedStatus: string; expectedUrl?: string }>
+}
+
+const CATEGORY_TO_ERROR: Record<keyof typeof URL_ERRORS, string> = URL_ERRORS
 
 function validationMessage(raw: string): string {
   try {
@@ -65,5 +79,24 @@ describe('hasToken', () => {
     expect(hasToken('https://dsh.example.test/?lang=zh')).toBe(false)
     expect(hasToken('https://dsh.example.test/')).toBe(false)
     expect(hasToken('::')).toBe(false)
+  })
+})
+
+describe('共享测试向量（与 Android core JUnit 同源）', () => {
+  it('normalize 组逐条断言校验结果、错误类别与剥离后地址', () => {
+    expect(vectors.normalize.length).toBeGreaterThanOrEqual(15)
+    for (const [index, c] of vectors.normalize.entries()) {
+      if (c.valid) {
+        expect(normalizeHarnessURL(c.input)).toBe(c.stripped)
+      } else {
+        try {
+          normalizeHarnessURL(c.input)
+          expect.unreachable(`向量 #${index} 输入 ${c.input} 应以 ${c.errorCategory} 拒绝`)
+        } catch (err) {
+          expect(err).toBeInstanceOf(URLValidationError)
+          expect((err as Error).message).toBe(CATEGORY_TO_ERROR[c.errorCategory])
+        }
+      }
+    }
   })
 })
