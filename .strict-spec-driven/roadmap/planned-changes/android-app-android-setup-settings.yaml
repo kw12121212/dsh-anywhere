@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: android-setup-settings
+  milestone: android-app
+status: planned
+summary: 在 Android 上复刻 harness URL 校验、token 剥离与持久化，以及首次设置页与设置页，校验逻辑与桌面端共用一份测试向量
+details: core 模块用 Kotlin 实现与桌面端一致的 harness URL 校验（只接受带主机名的 http/https 绝对地址，忽略首尾空白；按里程碑 intake 问题 cleartext-http 的决定，Android 同样接受 http）、token 查询参数剥离（只剥离 token，其他参数、路径、片段不变）与配置读取的“从未保存/配置无效”区分。新增一份共享 JSON 测试向量（输入、是否合法、拒绝原因类别、剥离后地址），桌面端 Vitest 与 core 的 JUnit 读取同一文件断言结果一致，两端之间没有差异项；任一端改行为必须同步改向量。:app 中配置保存在 App 私有存储（原子写入），只保存剥离后的干净地址，token 不进配置、日志与错误提示。首次设置页：无有效配置时显示欢迎说明、提示“粘贴 dsh-url 或 dsh web 输出的地址”的输入框与“开始使用”按钮，实时校验并显示原因，配置无效时额外提示需要重新填写；保存成功后把原始带 token 地址交给主页面加载一次（主页面由 android-main-webview 实现，本变更先以占位跳转接通）。设置页：可查看与修改 harness URL，保存规则同上；预留 Tailscale 卡片位置由 android-tstunnel 填充。主规格：新增 android-app 主规格描述 Android 上的首次设置与设置页可观察行为，harness-url-config 现有要求不变（平台无关）。测试：core JUnit 覆盖校验、剥离与读取三态；共享向量在 Vitest 与 JUnit 两侧都被执行；:app 的保存与界面行为在 Windows 宿主模拟器上验收并留证。
+depends_on:
+  - android-scaffold

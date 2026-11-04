@@ -1,0 +1,11 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: android-scaffold
+  milestone: android-app
+status: planned
+summary: 建立 android/ Gradle 多模块工程（:app 与纯 JVM core 模块）、应用身份与统一签名、从 package.json 派生的版本号，并把 core 模块 JVM 测试接入完整回归命令
+details: 工程：android/ 下放 :app 的 Gradle 构建（settings.gradle.kts、Gradle wrapper），:app 为 Kotlin + Jetpack Compose Material3 的单 Activity 应用，启动后显示占位页；core 为不依赖 android.* 的纯 JVM Kotlin 模块，作为独立 Gradle 构建放在 android/core，由 :app 以 includeBuild 引用，使 android/gradlew -p android/core test 只需 JDK 17、不需要 Android SDK。身份（里程碑 intake 问题 android-identity 已确认）：applicationId 为 work.keepwriting.dshanywhere，显示名称 DSH Anywhere，启动图标由现有桌面图标源生成。签名：debug 与 release 统一使用 ~/.config/dsh-anywhere/keys/ 下不入库的专用 release keystore，路径与密码经环境变量或本机未入库的 Gradle 配置读取，缺失时构建失败并提示 keystore 生成脚本（scripts/ 下）的用法。版本：versionName 在构建期读取仓库根 package.json 的 version，versionCode 按 MAJOR*10000+MINOR*100+PATCH 派生，Gradle 中不出现第二个版本号；packaging 技术标准的版本单一来源规则扩展到 Android。门禁：config.yaml 的 review_evidence 回归命令在现有命令之后追加 android/gradlew -p android/core test；80% 行覆盖率门槛的 scope 保持 src/**/*.ts 与 scripts/**/*.mts，Kotlin 代码不设覆盖率门槛，以 core 的 JUnit 全部通过为准；.gitignore 忽略 android 构建产物、local.properties 与 app/libs。文档：新增 android 技术标准（模块边界、纯逻辑下沉到 core、AAR 不入库、签名约定），AGENTS.md、README 与 config.yaml context 补充 Android 端说明与常用命令。测试：core 模块至少一个真实 JUnit 测试；scripts 下版本派生逻辑若用 .mts 实现则以 Vitest 覆盖；验收为 assembleDebug 成功、删除 keystore 环境变量后构建失败并带提示、APK 的 versionName 等于 package.json version、未设置 ANDROID_HOME 时 core 测试仍可运行。
+depends_on: []

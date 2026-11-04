@@ -19,3 +19,7 @@ milestones:
     title: 迁移到 Electron 技术栈
     path: roadmap/milestones/electron-migration.yaml
     status: complete
+  android-app:
+    title: Android App（内嵌 Tailscale）
+    path: roadmap/milestones/android-app.yaml
+    status: proposed

@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: android-release
+  milestone: android-app
+status: planned
+summary: 本地发布脚本构建 AAR 与签名 APK，上传到同版本的 GitHub Release 并附 sha256；CI 不构建 Android
+details: scripts/ 下新增本地 Android 发布脚本：依次校验工作区干净、HEAD 正好位于 v<package.json version> tag 提交、对应 GitHub Release 已存在（由现有 Release 工作流创建）、keystore 可用，任一不满足即失败且不上传；随后运行 AAR 构建脚本与 assembleRelease，产物按 packaging 技术标准带版本号命名（如 DSH-Anywhere-<version>.apk），生成同名 .sha256 文件，用 apksigner 校验签名证书与本地 keystore 一致后，以 gh release upload 上传 APK 与 .sha256 到该 Release；同名资产已存在时默认拒绝覆盖，显式参数才覆盖。脚本只在本机运行（WSL 或装有完整 Android 环境的 Windows 宿主），不输出 keystore 密码等密钥材料；版本只来自 package.json，不引入第二版本来源。现有 package.yml 与 release.yml 不变，CI 不构建 Android、不需要签名 Secrets；Release 工作流生成的桌面 SHA256 校验文件不含 APK，APK 以自身 .sha256 文件为准（android-self-update 读取它）。packaging 技术标准与 AGENTS.md 的发布流程补充 Android 步骤（打 tag、等 Release 工作流完成、运行本地脚本）。测试：脚本的前置校验（tag 不符、工作区脏、Release 不存在、资产已存在）以 Vitest 覆盖，可执行外部命令处注入替身；验收为正式 tag 后版本发布页出现签名 APK 与 .sha256，下载后 sha256 一致，安装后 versionName 等于 package.json version。
+depends_on:
+  - android-scaffold
+  - android-tstunnel

@@ -1,0 +1,82 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  android-app:
+    title: Android App（内嵌 Tailscale）
+order: 500
+goal: 在 Android 手机上安装 DSH Anywhere App，用与桌面端相同的方式接入用户配置的远程 DeepSeek harness URL：首次粘贴 dsh-url 输出的带 token 地址即建立会话并进入 harness，会话跨重启保留、失效时提示重新认证；App 进程内嵌 Tailscale 节点（tsnet），粘贴一次 tagged auth key 后无需安装官方 Tailscale App 即可访问 tailnet 中的 harness，非 tailnet 目标直接经手机网络访问；签名 APK 由本地脚本构建并上传到对应 v* 版本的 GitHub Release，App 可检查并安装新版本。
+scope:
+  in:
+    - android/ 下的 Gradle 多模块工程：:app（Kotlin + Jetpack Compose + WebView）、纯 JVM core 模块（URL 校验与 token 剥离、同源判定、tailnet 分流、代理协议）、tstunnel Go 模块（tsnet 经 gomobile bind 为 AAR，由 scripts/ 下的构建脚本产出，不入库）
+    - 按现有主规格的平台无关行为在 Android 上复刻：harness-url-config、first-run-setup、load-failure、navigation-scope、session-auth 及 main-window 中的远程页面隔离与重新加载；以新的 Android 主规格描述手机上的对应交互（设置页、返回键、外部链接交给系统浏览器）
+    - 内嵌 Tailscale：tagged auth key 引导、节点状态持久化与免 key 重连、设置页显示隧道状态与节点名；WebView 经进程内带随机凭据的本地代理桥按目标分流
+    - 回归命令追加 Android 纯 JVM 模块测试；新增 Android 技术标准；AGENTS.md、README、config.yaml context 补充 Android 端说明
+    - 版本与发布：versionName 取自 package.json、versionCode 按固定公式派生；本地脚本构建签名 APK 并上传到同版本的 GitHub Release；App 内检查更新、sha256 校验与安装
+  out:
+    - iOS 客户端
+    - 交互式 Tailscale 登录、出口节点、经内嵌节点访问公网
+    - 通用浏览器能力（多标签、书签、地址栏任意浏览）以及网页内文件上传与下载
+    - 常驻前台服务、后台保活、推送通知（更新就绪通知除外）
+    - 应用商店上架；桌面端任何对外行为变化
+done_criteria:
+  - 全新安装、手机未安装官方 Tailscale App：粘贴 tagged auth key 后内嵌节点入网，再粘贴 dsh-url 输出的带 token 地址即进入 tailnet 上的 harness 页面；强杀 App 后重新打开无需再输入 key 与地址，直接恢复 harness 页面且仍处于登录状态
+  - dsh web 重启使会话失效后，App 显示本地重新认证提示页，粘贴新地址保存后无需重启 App 即恢复 harness；token 不出现在配置、日志与导航历史中
+  - 安装旧版本 APK 后发布更高版本，App 检查到新版本、下载并校验 sha256 后调起系统安装器完成覆盖升级；校验失败时删除文件且不调起安装器
+  - 完整回归命令包含 Android 纯 JVM 模块测试并通过；运行本地发布脚本后，v* 版本发布页出现签名 APK 及其 sha256 文件，versionName 与 package.json 一致
+  - 未配置 auth key 时，手机网络可直连的 harness 地址（验收时用 Windows 宿主上可被模拟器直连的模拟 dsh 服务端）可正常进入；配置的地址为 tailnet 地址时显示需要接入 tailnet 的提示与去设置入口，而不是空白页
+  - harness 页面中非同源 http/https 链接与 window.open 交给系统浏览器，同源链接留在 App 内；harness 的流式回答与 WebSocket 正常；返回键先在网页历史中后退；远程页面无法调用 App 的任何本地接口
+  - 同机其他进程不带本 App 代理凭据访问其本地代理端口得到 407，代理不连接任何目标；经代理访问手机本机回环地址被拒绝
+intake_questions:
+  - id: auth-mode
+    question: 内嵌 Tailscale 节点如何入网？
+    context: 参考项目 private-content-assistant 用一次性粘贴的 tagged auth key；tsnet 也支持交互登录 URL，但无 key 且无持久状态时 Up() 会永久阻塞。
+    impact: 决定 android-tstunnel 的引导态、设置界面与 ACL 前置条件。
+    recommendation: 已确认（2026-11-04）：使用 tagged auth key，复用用户已有的 tag:pca-client key（不新建 tag），首次粘贴后持久化节点状态，强杀后免 key 重连；不做交互登录。
+  - id: tunnel-optional
+    question: 隧道是否必需？App 能否访问不在 tailnet 上的 harness？
+    context: harness 当前经 tailscale serve 暴露在 *.ts.net 上，但用户配置的地址也可能是公网地址。
+    impact: 决定未配置 key 时的行为与 WebView 分流设计。
+    recommendation: 已确认（2026-11-04）：隧道可选、按目标分流：tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）经内嵌节点，其他目标经手机网络直连；未配置 key 时公网 harness 地址仍可用，tailnet 地址给出需要接入 tailnet 的提示。
+  - id: regression-scope
+    question: Android 哪些部分进入完整回归命令？
+    context: 现有回归命令只调用 Node 工具链；AAR 与 APK 构建依赖 Go、Android SDK 与 NDK 的本机状态。
+    impact: 决定 config.yaml 回归命令与 Android 模块划分。
+    recommendation: 已确认（2026-11-04）：只把纯 JVM 模块（URL 校验、token 剥离、同源判定、分流与代理协议等）的测试接入回归命令（需 JDK 17）；AAR 与 APK 构建、设备验收不进回归命令。
+  - id: distribution
+    question: APK 如何分发与更新？
+    context: 仓库为公开的 GitHub 仓库 kw12121212/dsh-anywhere，现有 Release 工作流在 v* tag 时发布三平台桌面安装包；CI 构建 AAR 需在 runner 上装 Go、gomobile 与 NDK，耗时长。
+    impact: 决定 android-release 与 android-self-update 的范围。
+    recommendation: 已确认（2026-11-04）：APK 在本地构建签名后上传到同一版本的 GitHub Release（附 sha256），CI 不构建 Android、不需要签名 Secrets；App 内检查 GitHub Releases 的新版本、校验 sha256 后调起系统安装器。
+  - id: android-identity
+    question: Android 包名、显示名称与签名 keystore 如何确定？
+    context: 桌面端 appId 为 work.keepwriting.dsh-anywhere，Android 包名不允许连字符；包名与签名一旦发布不宜修改，App 内更新要求所有构建同一签名。
+    impact: 决定 android-scaffold 的 applicationId 与签名配置。
+    recommendation: 已确认（2026-11-04）：包名 work.keepwriting.dshanywhere，显示名 DSH Anywhere；专用 release keystore 存放在 ~/.config/dsh-anywhere/keys/（不进仓库，用户自行备份），debug 与 release 统一用它签名，只在本机构建使用。
+  - id: cleartext-http
+    question: Android 端是否允许 http:// 的 harness 地址？
+    context: 桌面端 harness-url-config 接受 http 与 https；Android 9 起默认禁止明文流量，参考项目只允许 https。实际 harness 在 tailnet 上为 https，但模拟器验收用的模拟 dsh 服务端用 http 最简单。
+    impact: 决定 android-setup-settings 的校验是否与桌面完全一致（共享测试向量）以及明文策略。
+    recommendation: 已确认（2026-11-04）：与桌面一致接受 http，共享测试向量对两端无差异项；明文只对已保存 harness 地址的源放开。因 harness 主机由用户运行时配置，无法写进静态的 network security config 域名白名单，故清单层面允许明文，由 App 在运行时把明文 http 限定为已保存 harness 的源（主页面与子资源请求、连接与会话探测），其他主机的 http 请求被拦截或拒绝。
+planned_changes: {}
+dependencies:
+  - electron-migration 里程碑已完成；桌面端主规格与回归命令作为 Android 行为复刻的基准
+  - 复用用户已有的 tag:pca-client tagged auth key；Tailscale ACL 须允许 tag:pca-client 访问 gamepc:13080（由 android-tstunnel 的验证 spike 确认，不满足时由用户在 Tailscale 管理后台调整）
+  - WSL 内 JDK 17、Gradle、Android SDK 与 NDK、Go 与 gomobile 可用；Windows 宿主 GAMEPC 装有完整 Android 开发环境与模拟器，模拟器验收经 interop 在宿主上运行（WSL 无 /dev/kvm），真机验收由用户在自己的手机上执行
+  - 本机 gh CLI 已登录且有该仓库 Release 上传权限
+risks:
+  - 内嵌 tsnet 已知坑：SELinux 禁止 netlink 需注入 Java 网卡快照与默认路由；无 key 且无持久状态时 Up() 永久阻塞；平台 HTTP 栈无法解析 MagicDNS；同进程关闭再重建节点的行为在 Android 上未经构造性验证
+  - APK 体积因 tsnet 增加约 20 MB（arm64）；tailscale、gomobile、NDK 升级后行为可能变化，需重新验证
+  - Android 12 以上从后台调起安装器会被静默丢弃，需在前台或经通知点击调起
+  - 签名 keystore 只在本机，丢失会导致后续版本无法覆盖升级、泄漏会让他人可签发可升级的 APK；本地构建发布依赖发布人工作区干净且位于 tag 提交上，由发布脚本强制校验
+  - 与 private-content-assistant 共用 tag:pca-client：任一 App 的 key 泄漏都获得该 tag 在 ACL 中的全部访问权，两个 App 的 ACL 需求变化会互相影响
+  - WebView 只能经 androidx.webkit ProxyController 覆盖代理，旧版系统 WebView 不支持；WebView 无法读取主框架 401 响应正文，会话失效识别改由 App 侧带 WebView cookie 经同一网络路径探测干净地址，需实测
+status: proposed
+notes:
+  - 参考 ../private-content-assistant：android/tstunnel（tstunnel.go、interfaces.go、defaultroute_android.go 与 defaultroute_other.go）、android/loopback（LoopbackProxy、Socks5、ConnectBridge、BrowserRouting）、scripts/ops/build-android-tstunnel.sh、android-keystore.sh、android-release.sh，以及 .strict-spec-driven/tech/android-client.yaml、specs/android-app.yaml、changes/archive/2026-10-26-android-tstunnel 与 2026-11-03-android-tailnet-browser
+  - 参考项目的 lessons 必须核对原始平台再引用（其 lesson-a8cde8）：tsnet-up-key-20f857（Up 前分流）、tailscale-netmon-goos-linux-0d714f（按 GOOS 拆分 netmon 符号）
+  - 版本号唯一来源仍是 package.json：Android versionName 构建期读取 package.json，versionCode 由 MAJOR*10000+MINOR*100+PATCH 派生，不得在 Gradle 中另存版本号
+  - Android 端不复刻桌面专属行为：应用菜单、单实例、窗口状态记忆、关于菜单项不适用；重新加载改为界面内刷新入口
+  - 规格归属：现有桌面主规格（first-run-setup、main-window、load-failure、navigation-scope、session-auth、settings-window 等）继续只描述桌面应用，平台限定语不改；Android 可观察行为全部写入由 android-setup-settings 新建、后续变更逐步扩充的 android-app 主规格；harness-url-config 平台无关，同时约束两端，由共享测试向量保证一致
+details: 技术栈：Kotlin、Jetpack Compose Material3、androidx.webkit、AGP 与 Gradle 采用当时稳定版、compileSdk/targetSdk 36、minSdk 26、JDK 17。网络形态：harness 主页面在 WebView 中加载，WebView 经 ProxyController 指向进程内本地代理桥（127.0.0.1 随机端口、随机 407 凭据、连接数上限、拒绝手机本机回环目标）；桥按目标分流，tailnet 目标经 SOCKS5 到内嵌 tsnet 节点，其余直连。TLS 由 WebView 端到端完成。连接探测与会话失效探测在 App 侧经同一分流路径发出。隧道按需启动、进程内单例、阻塞 Go 调用只在后台线程，不常驻前台服务。配置（harness URL、auth key 是否已配置、节点状态）保存在 App 私有存储，auth key 与 token 不进日志。纯逻辑下沉到 core 纯 JVM 模块并以 JUnit 覆盖；URL 校验与 token 剥离以一份共享 JSON 测试向量同时驱动 Vitest 与 JUnit，防止桌面与 Android 行为漂移。:app 与 AAR 构建、模拟器与真机验收在回归命令之外，由各变更的验收任务与证据覆盖。

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: android-tstunnel
+  milestone: android-app
+status: planned
+summary: 以 gomobile 把 tsnet 打包为 AAR 并在 App 内按需启动单例 Tailscale 节点：tagged auth key 引导、状态持久化与免 key 重连、设置页显示隧道状态
+details: 先做验证 spike：用用户已有的 tag:pca-client tagged auth key 起 tsnet 节点，经节点访问 gamepc:13080 上的 dsh web 得到响应；不通过（通常是 ACL 未允许 tag:pca-client 访问 13080）则停止并请用户调整 ACL。Go 模块 android/tstunnel 薄包装 tailscale.com/tsnet，暴露 NewNode(hostname, dir, authKey)、Start、阻塞 Up、Close、SOCKS5 回环端点、SetInterfacesJSON 与 SetDefaultRouteIfname；平台条件符号按 GOOS 拆文件并用 GOOS=android 交叉编译验证；gomobile/gobind 版本钉在 go.mod 的 tool 指令。AAR 只由 scripts/ 下构建脚本产出并同步到 android/app/libs/（不入库），脚本做静态检查。App 侧 TunnelManager：进程内单例、按需启动（打开 App 时）、ensureUp 幂等，任何 tsnet 启动前注入 Java 网卡快照与默认路由，XDG_CACHE_HOME 指向私有缓存目录，节点状态持久在 filesDir/tstunnel；阻塞调用只在后台线程，不使用常驻前台服务；auth key 不进日志。节点主机名与 private-content-assistant 的节点区分（如 dsh-anywhere-android）。隧道状态共五种：未配置（从未提供 key 且无节点状态，隧道不启动、不调用 Up()）、连接中、已连接、需要 key（已有节点状态但被 tailnet 拒绝或过期，需重新输入 key）、失败（附原因）。设置页 Tailscale 卡片显示当前状态与节点名，可粘贴 auth key 连接，在未配置、需要 key 或失败时可输入 key 并重试，可清除 key 与节点状态回到未配置。未配置时 App 其他功能照常可用（隧道可选）。主规格：android-app 主规格新增隧道引导、状态与重连场景。测试：Go 侧单测与交叉编译；状态转移判定（无 key 无状态直接未配置且不调用 Up、有持久状态无 key 尝试重连、Up 失败分类为需要 key 或失败）放在 core 模块并以 JUnit 覆盖，随回归命令执行；Windows 宿主模拟器与真机生命周期取证（首启、粘贴 key 入网、强杀重连、换 key 重建）留证。
+depends_on:
+  - android-scaffold
