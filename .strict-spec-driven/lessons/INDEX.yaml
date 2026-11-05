@@ -167,3 +167,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/windows-shell-linux-macos-permission-denied-952181.yaml
+    runner-os-spawn-c49e1a:
+      title: 假 Runner 单测全绿不代表脚本能在真实 OS 上执行：跨平台发布脚本必须为每个外部命令做真实 spawn 冒烟
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/runner-os-spawn-c49e1a.yaml

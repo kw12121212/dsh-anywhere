@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: runner-os-spawn-c49e1a
+  title: 假 Runner 单测全绿不代表脚本能在真实 OS 上执行：跨平台发布脚本必须为每个外部命令做真实 spawn 冒烟
+category: tooling
+status: active
+created_at: '2026-11-05T09:40:31.356Z'
+updated_at: '2026-11-05T09:40:31.356Z'
+context: android-release.mts 的 Vitest 用注入式假 Runner 断言命令序列，脚本自交付以来从未真实执行；首次真实执行发生在 v1.1.0 发布的 Windows 发布机上。
+observation: v1.1.0 发布当刻脚本第一步 assembleRelease 即 spawnSync ENOENT（无扩展名 POSIX 脚本 android/gradlew 在 win32 不可执行），apksigner 同理；keytool 缺 -storepass 非交互无法完成、缺 -v 拿不到证书 DN。三处缺陷全部被假 Runner 测试掩盖，发布只能人工按脚本步骤完成。
+takeaway: 假 Runner 只能锁定命令序列语义，锁不住可执行形态。凡 spawn 外部命令的脚本，每个命令的形态（可执行文件名、是否需要 shell、非交互参数完备性）必须在目标平台真实 spawn 至少一次（--version 级冒烟即可）并纳入变更验收；首次真实执行不要留给发布日。
+applies_when: 编写或修改以 spawnSync/exec 调用外部工具（gradlew、apksigner、keytool、gh 等）的 scripts/ 脚本，且开发机或发布机与参照实现平台不同族时。
+occurrences:
+  - origin: fix-android-release-windows
+    date: '2026-11-05'
+    evidence: 2026-11-05 本机实测 spawnSync(android/gradlew) status=null error=ENOENT；修复后 gradlew.bat/apksigner.bat --version 真实冒烟 status=0；scripts/android-release.test.mts 以平台调用形态断言与 main 级成功路径测试锁定。

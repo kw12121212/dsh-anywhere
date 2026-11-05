@@ -26,13 +26,28 @@ export interface RunnerResult {
   status: number | null
   stdout: string
   stderr: string
+  /** spawnSync 自身失败（如 win32 上对无扩展名脚本 ENOENT）时的 error.message，供 fail 文案附加以免掩盖真实原因。 */
+  error?: string
 }
 
-export type Runner = (command: string, args: string[], cwd?: string) => RunnerResult
+export interface RunnerOptions {
+  cwd?: string
+  /** 追加合并进进程环境的变量（如 -storepass:env 的密码），不落在命令行。 */
+  env?: NodeJS.ProcessEnv
+  /** win32 上执行 .bat / 脚本包装器必须经 shell（node 的 shell 即 cmd /d /s /c 并处理引用）。 */
+  shell?: boolean
+}
 
-export const spawnRunner: Runner = (command, args, cwd) => {
-  const r = spawnSync(command, args, { cwd: cwd ?? repoRoot, encoding: 'utf8' })
-  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+export type Runner = (command: string, args: string[], opts?: RunnerOptions) => RunnerResult
+
+export const spawnRunner: Runner = (command, args, opts) => {
+  const r = spawnSync(command, args, {
+    cwd: opts?.cwd ?? repoRoot,
+    encoding: 'utf8',
+    ...(opts?.shell === true ? { shell: true } : {}),
+    ...(opts?.env ? { env: { ...process.env, ...opts.env } } : {}),
+  })
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', ...(r.error ? { error: r.error.message } : {}) }
 }
 
 function fail(message: string): never {
@@ -104,6 +119,34 @@ export function certificatesMatch(apksignerOut: string, keytoolOut: string): boo
   return a !== null && a === k
 }
 
+/** gradle 调用按平台选入口：win32 的 CreateProcess 不能执行无扩展名 POSIX 脚本，走 gradlew.bat 且经 shell。 */
+export function gradleInvocation(): { command: string; args: string[]; shell: boolean } {
+  const win32 = process.platform === 'win32'
+  return { command: win32 ? 'android\\gradlew.bat' : 'android/gradlew', args: ['-p', 'android', 'assembleRelease'], shell: win32 }
+}
+
+/** build-tools 最新版内的 apksigner 入口：win32 侧只有 apksigner.bat。 */
+export function apksignerPath(androidHome: string): string {
+  const base = join(androidHome, 'build-tools', readdirSync(join(androidHome, 'build-tools')).sort().at(-1) ?? '', 'apksigner')
+  return process.platform === 'win32' ? `${base}.bat` : base
+}
+
+/** keytool 证书 DN 查询：-v 才输出 DN；密码经 -storepass:env 注入环境，不进命令行。 */
+export function keytoolInvocation(storeFile: string, keyAlias: string, storePassword: string): { command: 'keytool'; args: string[]; env: Record<string, string> } {
+  return {
+    command: 'keytool',
+    args: ['-list', '-v', '-keystore', storeFile, '-alias', keyAlias, '-storepass:env', 'DSH_KEYSTORE_STOREPASS'],
+    env: { DSH_KEYSTORE_STOREPASS: storePassword },
+  }
+}
+
+/** 失败文案附加真实原因：spawn error 优先，其次截断的 stderr。 */
+function describeFailure(r: RunnerResult): string {
+  if (r.error) return `：${r.error}`
+  const s = r.stderr.trim()
+  return s ? `：${s.slice(0, 120)}` : ''
+}
+
 export function main(argv: string[] = process.argv.slice(2), runner: Runner = spawnRunner, env: NodeJS.ProcessEnv = process.env, fileExists: (path: string) => boolean = existsSync): void {
   const overwrite = argv.includes('--overwrite')
   const version = readPackageVersion(join(repoRoot, 'package.json'))
@@ -121,8 +164,9 @@ export function main(argv: string[] = process.argv.slice(2), runner: Runner = sp
   // 构建：AAR（stamp 幂等）+ assembleRelease。
   const aar = runner('node', ['scripts/build-android-tstunnel.mts'])
   if (aar.status !== 0) fail('AAR 构建失败（scripts/build-android-tstunnel.mts）')
-  const gradle = runner('android/gradlew', ['-p', 'android', 'assembleRelease'])
-  if (gradle.status !== 0) fail('assembleRelease 失败')
+  const gradleCmd = gradleInvocation()
+  const gradle = runner(gradleCmd.command, gradleCmd.args, gradleCmd.shell ? { shell: true } : undefined)
+  if (gradle.status !== 0) fail(`assembleRelease 失败${describeFailure(gradle)}`)
 
   // 产物命名 + sha256。
   const outDir = join(repoRoot, 'android', 'app', 'build', 'outputs', 'apk', 'release')
@@ -137,11 +181,16 @@ export function main(argv: string[] = process.argv.slice(2), runner: Runner = sp
 
   // 签名核验：apksigner 证书 DN 与 keystore 侧一致（Android SDK build-tools）。
   const androidHome = env.ANDROID_HOME ?? join(env.LOCALAPPDATA ?? '', 'Android', 'Sdk')
-  const apksigner = join(androidHome, 'build-tools', readdirSync(join(androidHome, 'build-tools')).sort().at(-1) ?? '', 'apksigner')
-  const verify = runner(apksigner, ['verify', '--print-certs', apk])
+  const verify = runner(apksignerPath(androidHome), ['verify', '--print-certs', apk], process.platform === 'win32' ? { shell: true } : undefined)
+  if (verify.status !== 0) fail(`apksigner verify 失败${describeFailure(verify)}`)
   const props = readFileSync(keystorePropsPath(env), 'utf8')
   const storeFile = /^storeFile=(.+)$/m.exec(props)?.[1]?.trim() ?? fail('keystore.properties 缺少 storeFile')
-  const keytool = runner('keytool', ['-list', '-keystore', storeFile, '-alias', /^keyAlias=(.+)$/m.exec(props)?.[1]?.trim() ?? 'dsh'])
+  const keyAlias = /^keyAlias=(.+)$/m.exec(props)?.[1]?.trim() ?? 'dsh'
+  const storePassword = /^storePassword=(.+)$/m.exec(props)?.[1]?.trim()
+  if (!storePassword) fail('keystore.properties 缺少 storePassword')
+  const kt = keytoolInvocation(storeFile, keyAlias, storePassword)
+  const keytool = runner(kt.command, kt.args, { env: kt.env })
+  if (keytool.status !== 0) fail(`keytool 读取 keystore 失败${describeFailure(keytool)}`)
   if (!certificatesMatch(verify.stdout, keytool.stdout)) {
     fail('APK 签名证书与本地 keystore 不一致：拒绝上传（android-uniform-signing）')
   }

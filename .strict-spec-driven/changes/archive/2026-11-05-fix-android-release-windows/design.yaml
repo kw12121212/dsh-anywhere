@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-android-release-windows
+approach:
+  - 外部命令调用按平台选入口：win32 用 android\gradlew.bat 与 build-tools 的 apksigner.bat 并以 shell:true 执行（沿用 scripts/build-android-tstunnel.mts 已有的平台分支惯例，node 的 shell 引用即 cmd /d /s /c，不手写 cmd 引号拼接）；keytool 增加 -v 使 Owner DN 出现，keystore 密码从 keystore.properties 的 storePassword 读出后经 -storepass:env 注入进程环境（值不进命令行）。Runner 类型加可选第三参 opts（cwd/env/shell），spawnRunner 相应透传并把 r.error.message 记入 RunnerResult.error，main 各步 fail 文案附加该错误，spawn 失败不再被固定文案掩盖。修复层在 scripts/android-release.mts 自身：缺陷是调用形态错误，不是任何规格语义变化。
+decisions:
+  win32-bat-shell:
+    decision: gradlew 与 apksigner 在 win32 用 .bat 文件名 + shell:true，而非手写 cmd /c 参数拼接
+    rationale: node spawnSync 的 shell:true 在 Windows 走 cmd /d /s /c 且自动处理引用；手写 cmd 引号规则易错。当前全部实参（-p android、assembleRelease、verify --print-certs、APK 路径）均无空格，引用风险受控并有测试锁定调用形态。
+  storepass-env-inject:
+    decision: keystore 密码经 -storepass:env 环境变量注入，不从命令行传明文
+    rationale: android-local-release 规定脚本不输出 keystore 密码等密钥材料；-storepass:env 只在命令行出现变量名，值留在进程环境，ps 与日志都看不到。
+  keytool-v-for-dn:
+    decision: keytool 加 -v 而不是改 certificatesMatch 去解析指纹
+    rationale: JDK 25 的 -list 默认输出只有别名列与 SHA-256 指纹，无 DN；certificatesMatch 的正则直接匹配 DN 本身、不依赖 Owner 标签的本地化文案，-v 即可让它工作，改动最小。
+  no-delta-spec:
+    decision: 本变更为纯技术修复，不新增或修改任何主规格需求
+    rationale: packaging.android-local-release 规则的契约（校验序列、命名、apksigner 核验、密钥纪律）完全不变，修复只是让脚本在 Windows 发布机上真正能履行该契约；对可观察产品行为无影响。
+alternatives: []
+risks:
+  - shell:true 对含空格路径的引用脆弱：当前所有实参路径不含空格；win32 调用形态由测试断言锁定，出现含空格路径时需先扩测试。
+  - 真实全链路（含上传）无法在本变更内安全验收：HEAD 不在 v1.1.0 tag 上且 Release 已有同名资产，脚本按设计会拒绝；全链路验收顺延至下一个 v* tag 发布执行。
+  - shell:true 携带 args 数组在 Node ≥22.12 触发 DEP0190 弃用警告（参数仅拼接不转义）：真实发布时控制台会打印该警告，未来 Node 版本可能收紧；当前全部实参无空格与特殊字符，冒烟实测通过，后续可改为传单个已引用的完整命令串规避。

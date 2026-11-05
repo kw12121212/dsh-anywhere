@@ -1,0 +1,56 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: fix-android-release-windows
+open: []
+resolved:
+  - id: q-release-machine-platform
+    question: 发布机平台假设：android-release 是否必须支持 Windows 发布机？
+    context: tech 标准 android-local-release 未指定发布机 OS；v1.1.0 实际发布机是 Windows 开发机且脚本无法运行。
+    answer: 支持。本仓库的本地发布义务在当前开发机（Windows）上履行，macOS/Linux 形态保持不变；三平台调用形态均由测试锁定。
+    status: resolved
+    kind: technical
+    answered_by: human
+  - id: q-no-overwrite-acceptance
+    question: 本变更是否需要一次真实上传验收？
+    context: HEAD 已不在 v1.1.0 tag 上且该 Release 已有同名资产，脚本按设计拒绝覆盖；--overwrite 会动已发布资产。
+    answer: 不做。以真实 spawn 冒烟（gradlew.bat/apksigner.bat --version）+ 单元测试锁定调用形态为验收；真实全链路（含上传）顺延至下一个 v* tag 发布时执行。
+    status: resolved
+    kind: technical
+    answered_by: human
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: scripts/android-release.mts 在 Windows 发布机上无法运行：android/gradlew 与 apksigner 以无扩展名 POSIX 脚本路径 spawnSync 直接 ENOENT，keytool 缺 -storepass 卡密码、缺 -v 拿不到 DN；v1.1.0 发布被迫人工按脚本步骤执行。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: v1.1.0 发布在本机实测暴露（2026-11-05），发布义务依赖该脚本，用户随即要求修复。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 让脚本在 Windows 上原样履行 tech 标准 android-local-release 的既有义务；发布流程语义、校验顺序、产物形态一概不变。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: Windows 上目标回归测试由红转绿；真实 spawn 冒烟（gradlew.bat / apksigner.bat --version）退出码 0；下一个 v* tag 发布时脚本可一键跑通全链路。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不改 preflight 校验语义、产物命名与覆盖语义、非 Windows 平台调用形态、keystore 生成脚本与 certificatesMatch 的 DN 正则。
+    status: resolved
+    kind: requirement
+    answered_by: human

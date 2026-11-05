@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-android-release-windows
+sections:
+  Implementation:
+    repro-spawn-enoent:
+      text: 修复前复现：win32 上 spawnSync(android/gradlew, [--version]) 返回 status=null 且 error.code=ENOENT；build-tools 目录内只有 apksigner.bat；keytool -list 无 -storepass 时非交互失败、无 -v 时输出不含 DN。
+      status: complete
+      command: node -e "const {spawnSync}=require(\"node:child_process\");const r=spawnSync(\"android/gradlew\",[\"--version\"]);console.log(\"status=\"+r.status,\"error=\"+(r.error&&r.error.code))"
+    regression-win32-invocation:
+      text: scripts/android-release.test.mts 新增回归断言（修复前失败）：win32 下 gradle 调用命令为 android\gradlew.bat 且 shell=true、apksigner 路径指向 apksigner.bat；非 win32 维持无扩展名路径且不加 shell。
+      status: complete
+      command: npx vitest run scripts/android-release.test.mts
+    regression-keytool-and-secrets:
+      text: scripts/android-release.test.mts 新增（修复前失败）：keytoolInvocation 纯函数断言 -v 与 -storepass:env、密码只进 env 不进命令行；main 级成功路径测试（真实 app-release.apk 源文件 + 全绿 stub）锁定 apksigner 平台入口与 win32 shell、keytool 的 env 透传、storePassword 不出现在任何被记录的命令行参数或 stub 输出、upload 携带 APK 与 .sha256 双资产。
+      status: complete
+      command: npx vitest run scripts/android-release.test.mts
+    impl-platform-invocation:
+      text: scripts/android-release.mts：Runner 增加可选 opts（cwd/env/shell）与 RunnerResult.error；win32 选 gradlew.bat/apksigner.bat 且 shell:true；keytool 加 -v 与 -storepass:env（storePassword 解析自 keystore.properties，缺失即 fail）；gradle/apksigner/keytool 的 fail 文案附加 spawn error。
+      status: complete
+      command: npm run typecheck
+  Testing:
+    test-targeted:
+      text: 目标回归：android-release.test.mts 全部用例通过（新增断言由红转绿，既有 11 用例不回归）。
+      status: complete
+      command: npx vitest run scripts/android-release.test.mts
+    test-spawn-smoke:
+      text: 真实 spawn 冒烟（不触发发布语义，路径以 join 构造避免外层 shell 转义干扰）：win32 上以修复后的调用形态真跑 android\gradlew.bat --version 与 build-tools 最新版 apksigner.bat --version，均退出码 0。
+      status: complete
+      command: node -e "const{spawnSync}=require(\"node:child_process\");const{join}=require(\"node:path\");const{readdirSync}=require(\"node:fs\");const g=spawnSync(join(\"android\",\"gradlew.bat\"),[\"--version\"],{shell:true,encoding:\"utf8\"});const home=process.env.ANDROID_HOME;const bt=readdirSync(join(home,\"build-tools\")).sort().at(-1);const a=spawnSync(join(home,\"build-tools\",bt,\"apksigner.bat\"),[\"--version\"],{shell:true,encoding:\"utf8\"});console.log(\"gradlew=\"+g.status,\"apksigner=\"+a.status)"
+    test-typecheck:
+      text: TypeScript 类型检查通过。
+      status: complete
+      command: npm run typecheck
+    test-coverage:
+      text: Vitest 单元测试与 80% 行覆盖率门槛通过。
+      status: complete
+      command: npm run test:coverage
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify 通过。
+      status: complete
+      command: strict-spec-cli verify fix-android-release-windows
+    archive-readiness:
+      text: strict-spec-cli ready 确认归档就绪；完整回归命令已在本机逐字执行通过；真实全链路（含上传）验收顺延至下一个 v* tag 发布。
+      status: complete
+      command: strict-spec-cli ready fix-android-release-windows
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-coverage

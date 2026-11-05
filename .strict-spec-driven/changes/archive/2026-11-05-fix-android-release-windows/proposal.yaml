@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-android-release-windows
+  status: proposed
+summary:
+  what:
+    - 修复 scripts/android-release.mts 三处 Windows 缺陷：外部命令 android/gradlew 与 build-tools 内 apksigner 以无扩展名 POSIX 脚本路径 spawnSync，win32 上 CreateProcess 直接 ENOENT；keytool 调用缺 -storepass（非交互无法读 keystore 密码）且缺 -v（JDK 25 的 -list 不输出证书 DN，certificatesMatch 匹配不到）。
+    - spawn 失败时 spawnSync 的 error 不进 RunnerResult，fail 只报固定文案 assembleRelease 失败，掩盖真实原因。
+  why:
+    - v1.1.0 发布在本机（Windows）实测：脚本第一步 assembleRelease 即因 spawn ENOENT 失败，只能人工按脚本步骤逐步执行才完成上传；tech 标准 packaging.android-local-release（MUST）规定签名 APK 只能由该脚本本地构建上传，发布机为 Windows 时该义务无法履行。
+    - v1.1.0 发布在本机（Windows）实测：脚本第一步 assembleRelease 即因 spawn ENOENT 失败，只能人工按脚本步骤执行才完成上传；tech 标准 packaging.android-local-release（MUST）规定签名 APK 只能由该脚本本地构建上传，发布机为 Windows 时该义务无法履行。
+scope:
+  in:
+    - scripts/android-release.mts：win32 选择 gradlew.bat/apksigner.bat 并经 shell 执行；keytool 增加 -v 与 -storepass:env；Runner 增加可选 opts（cwd/env/shell），RunnerResult 增加 error 字段
+    - scripts/android-release.test.mts：新增回归测试锁定 win32 调用形态、keytool 参数与 keystore 密码不进命令行/输出的纪律
+    - scripts/android-release.mts：win32 选择 gradlew.bat/apksigner.bat 并经 shell 执行；keytool 增加 -v 与 -storepass:env（全平台生效）；Runner 增加可选 opts（cwd/env/shell），RunnerResult 增加 error 字段
+    - scripts/android-release.test.mts：新增回归测试锁定平台调用形态、main 级成功路径的 keytool 参数与 env 透传、keystore 密码不进命令行/输出的纪律
+  out:
+    - certificatesMatch 的 DN 正则泛化（当前 DN 由 android-uniform-signing 的统一 keystore 决定，保持不变）
+    - preflight 四类校验顺序与失败语义、产物命名与 .sha256 格式、同名资产默认拒绝覆盖语义
+    - macOS/Linux 上的调用形态与非 Windows 平台行为
+    - scripts/android-keystore.mts 与 keystore.properties 的字段（storePassword 字段已存在）
+    - macOS/Linux 上 gradlew 与 apksigner 的调用形态（无扩展名脚本、不经 shell）
+unchanged_behavior:
+  - preflight 工作区干净、HEAD 位于 tag、Release 已存在、keystore 可用的校验顺序与失败文案
+  - 产物命名 DSH-Anywhere-<version>.apk、.sha256 的 sha256sum 兼容格式与上传资产集合
+  - keystore 密码等密钥材料不进命令行参数、不进输出的纪律
+  - 非 Windows 平台上 gradlew/apksigner/keytool 的现有调用形态与行为
+  - 非 Windows 平台上 gradlew 与 apksigner 的调用形态与行为不变；keytool 的 -v 与 -storepass:env 为全平台统一修复（无 -storepass 时 keytool 非交互本就无法完成，属缺陷本体而非需要保留的平台行为）
