@@ -200,6 +200,15 @@ func request(client *http.Client, url string) (int, error) {
 		return 0, err
 	}
 	defer resp.Body.Close()
+	if os.Getenv("DSH_SPIKE_DUMP") != "" {
+		fmt.Printf("spike.response status=%s proto=%s\n", resp.Status, resp.Proto)
+		for k, v := range resp.Header {
+			fmt.Printf("spike.response.header %s: %s\n", k, strings.Join(v, ", "))
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<12))
+		fmt.Printf("spike.response.body[%d]=%q\n", len(body), string(body))
+		return resp.StatusCode, nil
+	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 	return resp.StatusCode, nil
 }
