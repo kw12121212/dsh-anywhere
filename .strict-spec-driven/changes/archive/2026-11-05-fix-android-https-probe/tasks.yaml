@@ -1,0 +1,50 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-android-https-probe
+sections:
+  Implementation:
+    repro-emulator:
+      text: 修复前模拟器复现（Medium_Phone_API_36.1，origin/dev 构建）：保存 https://example.com/ 后主页面显示「连接失败」错误页；对照 http://example.com/ 正常打开 WebView；设备 nc 到 example.com:443 TCP 可通，排除网络原因。
+      status: complete
+    repro-failing-test:
+      text: 新增 android/core/src/test/kotlin/work/keepwriting/core/DialProbeHttpsTest.kt（ConnectBridgeTest.kt 内已有仅覆盖 http 的 DialProbeTest 类）：测试时用 keytool 生成自签证书并起本地 TLS 服务端，断言 https 地址判可达、401 固定正文判会话失效、不受信任证书与主机名不符判 TLS；为编译先为 probe/isSessionExpired 增加可注入 TLS 工厂参数（读取路径不变）。修复前 httpsResponseMeansReachable（实得 Unreachable(OTHER)）与 httpsSessionExpiredMarkerMatched 失败。
+      status: complete
+      command: android/gradlew -p android/core test --tests work.keepwriting.core.DialProbeHttpsTest
+    fix-dialprobe:
+      text: DialProbe：拨号后 https 分层 TLS 并返回 TLS 套接字，请求与响应都经该套接字；TLS 工厂参数可注入（缺省平台默认工厂），证书与主机名校验不变。
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查。
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与 80% 行覆盖率门槛。
+      status: complete
+      command: npm run test:coverage
+    test-core:
+      text: 运行 core JUnit 测试（含 DialProbeTest，修复后全部通过）。
+      status: complete
+      command: android/gradlew -p android/core test
+    test-emulator-https:
+      text: 模拟器验收（构建 debug APK 安装到 Windows 侧模拟器）：保存 https://example.com/ 后打开 WebView 不显示错误页；http://example.com/ 行为不变；隧道已连接时保存 https://gamepc.tail89569c.ts.net:13080/ 探测判可达，WebView 加载后 dsh 对 tagged 节点返回 401 固定正文时进入重新认证页。
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Linux 本地以 xvfb-run 包裹提供显示服务器）。
+      status: complete
+      command: xvfb-run -a bash -c 'npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test'
+  Verification:
+    verify-change:
+      text: 运行 strict-spec-cli verify 确认任务与产物一致。
+      status: complete
+      command: strict-spec-cli verify fix-android-https-probe
+    archive-readiness:
+      text: 运行 strict-spec-cli ready 确认归档就绪，并确认模拟器与完整回归证据齐备。
+      status: complete
+      command: strict-spec-cli ready fix-android-https-probe
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-core

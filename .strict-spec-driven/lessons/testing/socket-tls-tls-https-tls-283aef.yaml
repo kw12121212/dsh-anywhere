@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: socket-tls-tls-https-tls-283aef
+  title: 手写协议客户端在 socket 上分层 TLS 后，必须对同一个 TLS 套接字读写，且 https 分支要有真实 TLS 服务端测试
+category: testing
+status: active
+created_at: '2026-11-05T06:18:44.887Z'
+updated_at: '2026-11-05T06:18:44.887Z'
+context: android-proxy-routing 把可达性探测从 HttpURLConnection 改为 DialProbe：经注入的分流拨号得到 socket，在其上手写 HTTP/1.1 请求，https 时用 SSLSocketFactory.createSocket(raw, …) 分层 TLS。
+observation: writeRequest 内部分层 TLS 并经 TLS 套接字写请求，但调用方随后从底层 raw socket 读响应，读到的是 TLS 记录密文，永远读不到 HTTP/ 状态行：所有 https harness 被判不可达（模拟器 https://example.com/ 显示连接失败），https 会话失效也永不识别。DialProbe 的既有测试全部是 http，假上游无 TLS，缺陷随 8 个变更归档。
+takeaway: 分层 TLS 的辅助函数应返回 TLS 套接字并让读写都经它，不要在函数内部吞掉它；任何同时支持 http 与 https 的手写协议代码，测试必须包含真实 TLS 服务端（JDK keytool 生成自签证书 + 注入信任该证书的 SSLSocketFactory），并保留证书不受信与主机名不符的负向用例证明校验仍开启。
+applies_when: 在 socket 层手写 HTTP/HTTPS、SOCKS/CONNECT 等协议客户端，或把平台 HTTP 客户端换成自写实现时，尤其当测试只用明文假服务端时
+occurrences:
+  - origin: fix-android-https-probe
+    date: '2026-11-05'
+    evidence: 2026-11-05：DialProbeHttpsTest 修复前 httpsResponseMeansReachable 得 Unreachable(OTHER)、httpsSessionExpiredMarkerMatched 失败；修复后 47 个 core 测试通过，模拟器 https://example.com/ 打开 WebView、tailnet https 地址探测判可达

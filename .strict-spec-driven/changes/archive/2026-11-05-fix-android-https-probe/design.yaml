@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-android-https-probe
+approach:
+  - 在 DialProbe 内新增一个打开连接的私有步骤：拨号得到底层 socket 并设读超时，https 时在其上分层 TLS（SNI + HTTPS 主机名校验，握手完成）并返回 TLS 套接字，http 返回底层 socket；probe 与 isSessionExpired 都只对返回的这一个套接字读写，关闭它即关闭底层连接。TLS 套接字工厂作为带缺省值（SSLSocketFactory.getDefault()）的参数注入，生产调用点不变，JUnit 以测试时 keytool 生成的自签证书构造信任该证书的工厂。
+decisions:
+  fix-in-core-dialprobe:
+    decision: 修复放在 core 的 DialProbe，测试为 core JUnit
+    rationale: 缺陷在纯 JVM 协议逻辑里；tech/android-client 的 pure-logic-in-core 要求此类逻辑由 core JUnit 覆盖，而 DialProbe 此前没有任何测试，正是缺陷漏网的原因；core 测试进入完整回归命令（core-jvm-tests-in-regression）
+  injectable-tls-factory:
+    decision: TLS 工厂可注入，缺省为平台默认工厂；不放宽证书与主机名校验
+    rationale: 测试需要信任自签证书，但生产必须保留默认信任链与 HTTPS 主机名校验；注入缺省参数让生产调用点与行为完全不变
+  spec-add-https-scenarios:
+    decision: MODIFIED main-page-load 与 session-expired-reauth，各增补一个 https 场景，需求语义不变
+    rationale: 原需求文本已覆盖 https（任何 HTTP 响应即可达），缺的是能拦住此缺陷的 https 场景；补场景使 https 成为显式验收点
+alternatives:
+  - option: 改用 HttpsURLConnection 探测 https
+    reason: HttpsURLConnection 走平台网络栈，无法经注入的分流拨号（tailnet 目标经节点 SOCKS5）发出，违反 tunnel-gated-tailnet-load 的同路径探测要求
+risks:
+  - 测试依赖 JDK 自带 keytool 生成证书；core 测试只需 JDK 17+，keytool 随 JDK 提供，不新增外部依赖

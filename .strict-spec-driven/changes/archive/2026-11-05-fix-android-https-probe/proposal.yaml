@@ -1,0 +1,26 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-android-https-probe
+  status: proposed
+summary:
+  what:
+    - 修复 Android 主页面可达性探测与会话失效探测对 https harness 地址的误判：DialProbe 在 TLS 套接字上发出请求后改为从同一 TLS 套接字读取响应，https 地址可达时打开 WebView，会话失效时能识别 401 固定正文。
+  why:
+    - DialProbe.probe 与 isSessionExpired 对 https 地址在 TLS 层写请求却从底层明文 socket 读取，读到的是 TLS 记录密文，永远读不到 HTTP/ 状态行：所有 https harness 地址（含 https://<主机>.ts.net 的 tailnet 地址）都被判为不可达并显示「连接失败」错误页，https 下会话失效也永远识别不到。模拟器实测 https://example.com/ 显示错误页、http://example.com/ 正常打开（2026-11-05）。这违反 android-app 主规格 main-page-load（任何 HTTP 响应视为可达）与 session-expired-reauth。
+scope:
+  in:
+    - android/core/src/main/kotlin/work/keepwriting/core/DialProbe.kt：https 的请求与响应都经同一 TLS 套接字；TLS 工厂可注入（缺省平台默认工厂）以便测试
+    - android/core/src/test/kotlin/work/keepwriting/core/DialProbeTest.kt：本地 TLS 服务端驱动的 https 可达、https 会话失效、证书不受信任判 TLS 错误、http 行为不变用例
+    - android-app 主规格 main-page-load 与 session-expired-reauth 增补 https 场景（MODIFIED）
+  out:
+    - 代理桥 ConnectBridge、分流与隧道逻辑
+    - WebView 自身的 TLS 处理（由 WebView 端到端完成，不受影响）
+    - 错误分类文案与错误页界面
+unchanged_behavior:
+  - http 地址的探测与会话失效判定结果
+  - 不可达原因分类（DNS、拒绝、超时、TLS、其他）与 10 秒超时
+  - 探测经与 WebView 相同的分流路径（tailnet 目标经节点）
+  - 证书与主机名校验保持开启（不放宽 TLS 校验）

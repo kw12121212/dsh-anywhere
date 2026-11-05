@@ -3,6 +3,7 @@ package work.keepwriting.core
 import java.io.InputStream
 import java.net.Socket
 import java.net.URI
+import javax.net.ssl.SSLSocketFactory
 
 /**
  * 经分流拨号的探测（android-proxy-routing）：连接探测与会话失效探测统一走与
@@ -22,14 +23,18 @@ object DialProbe {
     }
 
     /** 可达性探测：手写 GET，收到响应状态行即视为可达，不读正文。 */
-    fun probe(url: String, dial: Dial, timeoutMs: Int = 10_000): ProbeResult {
+    fun probe(
+        url: String,
+        dial: Dial,
+        timeoutMs: Int = 10_000,
+        tls: SSLSocketFactory = defaultTls(),
+    ): ProbeResult {
         return try {
             val u = URI(url)
             val host = u.host ?: return ProbeResult.Unreachable(ProbeFailure.Reason.OTHER)
             val port = if (u.port > 0) u.port else if (u.scheme?.lowercase() == "https") 443 else 80
-            dial.connect(host, port).use { sock ->
-                sock.soTimeout = timeoutMs
-                writeRequest(sock, host, port, u.rawPath?.ifEmpty { null } ?: "/", cookie = null, httpsTls = isHttps(u))
+            open(u, host, port, dial, timeoutMs, tls).use { sock ->
+                writeRequest(sock, host, port, u.rawPath?.ifEmpty { null } ?: "/", cookie = null)
                 // 目标接受 TCP 后不回任何字节即关闭（EOF）：与桌面 ERR_EMPTY_RESPONSE
                 // 同判——无响应即不可达。
                 if (readStatusLine(sock.getInputStream()) == null) {
@@ -43,14 +48,19 @@ object DialProbe {
     }
 
     /** 会话失效确认：带 cookie 探测干净地址，401 且正文为 EXPIRED_MARKER 才判定失效。 */
-    fun isSessionExpired(url: String, cookieHeader: String?, dial: Dial, timeoutMs: Int = 10_000): Boolean {
+    fun isSessionExpired(
+        url: String,
+        cookieHeader: String?,
+        dial: Dial,
+        timeoutMs: Int = 10_000,
+        tls: SSLSocketFactory = defaultTls(),
+    ): Boolean {
         return try {
             val u = URI(url)
             val host = u.host ?: return false
             val port = if (u.port > 0) u.port else if (u.scheme?.lowercase() == "https") 443 else 80
-            dial.connect(host, port).use { sock ->
-                sock.soTimeout = timeoutMs
-                writeRequest(sock, host, port, u.rawPath?.ifEmpty { null } ?: "/", cookieHeader, isHttps(u))
+            open(u, host, port, dial, timeoutMs, tls).use { sock ->
+                writeRequest(sock, host, port, u.rawPath?.ifEmpty { null } ?: "/", cookieHeader)
                 val input = sock.getInputStream()
                 val statusLine = readStatusLine(input) ?: return false
                 val status = statusLine.split(' ').getOrNull(1)?.toIntOrNull() ?: return false
@@ -77,17 +87,29 @@ object DialProbe {
         }
     }
 
+    private fun defaultTls(): SSLSocketFactory = SSLSocketFactory.getDefault() as SSLSocketFactory
+
     private fun isHttps(u: URI): Boolean = u.scheme?.lowercase() == "https"
 
-    /** 手写请求：明文直发；https 在 socket 上分层 TLS（SNI+主机名校验）。 */
-    private fun writeRequest(sock: Socket, host: String, port: Int, path: String, cookie: String?, httpsTls: Boolean) {
-        val raw = sock
-        val out = if (httpsTls) {
-            val tls = layerTls(raw, host, port)
-            tls.getOutputStream()
-        } else {
-            raw.getOutputStream()
+    /**
+     * 建立探测连接：经 [dial] 拨号并设读超时；https 在其上分层 TLS（SNI+主机名校验）并
+     * 返回 TLS 套接字——请求与响应必须经同一个套接字读写，从底层 socket 读到的是 TLS
+     * 密文（fix-android-https-probe）。关闭返回的套接字即关闭底层连接。
+     */
+    private fun open(u: URI, host: String, port: Int, dial: Dial, timeoutMs: Int, tls: SSLSocketFactory): Socket {
+        val raw = dial.connect(host, port)
+        try {
+            raw.soTimeout = timeoutMs
+        } catch (e: Exception) {
+            try { raw.close() } catch (_: Exception) {}
+            throw e
         }
+        return if (isHttps(u)) layerTls(raw, host, port, tls) else raw
+    }
+
+    /** 手写请求：写到 [open] 返回的套接字（https 时为 TLS 套接字）。 */
+    private fun writeRequest(sock: Socket, host: String, port: Int, path: String, cookie: String?) {
+        val out = sock.getOutputStream()
         val hostHeader = host + if (port != 80 && port != 443) ":$port" else ""
         val sb = StringBuilder("GET $path HTTP/1.1\r\n")
         sb.append("Host: $hostHeader\r\n")
@@ -97,8 +119,7 @@ object DialProbe {
         out.flush()
     }
 
-    private fun layerTls(raw: Socket, host: String, port: Int): javax.net.ssl.SSLSocket {
-        val factory = javax.net.ssl.SSLSocketFactory.getDefault() as javax.net.ssl.SSLSocketFactory
+    private fun layerTls(raw: Socket, host: String, port: Int, factory: SSLSocketFactory): javax.net.ssl.SSLSocket {
         return try {
             (factory.createSocket(raw, host, port, true) as javax.net.ssl.SSLSocket).also { tls ->
                 tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }

@@ -76,6 +76,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/lesson-0d4784.yaml
+    socket-tls-tls-https-tls-283aef:
+      title: 手写协议客户端在 socket 上分层 TLS 后，必须对同一个 TLS 套接字读写，且 https 分支要有真实 TLS 服务端测试
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/socket-tls-tls-https-tls-283aef.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
