@@ -1,0 +1,64 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: diagnostics-reporting
+sections:
+  Implementation:
+    impl-core-report-model:
+      text: android/core 新增诊断报告纯逻辑模块：报告模型与构造（id/kind/platform/occurred_at/app_version/device/message/stack_trace/breadcrumbs）、token 脱敏（与 HarnessUrl.redact 同源语义，无法解析的地址不回显原文）、有界待发队列（默认 50 份、超限丢最旧、读取端容忍损坏按空处理）、批量组包（每批不超过 20 份、请求体不超过 1MB）、同会话错误态去重键（按错误分类）。
+      status: complete
+    impl-android-capture:
+      text: ':app 新增错误捕获器：未捕获异常 handler（先原子落盘报告再放行系统默认崩溃处理）、ANR 看门狗（保守阈值，判定放 core）、harness 加载失败（按本地错误页原因分类）与隧道进入失败状态（按失败原因分类）的错误态捕获，全部经 core 模型构造与去重。'
+      status: complete
+    impl-android-config-card:
+      text: Android 设置页新增「诊断上报」条目：默认未配置、显示未配置状态；粘贴地址实时校验（仅 https 合法地址可保存），保存后配置原子持久化到私有存储独立文件并开启上报；提供清除回到未配置（清除时同时清空本地待发队列）。
+      status: complete
+    impl-android-sender:
+      text: ':app 新增发送装配：上报请求复用 TailnetRouting 分流（tailnet 目标经内嵌节点、其余直连，隧道未连接时按失败入队、不触发隧道启动）；启动时补报队列、错误态触发点即时尝试；失败静默入队，4xx 响应丢弃该批不再重试；发送路径不抛出异常到主流程、不阻塞界面。'
+      status: complete
+    impl-desktop-capture-send:
+      text: src/main 新增桌面诊断模块：主进程 uncaughtException 与渲染进程 render-process-gone 捕获后原子落盘、下次启动补报；加载失败错误态（按原因分类、同会话去重）即时上报；纯逻辑（脱敏/队列/组包，与 core 同语义）独立模块并以 Vitest 覆盖；https 直连发送、失败入队、4xx 丢弃。
+      status: complete
+    impl-desktop-settings:
+      text: 桌面设置窗口新增「诊断上报」条目：默认未配置；实时校验（仅 https 合法地址可保存），保存后原子持久化到配置目录独立文件（state-persistence 约定）并开启；可清除回到未配置并清空待发队列；本地页面与 IPC 处理遵守 ipc-sender-validation。
+      status: complete
+  Testing:
+    test-core-junit:
+      text: core JUnit 测试：报告构造字段、token 脱敏（含无法解析地址不回显）、队列有界与损坏容忍、批量组包上限（20 份/1MB）、同会话错误态去重、ANR 阈值判定。
+      status: complete
+      command: android/gradlew -p android/core test
+    test-desktop-unit:
+      text: 桌面 Vitest 单元测试（与源码同目录）：诊断纯逻辑模块的构造/脱敏/队列/组包/去重、崩溃落盘与补报读取、设置条目校验与持久化。
+      status: complete
+      command: npm run test
+    test-desktop-e2e:
+      text: Playwright e2e：设置窗口「诊断上报」默认未配置、非法地址不可保存、合法地址保存后持久化并开启、清除回到未配置；每个测试独立临时 user-data-dir。
+      status: complete
+      command: npm run test:e2e
+    validation-typecheck-build:
+      text: 类型检查与生产构建通过（主进程/渲染/e2e 三份 tsconfig 与 electron-vite 构建）。
+      status: complete
+      command: npm run typecheck && npm run build
+  Verification:
+    verify-strict-checks:
+      text: strict 工作流校验：ready 与 verify 均通过（含 delta scene 步骤覆盖检查）。
+      status: complete
+      command: strict-spec-cli ready diagnostics-reporting && strict-spec-cli verify diagnostics-reporting
+    verify-regression:
+      text: 完整项目回归命令逐字执行通过（npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test），覆盖率门槛 80%。
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    verify-android-device:
+      text: Android 模拟器(API 36)验收完成（真机投递由用户决议豁免,见 questions.yaml device-verification-scope）：（1）未配置时零行为——无诊断队列目录、无任何上报；（2）token 剥离——配置存干净地址,报告载荷不含 secret123；（3）am crash 崩溃报告同步落盘含完整堆栈,重启后保留并尝试补报；（4）加载失败错误态同会话同类一份,刷新不重复；（5）端点不可达时功能不受影响、报告静默保留；（6）清除端点即删除配置与队列；（7）ANR 看门狗误报（检查间隔等于阈值的边界 bug）已修复并以 32 秒零误报验证。
+      status: complete
+    verify-pca-integration:
+      text: pca 联调验收完成（android 真机投递由用户决议豁免,见 questions.yaml device-verification-scope）：桌面端在真实 tailscale serve https 端点配置后,不可达 harness 触发的错误态报告以 platform=dsh_desktop 直抵 POST /api/diagnostics/reports 并出现在 issue 列表（版本 1.1.1）,本地队列送达后清空;pca 侧 diagnostics-dsh-platforms 变更已部署并先行验证 dsh_android/dsh_desktop 枚举接受与筛选（accepted:2、platform 过滤命中、非法值 400）。
+      status: complete
+    verify-archive-check:
+      text: 归档前检查：delta spec（新 spec 区 diagnostics-reporting）与 delta scene 经 archive 正确合并、specs/INDEX.yaml 与 scenes INDEX 更新无误、无遗留 open questions。
+      status: complete
+      command: strict-spec-cli verify diagnostics-reporting
+testing_gates:
+  validation_task: validation-typecheck-build
+  unit_test_task: test-core-junit

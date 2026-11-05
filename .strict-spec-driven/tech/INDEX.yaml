@@ -15,6 +15,10 @@ standards:
     title: CI 回归矩阵
     category: tooling
     path: .strict-spec-driven/tech/ci-regression.yaml
+  - id: diagnostics
+    title: 诊断上报端点与被动能力
+    category: security
+    path: .strict-spec-driven/tech/diagnostics.yaml
   - id: electron-layout-security
     title: Electron 工程布局与安全基线
     category: security

@@ -1,4 +1,5 @@
 import { bindValidation } from './validation'
+import { validateDiagnosticsEndpoint } from '../../main/diagnostics'
 
 function element(id: string): HTMLElement {
   const found = document.getElementById(id)
@@ -26,6 +27,7 @@ export async function startSettingsPage(): Promise<void> {
   const cancelButton = element('cancel') as HTMLButtonElement
 
   section.hidden = false
+  startDiagnosticsBlock()
   const validation = bindValidation(input, errorText, saveButton)
   try {
     // 与 Go 版 CurrentURL 一致：未配置或配置无效时为空字符串。
@@ -57,5 +59,57 @@ export async function startSettingsPage(): Promise<void> {
 
   cancelButton.addEventListener('click', () => {
     window.close()
+  })
+}
+
+// startDiagnosticsBlock 渲染设置窗口的「诊断上报」区块（diagnostics-reporting）：默认未配置；
+// 实时校验（仅 https 可保存），保存原子持久化并触发补报；清除回到未配置并清空待发队列。
+export function startDiagnosticsBlock(): void {
+  const input = element('diag-endpoint') as HTMLInputElement
+  const errorText = element('diag-error')
+  const saveButton = element('diag-save') as HTMLButtonElement
+  const clearButton = element('diag-clear') as HTMLButtonElement
+
+  const validate = (): void => {
+    const raw = input.value.trim()
+    if (raw === '') {
+      errorText.textContent = ''
+      saveButton.disabled = true
+      return
+    }
+    if (validateDiagnosticsEndpoint(raw) === null) {
+      errorText.textContent = '仅支持 https 地址'
+      saveButton.disabled = true
+    } else {
+      errorText.textContent = ''
+      saveButton.disabled = false
+    }
+  }
+  input.addEventListener('input', validate)
+
+  void window.dsh.getDiagEndpoint().then((endpoint) => {
+    input.value = endpoint
+    validate()
+  })
+
+  saveButton.addEventListener('click', async () => {
+    if (saveButton.disabled) {
+      return
+    }
+    saveButton.disabled = true
+    const result = await window.dsh.saveDiagEndpoint(input.value)
+    if (!result.ok) {
+      errorText.textContent = result.error
+      return
+    }
+    // 保存成功：以规范化后的端点回显。
+    input.value = await window.dsh.getDiagEndpoint()
+    validate()
+  })
+
+  clearButton.addEventListener('click', async () => {
+    await window.dsh.clearDiagEndpoint()
+    input.value = ''
+    validate()
   })
 }

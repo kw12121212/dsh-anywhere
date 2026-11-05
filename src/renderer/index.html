@@ -72,6 +72,23 @@
             <button id="cancel" type="button" class="secondary">取消</button>
           </div>
         </form>
+        <div id="diag-block">
+          <h2>诊断上报</h2>
+          <p class="notice">崩溃与错误信息会上报到此诊断端点（可选）。保存后立即生效，清除后回到未配置。</p>
+          <label for="diag-endpoint">诊断端点地址（https）</label>
+          <input
+            id="diag-endpoint"
+            type="url"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="https://…"
+          />
+          <p id="diag-error" class="error" aria-live="polite"></p>
+          <div class="actions">
+            <button id="diag-save" type="button" disabled>保存端点</button>
+            <button id="diag-clear" type="button" class="secondary">清除</button>
+          </div>
+        </div>
       </section>
     </main>
     <script type="module" src="./src/main.ts"></script>

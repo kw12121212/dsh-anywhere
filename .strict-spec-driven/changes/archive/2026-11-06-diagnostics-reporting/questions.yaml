@@ -1,0 +1,66 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: diagnostics-reporting
+open: []
+resolved:
+  - id: requirement-problem
+    question: 今天具体什么问题促成了这个变更?
+    context: 需求审问(2026-11-05)逐条确认。
+    answer: App 在手机上崩溃过且事后没有任何记录可查;错误态(加载失败、隧道失败)只在设备本地瞬时可见,人不在设备旁就错过且不留痕。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: 什么可观察差异证明需求已解决?
+    context: 需求审问(2026-11-05)逐条确认。
+    answer: 崩溃与错误态报告出现在 pca 诊断接口的 issue 列表并可远程查看(含版本、设备、线程、堆栈);崩溃在下次启动客户端后自动补报;未配置端点时两端客户端行为与现状完全一致。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: 为什么是现在做?
+    context: 需求审问(2026-11-05)逐条确认。
+    answer: 真实发生过 App 崩溃且无记录可查的事故,而 pca 常驻诊断服务已经就绪(接口与 issue UI 均已存在),接入成本低。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: 哪些事情明确不许变、不做?
+    context: 需求审问(2026-11-05)逐条确认。
+    answer: 不动 pca 仓库(枚举扩展另行变更);不抓 WebView/远程页面内 JS 错误(被隔离规范禁止);不做 breadcrumb 与更新失败上报;不硬编码任何地址或凭据;未配置诊断上报时两端客户端全部既有行为不变。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: 「错误信息」按哪种读法理解?
+    context: 需求审问(2026-11-05)逐条确认。
+    answer: 崩溃类+错误态:安卓=未捕获异常、ANR、加载失败、隧道失败;桌面 Electron 端也在本次范围内(用户明确选择「桌面也要」),范围为崩溃类与加载失败错误态(细项见 open question desktop-error-scope)。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: platform-enum-strategy
+    question: 上报到 pca 的 platform 字段取值:新增专用枚举还是复用现有枚举?
+    context: pca 的 POST /api/diagnostics/reports 在提交时校验 platform 枚举(android/web/desktop/windows_host),枚举外的值返回 400 invalid_input;issue 指纹为 Fingerprint(platform, kind, message, stack_trace),platform 相同的不同 App 报告会被聚合成同一 issue 且列表按 platform 筛选无法区分。影响:两端客户端上报的 platform 常量取值、pca 侧是否需要先行变更与部署(时序依赖)、issue 列表的可排障性。推荐:pca 仓库先行增加 dsh_android 与 dsh_desktop 专用枚举并部署,本变更按新枚举上报(联调任务 verify-pca-integration 依赖该部署);备选:复用 android/desktop(pca 零改动,但与 pca 自家客户端混排且指纹跨 App 混聚合,只能靠 Source 节点名区分)。
+    answer: 采用专用枚举:pca 仓库先行在 validPlatform 增加 dsh_android 与 dsh_desktop 并合并部署到 WSL 里的常驻服务后才生效——枚举校验在服务端,仅改代码不部署不起作用;本变更两端客户端按新枚举上报,联调与验收(verify-pca-integration、verify-android-device)在 pca 部署之后进行。
+    status: resolved
+    answered_by: human
+  - id: endpoint-config-default
+    question: 诊断上报端点的配置形态:设置项+默认关闭,还是默认开启必填?
+    context: 仓库为公开 GitHub 仓库,ts.net 私有地址绝不能硬编码,端点只能来自用户配置(与 harness URL 同一约束)。影响:spec 需求中「未配置时零行为变化」的前提是否成立、首次设置流程是否被触碰(proposal 已把首次设置页列为范围外)、设置页/设置窗口的条目交互。推荐:Android 设置页与桌面设置窗口各新增「诊断上报」条目,默认未配置即完全关闭,粘贴合法 https 地址保存后开启,可清除回到未配置(本提案的 delta spec 按此书写);备选:默认开启且首次启动必填地址(会触碰首次设置流程并违背可选接入哲学)。
+    answer: 采用推荐形态:Android 设置页与桌面设置窗口各新增「诊断上报」条目,默认未配置即完全关闭,粘贴合法 https 地址保存后开启,可清除回到未配置;不触碰首次设置流程(delta spec 已按此书写,无需改动)。
+    status: resolved
+    answered_by: human
+  - id: desktop-error-scope
+    question: 桌面端的错误捕获范围是否确认为崩溃类+加载失败错误态?
+    context: 安卓侧范围已由用户确认:未捕获异常+ANR+加载失败/隧道失败错误态。桌面候选范围:主进程 uncaughtException、渲染进程 render-process-gone、加载失败错误态(按原因分类);备选为仅崩溃类,或额外加窗口 unresponsive(近似 ANR)。影响:src/main 捕获器实现范围与桌面纯逻辑模块测试面。推荐:崩溃类+加载失败(与安卓对称,unresponsive 误报率高且 Electron 场景价值有限,不做)。
+    answer: 确认为崩溃类+加载失败错误态:主进程 uncaughtException、渲染进程 render-process-gone、加载失败按原因分类;窗口 unresponsive 不做(误报率高、价值有限)。
+    status: resolved
+    answered_by: human
+  - id: device-verification-scope
+    question: Android 设备验收与真实投递的验证口径?
+    context: 模拟器(API 36)已完成:未配置零行为、token 脱敏、崩溃同步落盘与重启补报尝试、错误态去重、端点不可达静默入队、清除清空队列、ANR 看门狗误报修复。tailnet 投递路径(SOCKS5+TLS 包装)在模拟器无用户 auth key 不可达;桌面端已在同一 pca 端点真实验证投递与枚举。
+    answer: 用户决议(2026-11-05):真机不需要测试,模拟器验收代替;android 经 tailnet 的真实投递不再作为本变更的验收前置。
+    status: resolved
+    answered_by: human

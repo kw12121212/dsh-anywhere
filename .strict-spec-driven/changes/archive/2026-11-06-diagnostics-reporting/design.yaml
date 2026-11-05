@@ -1,0 +1,46 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: diagnostics-reporting
+approach:
+  - 两端各自捕获错误并构造统一的报告模型，发送到用户配置的 pca https 端点：崩溃类报告在异常处理器中原子落盘（临时文件加重命名）、进程本次终止，下次启动发现未发送报告时补报；错误态报告在触发点即时尝试发送、失败静默入队。Android 上报请求复用既有 TailnetRouting 分流（tailnet 目标经内嵌 tsnet 节点，其余直连），桌面经系统网络直连。待发队列有界（超限丢最旧），启动与错误发生时重试；对 pca 明确拒绝的 4xx 响应直接丢弃不再重试。报告构造、token 脱敏、队列与批量组包（每批不超过 20 份、请求体不超过 1MB）逻辑下沉 core 纯 JVM 模块并以 JUnit 覆盖，:app 与 src/main 只保留捕获器与发送装配。
+decisions:
+  reuse-pca-diagnostics-api:
+    decision: 复用 pca 现有 POST /api/diagnostics/reports 接口与报告模型（kind/platform/occurred_at/app_version/device/message/stack_trace/breadcrumbs，批量不超过 20 份、请求体不超过 1MB），不在 pca 侧新建接口、不在本仓库实现服务端。
+    rationale: 接口与 issue 指纹聚合、查询 UI 在 pca 已存在且字段完全覆盖两端需求；跨仓库改动最小，pca 常驻部署在 WSL 经 tailscale serve 暴露，两端客户端只需一个可配置的 https 地址即可接入。
+  endpoint-user-configured:
+    decision: 上报端点地址只能来自用户在设置中的显式配置（Android 设置页与桌面设置窗口各一个「诊断上报」条目），默认未配置即完全关闭，绝不硬编码任何 ts.net 地址或凭据。
+    rationale: 本仓库是公开 GitHub 仓库，私有 tailnet 地址属于敏感信息；config.yaml code 规则要求 URL 与凭据只能来自用户配置；与 harness-url-config、tunnel-optional-onboarding 的可选接入哲学一致——未配置时零行为变化可直接验收。
+  crash-persist-next-launch:
+    decision: 崩溃类报告（安卓未捕获异常与 ANR、桌面主进程 uncaughtException）在异常处理器中先原子落盘再放行系统默认终止行为，进程本次不尝试网络发送，下次启动发现未发送报告时补报；桌面渲染进程 render-process-gone 不终止进程，报告落盘后进入待发队列即时尝试。
+    rationale: 崩溃时进程即将死亡，网络发送不可靠也不安全；state-persistence 标准的原子写约定（临时文件加重命名、读取端容忍损坏）适用于崩溃报告文件；下次启动补报是 pca 诊断接口已支持的批量提交形态；渲染进程崩溃进程仍存活，没有必要等到下次启动。
+  android-send-via-split-bridge:
+    decision: Android 上报请求复用既有 TailnetRouting 分流判定与代理桥：端点为 tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）时经内嵌节点转发，其余经手机网络直连；隧道未连接且端点为 tailnet 目标时按发送失败入队，不触发隧道启动。
+    rationale: proxy-split-routing 已验证的路径与判定逻辑，复用避免第二套网络机制；上报是被动诊断能力，不能反过来驱动隧道连接（保持 tunnel-optional-onboarding 的不启动语义）。
+  core-pure-logic:
+    decision: 报告模型与构造、token 脱敏（复用 HarnessUrl.redact 的同源语义）、有界队列、批量组包与同会话错误态去重逻辑全部放 android/core 纯 JVM 模块并以 JUnit 覆盖；:app 只保留异常捕获器、看门狗与发送装配，桌面 src/main 另以 TypeScript 实现同语义的纯逻辑模块并以 Vitest 覆盖。
+    rationale: 遵守 android-client/pure-logic-in-core SHOULD：不依赖 android.* 的协议与判定逻辑下沉 core；脱敏是安全关键逻辑，与 HarnessUrl.redact 同源可交叉验证；桌面侧单测与源码同目录符合 electron-project-layout。
+  redaction-must:
+    decision: 所有上报字段（message、stack_trace、breadcrumbs 及任何携带 URL 的字段）中的地址一律经过脱敏，token 查询参数的值绝不出现在报告、本地队列文件或日志中；无法解析的 URL 不回显原文。
+    rationale: security-secrets/no-input-echo-errors MUST 与 config.yaml code 规则的直接要求；报告离开设备进入常驻服务，泄漏面比本地日志更大。
+  queue-bounded-nonblocking:
+    decision: 本地待发队列有界（默认保留最近 50 份，超限丢最旧），发送失败静默保留；重试只在启动与新的错误触发点发生，不做定时轮询；对 pca 返回的 4xx（含枚举拒绝 400）直接丢弃该批并停用后续同因重试；发送路径在任何情况下不得抛出到主流程或阻塞界面。
+    rationale: 诊断是辅助能力，不能反噬主功能；有界防磁盘增长；4xx 属于永久性拒绝（如枚举未部署），重试无意义且会刷屏 issue 列表。
+  error-state-throttle:
+    decision: 错误态报告同会话同类至多上报一次（按错误分类键去重）：加载失败按原因分类、隧道失败按失败原因分类；崩溃类不做去重。
+    rationale: 错误页可能被反复重试触发（用户连点重试），不去重会在 pca 产生重复 issue 事件与无谓流量；同会话一次足以远程知晓。
+  review-fixes:
+    decision: 评审修复(独立评审发现):(1)ANR 判定下沉 core 的 AnrDetection(post 前后心跳观察值比较,常量与判定纯函数 + JUnit),首版检查间隔等于阈值的边界误报已由设备验收发现并修正;(2)ANR 报告补主线程当前堆栈(Thread.getAllStackTraces,脱敏截断),桌面渲染进程崩溃在主进程侧客观取不到堆栈,spec 语句已按实际收窄;(3)错误态入队从主线程移到 dsh-diag worker 线程(去重仍在调用方,内存级);(4)端点校验拒绝带 query 的地址(两端一致,避免拼路径畸形)。
+    rationale: pure-logic-in-core SHOULD 要求不依赖 android.* 的判定下沉并测试;发送与重试在任何情况下不阻塞界面(S4);spec 语句必须反映实际建成的行为。
+alternatives:
+  - option: 自建独立的错误收集服务或直接写文件同步
+    reason: 被否：pca 诊断接口、指纹聚合与查询 UI 已存在并常驻，重复建设且还要新增部署面；文件同步需要设备侧额外基础设施，不如 https 上报直接。
+  - option: 复用 pca 现有 platform 枚举 android/desktop，pca 零改动
+    reason: 被否为默认：与 pca 自家客户端的报告混在同一 platform 下，Fingerprint(platform,kind,message,stack) 会跨 App 聚合，排障困难；推荐 pca 增加专用枚举，最终决策见 questions.yaml 的 platform-enum-strategy。
+  - option: 桌面端另行变更、本次仅 Android
+    reason: 被否：用户在需求审问中明确选择桌面端也在本次范围内；两端共用同一接口与设计，拆开反而重复决策。
+risks:
+  - pca 侧专用 platform 枚举未先部署时，客户端按新枚举上报会收到 400 invalid_input
+  - ANR 看门狗（主线程心跳）在慢机型上可能误报
+  - 错误态高频触发导致上报风暴或队列快速挤占

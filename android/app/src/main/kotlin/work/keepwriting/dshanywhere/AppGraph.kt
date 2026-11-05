@@ -28,6 +28,9 @@ class AppGraph private constructor(context: Context) {
     /** 自更新（android-self-update）。 */
     val updates = UpdateManager(context)
 
+    /** 诊断上报（diagnostics-reporting）：未配置端点时零行为。 */
+    val diagnostics = DiagnosticsManager.get(context)
+
     var configState by mutableStateOf(ConfigState.NeedsSetup)
         private set
     var cleanUrl by mutableStateOf<String?>(null)
@@ -37,9 +40,11 @@ class AppGraph private constructor(context: Context) {
     // android-main-webview 到来后由主页面消费。
     private var pendingRawUrl: String? = null
 
+    private val appContext: Context = context.applicationContext
     private val harnessConfig = HarnessConfig(File(context.filesDir, "config").toPath())
 
     fun load() {
+        diagnostics.start(diagnosticsBuildInfo(appContext))
         when (val load = harnessConfig.load()) {
             HarnessConfig.Load.Missing -> configState = ConfigState.NeedsSetup
             HarnessConfig.Load.Invalid -> configState = ConfigState.InvalidConfig
@@ -94,6 +99,19 @@ class AppGraph private constructor(context: Context) {
     }
 
     companion object {
+        /** 诊断报告的版本与设备信息（进程启动时读一次 PackageManager）。 */
+        private fun diagnosticsBuildInfo(context: Context): DiagnosticsManager.BuildInfo = try {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            DiagnosticsManager.BuildInfo(
+                versionName = info.versionName ?: "?",
+                versionCode = (info.longVersionCode),
+                device = android.os.Build.MODEL ?: "?",
+                osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            )
+        } catch (_: Exception) {
+            DiagnosticsManager.BuildInfo("?", 0L, "?", "?")
+        }
+
         @Volatile
         private var instance: AppGraph? = null
 

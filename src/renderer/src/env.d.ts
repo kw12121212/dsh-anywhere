@@ -11,6 +11,9 @@ declare global {
       completeSetup(raw: string): Promise<SaveResult>
       getSettingsURL(): Promise<string>
       saveSettings(raw: string): Promise<SaveResult>
+      getDiagEndpoint(): Promise<string>
+      saveDiagEndpoint(raw: string): Promise<SaveResult>
+      clearDiagEndpoint(): Promise<void>
     }
   }
 }

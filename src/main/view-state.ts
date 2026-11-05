@@ -19,5 +19,8 @@ export const IPC_CHANNELS = {
   openSettings: 'main-window:open-settings',
   completeSetup: 'setup:complete',
   getSettingsURL: 'settings:get-url',
-  saveSettings: 'settings:save'
+  saveSettings: 'settings:save',
+  diagGetEndpoint: 'diag:get-endpoint',
+  diagSaveEndpoint: 'diag:save-endpoint',
+  diagClearEndpoint: 'diag:clear-endpoint'
 } as const

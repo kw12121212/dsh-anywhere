@@ -1,0 +1,77 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: report-client-errors
+  title: 客户端错误上报诊断
+area: diagnostics
+status: draft
+actors:
+  - name: 用户
+    role: 在 Android 与桌面客户端上使用应用,并在设置中配置诊断上报
+preconditions:
+  - pca 诊断服务已在 tailnet 常驻可达;两端客户端已安装,诊断上报默认未配置
+main_flow:
+  configure-endpoint:
+    action: 用户在 Android 设置页或桌面设置窗口的「诊断上报」条目粘贴 pca 完整 https 地址,校验通过后保存开启(默认未配置即完全关闭)
+    covered_by:
+      - spec_id: diagnostics-reporting
+        requirement_id: endpoint-config-android
+      - spec_id: diagnostics-reporting
+        requirement_id: endpoint-config-desktop
+  normal-use-no-report:
+    action: 正常使用客户端(无崩溃、无错误态)时不产生、不保存、不发送任何诊断报告
+    covered_by:
+      - spec_id: diagnostics-reporting
+        requirement_id: error-state-capture
+  error-state-occurs:
+    action: 本地错误页显示(安卓与桌面)或安卓隧道卡片进入失败状态时,产生一份按原因分类、脱敏后的错误态报告(kind=error),同会话同类至多一份,经发送路径尝试上报
+    covered_by:
+      - spec_id: diagnostics-reporting
+        requirement_id: error-state-capture
+      - spec_id: diagnostics-reporting
+        requirement_id: report-content-redaction
+  crash-occurs:
+    action: 崩溃类事件(安卓未捕获异常与 ANR、桌面主进程未捕获异常与渲染进程崩溃)发生时,脱敏后的报告先原子落盘,进程按系统默认行为终止或报告进入待发队列
+    covered_by:
+      - spec_id: diagnostics-reporting
+        requirement_id: crash-persist-next-launch
+      - spec_id: diagnostics-reporting
+        requirement_id: report-content-redaction
+  next-launch-reports:
+    action: 下次启动客户端时发现未发送报告,连同待发队列批量补报到 pca,issue 列表出现对应记录
+    covered_by:
+      - spec_id: diagnostics-reporting
+        requirement_id: crash-persist-next-launch
+      - spec_id: diagnostics-reporting
+        requirement_id: send-path-and-queue
+exception_flows:
+  send-failure:
+    trigger: 端点不可达、安卓隧道未连接或网络失败
+    steps:
+      queue-and-retry:
+        action: 发送静默失败,报告留在有界本地队列(超限丢最旧),下次启动或下次错误触发点重试;pca 返回 4xx 时该批丢弃不再重试;主流程与界面不受影响,上报不触发隧道启动
+        covered_by:
+          - spec_id: diagnostics-reporting
+            requirement_id: send-path-and-queue
+  invalid-address:
+    trigger: 用户粘贴的地址不是合法 https 地址
+    steps:
+      reject-save:
+        action: 保存不可用并显示原因,配置不被修改
+        covered_by:
+          - spec_id: diagnostics-reporting
+            requirement_id: endpoint-config-android
+          - spec_id: diagnostics-reporting
+            requirement_id: endpoint-config-desktop
+  unconfigured-error:
+    trigger: 诊断上报未配置时发生崩溃或错误态
+    steps:
+      zero-behavior:
+        action: 不产生、不保存、不发送任何报告,客户端行为与现状完全一致
+        covered_by:
+          - spec_id: diagnostics-reporting
+            requirement_id: endpoint-config-android
+          - spec_id: diagnostics-reporting
+            requirement_id: endpoint-config-desktop

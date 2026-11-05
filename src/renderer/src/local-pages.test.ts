@@ -48,6 +48,15 @@ const PAGE_BODY = `
         <button id="cancel" type="button">取消</button>
       </div>
     </form>
+    <div id="diag-block">
+      <label for="diag-endpoint">诊断端点地址（https）</label>
+      <input id="diag-endpoint" type="url" autocomplete="off" spellcheck="false" />
+      <p id="diag-error" aria-live="polite"></p>
+      <div class="actions">
+        <button id="diag-save" type="button" disabled>保存端点</button>
+        <button id="diag-clear" type="button">清除</button>
+      </div>
+    </div>
   </section>
 </main>`
 
@@ -59,6 +68,9 @@ interface FakeDsh {
   completeSetup: (raw: string) => Promise<SaveResult>
   getSettingsURL: ReturnType<typeof vi.fn>
   saveSettings: (raw: string) => Promise<SaveResult>
+  getDiagEndpoint: ReturnType<typeof vi.fn>
+  saveDiagEndpoint: (raw: string) => Promise<SaveResult>
+  clearDiagEndpoint: ReturnType<typeof vi.fn>
   listeners: ((state: LocalState) => void)[]
 }
 
@@ -72,6 +84,9 @@ function fakeDsh(overrides: Partial<FakeDsh> = {}): FakeDsh {
     completeSetup: vi.fn(async (_raw: string): Promise<SaveResult> => ({ ok: true })),
     getSettingsURL: vi.fn(async () => 'https://a.example.test/'),
     saveSettings: vi.fn(async (_raw: string): Promise<SaveResult> => ({ ok: true })),
+    getDiagEndpoint: vi.fn(async () => ''),
+    saveDiagEndpoint: vi.fn(async (_raw: string): Promise<SaveResult> => ({ ok: true })),
+    clearDiagEndpoint: vi.fn(async () => {}),
     listeners,
     ...overrides
   }

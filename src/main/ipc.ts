@@ -66,6 +66,12 @@ export interface LocalPageIpcDeps {
   // saveSettings 校验并保存地址，按 settings-policy 决定主窗口是否用原始地址打开一次；
   // 成功后设置窗口由其页面自行 window.close() 关闭。
   saveSettings(raw: string): SaveResult
+  // getDiagEndpoint 返回已配置的诊断上报端点；未配置或配置无效为空字符串（diagnostics-reporting）。
+  getDiagEndpoint(): string
+  // saveDiagEndpoint 校验（仅 https）并原子保存诊断端点，成功后触发一轮补报。
+  saveDiagEndpoint(raw: string): SaveResult
+  // clearDiagEndpoint 清除诊断端点与待发队列，回到未配置。
+  clearDiagEndpoint(): void
 }
 
 // registerLocalPageIpc 注册本地页面（主窗口与设置窗口）的全部 IPC：每个处理函数先校验
@@ -105,4 +111,13 @@ export function registerLocalPageIpc(ipc: IpcRegistrar, deps: LocalPageIpcDeps):
     return deps.getSettingsURL()
   })
   ipc.handle(IPC_CHANNELS.saveSettings, (event, ...args) => deps.saveSettings(guardUrlArg(event, args)))
+  ipc.handle(IPC_CHANNELS.diagGetEndpoint, (event, ...args) => {
+    guardNoArgs(event, args)
+    return deps.getDiagEndpoint()
+  })
+  ipc.handle(IPC_CHANNELS.diagSaveEndpoint, (event, ...args) => deps.saveDiagEndpoint(guardUrlArg(event, args)))
+  ipc.handle(IPC_CHANNELS.diagClearEndpoint, (event, ...args) => {
+    guardNoArgs(event, args)
+    deps.clearDiagEndpoint()
+  })
 }

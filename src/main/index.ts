@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import os from 'node:os'
 import { BrowserWindow, Menu, WebContentsView, app, dialog, ipcMain, net, protocol, screen, session, shell } from 'electron'
 import { ABOUT_TITLE, aboutMessage } from './app-info'
 import { buildMenuTemplate } from './app-menu'
@@ -6,6 +7,14 @@ import { APP_SCHEME, createAppProtocolHandler } from './app-protocol'
 import { warmUpWebGlobals } from './web-globals'
 import { APP_VERSION } from './version'
 import { CONFIG_FILE_NAME, ensurePrivateDir, loadConfig, saveConfig } from './config'
+import {
+  DIAGNOSTICS_CONFIG_FILE_NAME,
+  DiagnosticsQueue,
+  clearDiagEndpoint,
+  loadDiagEndpoint,
+  saveDiagEndpoint
+} from './diagnostics-store'
+import { DiagnosticsRuntime, type DiagSendOutcome } from './diagnostics-runtime'
 import { URLValidationError, redactURL } from './url-validation'
 import { allowedLocalOrigins, registerLocalPageIpc } from './ipc'
 import { Navigator } from './navigator'
@@ -29,8 +38,34 @@ import {
 
 let navigator: Navigator | null = null
 let mainWindow: BrowserWindow | null = null
+let diagRuntime: DiagnosticsRuntime | null = null
 const activator = new SingleInstanceActivator()
 const settingsManager = new SettingsWindowManager()
+
+// sendDiagBatch 用 Electron net 直连 POST 一批诊断报告（diagnostics-reporting：桌面端点
+// 经系统网络直连）；目标地址由 runtime 拼好；15 秒超时或网络错误按 failed（保留队列重试），不读正文。
+function sendDiagBatch(url: string, body: string): Promise<DiagSendOutcome> {
+  return new Promise((resolve) => {
+    const request = net.request({ url, method: 'POST' })
+    const timer = setTimeout(() => {
+      request.abort()
+      resolve('failed')
+    }, 15_000)
+    request.on('response', (response) => {
+      clearTimeout(timer)
+      const code = response.statusCode
+      request.abort()
+      resolve(code >= 200 && code < 300 ? 'delivered' : code >= 400 && code < 500 ? 'rejected' : 'failed')
+    })
+    request.on('error', () => {
+      clearTimeout(timer)
+      resolve('failed')
+    })
+    request.setHeader('Content-Type', 'application/json; charset=utf-8')
+    request.write(body)
+    request.end()
+  })
+}
 
 // Wayland 会话下窗口位置由合成器决定，传入空显示器列表使 resolve 只恢复尺寸与最大化。
 function currentScreens(): Screen[] {
@@ -141,6 +176,10 @@ function createMainWindow(): void {
   // 本地页面不导航、不弹窗。
   local.on('will-navigate', (event) => event.preventDefault())
   local.setWindowOpenHandler(() => ({ action: 'deny' }))
+  // 渲染进程崩溃报告（diagnostics-reporting）：进程仍存活，落盘后即时尝试发送。
+  local.on('render-process-gone', (_event, details) => {
+    diagRuntime?.reportRenderCrash({ type: 'local', reason: details.reason, exitCode: details.exitCode })
+  })
 
   const remote = new WebContentsView(createRemoteViewOptions())
   let remoteShown = false
@@ -158,6 +197,10 @@ function createMainWindow(): void {
     loadConfig: () => loadConfig(configPath),
     probe: (url) => probe(url, (target) => net.request({ url: target, session: remoteSession, redirect: 'manual', useSessionCookies: false })),
     showLocal: (state) => {
+      if (state.view === 'error') {
+        // 错误态报告（diagnostics-reporting）：未配置端点时 runtime 内部零行为。
+        diagRuntime?.recordLoadError(state.reason, redactURL(state.url))
+      }
       if (remoteShown) {
         window.contentView.removeChildView(remote)
         remoteShown = false
@@ -187,6 +230,9 @@ function createMainWindow(): void {
     generation: () => nav.generationId,
     sessionExpired: (observed) => nav.sessionExpired(observed),
     loadFailed: (reason) => nav.loadFailed(reason)
+  })
+  remote.webContents.on('render-process-gone', (_event, details) => {
+    diagRuntime?.reportRenderCrash({ type: 'remote', reason: details.reason, exitCode: details.exitCode })
   })
 
   window.on('closed', () => {
@@ -224,6 +270,30 @@ if (app.requestSingleInstanceLock()) {
     ensurePrivateDir(app.getPath('userData'))
     protocol.handle(APP_SCHEME, createAppProtocolHandler(join(__dirname, '../renderer'), (url) => net.fetch(url)))
     const configPath = join(app.getPath('userData'), CONFIG_FILE_NAME)
+
+    // 诊断上报装配（diagnostics-reporting）：未配置端点时 runtime 内部全部零行为。
+    const diagConfigPath = join(app.getPath('userData'), DIAGNOSTICS_CONFIG_FILE_NAME)
+    const diagQueue = new DiagnosticsQueue(join(app.getPath('userData'), 'diagnostics-queue'))
+    diagRuntime = new DiagnosticsRuntime({
+      queue: diagQueue,
+      loadEndpoint: () => {
+        const load = loadDiagEndpoint(diagConfigPath)
+        return load.status === 'ok' ? load.endpoint : null
+      },
+      send: sendDiagBatch,
+      appVersion: APP_VERSION,
+      device: `${process.platform}/${process.arch}`,
+      osVersion: os.release()
+    })
+    // 主进程未捕获异常：同步落盘崩溃报告后交还默认行为（错误对话框与进程终止）；
+    // 下次启动的 flush 补报。
+    process.on('uncaughtException', (err) => {
+      diagRuntime?.reportCrashSync('main', err)
+      process.removeAllListeners('uncaughtException')
+      throw err
+    })
+    void diagRuntime.flush().catch(() => {})
+
     registerLocalPageIpc(ipcMain, {
       allowedOrigins: allowedLocalOrigins(app.isPackaged, process.env['ELECTRON_RENDERER_URL']),
       getState: () => navigator?.localState ?? { view: 'connecting' },
@@ -267,6 +337,23 @@ if (app.requestSingleInstanceLock()) {
           navigator?.openRemote(raw)
         }
         return { ok: true }
+      },
+      getDiagEndpoint: () => {
+        const load = loadDiagEndpoint(diagConfigPath)
+        return load.status === 'ok' ? load.endpoint : ''
+      },
+      saveDiagEndpoint: (raw) => {
+        try {
+          saveDiagEndpoint(diagConfigPath, raw)
+        } catch {
+          return { ok: false, error: '诊断端点仅支持 https 地址。' }
+        }
+        void diagRuntime?.flush().catch(() => {})
+        return { ok: true }
+      },
+      clearDiagEndpoint: () => {
+        clearDiagEndpoint(diagConfigPath)
+        diagQueue.clear()
       }
     })
     Menu.setApplicationMenu(

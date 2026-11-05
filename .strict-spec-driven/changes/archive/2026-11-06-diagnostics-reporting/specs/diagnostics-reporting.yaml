@@ -1,0 +1,128 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: diagnostics-reporting
+spec:
+  title: 诊断上报
+  path: .strict-spec-driven/specs/diagnostics-reporting.yaml
+operations:
+  ADDED:
+    endpoint-config-android:
+      strength: MUST
+      statement: Android 设置页提供「诊断上报」条目:从未配置时显示未配置状态,App 不产生、不保存、不发送任何诊断报告,其余全部功能与现状完全一致;粘贴地址实时校验,仅合法 https 地址可保存,保存后地址原子持久化到私有存储的独立文件并开启上报;提供清除,清除时删除配置与本地待发队列,回到未配置。
+      scenarios:
+        unconfigured-zero-behavior:
+          - GIVEN: 诊断上报从未配置
+          - WHEN: 启动 App 并正常使用全部既有功能
+          - THEN: 不产生任何报告、不保存诊断文件、不发出任何上报请求,行为与无此功能时一致
+        save-valid-url:
+          - GIVEN: 诊断上报未配置
+          - WHEN: 粘贴 https://gamepc.example.ts.net:18790 并保存
+          - THEN: 条目显示已配置,私有存储独立文件保存该地址且上报开启
+        invalid-url-rejected:
+          - GIVEN: 「诊断上报」条目已打开
+          - WHEN: 输入 ftp://bad.example/
+          - THEN: 保存不可用并显示原因,配置不变
+        clear-back-to-unconfigured:
+          - GIVEN: 已配置端点且待发队列有报告
+          - WHEN: 点击清除
+          - THEN: 配置与待发队列被删除,条目回到未配置,此后不再有任何上报行为
+    endpoint-config-desktop:
+      strength: MUST
+      statement: 桌面设置窗口提供「诊断上报」条目,语义与 Android 侧一致:默认未配置即应用零行为变化(不产生、不保存、不发送任何报告);实时校验,仅合法 https 地址可保存,保存后原子持久化到配置目录的独立文件并开启;可清除回到未配置;设置窗口的打开、聚焦、取消与保存交互不影响主窗口显示。
+      scenarios:
+        unconfigured-zero-behavior-desktop:
+          - GIVEN: 诊断上报从未配置
+          - WHEN: 启动应用并正常使用
+          - THEN: 不产生任何报告或上报请求,行为与无此功能时一致
+        save-valid-url-desktop:
+          - GIVEN: 设置窗口已打开「诊断上报」条目
+          - WHEN: 粘贴合法 https 地址并保存
+          - THEN: 配置目录独立文件保存该地址,诊断上报开启,主窗口不受影响
+        invalid-rejected-desktop:
+          - GIVEN: 「诊断上报」条目已打开
+          - WHEN: 输入 http://clear.example/
+          - THEN: 保存不可用并显示原因(仅接受 https),配置不变
+        clear-desktop:
+          - GIVEN: 已配置端点
+          - WHEN: 清除配置
+          - THEN: 回到未配置,待发队列清空,不再上报
+    crash-persist-next-launch:
+      strength: MUST
+      statement: 崩溃类事件发生时,客户端先把脱敏后的报告原子写入本地(写入中断不留半份文件),安卓未捕获异常与桌面主进程未捕获异常随后按系统默认行为终止进程,进程本次不尝试网络发送;下次启动发现未发送报告时连同待发队列批量补报;桌面渲染进程崩溃时进程仍存活,报告落盘后进入待发队列即时尝试。
+      scenarios:
+        crash-then-restart-reports:
+          - GIVEN: 已配置端点
+          - WHEN: App 发生未捕获异常崩溃后重新启动
+          - THEN: 崩溃报告被补报,pca 收到该报告
+        interrupted-write-tolerated:
+          - GIVEN: 崩溃报告写入被中断,文件损坏或不完整
+          - WHEN: 下次启动读取
+          - THEN: 该文件按没有报告处理,不阻断启动、不影响其他诊断状态
+        desktop-render-crash:
+          - GIVEN: 已配置端点,桌面渲染进程崩溃
+          - WHEN: 崩溃事件发生
+          - THEN: 报告落盘进入待发队列并被尝试发送,应用不因此退出
+    error-state-capture:
+      strength: MUST
+      statement: 诊断上报开启时:主窗口或主页面显示本地错误页的同时产生一份按原因分类的错误态报告;安卓隧道卡片进入失败状态时同样产生一份;同一会话内同类错误态至多上报一次;没有任何错误态时不产生任何报告。诊断上报未配置时,错误页与隧道卡片的既有行为不变,不产生报告。
+      scenarios:
+        load-error-one-report:
+          - GIVEN: 已配置端点,已保存地址不可达
+          - WHEN: 启动显示错误页并多次点击重试仍失败
+          - THEN: 同类错误态只产生一份报告
+        tunnel-failure-reported:
+          - GIVEN: 已配置端点,隧道进入失败状态
+          - WHEN: 失败发生
+          - THEN: 产生一份隧道失败错误态报告(kind=error,按失败原因分类)
+        no-error-no-report:
+          - GIVEN: 已配置端点
+          - WHEN: 正常使用,无错误态发生
+          - THEN: 不产生任何报告或上报请求
+        unconfigured-error-page-unchanged:
+          - GIVEN: 诊断上报未配置,已保存地址不可达
+          - WHEN: 启动 App
+          - THEN: 本地错误页照常显示,不产生任何报告
+    send-path-and-queue:
+      strength: MUST
+      statement: 上报发送与队列:安卓端点为 tailnet 目标时经内嵌节点转发(隧道已连接),其余目标与桌面端点经系统网络直连;发送失败静默进入有界本地队列(超限丢弃最旧),仅在启动与新的错误触发点重试,不做定时轮询;pca 返回 4xx 时该批丢弃不再重试;发送与重试在任何情况下不阻塞界面与主流程、不弹出提示;上报不触发隧道启动。上报请求只针对已配置的诊断端点发出。
+      scenarios:
+        tailnet-via-node:
+          - GIVEN: 已配置 ts.net 端点,隧道已连接
+          - WHEN: 发送报告
+          - THEN: 请求经内嵌节点转发到达,不走手机网络直连
+        unreachable-queued:
+          - GIVEN: 已配置端点当前不可达
+          - WHEN: 发送尝试失败
+          - THEN: 报告留在有界队列,界面与主流程不受影响,下次启动重试
+        4xx-dropped:
+          - GIVEN: pca 对某批报告返回 400
+          - WHEN: 响应到达
+          - THEN: 该批从队列删除,不再重试,应用其余功能不受影响
+        no-tunnel-not-started:
+          - GIVEN: 已配置 tailnet 端点,隧道未配置
+          - WHEN: 发送失败入队
+          - THEN: 隧道不被启动,下次启动仍按未连接处理
+    report-content-redaction:
+      strength: MUST
+      statement: 报告内容与脱敏:崩溃类报告包含线程、消息与堆栈——安卓 kind=crash 取未捕获异常堆栈,kind=anr 取判定时主线程的当前堆栈,桌面 kind=crash 的主进程未捕获异常取异常堆栈,渲染进程崩溃在主进程侧无法取得渲染进程堆栈,消息含崩溃原因与退出码;错误态报告 kind=error,安卓按 harness 加载失败原因与隧道失败原因分类,桌面按加载失败原因分类;报告附带应用版本与设备信息;任何字段中出现的地址一律经过脱敏,token 查询参数的值绝不出现在报告、本地队列或日志中;无法解析的地址不回显原文。
+      scenarios:
+        crash-report-fields:
+          - GIVEN: 已配置端点,安卓发生未捕获异常
+          - WHEN: 崩溃报告产生
+          - THEN: 报告 kind=crash,含线程、消息、堆栈、应用版本与设备信息
+        anr-report-include-main-stack:
+          - GIVEN: 已配置端点,主线程无响应超过宽限期
+          - WHEN: 看门狗判定成立
+          - THEN: 报告 kind=anr,堆栈含判定时主线程的当前调用栈
+        error-state-classified:
+          - GIVEN: 已配置端点,已保存地址连接被拒绝
+          - WHEN: 主页面显示本地错误页
+          - THEN: 产生 kind=error 的报告,失败原因分类为连接被拒绝
+        token-never-reported:
+          - GIVEN: 已配置端点,harness 地址曾带 token 保存
+          - WHEN: 任何报告产生并被发送
+          - THEN: 上报载荷中不出现 token 值,载荷中的地址均为脱敏后的干净地址
+  MODIFIED: {}
+  REMOVED: {}

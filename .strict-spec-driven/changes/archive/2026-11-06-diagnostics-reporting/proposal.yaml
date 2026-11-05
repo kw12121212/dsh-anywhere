@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: diagnostics-reporting
+  status: proposed
+summary:
+  what:
+    - Android 与桌面（Electron）客户端新增可选的诊断上报：把崩溃类报告（安卓未捕获异常与 ANR、桌面主进程未捕获异常与渲染进程崩溃）与错误态报告（harness 加载失败按原因分类、安卓隧道进入失败状态）发送到用户在设置中配置的 pca 诊断接口（POST /api/diagnostics/reports，批量不超过 20 份）；崩溃类报告当场原子落盘、下次启动补报；诊断上报未配置时两端客户端零行为变化。
+  why:
+    - 客户端的崩溃与错误态目前只在设备本地瞬时可见（本地错误页与隧道卡片），不留任何记录：用户真实经历过 App 崩溃后无迹可循，人不在设备旁就无从得知发生过什么；pca 常驻服务（WSL 中、经 tailscale serve 暴露）已有诊断上报接口与 issue 聚合查询 UI，把两端客户端接上去即可远程排障。
+scope:
+  in:
+    - Android（:app）：未捕获异常 handler 原子落盘与下次启动补报、ANR 看门狗、加载失败与隧道失败错误态捕获、设置页新增「诊断上报」条目（默认未配置、粘贴合法 https 地址开启、可清除）、上报请求复用既有分流路径（tailnet 目标经内嵌节点）；桌面（src/main）：主进程 uncaughtException 与 render-process-gone 捕获落盘补报、加载失败错误态上报、设置窗口新增「诊断上报」配置；core 纯 JVM 模块：报告模型与构造、token 脱敏（与 HarnessUrl.redact 同源语义）、有界队列与批量组包逻辑及 JUnit 测试；桌面端 Vitest 单元测试与设置条目 e2e；strict 产物：新 delta scene 与新 spec 区 diagnostics-reporting 的 delta spec。
+  out:
+    - pca 仓库的任何改动（platform 枚举扩展等另行变更）；WebView/远程页面内 JS 错误捕获（被 remote-isolation-android 与 remote-content-no-preload 禁止，技术上不可行）；更新检查/下载失败与运行 breadcrumb 上报；崩溃自动重启或保活；诊断数据的展示（pca 已有 issue UI）；首次设置页流程改动。
+unchanged_behavior:
+  - 诊断上报未配置时，两端客户端全部既有行为（首次设置、地址配置与校验、加载与错误页、会话、隧道、更新、设置）与现状完全一致；harness URL 只来自用户配置、token 不入配置/日志/错误的既有约束不变；上报的发送与失败绝不阻塞或影响主流程与界面；回归命令与 CI 打包分工不变。

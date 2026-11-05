@@ -66,4 +66,11 @@
     <string name="error_hint_address">请到设置检查 dsh 地址是否正确，并确认 DSH 主机上的服务在运行</string>
     <string name="error_hint_tailscale">请到设置检查 Tailscale 隧道状态与 dsh 地址</string>
     <string name="tunnel_wait_hint">请到设置检查 Tailscale auth key 与隧道状态</string>
+    <string name="diag_title">诊断上报</string>
+    <string name="diag_state_unconfigured">未配置（可选）：粘贴诊断服务的 https 地址后，崩溃与错误信息会自动上报。</string>
+    <string name="diag_endpoint_label">粘贴诊断端点地址（https）</string>
+    <string name="diag_endpoint_invalid">仅支持 https 地址</string>
+    <string name="diag_save">保存</string>
+    <string name="diag_clear">清除</string>
+    <string name="diag_save_failed">保存失败，请重试</string>
 </resources>

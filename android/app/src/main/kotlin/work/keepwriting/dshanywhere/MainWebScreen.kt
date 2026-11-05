@@ -112,7 +112,11 @@ fun MainWebScreen(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -
             DialProbe.ProbeResult.Reachable -> {
                 Phase.Content(clean, graph.consumePendingRawUrl() ?: clean)
             }
-            is DialProbe.ProbeResult.Unreachable -> Phase.Error(clean, result.reason)
+            is DialProbe.ProbeResult.Unreachable -> {
+                // 错误态报告（diagnostics-reporting）：未配置时 manager 内部零行为。
+                graph.diagnostics.recordLoadError(clean, result.reason)
+                Phase.Error(clean, result.reason)
+            }
         }
     }
 

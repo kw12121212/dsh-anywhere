@@ -38,7 +38,14 @@ describe('isTrustedSender', () => {
 describe('registerLocalPageIpc', () => {
   function setup() {
     const handlers = new Map<string, (event: IpcEvent, ...args: unknown[]) => unknown>()
-    const calls = { retries: 0, completeSetup: [] as string[], saveSettings: [] as string[], openSettings: 0 }
+    const calls = {
+      retries: 0,
+      completeSetup: [] as string[],
+      saveSettings: [] as string[],
+      openSettings: 0,
+      diagSaved: [] as string[],
+      diagCleared: 0
+    }
     registerLocalPageIpc(
       { handle: (channel, listener) => handlers.set(channel, listener) },
       {
@@ -54,7 +61,13 @@ describe('registerLocalPageIpc', () => {
         saveSettings: (raw) => {
           calls.saveSettings.push(raw)
           return { ok: true }
-        }
+        },
+        getDiagEndpoint: () => '',
+        saveDiagEndpoint: (raw) => {
+          calls.diagSaved.push(raw)
+          return { ok: true }
+        },
+        clearDiagEndpoint: () => calls.diagCleared++
       }
     )
     return { handlers, calls }
@@ -70,11 +83,16 @@ describe('registerLocalPageIpc', () => {
     expect(handlers.get(IPC_CHANNELS.getSettingsURL)?.(local)).toBe('https://dsh.example.test/')
     expect(handlers.get(IPC_CHANNELS.completeSetup)?.(local, 'http://127.0.0.1:13080/?token=abc')).toEqual({ ok: true })
     expect(handlers.get(IPC_CHANNELS.saveSettings)?.(local, 'https://b.example.test/')).toEqual({ ok: true })
+    expect(handlers.get(IPC_CHANNELS.diagGetEndpoint)?.(local)).toBe('')
+    handlers.get(IPC_CHANNELS.diagSaveEndpoint)?.(local, 'https://gamepc.example.ts.net:18790')
+    handlers.get(IPC_CHANNELS.diagClearEndpoint)?.(local)
     expect(calls).toEqual({
       retries: 1,
       completeSetup: ['http://127.0.0.1:13080/?token=abc'],
       saveSettings: ['https://b.example.test/'],
-      openSettings: 1
+      openSettings: 1,
+      diagSaved: ['https://gamepc.example.ts.net:18790'],
+      diagCleared: 1
     })
   })
 
@@ -91,6 +109,8 @@ describe('registerLocalPageIpc', () => {
     expect(calls.completeSetup).toHaveLength(0)
     expect(calls.saveSettings).toHaveLength(0)
     expect(calls.openSettings).toBe(0)
+    expect(() => handlers.get(IPC_CHANNELS.diagSaveEndpoint)?.(remote, 'https://x/')).toThrow()
+    expect(calls.diagSaved).toHaveLength(0)
   })
 
   it('地址通道只接受单个字符串，参数缺失、多余、类型不符或超长即拒绝', () => {

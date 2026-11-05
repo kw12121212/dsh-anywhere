@@ -12,5 +12,8 @@ contextBridge.exposeInMainWorld('dsh', {
   openSettings: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openSettings),
   completeSetup: (raw: string): Promise<SaveResult> => ipcRenderer.invoke(IPC_CHANNELS.completeSetup, raw),
   getSettingsURL: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.getSettingsURL),
-  saveSettings: (raw: string): Promise<SaveResult> => ipcRenderer.invoke(IPC_CHANNELS.saveSettings, raw)
+  saveSettings: (raw: string): Promise<SaveResult> => ipcRenderer.invoke(IPC_CHANNELS.saveSettings, raw),
+  getDiagEndpoint: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.diagGetEndpoint),
+  saveDiagEndpoint: (raw: string): Promise<SaveResult> => ipcRenderer.invoke(IPC_CHANNELS.diagSaveEndpoint, raw),
+  clearDiagEndpoint: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.diagClearEndpoint)
 })

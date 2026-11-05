@@ -156,6 +156,8 @@ class TunnelManager private constructor(context: Context) {
             // 错误文本可能回显 key（如 URL 形式的 authkey=…），一律脱敏。
             val sanitized = if (authKey.isNotEmpty()) raw.replace(authKey, "***") else raw
             setState(classified, reason = sanitized)
+            // 失败/需要 key 的错误态报告（diagnostics-reporting）：reason 已脱敏，未配置时零行为。
+            DiagnosticsManager.get(appContext).recordTunnelFailure(classified, sanitized)
         }
     }
 

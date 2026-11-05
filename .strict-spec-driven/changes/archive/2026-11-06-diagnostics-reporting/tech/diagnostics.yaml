@@ -1,0 +1,30 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: diagnostics
+standard:
+  title: 诊断上报端点与被动能力
+  category: security
+operations:
+  ADDED:
+    diagnostics-endpoint-user-configured:
+      strength: MUST
+      statement: 诊断类上报端点只能来自用户在设置中的显式配置:默认未配置即完全关闭(不采集、不落盘、不发送),仅接受 https 地址,提供清除(删除配置并清空待发队列);端点与任何凭据不得硬编码;报告、本地队列与日志中携带地址的文本必须经与 HarnessUrl.redact 同源的脱敏,token 查询参数的值绝不出现。
+      rationale: 仓库公开而端点位于私有 tailnet,地址即敏感信息;报告离开设备进入常驻服务,泄漏面大于本地日志(security-secrets/no-input-echo-errors 的延伸)。
+      enforcement:
+        method: test
+    passive-capability-nonblocking:
+      strength: MUST
+      statement: 被动辅助能力(诊断捕获、入队、发送)不得阻塞主线程或 UI、不得触发隧道或网络连接建立、不得弹任何提示;失败静默保留,重试只在启动与错误触发点,不做定时轮询;服务端 4xx 属永久拒绝,直接丢弃该批不再重试。
+      rationale: 辅助能力不得反噬主功能;上报是被动诊断,不得反向驱动连接(tunnel-optional-onboarding 的不启动语义)。
+      enforcement:
+        method: test
+    crash-report-atomic-persist:
+      strength: MUST
+      statement: 崩溃处理器内只做同步原子落盘(临时文件加重命名)后交还系统默认处理,不在崩溃路径做网络发送;报告由下次启动连同待发队列批量补报;损坏或写入中断的报告文件按没有报告处理,不阻断启动(遵循 state-persistence/atomic-tolerant-state-read)。
+      rationale: 崩溃时进程即将死亡,网络发送不可靠也不安全;原子写与读取容忍是既有持久化标准对崩溃报告的直接适用。
+      enforcement:
+        method: test
+  MODIFIED: {}
+  REMOVED: {}

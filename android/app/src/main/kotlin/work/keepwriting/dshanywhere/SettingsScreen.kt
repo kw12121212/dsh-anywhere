@@ -159,6 +159,8 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
             Spacer(Modifier.height(32.dp))
             TunnelCard(tunnel)
             Spacer(Modifier.height(24.dp))
+            DiagnosticsCard(graph.diagnostics)
+            Spacer(Modifier.height(24.dp))
             UpdateCard(graph.updates)
         }
     }
@@ -218,6 +220,70 @@ private fun UpdateCard(updates: UpdateManager) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { updates.check() }, enabled = updates.state != UpdateManager.State.CHECKING) {
                 Text(stringResource(R.string.update_check))
+            }
+        }
+    }
+}
+
+/** 诊断上报卡片（diagnostics-reporting）：默认未配置零行为；粘贴 pca https 端点开启，可清除。 */
+@Composable
+private fun DiagnosticsCard(diagnostics: DiagnosticsManager) {
+    var endpointInput by remember { mutableStateOf("") }
+    var saveError by remember { mutableStateOf(false) }
+    val inputValid = remember(endpointInput) {
+        work.keepwriting.core.DiagEndpoint.validate(endpointInput) != null
+    }
+    Card(modifier = Modifier
+        .fillMaxWidth()
+        .widthIn(max = 480.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.diag_title), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            val configured = diagnostics.endpoint
+            if (configured == null) {
+                Text(stringResource(R.string.diag_state_unconfigured), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = endpointInput,
+                    onValueChange = {
+                        endpointInput = it
+                        saveError = false
+                    },
+                    label = { Text(stringResource(R.string.diag_endpoint_label)) },
+                    isError = endpointInput.isNotBlank() && !inputValid,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                if (endpointInput.isNotBlank() && !inputValid) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.diag_endpoint_invalid),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (diagnostics.saveEndpoint(endpointInput) == null) saveError = true
+                        else endpointInput = ""
+                    },
+                    enabled = endpointInput.isNotBlank() && inputValid,
+                ) { Text(stringResource(R.string.diag_save)) }
+            } else {
+                Text(configured, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { diagnostics.clearEndpoint() }) {
+                    Text(stringResource(R.string.diag_clear))
+                }
+            }
+            if (saveError) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.diag_save_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }

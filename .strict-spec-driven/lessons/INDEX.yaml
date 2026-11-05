@@ -19,6 +19,12 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/architecture/activity-6a9786.yaml
+  coding:
+    post-ec9ab1:
+      title: 心跳式看门狗的检查点与阈值间隔不得恰好相等:post 前后观察值比较才是正确语义
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/post-ec9ab1.yaml
   security:
     wails-seturl-token-e08b6a:
       title: Wails SetURL 会在内存中保留并可能重放带 token 的地址

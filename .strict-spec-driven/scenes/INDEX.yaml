@@ -12,6 +12,11 @@ areas:
       title: Android 连接出错后去设置检查并修正
       status: draft
       path: .strict-spec-driven/scenes/android/android-fix-connection.yaml
+  diagnostics:
+    report-client-errors:
+      title: 客户端错误上报诊断
+      status: draft
+      path: .strict-spec-driven/scenes/diagnostics/report-client-errors.yaml
   release:
     release-new-version:
       title: 发布新版本

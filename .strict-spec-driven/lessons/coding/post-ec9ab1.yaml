@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: post-ec9ab1
+  title: 心跳式看门狗的检查点与阈值间隔不得恰好相等:post 前后观察值比较才是正确语义
+category: coding
+status: active
+created_at: '2026-11-05T16:02:24.152Z'
+updated_at: '2026-11-05T16:02:24.152Z'
+context: diagnostics-reporting 的 Android ANR 看门狗(dsh-anr-watchdog 线程 + 主线程心跳 Runnable)。
+observation: 首版实现『每轮 post 心跳后固定 sleep 恰好等于阈值的时间,再检查 now-lastTick >= 阈值』:检查点距上次心跳必然恰好等于阈值,边界条件每次成立,模拟器上每 12 秒稳定产生一份 ANR 误报报告(设备验收实测发现);修复为『记录 post 前的观察值,宽限期后观察值未变(新心跳没执行)才判定无响应』后 35 秒零误报。
+takeaway: 周期性投递心跳的看门狗,判定必须是『post 前后观察值是否前进』,而不是『距上次心跳多久』——后者的测量点被自己的调度周期锚定,间隔设计成等于阈值时必然误报;纯判定逻辑下沉 core 并以 JUnit 锁定(AnrDetection.isUnresponsive)。
+applies_when: 实现任何形式的心跳/看门狗/活性检测线程:向事件循环投递 tick 并在固定延时后判定对端是否无响应(ANR、UI 冻结、连接保活检测等)。
+occurrences:
+  - origin: diagnostics-reporting
+    date: '2026-11-05'
+    evidence: 2026-11-05 模拟器(API 36)设备验收:修复前每周期一份 kind=anr 误报(队列文件时间戳间隔 12s);修复后配置端点连续 35 秒队列零增长。
