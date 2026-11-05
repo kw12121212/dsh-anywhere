@@ -1,0 +1,23 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-android-release-cmd-robustness
+approach:
+  - DEP0190 的根因是 node 在 shell 下对 args 只做拼接不做转义，官方出路是调用方传完整命令串：spawnRunner 在 shell 分支内用 shellCommandLine（quoteForCmd 逐个引用）把 command+args 合成单串再 spawnSync(line, {shell:true})，接口与调用方不变。版本比较抽出纯函数 compareVersionDirs 按点分段数值比较，apksignerPath 用它排序取末位。修复都在 scripts/android-release.mts 单层内消化，不触碰规格语义。
+decisions:
+  shell-branch-string:
+    decision: DEP0190 消除放在 spawnRunner 内部而不是改调用方
+    rationale: Runner 三参接口是测试注入面（fakeRunner 记录 command/args/opts），调用方与 16 个既有用例零改动；单串拼装集中一处便于单测锁定引用规则。
+  quote-whitespace-only:
+    decision: quoteForCmd 只对含空白/引号的实参加双引号（内嵌引号加倍）
+    rationale: 现实实参是路径与固定 flag，空格是唯一现实风险；cmd 元字符 % & ^ 在双引号内不全部失活，完全转义需反引号垫层且可读性差，按实际威胁面取舍并记录残余风险。
+  numeric-version-compare:
+    decision: compareVersionDirs 按点分段 parseInt 数值比较，缺段补 0
+    rationale: build-tools 目录名就是点分数字版本，字典序对不等长数字必错（9>34、10<9 都会错）；数值比较 3 行逻辑，纯函数可单测。
+  no-delta-spec:
+    decision: 纯技术修复，不新增或修改任何主规格需求
+    rationale: packaging.android-local-release 的契约不变，本变更只是让脚本调用形态免于弃用与排序陷阱；无可观察产品行为变化。
+alternatives: []
+risks:
+  - cmd 元字符（% & ^）在双引号内仍会被 cmd 解释：现实实参（本地路径与固定 flag）不含这些字符；若未来实参面扩大到用户可控文本，需重新评估引用策略。

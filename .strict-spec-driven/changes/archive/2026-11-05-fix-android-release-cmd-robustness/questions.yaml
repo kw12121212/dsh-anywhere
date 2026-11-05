@@ -1,0 +1,56 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: fix-android-release-cmd-robustness
+open: []
+resolved:
+  - id: q-shell-string-scope
+    question: DEP0190 消除的范围：改调用方还是 spawnRunner 内部？残余转义风险接受吗？
+    context: 复审 fix-android-release-windows 的 P3-2：node 对 shell+args 仅拼接不转义且已弃用；完全转义 cmd 元字符需反引号垫层。
+    answer: spawnRunner 内部消化（Runner 接口与调用方零改动）；quoteForCmd 只覆盖空格与引号，现实实参为路径与固定 flag，cmd 元字符残余风险记录于 design 并由测试锁定引用规则。
+    status: resolved
+    kind: technical
+    answered_by: human
+  - id: q-sort-scope
+    question: 版本比较的适用范围：只改 apksignerPath 还是抽公共工具？
+    context: build-tools 目录名恒为点分数字版本。
+    answer: 只改 android-release.mts 内的 apksignerPath，抽导出纯函数 compareVersionDirs 供单测；不引入跨脚本公共模块（YAGNI）。
+    status: resolved
+    kind: technical
+    answered_by: human
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: spawnRunner 在 shell 分支触发 DEP0190 弃用且参数不转义（含空格路径破裂）；apksignerPath 以字典序取 build-tools 最新版，9.0.0 会被当成比 34.0.0 更新。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: fix-android-release-windows 复审将其备案为 P3-2 与 P3-4，用户随后明确要求两项一并合理修复。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 让发布脚本的外部命令调用免于 Node 弃用语义且对含空格路径可用、build-tools 选择按数值取最新；不改变任何发布流程语义。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 目标回归由红转绿；真实冒烟中 gradlew.bat 单命令串形态退出码 0 且无 DEP0190、含空格目录的 .bat 可执行；apksignerPath fixture 下 9.0.0 与 34.0.0 并存时取 34.0.0。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不改 Runner 接口与调用方、preflight/命名/覆盖语义、密钥纪律、非 shell 分支行为；不做 cmd 元字符完全转义与 build-tools 缺失报错。
+    status: resolved
+    kind: requirement
+    answered_by: human

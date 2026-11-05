@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: node-spawnsync-shell-true-dep0190-shell-ed71a3
+  title: node spawnSync 的 shell:true 带参数组只拼接不转义（DEP0190 弃用）：需要 shell 的调用一律合成单个显式引用的命令串
+category: tooling
+status: active
+created_at: '2026-11-05T09:58:42.806Z'
+updated_at: '2026-11-05T09:58:42.806Z'
+context: scripts/android-release.mts 在 win32 上以 spawnSync(x.bat, args, {shell:true}) 执行 gradlew/apksigner，Node ≥22.12 对该组合发出 DEP0190 弃用警告且参数不经转义，含空格路径直接破裂。
+observation: fix-android-release-windows 首修采用 shell:true+参数组，复审以真实 spawn 实证：每次调用打印 DEP0190，且哑 .bat 置于含空格目录时旧形态 status=1 输出为空（参数被拆断）；改为经 quoteForCmd 逐个引用后合成单命令串（spawnSync(line,{shell:true})，不传 args）后警告消失、空格路径 status=0。
+takeaway: 凡必须经 shell 执行（win32 的 .bat、无扩展名包装器），不要把参数数组交给 node 拼接：调用方自己逐个引用（含空白加双引号、内嵌引号加倍）合成单命令串再 spawnSync；并在纯函数里锁定引用规则。
+applies_when: 任何 scripts/ 脚本需要 spawnSync/exec 且必须启用 shell（Windows .bat、shell 包装器），或实参含路径等可能出现空白的值时。
+occurrences:
+  - origin: fix-android-release-cmd-robustness
+    date: '2026-11-05'
+    evidence: 2026-11-05 本机 Node v24.14.0 实测：旧形态子进程 stderr 含 DEP0190、含空格目录 .bat status=1；单命令串形态 DEP0190=false、status=0；quoteForCmd/shellCommandLine 由 scripts/android-release.test.mts 单测锁定。

@@ -172,3 +172,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/runner-os-spawn-c49e1a.yaml
+    node-spawnsync-shell-true-dep0190-shell-ed71a3:
+      title: node spawnSync 的 shell:true 带参数组只拼接不转义（DEP0190 弃用）：需要 shell 的调用一律合成单个显式引用的命令串
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/node-spawnsync-shell-true-dep0190-shell-ed71a3.yaml

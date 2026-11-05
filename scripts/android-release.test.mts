@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { apksignerPath, gradleInvocation, keytoolInvocation } from './android-release.mts'
+import { apksignerPath, compareVersionDirs, gradleInvocation, keytoolInvocation, quoteForCmd, shellCommandLine } from './android-release.mts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
@@ -132,6 +132,39 @@ describe('平台调用形态（回归：v1.1.0 在 Windows 上 spawn ENOENT）',
     expect(k.args).toEqual(['-list', '-v', '-keystore', 'C:/keys/release.keystore', '-alias', 'dsh', '-storepass:env', 'DSH_KEYSTORE_STOREPASS'])
     expect(k.env).toEqual({ DSH_KEYSTORE_STOREPASS: 'top-secret-pass' })
     expect(k.args.join(' ')).not.toContain('top-secret-pass')
+  })
+})
+
+describe('cmd 引用与 build-tools 版本比较（回归：DEP0190 与字典序）', () => {
+  it('quoteForCmd：纯实参不变，含空白加引号，内嵌引号加倍', () => {
+    expect(quoteForCmd('assembleRelease')).toBe('assembleRelease')
+    expect(quoteForCmd('C:/sp ace/x.apk')).toBe('"C:/sp ace/x.apk"')
+    expect(quoteForCmd('a"b')).toBe('"a""b"')
+  })
+
+  it('shellCommandLine：command 与 args 逐个引用后以空格拼成单命令串', () => {
+    expect(shellCommandLine('cmd.bat', ['-p', 'android', 'C:/sp ace/x.apk'])).toBe('cmd.bat -p android "C:/sp ace/x.apk"')
+  })
+
+  it('compareVersionDirs：点分数值比较，9.0.0 < 34.0.0、10.0.0 > 9.0.0、相等为 0', () => {
+    expect(compareVersionDirs('9.0.0', '34.0.0')).toBeLessThan(0)
+    expect(compareVersionDirs('10.0.0', '9.0.0')).toBeGreaterThan(0)
+    expect(compareVersionDirs('36.1.0', '36.1.0')).toBe(0)
+    expect(['9.0.0', '34.0.0', '10.0.0'].sort(compareVersionDirs)).toEqual(['9.0.0', '10.0.0', '34.0.0'])
+  })
+
+  it('apksignerPath 数值取最新：9.0.0 与 34.0.0 并存时取 34.0.0（修复前字典序取 9.0.0）', () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-bt-sort-'))
+    try {
+      for (const v of ['9.0.0', '34.0.0']) {
+        const d = join(home, 'build-tools', v)
+        mkdirSync(d, { recursive: true })
+        writeFileSync(join(d, process.platform === 'win32' ? 'apksigner.bat' : 'apksigner'), '')
+      }
+      expect(apksignerPath(home).replace(/\\/g, '/')).toContain('/34.0.0/')
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 })
 

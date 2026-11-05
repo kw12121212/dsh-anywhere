@@ -41,12 +41,13 @@ export interface RunnerOptions {
 export type Runner = (command: string, args: string[], opts?: RunnerOptions) => RunnerResult
 
 export const spawnRunner: Runner = (command, args, opts) => {
-  const r = spawnSync(command, args, {
-    cwd: opts?.cwd ?? repoRoot,
-    encoding: 'utf8',
-    ...(opts?.shell === true ? { shell: true } : {}),
-    ...(opts?.env ? { env: { ...process.env, ...opts.env } } : {}),
-  })
+  const base = { cwd: opts?.cwd ?? repoRoot, encoding: 'utf8' as const }
+  const env = opts?.env ? { ...process.env, ...opts.env } : undefined
+  // DEP0190：node 对 shell+args 只做拼接不做转义——shell 分支在此合成单个显式引用的命令串执行。
+  const r =
+    opts?.shell === true
+      ? spawnSync(shellCommandLine(command, args), env ? { ...base, shell: true, env } : { ...base, shell: true })
+      : spawnSync(command, args, env ? { ...base, env } : base)
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', ...(r.error ? { error: r.error.message } : {}) }
 }
 
@@ -127,8 +128,29 @@ export function gradleInvocation(): { command: string; args: string[]; shell: bo
 
 /** build-tools 最新版内的 apksigner 入口：win32 侧只有 apksigner.bat。 */
 export function apksignerPath(androidHome: string): string {
-  const base = join(androidHome, 'build-tools', readdirSync(join(androidHome, 'build-tools')).sort().at(-1) ?? '', 'apksigner')
+  const base = join(androidHome, 'build-tools', readdirSync(join(androidHome, 'build-tools')).sort(compareVersionDirs).at(-1) ?? '', 'apksigner')
   return process.platform === 'win32' ? `${base}.bat` : base
+}
+
+/** 点分版本目录的数值比较：字典序会把 9.0.0 排在 34.0.0 之后，必须逐段按数字比。 */
+export function compareVersionDirs(a: string, b: string): number {
+  const pa = a.split('.').map((x) => Number.parseInt(x, 10) || 0)
+  const pb = b.split('.').map((x) => Number.parseInt(x, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return 0
+}
+
+/** cmd 引用：含空白的实参加双引号（内嵌引号加倍）。cmd 元字符不在此覆盖，实参现实形态为路径与固定 flag。 */
+export function quoteForCmd(arg: string): string {
+  return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg
+}
+
+/** shell 分支的单命令串：command 与 args 逐个引用后拼接（规避 DEP0190 的 shell+args 仅拼接语义）。 */
+export function shellCommandLine(command: string, args: string[]): string {
+  return [command, ...args].map(quoteForCmd).join(' ')
 }
 
 /** keytool 证书 DN 查询：-v 才输出 DN；密码经 -storepass:env 注入环境，不进命令行。 */

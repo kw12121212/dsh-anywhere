@@ -1,0 +1,26 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-android-release-cmd-robustness
+  status: proposed
+summary:
+  what:
+    - spawnRunner 的 shell 分支改为执行单个显式引用的命令串（新增 quoteForCmd/shellCommandLine，对含空白的实参加双引号）：消除 Node ≥22.12 对 shell+args 组合的 DEP0190 弃用警告（参数仅拼接不转义），并使含空格路径（如仓库检出在带空格目录）下的 .bat 调用不再破裂。
+    - apksignerPath 的 build-tools 版本目录选择由字典序 sort 改为点分数值比较（新增 compareVersionDirs）：字典序会把 9.0.0 排在 34.0.0 之后被当作最新，单数字主版本与 34+ 并存时选错 apksigner。
+  why:
+    - fix-android-release-windows 复审备案的两项：DEP0190 在每次真实发布时打印弃用警告且未来 Node 版本可能收紧为报错，参数不转义使含空格仓库路径下 apksigner 调用破裂；版本字典序是潜伏的正确性缺陷（依赖本机恰好只装两位数主版本目录才未触发）。
+scope:
+  in:
+    - scripts/android-release.mts：spawnRunner shell 分支（拼装单命令串）、quoteForCmd/shellCommandLine、compareVersionDirs、apksignerPath 排序
+    - scripts/android-release.test.mts：新增单测锁定引用规则、版本数值比较、apksignerPath 数值取最新
+  out:
+    - Runner/RunnerResult 接口与 main 各调用方签名（spawnRunner 内部消化，调用方与既有 16 个用例零改动）
+    - preflight 校验语义、产物命名与覆盖语义、密钥纪律
+    - cmd 元字符（% & ^ 等）的完全转义：引用只覆盖空格与引号场景，实参现实形态为路径与固定 flag，残余风险记录于 design
+    - build-tools 目录缺失时的报错文案（既有行为，另行处理）
+unchanged_behavior:
+  - Runner 三参签名与全部既有调用方、main 各步骤语义与失败文案
+  - keystore 密码不进命令行参数与输出的纪律（keytool 不经 shell，路径不变）
+  - 非 Windows 平台调用形态（不经 shell 的分支逐位不变）
