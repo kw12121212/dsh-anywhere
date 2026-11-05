@@ -52,4 +52,18 @@
     <string name="update_install">安装</string>
     <string name="update_failed">更新失败</string>
     <string name="proxy_unsupported">当前系统 WebView 不支持代理覆盖，请升级系统 WebView（Google Play 中的 Android System WebView）后重试。</string>
+    <string name="first_run_tunnel_section">Tailscale 隧道（可选，地址在 tailnet 上时需要）</string>
+    <string name="first_run_tunnel_label">Tailscale auth key</string>
+    <string name="first_run_tunnel_connected">Tailscale 已连接（节点名：%1$s），无需填写 auth key</string>
+    <string name="verify_stage_tunnel">正在连接 Tailscale…</string>
+    <string name="verify_stage_probe">正在检查地址…</string>
+    <string name="verify_missing_key">该地址位于 tailnet，需要填写 Tailscale auth key</string>
+    <string name="verify_hint_address">请检查地址是否正确，并确认 DSH 主机上的服务在运行</string>
+    <string name="verify_hint_tailscale">请检查地址是否正确，并确认该主机在 tailnet 中在线、服务在运行</string>
+    <string name="settings_verifying">正在验证…</string>
+    <string name="settings_verify_missing_tunnel">该地址位于 tailnet，需要 Tailscale 隧道：请先在下方 Tailscale 卡片连接</string>
+    <string name="settings_verify_tunnel_failed">Tailscale 隧道未连接（%1$s）：请在下方 Tailscale 卡片检查</string>
+    <string name="error_hint_address">请到设置检查 dsh 地址是否正确，并确认 DSH 主机上的服务在运行</string>
+    <string name="error_hint_tailscale">请到设置检查 Tailscale 隧道状态与 dsh 地址</string>
+    <string name="tunnel_wait_hint">请到设置检查 Tailscale auth key 与隧道状态</string>
 </resources>

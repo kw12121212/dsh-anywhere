@@ -50,6 +50,7 @@ import work.keepwriting.core.DialProbe
 import work.keepwriting.core.OriginPolicy
 import work.keepwriting.core.ProbeFailure
 import work.keepwriting.core.SessionAuth
+import work.keepwriting.core.SetupCheck
 import work.keepwriting.core.TailnetRouting
 import work.keepwriting.core.TunnelStateMachine
 import java.io.ByteArrayInputStream
@@ -180,6 +181,12 @@ fun MainWebScreen(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -
                     is Phase.Error -> ErrorPage(
                         url = current.url,
                         reasonText = stringResource(reasonMessage(current.reason)),
+                        hintText = stringResource(
+                            when (SetupCheck.errorHint(current.url)) {
+                                SetupCheck.Hint.CHECK_TAILSCALE -> R.string.error_hint_tailscale
+                                SetupCheck.Hint.CHECK_ADDRESS -> R.string.error_hint_address
+                            },
+                        ),
                         onRetry = { graph.requestReload() },
                         onChangeAddress = onOpenSettings,
                     )
@@ -189,6 +196,7 @@ fun MainWebScreen(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -
                     Phase.TunnelPrompt -> TunnelPanel(
                         title = stringResource(R.string.tunnel_prompt_title),
                         detail = stringResource(R.string.tunnel_prompt_detail),
+                        hint = "",
                         showRetry = false,
                         onOpenSettings = onOpenSettings,
                         onRetry = {},
@@ -197,6 +205,7 @@ fun MainWebScreen(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -
                     Phase.TunnelWait -> TunnelPanel(
                         title = stringResource(R.string.tunnel_wait_title, tunnelStateText(tunnel.state)),
                         detail = tunnel.failureReason,
+                        hint = stringResource(R.string.tunnel_wait_hint),
                         showRetry = true,
                         onOpenSettings = onOpenSettings,
                         onRetry = { tunnel.ensureUp() },
@@ -260,7 +269,7 @@ private sealed interface Phase {
 }
 
 @Composable
-private fun tunnelStateText(state: TunnelStateMachine.State): String = when (state) {
+internal fun tunnelStateText(state: TunnelStateMachine.State): String = when (state) {
     TunnelStateMachine.State.NOT_CONFIGURED -> stringResource(R.string.tunnel_state_not_configured)
     TunnelStateMachine.State.CONNECTING -> stringResource(R.string.tunnel_state_connecting)
     TunnelStateMachine.State.CONNECTED -> stringResource(R.string.tunnel_state_connected)
@@ -272,6 +281,7 @@ private fun tunnelStateText(state: TunnelStateMachine.State): String = when (sta
 private fun TunnelPanel(
     title: String,
     detail: String,
+    hint: String,
     showRetry: Boolean,
     onOpenSettings: () -> Unit,
     onRetry: () -> Unit,
@@ -288,6 +298,10 @@ private fun TunnelPanel(
             Spacer(Modifier.height(8.dp))
             Text(detail, style = MaterialTheme.typography.bodyMedium)
         }
+        if (hint.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(hint, style = MaterialTheme.typography.bodyMedium)
+        }
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onOpenSettings) { Text(stringResource(R.string.reauth_open_settings)) }
@@ -299,7 +313,7 @@ private fun TunnelPanel(
 }
 
 @Composable
-private fun ErrorPage(url: String, reasonText: String, onRetry: () -> Unit, onChangeAddress: () -> Unit) {
+private fun ErrorPage(url: String, reasonText: String, hintText: String, onRetry: () -> Unit, onChangeAddress: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -310,6 +324,8 @@ private fun ErrorPage(url: String, reasonText: String, onRetry: () -> Unit, onCh
         Text(reasonText, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(8.dp))
         Text(url, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(8.dp))
+        Text(hintText, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onChangeAddress) { Text(stringResource(R.string.error_change_address)) }
@@ -496,7 +512,7 @@ private fun createHarnessWebView(
     return webView
 }
 
-private fun reasonMessage(reason: ProbeFailure.Reason): Int = when (reason) {
+internal fun reasonMessage(reason: ProbeFailure.Reason): Int = when (reason) {
     ProbeFailure.Reason.DNS -> R.string.error_reason_dns
     ProbeFailure.Reason.REFUSED -> R.string.error_reason_refused
     ProbeFailure.Reason.TIMEOUT -> R.string.error_reason_timeout

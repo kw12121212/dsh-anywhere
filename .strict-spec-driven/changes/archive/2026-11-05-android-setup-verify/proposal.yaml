@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-setup-verify
+  status: proposed
+summary:
+  what:
+    - Android 首次设置页改为一页同时提供可选的 Tailscale auth key 与 dsh URL 两项输入；点击「开始使用」按顺序验证（填了 key 先连接隧道，再对干净地址做实际可达性探测），全部通过才保存并进入主页面，失败时在对应输入下显示原因且不保存。
+    - 设置页「保存」做与首次设置页相同的连通验证（tailnet 地址要求隧道已连接、地址可达），失败在地址输入下显示原因且不保存。
+    - 主页面连接错误页与隧道等待面板按原因提示去设置检查哪一项（tailnet 地址检查 Tailscale 隧道与地址，其他地址检查 dsh 地址与服务是否在运行）。
+  why:
+    - 用户重装/清数据后重新配置时被绕路：首次设置页只有 URL，填 tailnet 地址后要进主页面才被告知需配置 Tailscale，再去设置页粘贴 key；地址或 key 填错也要到主页面才发现。不做的话每次重装都要再绕一遍。
+scope:
+  in:
+    - android/app 的 FirstRunScreen（新增 auth key 输入与验证流程）、SettingsScreen（保存前验证）、MainWebScreen（错误页与隧道面板的检查提示）、TunnelManager（可等待结果的连接入口）与 strings.xml
+    - android/core 新增纯逻辑的设置验证编排（地址校验、隧道步骤判定、可达性探测结果到输入项错误的映射、错误提示类别）及 JUnit 测试
+    - android-app 主规格中首次设置、设置页、错误页、隧道可选与隧道联动相关 requirement 的修改与新增
+  out:
+    - 验证 token 是否有效（token 只在主页面加载时使用一次；会话失效由既有重新认证流程处理）
+    - 分步向导、验证失败时的「仍然保存」入口、设置页布局重排
+    - 桌面 Electron 客户端的任何改动
+unchanged_behavior:
+  - Tailscale 仍是可选：非 tailnet 地址不填 key 即可完成首次设置，不填 key 且无节点状态时不启动隧道、不发起登录
+  - 已有有效配置的用户启动 App 直接进入主页面，不显示首次设置页
+  - 配置只保存去掉 token 的干净地址，带 token 原始地址只交给主页面加载一次；auth key 不回显、不进日志与错误信息，节点注册成功即从私有存储删除
+  - 主页面可达性探测与加载、代理分流、明文限制、导航范围、会话建立与失效重新认证、自更新流程不变
+  - 设置页 Tailscale 卡片（连接、清除、状态显示）与应用更新卡片行为不变；取消或系统返回不修改配置

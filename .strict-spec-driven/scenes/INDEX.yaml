@@ -3,6 +3,15 @@ schema_version: 1
 artifact_type: scenes_index
 schema_file: templates/strict-spec-driven/schemas/scenes-index.yaml
 areas:
+  android:
+    android-first-setup:
+      title: Android 首次设置并验证连接
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-first-setup.yaml
+    android-fix-connection:
+      title: Android 连接出错后去设置检查并修正
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-fix-connection.yaml
   release:
     release-new-version:
       title: 发布新版本

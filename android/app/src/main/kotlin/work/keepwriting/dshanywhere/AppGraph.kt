@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import work.keepwriting.core.DialProbe
 import work.keepwriting.core.HarnessConfig
+import work.keepwriting.core.SetupCheck
 import java.io.File
 
 /**
@@ -58,6 +60,16 @@ class AppGraph private constructor(context: Context) {
         pendingRawUrl = rawUrl
         return clean
     }
+
+    /** 保存前验证（android-setup-verify；阻塞，只可在后台线程调用）：隧道经
+     *  connectAndAwait，探测经与主页面相同的分流拨号（tailnet 目标经内嵌节点）。 */
+    fun verifySetup(rawUrl: String, keyInput: String, onStage: (SetupCheck.Stage) -> Unit): SetupCheck.Result =
+        SetupCheck.verify(
+            rawUrl, keyInput, tunnel.state,
+            connectTunnel = { key -> tunnel.connectAndAwait(key) },
+            probe = { clean -> DialProbe.probe(clean, DialProbe.Dial { h, p -> proxyBridge.dialForBridge(h, p) }) },
+            onStage = onStage,
+        )
 
     /** 主页面取走待加载的原始地址（一次性）。 */
     fun consumePendingRawUrl(): String? {

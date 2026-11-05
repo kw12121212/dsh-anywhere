@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: android-setup-verify
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 新装或清数据后的首次配置顺序绕路：首次设置页只有 dsh URL 输入框，填了 tailnet 地址（如 http://gamepc:13080/）进主页面后才被提示需要配置 Tailscale，再去设置页粘贴 auth key；地址或 key 填错也要到主页面才发现。受影响者是安装/重装 App 的用户本人。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 启动页一页同时提供 Tailscale auth key（可留空）与 dsh URL 两项输入，点一次「开始使用」按顺序验证：填了 key 先连隧道、再实际探测 URL 可达；全部通过才保存并进入主页面，哪项失败就在哪项下面显示原因且不保存（tailnet 地址未填 key 时提示需要 key）。设置页「保存」同样做连通验证，失败在对应输入下提示且不保存。主页面连接出错时按原因提示去设置检查哪一项（tailnet 地址查 Tailscale，其他查 dsh 地址与服务）并提供去设置入口。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 用户本人重装/清数据后重新配置时刚被绕了一次；不做的话每次重装都要再绕一遍。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: Tailscale 仍是可选（非 tailnet 地址不填 key 直接可用，不填 key 时不启动隧道）；已有有效配置的用户启动仍直接进主页面、不见启动页；token 不落盘、只用一次，auth key 注册成功即删除、不回显不进日志；主页面探测加载、代理分流、会话失效重认证与自更新流程不变。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 启动页采用『一页填完两项再验证』而非分步向导；『配置页来改设置』指设置页布局基本不变，但「保存」时做与启动页相同的连通验证（tailnet 地址要求隧道已连接、URL 可达），失败在对应输入下显示原因且不保存；连接错误提示按原因指向要检查的设置项。用户已确认此整体理解。
+    status: resolved
+    kind: requirement
+    answered_by: human

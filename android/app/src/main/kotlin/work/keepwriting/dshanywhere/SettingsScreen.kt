@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
@@ -36,21 +37,30 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import work.keepwriting.core.HarnessUrl
+import work.keepwriting.core.SetupCheck
 import work.keepwriting.core.TunnelStateMachine
 
 /**
- * 设置页：查看与修改 harness URL。实时校验（非法禁用保存并显示原因）；保存成功返回
- * 主页面并把原始地址交给主页面加载一次；取消或返回不修改配置。预留 Tailscale 卡片
- * 位置（android-tstunnel 填充）。
+ * 设置页：查看与修改 harness URL。实时校验（非法禁用保存并显示原因）；「保存」先做与
+ * 首次设置页相同的连通验证（android-setup-verify：tailnet 地址要求隧道已连接、地址
+ * 可达），失败在地址下显示原因且不保存；通过才保存、返回主页面并把原始地址交给主页面
+ * 加载一次；取消或返回不修改配置。下方为 Tailscale 卡片与应用更新卡片。
  */
 @Composable
 fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit) {
     var input by remember { mutableStateOf(graph.cleanUrl.orEmpty()) }
     var saveError by remember { mutableStateOf(false) }
+    var verifying by remember { mutableStateOf(false) }
+    var stage by remember { mutableStateOf<SetupCheck.Stage?>(null) }
+    var failure by remember { mutableStateOf<SetupCheck.Result?>(null) }
     val errorCategory = remember(input) { HarnessUrl.errorCategory(input) }
     val inputPresent = input.isNotBlank()
     val tunnel = graph.tunnel
+    val scope = rememberCoroutineScope()
 
     // App 打开设置页时按需启动隧道（未配置时不触碰 tsnet）。
     LaunchedEffect(Unit) { tunnel.ensureUp() }
@@ -70,9 +80,11 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
                 onValueChange = {
                     input = it
                     saveError = false
+                    failure = null
                 },
                 label = { Text(stringResource(R.string.settings_url_label)) },
-                isError = inputPresent && errorCategory != null,
+                isError = (inputPresent && errorCategory != null) || (failure != null && failure !is SetupCheck.Result.Ok),
+                enabled = !verifying,
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 480.dp),
@@ -86,6 +98,18 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            Column(modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp)) {
+                when (val f = failure) {
+                    SetupCheck.Result.MissingKey -> ErrorLine(stringResource(R.string.settings_verify_missing_tunnel))
+                    is SetupCheck.Result.TunnelFailed ->
+                        ErrorLine(stringResource(R.string.settings_verify_tunnel_failed, tunnelStateText(f.state)))
+                    is SetupCheck.Result.Unreachable -> {
+                        ErrorLine(stringResource(reasonMessage(f.reason)))
+                        ErrorLine(stringResource(verifyHint(input)))
+                    }
+                    else -> {}
+                }
+            }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onCancelled) {
@@ -93,17 +117,36 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
                 }
                 Button(
                     onClick = {
-                        try {
-                            graph.save(input)
-                            onSaved()
-                        } catch (_: Exception) {
-                            saveError = true
+                        // 同一帧内连点：重组禁用按钮之前只受理第一次。
+                        if (verifying) return@Button
+                        failure = null
+                        saveError = false
+                        verifying = true
+                        scope.launch {
+                            // 设置页的地址区没有 key 输入：隧道由下方 Tailscale 卡片管理。
+                            val result = withContext(Dispatchers.IO) { graph.verifySetup(input, "") { stage = it } }
+                            verifying = false
+                            stage = null
+                            if (result is SetupCheck.Result.Ok) {
+                                try {
+                                    graph.save(input)
+                                    onSaved()
+                                } catch (_: Exception) {
+                                    saveError = true
+                                }
+                            } else {
+                                failure = result
+                            }
                         }
                     },
-                    enabled = errorCategory == null && inputPresent,
+                    enabled = errorCategory == null && inputPresent && !verifying,
                 ) {
                     Text(stringResource(R.string.settings_save))
                 }
+            }
+            if (verifying) {
+                Spacer(Modifier.height(12.dp))
+                VerifyProgress(stage)
             }
             if (saveError) {
                 Spacer(Modifier.height(8.dp))

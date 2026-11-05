@@ -1,0 +1,67 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: android-fix-connection
+  title: Android 连接出错后去设置检查并修正
+area: android
+status: draft
+actors:
+  - name: 用户
+    role: 已配置过 App、在主页面遇到连接出错的人
+  - name: App
+    role: 按出错原因提示应检查的设置项，并在设置页保存前验证新设置
+preconditions:
+  - App 已保存有效的 harness 地址，主页面正在打开该地址
+main_flow:
+  see-error:
+    action: 主页面连接失败，显示本地错误页：原因、干净地址，以及按原因指向应检查的设置项的提示
+    covered_by:
+      - spec_id: android-app
+        requirement_id: load-error-page
+      - spec_id: android-app
+        requirement_id: connection-error-hint
+  open-settings:
+    action: 用户点击「修改地址」进入设置页，看到当前地址与 Tailscale 卡片
+    covered_by:
+      - spec_id: android-app
+        requirement_id: load-error-page
+      - spec_id: android-app
+        requirement_id: settings-page
+  fix-settings:
+    action: 用户修改地址，或在 Tailscale 卡片重新粘贴 key 连接隧道
+    covered_by:
+      - spec_id: android-app
+        requirement_id: settings-page
+      - spec_id: android-app
+        requirement_id: tunnel-states
+  save-verify:
+    action: 用户点击「保存」，App 验证：tailnet 地址要求隧道已连接，地址须可达
+    covered_by:
+      - spec_id: android-app
+        requirement_id: settings-save-verify
+  reload-main:
+    action: 验证通过后保存干净地址、返回主页面并重新加载
+    covered_by:
+      - spec_id: android-app
+        requirement_id: settings-page
+exception_flows:
+  tunnel-not-ready:
+    trigger: 已保存地址为 tailnet 目标而隧道未就绪
+    steps:
+      show-tunnel-panel:
+        action: 主页面显示隧道状态面板、检查 Tailscale 的提示与「去设置」入口，不加载网页
+        covered_by:
+          - spec_id: android-app
+            requirement_id: tunnel-gated-tailnet-load
+          - spec_id: android-app
+            requirement_id: connection-error-hint
+  save-verify-failed:
+    trigger: 设置页保存时验证失败（隧道未连接或地址不可达）
+    steps:
+      show-settings-error:
+        action: 地址输入下显示原因（隧道类错误指向下方 Tailscale 卡片），配置不变、停留在设置页
+        covered_by:
+          - spec_id: android-app
+            requirement_id: settings-save-verify

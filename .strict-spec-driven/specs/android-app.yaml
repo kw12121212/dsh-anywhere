@@ -8,12 +8,12 @@ spec:
 requirements:
   first-run-setup-page:
     strength: MUST
-    statement: App 启动时如果从未保存过 harness URL，或已有配置损坏、其中地址无效，显示首次设置页：包含欢迎说明、提示文字为「粘贴 dsh-url 或 dsh web 输出的地址」的输入框和「开始使用」按钮；已有配置无效时额外显示已有配置无效、需要重新填写的提示。输入时实时校验：地址不合法时「开始使用」按钮不可用并显示说明原因，地址合法时按钮可用且不显示错误。
+    statement: App 启动时如果从未保存过 harness URL，或已有配置损坏、其中地址无效，显示首次设置页：包含欢迎说明、可选的 Tailscale auth key 输入框（密码型、不回显；隧道已连接时改为显示已连接与节点名、不再要求 key）、提示文字为「粘贴 dsh-url 或 dsh web 输出的地址」的地址输入框和「开始使用」按钮；已有配置无效时额外显示已有配置无效、需要重新填写的提示。地址输入时实时校验：地址不合法时「开始使用」按钮不可用并显示说明原因，地址合法时按钮可用且不显示错误；auth key 留空不影响按钮可用。
     scenarios:
       fresh-launch:
         - GIVEN: 应用数据被清除（从未保存过配置）
         - WHEN: 启动 App
-        - THEN: 显示首次设置页，输入框为空，没有已有配置无效提示
+        - THEN: 显示首次设置页，地址输入框与 auth key 输入框为空，没有已有配置无效提示
       invalid-config-notice:
         - GIVEN: App 私有存储中的配置文件内容损坏或其中的地址为 ftp://dsh.example.test/
         - WHEN: 启动 App
@@ -24,34 +24,38 @@ requirements:
         - THEN: 「开始使用」按钮不可用，并显示只支持 http 或 https 的提示
       live-validation-valid:
         - GIVEN: 首次设置页已打开
-        - WHEN: 输入 http://127.0.0.1:13080/?token=abc123
+        - WHEN: 输入 http://127.0.0.1:13080/?token=abc123，auth key 留空
         - THEN: 「开始使用」按钮可用，不显示错误提示
+      tunnel-connected-shows-status:
+        - GIVEN: 隧道已连接，配置文件内容损坏
+        - WHEN: 启动 App
+        - THEN: 首次设置页的 Tailscale 部分显示已连接与节点名，不显示 auth key 输入框
   first-run-complete:
     strength: MUST
-    statement: 在首次设置页点击「开始使用」后，App 保存去掉 token 的干净地址到私有存储，界面进入主页面：主页面以 WebView 承载，可达性探测通过后加载干净地址，不可达时显示本地错误页；用户输入的原始地址（含 token）只作为主页面加载的输入之一留存内存，不写入配置，也不在界面上显示 token。保存失败时首次设置页显示可读的错误信息并保持打开，错误信息中不含 token 值。
+    statement: 首次设置页验证全部通过后（见 first-run-verify），App 保存去掉 token 的干净地址到私有存储，界面进入主页面：主页面以 WebView 承载，可达性探测通过后加载 harness 页面，不可达时显示本地错误页；用户输入的原始地址（含 token）只作为主页面加载的输入之一留存内存，不写入配置，也不在界面上显示 token。保存失败时首次设置页显示可读的错误信息并保持打开，错误信息中不含 token 值。
     scenarios:
       paste-token-url:
         - GIVEN: 用户在首次设置页输入 http://127.0.0.1:13080/?token=abc123，该地址可达
         - WHEN: 点击「开始使用」
         - THEN: 私有存储配置中为 http://127.0.0.1:13080/ 且不含 abc123，界面进入主页面并显示该地址的 harness 页面，abc123 不出现在任何界面文本
       no-token-url:
-        - GIVEN: 用户在首次设置页输入 https://dsh.example.test/
+        - GIVEN: 用户在首次设置页输入 https://dsh.example.test/，该地址可达
         - WHEN: 点击「开始使用」
         - THEN: 配置保存 https://dsh.example.test/，界面进入主页面
       save-failure-stays:
-        - GIVEN: 私有存储无法写入
-        - WHEN: 输入合法地址并点击「开始使用」
+        - GIVEN: 私有存储无法写入，输入的合法地址可达
+        - WHEN: 点击「开始使用」
         - THEN: 首次设置页显示保存失败的错误且不含 token，停留在首次设置页
   settings-page:
     strength: MUST
-    statement: 主页面提供「设置」入口，打开设置页显示当前已保存的干净地址；编辑时实时校验：地址不合法时「保存」不可用并显示原因，合法时可用。点击「保存」后保存去掉 token 的干净地址、返回主页面并重新加载已保存地址（可达时显示 harness 页面，不可达时显示本地错误页）；「取消」或系统返回不修改配置并返回主页面。设置页包含 Tailscale 卡片（隧道状态、节点名、auth key 连接与清除，见隧道相关 requirement）。
+    statement: 主页面提供「设置」入口，打开设置页显示当前已保存的干净地址；编辑时实时校验：地址不合法时「保存」不可用并显示原因，合法时可用。点击「保存」后先按 settings-save-verify 验证，通过才保存去掉 token 的干净地址、返回主页面并重新加载已保存地址；「取消」或系统返回不修改配置并返回主页面。设置页包含 Tailscale 卡片（隧道状态、节点名、auth key 连接与清除，见隧道相关 requirement）。
     scenarios:
       open-shows-current:
         - GIVEN: 已保存 http://127.0.0.1:13080/，界面在主页面
         - WHEN: 打开设置页
         - THEN: 输入框中为 http://127.0.0.1:13080/，页面包含 Tailscale 卡片
       save-new-token-url:
-        - GIVEN: 设置页已打开，已保存地址可达
+        - GIVEN: 设置页已打开，http://127.0.0.1:13080/ 可达
         - WHEN: 把地址改为 http://127.0.0.1:13080/?token=def456 并点击「保存」
         - THEN: 配置中为 http://127.0.0.1:13080/ 且不含 def456，返回主页面重新加载并显示 harness 页面，def456 不出现在任何界面文本
       cancel-keeps-config:
@@ -232,12 +236,16 @@ requirements:
         - THEN: App 自动重试一次后显示本地重新认证提示页，而不是停留在 401 页面或显示连接错误页
   tunnel-optional-onboarding:
     strength: MUST
-    statement: App 内嵌可选的 Tailscale 隧道（进程内 userspace 节点）：从未配置 auth key 且无已注册节点状态时，隧道完全不启动（不发起登录），App 的 harness 配置、首次设置、设置页与主页面行为与无隧道时完全一致；设置页提供 Tailscale 卡片，未配置时显示未配置状态并允许粘贴 tagged auth key 发起连接，可清除 key 与节点状态回到未配置。
+    statement: App 内嵌可选的 Tailscale 隧道（进程内 userspace 节点）：从未配置 auth key 且无已注册节点状态时，隧道完全不启动（不发起登录）；首次设置页的 auth key 输入可留空，留空且地址不在 tailnet 时首次设置、设置页与主页面行为与无隧道时一致；在首次设置页填写 auth key 或在设置页 Tailscale 卡片粘贴 tagged auth key 都会发起连接；卡片未配置时显示未配置状态，可清除 key 与节点状态回到未配置。
     scenarios:
       unconfigured-no-tunnel:
         - GIVEN: 从未提供 auth key，也无节点状态
-        - WHEN: 启动 App 并使用全部既有功能
+        - WHEN: 启动 App，首次设置页 auth key 留空并使用非 tailnet 地址，之后使用全部既有功能
         - THEN: 隧道不启动、不发起任何登录，设置页 Tailscale 卡片显示未配置，其余功能与之前完全一致
+      first-run-key-connects:
+        - GIVEN: 从未提供 auth key，也无节点状态
+        - WHEN: 在首次设置页填写有效 tagged auth key 与地址并通过验证
+        - THEN: 隧道连接成功，进入主页面后设置页 Tailscale 卡片显示已连接与节点名
       clear-back-to-unconfigured:
         - GIVEN: 已配置 key 且节点处于任意状态
         - WHEN: 在 Tailscale 卡片点击「清除」
@@ -374,3 +382,67 @@ requirements:
         - GIVEN: Android 13+，App 从未请求过通知权限
         - WHEN: 在设置页点击下载更新，拒绝通知权限后再次下载
         - THEN: 第一次点击时请求一次通知权限，之后不再请求，下载照常进行
+  first-run-verify:
+    strength: MUST
+    statement: 在首次设置页点击「开始使用」后，App 先验证再保存：验证期间输入与按钮不可用并显示当前阶段（连接 Tailscale、检查地址）。验证依次为：(1) 填了 auth key 且隧道未连接时用该 key 连接隧道并等待结果，结果不是已连接时在 auth key 输入下显示隧道状态与原因（不含 key），不再检查地址，且该 auth key 不留存在私有存储（此前没有节点时也不留下节点状态，隧道仍为未配置）；(2) 未填 auth key、地址为 tailnet 目标且隧道未连接时：隧道为未配置或需要 key 则在 auth key 输入下提示该地址位于 tailnet、需要填写 auth key；隧道为连接中或失败则凭已有节点状态重连并等待结果，仍未连接按 (1) 显示；(3) 对去掉 token 的干净地址做与主页面相同定义的可达性探测（任何 HTTP 响应即可达，tailnet 目标经内嵌节点），不可达时在地址输入下显示按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败）与检查地址、确认服务在运行的提示。任一步失败都不保存配置、停留在首次设置页，修改输入后可再次点击；未填 auth key 且地址不在 tailnet 时不启动、不触碰隧道。
+    scenarios:
+      non-tailnet-no-key-passes:
+        - GIVEN: 首次设置页已打开，隧道从未配置，http://10.0.2.2:13080/ 有服务
+        - WHEN: 只填该地址（auth key 留空）并点击「开始使用」
+        - THEN: 隧道保持未配置、不发起登录，配置保存 http://10.0.2.2:13080/ 并进入主页面
+      tailnet-missing-key:
+        - GIVEN: 首次设置页已打开，隧道从未配置
+        - WHEN: 只填 http://gamepc:13080/ 并点击「开始使用」
+        - THEN: auth key 输入下提示该地址位于 tailnet、需要填写 auth key，配置未保存，停留在首次设置页
+      key-connects-then-probes:
+        - GIVEN: 首次设置页已打开，隧道从未配置，tailnet 地址 http://gamepc:13080/ 有服务
+        - WHEN: 填写有效 tagged auth key 与该地址并点击「开始使用」
+        - THEN: 先显示连接 Tailscale 阶段，隧道已连接后显示检查地址阶段，可达后进入主页面；key 不出现在界面文本与 App 私有存储中
+      bad-key-shows-under-key:
+        - GIVEN: 首次设置页已打开，隧道从未配置
+        - WHEN: 填写无效或已过期的 auth key 与任意合法地址并点击「开始使用」
+        - THEN: auth key 输入下显示需要 key 或连接失败及原因（不含 key 值），不检查地址，配置未保存，停留在首次设置页
+      unreachable-shows-under-address:
+        - GIVEN: 首次设置页已打开，http://10.0.2.2:13080/ 端口没有服务
+        - WHEN: 填写该地址并点击「开始使用」
+        - THEN: 地址输入下显示连接被拒绝或连接超时的说明与检查地址、确认服务在运行的提示，配置未保存，停留在首次设置页
+      retry-after-fix:
+        - GIVEN: 首次设置页显示地址不可达的提示
+        - WHEN: 把地址改为可达地址并再次点击「开始使用」
+        - THEN: 进入主页面
+      bad-key-not-retained:
+        - GIVEN: 首次设置页已打开，隧道从未配置，用户填写无效 auth key 后验证失败
+        - WHEN: 清空 auth key、填写可达的非 tailnet 地址并通过验证，之后重启 App
+        - THEN: App 私有存储中没有该 auth key 与节点状态，设置页 Tailscale 卡片显示未配置，隧道不发起登录
+  settings-save-verify:
+    strength: MUST
+    statement: 在设置页点击「保存」时，App 先做与首次设置页相同的连通验证（设置页的地址区没有 auth key 输入，隧道由 Tailscale 卡片管理）：验证期间「保存」不可用并显示正在验证；地址为 tailnet 目标而隧道未连接时（隧道为连接中或失败先凭已有节点状态重连并等待结果），在地址输入下提示该地址需要 Tailscale 隧道、请在下方 Tailscale 卡片连接；地址不可达时在地址输入下显示按原因分类的说明与检查提示。验证失败时不修改配置、停留在设置页；验证通过才保存并返回主页面。
+    scenarios:
+      unreachable-not-saved:
+        - GIVEN: 已保存 https://a.example.test/，设置页已打开并把地址改为 http://10.0.2.2:13999/（该端口没有服务）
+        - WHEN: 点击「保存」
+        - THEN: 地址输入下显示连接被拒绝或连接超时的说明，停留在设置页，配置仍为 https://a.example.test/
+      tailnet-without-tunnel:
+        - GIVEN: 隧道从未配置，设置页已打开
+        - WHEN: 把地址改为 http://gamepc:13080/ 并点击「保存」
+        - THEN: 地址输入下提示需要在下方 Tailscale 卡片连接隧道，配置不变，停留在设置页
+      reachable-saves:
+        - GIVEN: 设置页已打开，新地址 http://10.0.2.2:13080/ 有服务
+        - WHEN: 把地址改为该地址并点击「保存」
+        - THEN: 配置保存为该地址，返回主页面并重新加载 harness 页面
+  connection-error-hint:
+    strength: MUST
+    statement: 主页面连接出错时按原因提示应去设置检查的项目：本地错误页在原因说明下显示检查提示——已保存地址为 tailnet 目标时提示检查设置中的 Tailscale 隧道状态与 dsh 地址，否则提示检查 dsh 地址是否正确并确认 DSH 主机上的服务在运行；隧道等待面板（连接中、需要 key、失败）显示检查设置中 Tailscale auth key 与隧道状态的提示；两者都提供进入设置页的按钮。提示为固定文本，不含 token 或 auth key。
+    scenarios:
+      non-tailnet-error-hint:
+        - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
+        - WHEN: 启动 App
+        - THEN: 错误页在原因说明下显示检查 dsh 地址并确认服务在运行的提示，以及「修改地址」按钮
+      tailnet-error-hint:
+        - GIVEN: 已保存 tailnet 地址，隧道已连接但该地址没有服务
+        - WHEN: 打开主页面
+        - THEN: 错误页显示检查 Tailscale 隧道状态与 dsh 地址的提示，以及「修改地址」按钮
+      tunnel-wait-hint:
+        - GIVEN: 已保存 tailnet 地址，隧道处于失败或需要 key
+        - WHEN: 打开主页面
+        - THEN: 隧道面板显示检查设置中 Tailscale auth key 与隧道状态的提示，以及「打开设置」与「重试连接」按钮

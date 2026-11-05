@@ -1,0 +1,42 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-setup-verify
+approach:
+  - 在 core 新增纯 JVM 的 SetupCheck：verify(rawUrl, keyInput, tunnelState, connectTunnel, probe, onStage) 依次做格式校验（HarnessUrl.normalize）→ 隧道步骤判定 → 可达性探测，返回 Ok(干净地址) / InvalidUrl / MissingKey / TunnelFailed(state) / Unreachable(reason) 之一；隧道连接与探测以函数参数注入，JUnit 用假实现覆盖全部分支。errorHint(cleanUrl) 按 tailnet 与否给出 CHECK_TAILSCALE / CHECK_ADDRESS。
+  - 隧道步骤判定：隧道已连接→跳过；填了 key→以 key 连接并等待结果；未填 key 且地址非 tailnet→跳过（不触碰隧道，保持可选）；未填 key、tailnet 地址且隧道为未配置或需要 key→MissingKey；连接中或失败→凭持久状态重连并等待结果。用 key 或重连后状态不是已连接即 TunnelFailed，不再探测。
+  - ':app 侧 TunnelManager 新增阻塞的 connectAndAwait(key)：在既有单一 tunnel 工作线程上执行与 connectWithKey/ensureUp 相同的逻辑并返回最终状态，界面在 Dispatchers.IO 等待；探测拨号统一用 proxyBridge.dialForBridge（隧道在役时 tailnet 目标经节点，否则直连），与主页面同一分流路径。FirstRunScreen 增加密码型 auth key 输入（隧道已连接时改为显示已连接与节点名），点击「开始使用」后禁用输入、显示当前验证阶段，结果映射到对应输入下的固定文案；Ok 后才调用 graph.save。SettingsScreen「保存」以空 key 调用同一 verify，错误显示在地址输入下。MainWebScreen 错误页与隧道等待面板增加按 errorHint 选择的检查提示。'
+decisions:
+  verify-in-core:
+    decision: 验证编排与结果分类放在 core 的 SetupCheck，:app 只注入隧道连接与探测、映射文案
+    rationale: tech/android-client 的 pure-logic-in-core（SHOULD）：决策逻辑在 core 才有进入完整回归命令的 JUnit 信号；隧道连接需要 tsnet 与 Context、探测需要真实网络，以函数注入隔离后分支可全部用假实现覆盖
+  blocking-connect-on-worker:
+    decision: connectAndAwait 复用 TunnelManager 唯一的 HandlerThread，以 CompletableFuture 返回最终状态
+    rationale: 全部 tsnet 调用只在单一后台线程执行是既有约定；与设置页打开时的 ensureUp、卡片的连接按钮串行在同一线程上，不会并发 Up 或重建在役节点（已连接时幂等直返）
+  reachability-not-token:
+    decision: 验证内容为地址格式、隧道连通与对干净地址的可达性（任何 HTTP 响应含 401 即可达），不验证 token
+    rationale: 主规格 main-page-load 的可达性定义沿用不变；token 由主页面一次性加载给 WebView 建立会话，App 侧提前用它请求会让 cookie 落在 App 的 HTTP 客户端而不是 WebView，且 token 失效已有 session-expired-reauth 流程兜底
+  no-save-on-failure:
+    decision: 任一验证失败都不保存、停留在当前页，不提供「仍然保存」
+    rationale: 需求访谈确认设置页同样验证且失败不保存；用户选择的方案不含『仍然保存』，保持『保存的配置都验证过』的语义
+  key-error-placement:
+    decision: 首次设置页 MissingKey/TunnelFailed 显示在 auth key 输入下，Unreachable/InvalidUrl 显示在地址输入下；设置页没有独立 key 输入，隧道类错误显示在地址输入下并指向下方 Tailscale 卡片
+    rationale: 需求『哪项出错就在哪项下提示』；设置页的 key 输入属于 Tailscale 卡片（行为不变），在地址下给出指向卡片的说明即可定位
+  new-android-scenes:
+    decision: 新增 android 场景区：android-first-setup（首次设置主流程与验证失败分支）与 android-fix-connection（连接出错→去设置检查→保存验证）
+    rationale: 改动是用户可见的行为，按 scene-first 先写场景再写 requirement；现有场景只有 release 区，没有可复用的 Android 场景
+  failed-key-cleanup:
+    decision: connectAndAwait 带 key 的尝试未连上时删除该 key；此前本无节点状态时连同半注册的节点状态一起丢弃（重连后状态回到未配置则按 MissingKey 提示）
+    rationale: 评审发现：被拒的 key 与失败注册留下的 tailscaled.state 会让之后每次启动都尝试登录，用户最终留空 key 时隧道也不再是『未配置』，违背 Tailscale 可选（unchanged_behavior）。验证页输入框仍持有 key，重试会重新提交，删除不影响重试；设置页卡片的 connectWithKey 失败保留 key 的既有行为不变
+  connected-guard:
+    decision: connectAndAwait 在役且已连接时直返，不写 key、不重建节点；两个页面的验证按钮在验证中忽略重复点击
+    rationale: 评审发现：首次设置页可能在启动时的 ensureUp 重连中（CONNECTING）提交 key，排队执行时节点已连上，再走 key 路径会关闭在役节点重建，正是 TunnelManager 注释禁止的同进程重建；连点同理会排两次
+alternatives:
+  - option: 分步向导（先 Tailscale 页、再 URL 页）
+    reason: 用户明确选择一页填完两项再验证
+  - option: 隧道连接后台进行、只做格式校验即进入主页面
+    reason: 不能在设置时发现 key 或地址错误，正是本次要解决的问题
+risks:
+  - 隧道注册（Up）可能耗时数十秒，期间首次设置页显示连接 Tailscale 阶段并禁用输入；超时由 tsnet 既有 Up 超时与状态分类兜底
+  - 验证通过后进入主页面会再探测一次，网络瞬断时可能验证通过但主页面显示错误页（由既有错误页与新增检查提示处理）

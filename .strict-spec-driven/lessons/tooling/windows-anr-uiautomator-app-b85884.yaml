@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: windows-anr-uiautomator-app-b85884
+  title: Windows 侧模拟器长时间运行后系统过载：输入分发 ANR 与 uiautomator 取树失败不是 App 缺陷
+category: tooling
+status: active
+created_at: '2026-11-05T13:23:54.407Z'
+updated_at: '2026-11-05T13:23:54.407Z'
+context: android-setup-verify 在 Windows 侧 Medium_Phone_API_36.1 模拟器上经 adb.exe 驱动 UI 验收（uiautomator dump + input tap/text/keyevent）
+observation: 模拟器运行数小时后 android.hardware.sensors-service.multihal 空转（>100% CPU）、system_server 内核态 150%+，loadavg 13-22：system 进程与 App 先后弹出 Input dispatching timed out 的 ANR（旧版 1.0.1 同样出现），uiautomator dump 报 null root node 或沿用旧文件，screencap 超时；一次注入 80 个 KEYCODE_DEL 会直接诱发 App 的 KeyEvent ANR。dropbox 的 data_app_anr 记录 CPU 压力与 Subject，run-as 读 /proc/<pid>/wchan 显示主线程停在 do_epoll_wait（looper 空闲），证明不是 App 阻塞主线程。adb reboot 后负载回落、App 无 ANR。
+takeaway: 验收前先看 adb shell cat /proc/loadavg，持续 >4 就 adb reboot（数据保留）并等负载回落；清空输入框用 input keycombination KEYCODE_CTRL_LEFT KEYCODE_A 加一次 DEL，不要批量注入按键；uiautomator dump 前删除旧 /sdcard/ui.xml 并把取树失败当作重试信号；遇到 App ANR 先用 dumpsys dropbox --print data_app_anr 看 CPU 压力、run-as 读主线程 wchan 判定是否真阻塞，再决定是否归因于代码。
+applies_when: 在 Windows 侧 Android 模拟器上用 adb 驱动 App UI 做验收，或验收中出现 ANR 对话框、uiautomator 取树失败、screencap 超时
+occurrences:
+  - origin: android-setup-verify
+    date: '2026-11-05'
+    evidence: 2026-11-05 dropbox data_app_anr 三条（06:44 v1.0.1、11:25、12:04，均为 Input dispatching timed out，CPU some avg10≈75%）；ANR 期间 /proc/9144/wchan 连续采样为 do_epoll_wait；两次 adb reboot 后 loadavg 由 15+ 降至 <4 并完成全部场景

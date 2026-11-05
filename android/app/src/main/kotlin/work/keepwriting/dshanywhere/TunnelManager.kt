@@ -11,6 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import work.keepwriting.core.TunnelStateMachine
 import java.io.File
+import java.util.concurrent.CompletableFuture
 
 /**
  * 内嵌 tailnet 隧道生命周期（android-tstunnel）：进程内单例、按需启动，全部
@@ -58,24 +59,64 @@ class TunnelManager private constructor(context: Context) {
     /** 粘贴 auth key 发起连接（设置页卡片）。 */
     fun connectWithKey(key: String) {
         if (key.isBlank()) return
+        handler.post { connectNow(key) }
+    }
+
+    /**
+     * 阻塞直到连接尝试结束并返回最终状态（首次设置页/设置页的保存前验证；
+     * 只可在后台线程调用）：有 key 时同 [connectWithKey]，null 时同 [ensureUp]
+     * 凭已有节点状态重连。在同一隧道线程上执行，与其他入口串行。
+     * 在役且已连接时直返（排在前面的 ensureUp 可能刚连上，绝不重建在役节点）；
+     * 带 key 的尝试未连上时删除该 key（验证页的输入框仍持有 key，重试会重新提交）；
+     * 此前本无节点时连同半注册的节点状态一并丢弃——否则之后每次启动都会凭被拒的
+     * key 或残留状态尝试登录，用户留空 key 时隧道也不再是「未配置」。
+     */
+    fun connectAndAwait(key: String?): TunnelStateMachine.State {
+        val done = CompletableFuture<TunnelStateMachine.State>()
         handler.post {
-            prefs.edit().putString(PREF_AUTH_KEY, key).apply()
-            setState(TunnelStateMachine.State.CONNECTING)
-            startNode(key)
+            try {
+                if (node != null && state == TunnelStateMachine.State.CONNECTED) return@post
+                if (key.isNullOrBlank()) {
+                    startIfNeeded()
+                } else {
+                    val hadNode = hasPersistedState()
+                    connectNow(key)
+                    if (state != TunnelStateMachine.State.CONNECTED) {
+                        prefs.edit().remove(PREF_AUTH_KEY).apply()
+                        if (!hadNode) discardNode()
+                    }
+                }
+            } finally {
+                done.complete(state)
+            }
         }
+        return done.get()
+    }
+
+    private fun connectNow(key: String) {
+        // 幂等守卫（tech/android-client 的 tunnel-single-worker）：在役且已连接即直返。
+        if (node != null && state == TunnelStateMachine.State.CONNECTED) return
+        prefs.edit().putString(PREF_AUTH_KEY, key).apply()
+        setState(TunnelStateMachine.State.CONNECTING)
+        startNode(key)
     }
 
     /** 清除：关节点、删 key 与节点状态（含 logpolicy 缓存），彻底回到未配置。 */
     fun clear() {
         handler.post {
-            runCatching { node?.close() }
-            node = null
-            socksEndpoint = null
+            discardNode()
             prefs.edit().remove(PREF_AUTH_KEY).apply()
-            stateDir.deleteRecursively()
-            stateDir.parentFile?.resolve("cache")?.resolve("Tailscale")?.deleteRecursively()
             setState(TunnelStateMachine.cleared(), reason = "")
         }
+    }
+
+    /** 关节点并删除节点状态（含 logpolicy 缓存）；不改界面状态。 */
+    private fun discardNode() {
+        runCatching { node?.close() }
+        node = null
+        socksEndpoint = null
+        stateDir.deleteRecursively()
+        stateDir.parentFile?.resolve("cache")?.resolve("Tailscale")?.deleteRecursively()
     }
 
     private fun startIfNeeded() {

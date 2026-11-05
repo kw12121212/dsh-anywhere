@@ -51,3 +51,15 @@ rules:
     enforcement:
       method: test
       detail: 验收任务覆盖正路径（assembleDebug 成功）与负路径（移除 DSH_KEYSTORE_PROPS 且缺省文件改名后 assembleDebug 失败并带提示）
+  tunnel-single-worker:
+    strength: MUST
+    statement: 所有 tsnet（tstunnel.*）调用只在 TunnelManager 唯一的 HandlerThread 上执行；需要同步结果的调用方经该线程上返回 Future 的入口（如 connectAndAwait）等待，等待只能发生在后台 dispatcher，不得在主线程或隧道线程本身上等待；每个会启动节点的入口都必须先做『在役且已连接即直返』的幂等守卫，不得关闭重建在役节点。
+    rationale: tsnet 是阻塞的单节点生命周期：并发 Up 或同进程关闭重建在役节点会造成 tailscaled.state 锁冲突并把在役连接误判失败；android-setup-verify 评审中发现新增的阻塞入口漏掉幂等守卫，此约定此前只写在代码注释里
+    enforcement:
+      method: review
+      detail: 评审检查 tstunnel.* 调用点只出现在隧道线程执行的代码中、*AndAwait 只在 Dispatchers.IO 等后台上下文调用、每个启动节点的入口在改写状态前有已连接直返守卫
+    examples:
+      good:
+        - handler.post { if (node != null && state == CONNECTED) return@post; connectNow(key) }；界面 withContext(Dispatchers.IO) { tunnel.connectAndAwait(key) }
+      bad:
+        - 在主线程直接调用 tunnel.connectAndAwait(key)，或带 key 的入口不检查已连接就 close 旧节点并新建 tstunnel.Node

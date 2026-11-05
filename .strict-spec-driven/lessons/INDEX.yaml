@@ -177,3 +177,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/node-spawnsync-shell-true-dep0190-shell-ed71a3.yaml
+    windows-anr-uiautomator-app-b85884:
+      title: Windows 侧模拟器长时间运行后系统过载：输入分发 ANR 与 uiautomator 取树失败不是 App 缺陷
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/windows-anr-uiautomator-app-b85884.yaml

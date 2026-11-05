@@ -1,0 +1,86 @@
+schema: strict-spec-driven/delta-scene/v1
+schema_version: 1
+artifact_type: delta_scene
+schema_file: templates/strict-spec-driven/schemas/delta-scene.yaml
+target_scene: android-first-setup
+scene:
+  title: Android 首次设置并验证连接
+  area: android
+  actors:
+    - name: 用户
+      role: 安装或重装 App 后配置 dsh 地址与可选 Tailscale 隧道的人
+    - name: App
+      role: 校验输入、按需连接内嵌 Tailscale 隧道、探测地址可达后保存配置
+  preconditions:
+    - App 已安装，私有存储中没有有效的 harness 配置（从未保存或已有配置无效）
+    - 用户持有 dsh-url 或 dsh web 输出的地址；地址位于 tailnet 时另持有 tagged auth key
+operations:
+  ADDED:
+    exception_flows:
+      tailnet-missing-key:
+        trigger: 地址是 tailnet 目标，未填 auth key 且隧道未连接（未配置或需要 key）
+        steps:
+          show-key-required:
+            action: auth key 输入下提示该地址位于 tailnet、需要填写 auth key，不保存、停留在首次设置页
+            covered_by:
+              - spec_id: android-app
+                requirement_id: first-run-verify
+      tunnel-connect-failed:
+        trigger: 连接隧道的结果为需要 key 或失败
+        steps:
+          show-tunnel-error:
+            action: auth key 输入下显示隧道状态与原因（不含 key），不探测地址、不保存
+            covered_by:
+              - spec_id: android-app
+                requirement_id: first-run-verify
+      address-unreachable:
+        trigger: 地址可达性探测失败（无法解析主机名、连接被拒绝、超时或 TLS 失败）
+        steps:
+          show-address-error:
+            action: 地址输入下显示按原因分类的说明与检查提示，不保存、停留在首次设置页
+            covered_by:
+              - spec_id: android-app
+                requirement_id: first-run-verify
+      save-failed:
+        trigger: 验证通过但私有存储写入失败
+        steps:
+          show-save-error:
+            action: 首次设置页显示保存失败（不含 token），停留在首次设置页
+            covered_by:
+              - spec_id: android-app
+                requirement_id: first-run-complete
+    main_flow:
+      open-setup:
+        action: 用户启动 App，看到首次设置页：可选的 Tailscale auth key 输入与 dsh 地址输入及「开始使用」按钮
+        covered_by:
+          - spec_id: android-app
+            requirement_id: first-run-setup-page
+      fill-inputs:
+        action: 用户粘贴地址（实时格式校验，非法时按钮不可用并显示原因），按需粘贴 auth key（不回显）
+        covered_by:
+          - spec_id: android-app
+            requirement_id: first-run-setup-page
+      start-verify:
+        action: 用户点击「开始使用」，App 禁用输入并显示当前验证阶段
+        covered_by:
+          - spec_id: android-app
+            requirement_id: first-run-verify
+      connect-tunnel:
+        action: 填了 auth key 时 App 用该 key 连接 Tailscale 隧道并等到已连接；未填 key 且地址不在 tailnet 时跳过隧道
+        covered_by:
+          - spec_id: android-app
+            requirement_id: first-run-verify
+          - spec_id: android-app
+            requirement_id: tunnel-optional-onboarding
+      probe-address:
+        action: App 经与主页面相同的分流路径对干净地址做可达性探测
+        covered_by:
+          - spec_id: android-app
+            requirement_id: first-run-verify
+      save-and-enter:
+        action: 探测可达后 App 保存干净地址并进入主页面加载 harness
+        covered_by:
+          - spec_id: android-app
+            requirement_id: first-run-complete
+  MODIFIED: {}
+  REMOVED: {}

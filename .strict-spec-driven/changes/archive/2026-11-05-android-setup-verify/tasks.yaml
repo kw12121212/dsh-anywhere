@@ -1,0 +1,58 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: android-setup-verify
+sections:
+  Implementation:
+    core-setup-check:
+      text: core 新增 SetupCheck：verify（格式校验→隧道步骤判定→可达性探测，注入 connectTunnel/probe/onStage，返回 Ok/InvalidUrl/MissingKey/TunnelFailed/Unreachable）与 errorHint（tailnet→CHECK_TAILSCALE，否则 CHECK_ADDRESS）。
+      status: complete
+    core-setup-check-test:
+      text: core 新增 SetupCheckTest：覆盖非 tailnet 留空 key 不触碰隧道、tailnet 缺 key（未配置/需要 key）、key 连接成功后探测、key 连接失败不探测、连接中/失败重连、已连接跳过、不可达原因透传、非法地址、探测只用干净地址（不含 token）、errorHint 两类。
+      status: complete
+    tunnel-connect-await:
+      text: TunnelManager 新增 connectAndAwait(key)：在既有隧道工作线程执行（有 key 同 connectWithKey，无 key 同 ensureUp）并返回最终状态；connectWithKey 复用同一内部实现。
+      status: complete
+    first-run-ui:
+      text: FirstRunScreen：新增密码型 auth key 输入（隧道已连接时显示已连接与节点名），「开始使用」改为调用 SetupCheck.verify（Dispatchers.IO），验证中禁用输入并显示阶段，结果映射到 key/地址输入下的固定文案，Ok 后才 graph.save 并进入主页面。
+      status: complete
+    settings-ui:
+      text: SettingsScreen：「保存」以空 key 调用同一 verify，验证中禁用保存并显示正在验证，失败在地址输入下显示原因（隧道类指向 Tailscale 卡片）且不保存。
+      status: complete
+    error-hints-ui:
+      text: MainWebScreen：错误页在原因下按 SetupCheck.errorHint 显示检查提示；隧道等待面板显示检查 Tailscale auth key 与隧道状态的提示；strings.xml 增加相应固定文案。
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查（项目无独立 lint 命令，类型检查作为静态校验门）。
+      status: complete
+      command: npm run typecheck
+    test-core:
+      text: 运行 core JUnit 测试（含新增 SetupCheckTest）。
+      status: complete
+      command: android/gradlew -p android/core test
+    test-app-build:
+      text: 构建 :app 调试 APK（需 tstunnel AAR 与 keystore，确认 Kotlin/Compose 改动可编译）。
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    test-emulator:
+      text: Windows 侧模拟器验收（debug APK，Medium_Phone_API_36.1，含评审修复后的重新构建）：全新状态首次设置页显示可选 key 与地址输入；tailnet 地址留空 key 在 key 下提示需要 key 且不保存；不可达地址在地址下显示连接超时与检查提示且不保存，同一会话改为可达地址后进入主页面（retry-after-fix）；可达地址留空 key 进入主页面、配置只存干净地址、未创建隧道状态与 key 偏好；验证期间两个输入框不可用并显示『正在连接 Tailscale…』『正在检查地址…』阶段；无效 key 在 key 下显示需要 key 与原因（不含 key）且不保存，失败后私有存储无 key、无节点状态，清空 key 提交非 tailnet 地址后重启卡片显示未配置；有效 tagged key + tailnet 地址先连隧道再探测并进入主页面，配置为干净地址，偏好/配置/节点状态目录中均无 key，卡片显示已连接与节点名；配置损坏+隧道已连接时显示已连接与节点名、无 key 输入，tailnet 不可达端口显示 tailnet 检查提示，真实 tailnet 地址保存后进入主页面；设置页保存不可达地址被拒且配置不变、可达地址保存返回主页面、隧道失败/未配置时保存 tailnet 地址分别提示卡片检查/连接且配置不变；主页面非 tailnet 与 tailnet 错误页、隧道失败面板显示对应检查提示。验收后模拟器还原为原节点与原配置。
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Linux 本地以 xvfb-run 包裹提供显示服务器）。
+      status: complete
+      command: xvfb-run -a bash -c 'npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test'
+  Verification:
+    verify-change:
+      text: 运行 strict-spec-cli verify 确认任务、场景覆盖与产物一致。
+      status: complete
+      command: strict-spec-cli verify android-setup-verify
+    archive-readiness:
+      text: 运行 strict-spec-cli ready 确认归档就绪，并确认模拟器与完整回归证据齐备。
+      status: complete
+      command: strict-spec-cli ready android-setup-verify
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-core
