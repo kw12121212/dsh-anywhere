@@ -1,0 +1,23 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-gradlew-exec-bit
+  status: proposed
+summary:
+  what:
+    - 把 android/gradlew 在 git 中的文件模式改为可执行（100755），使完整回归命令末段 android/gradlew -p android/core test 在 Linux/macOS 上可直接运行。
+  why:
+    - 'android-app 里程碑在 Windows 宿主提交 android/gradlew，git 记录为 100644；在 Linux（WSL）上逐字执行 config.yaml 的完整回归命令时末段以 ''permission denied: android/gradlew'' 失败，回归门禁无法通过，AGENTS.md 与 README 列出的 android/gradlew 命令同样不可用。'
+scope:
+  in:
+    - android/gradlew 的 git 文件模式（100644 → 100755），不改文件内容
+    - scripts/workflows.test.mts：新增断言锁定 android/gradlew 在 git 索引中为可执行模式
+  out:
+    - 修改 config.yaml 的回归命令文本（例如改成 sh android/gradlew）：命令本身正确，问题在文件模式
+    - android/gradlew.bat 与 Gradle wrapper 版本
+unchanged_behavior:
+  - 完整回归命令文本与各段行为
+  - Gradle wrapper 脚本内容、wrapper 版本与 Windows 侧 gradlew.bat
+  - 全部主规格的可观察行为

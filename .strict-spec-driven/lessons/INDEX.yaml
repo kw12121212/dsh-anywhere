@@ -142,3 +142,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/httpurlconnection-connect-tcp-responsecode-c3bf75.yaml
+    windows-shell-linux-macos-permission-denied-952181:
+      title: 在 Windows 上提交的 shell 包装脚本会丢失可执行位，回归命令在 Linux/macOS 上 permission denied
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/windows-shell-linux-macos-permission-denied-952181.yaml

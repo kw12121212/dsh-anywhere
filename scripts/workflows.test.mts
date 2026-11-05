@@ -1,6 +1,7 @@
 // CI/发布工作流与打包配置的结构断言（技术标准 packaging/workflow-structure-assertion-tests）。
 // 迁移自 internal/appinfo 下的 Go 断言测试：关键片段正向断言、负向断言，并锁定
 // 被复用上游的关键前提（package.yml 的 workflow_call 触发器）。
+import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -60,6 +61,12 @@ describe('config.yaml 完整回归口径', () => {
   it('回归命令尾部包含 Android core 纯 JVM 测试段（tech/android-client 的 core-jvm-tests-in-regression）', () => {
     // 删掉 android 段会让 Android 门禁信号静默消失，此断言负责拦住。
     expect(regressionCommand()).toContain('android/gradlew -p android/core test')
+  })
+
+  it('android/gradlew 在 git 索引中可执行（100755），回归命令末段可直接运行', () => {
+    // Windows 提交不保留可执行位：100644 会让 Linux/macOS 上的回归命令以 permission denied 失败。
+    const entry = execFileSync('git', ['ls-files', '-s', 'android/gradlew'], { cwd: repoRoot, encoding: 'utf8' })
+    expect(entry.split(/\s+/)[0]).toBe('100755')
   })
 })
 

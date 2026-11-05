@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: windows-shell-linux-macos-permission-denied-952181
+  title: 在 Windows 上提交的 shell 包装脚本会丢失可执行位，回归命令在 Linux/macOS 上 permission denied
+category: tooling
+status: active
+created_at: '2026-11-05T06:10:29.975Z'
+updated_at: '2026-11-05T06:10:29.975Z'
+context: android-app 里程碑在 Windows 宿主生成并提交 Gradle wrapper（android/gradlew），完整回归命令以 android/gradlew -p android/core test 收尾。
+observation: git 索引记录 android/gradlew 为 100644；Windows 上门禁照常通过（gradlew.bat），在 WSL/Linux 上逐字执行回归命令末段以 permission denied（退出码 126）失败，8 个变更归档时都没有暴露。
+takeaway: 跨平台仓库中由 Windows 生成的可执行脚本（gradlew、*.sh）提交前需确认 git ls-files -s 为 100755，并用纳入回归的测试锁定索引模式；只在 Windows 上跑过的门禁不能当作跨平台门禁证据。
+applies_when: 在 Windows 上新增或重新生成会被 Linux/macOS 直接执行的脚本（Gradle/Maven wrapper、shell 脚本、git hooks），或门禁只在单一平台上验证过时
+occurrences:
+  - origin: fix-gradlew-exec-bit
+    date: '2026-11-05'
+    evidence: 2026-11-05 WSL 实测：修复前 android/gradlew -p android/core test 退出码 126；git update-index --chmod=+x 后完整回归通过，workflows.test.mts 新断言修复前失败（100644≠100755）修复后通过
