@@ -9,10 +9,12 @@ import java.io.File
 
 /**
  * 进程内单例装配点：持有配置目录（App 私有存储 filesDir/config）与配置状态。
+ * 代理桥与更新状态属于进程而非 Activity：Activity 重建（深色模式、语言等配置变化）
+ * 经 [get] 复用同一实例，不再起第二个代理桥（fix-android-update-lifecycle）。
  * 校验、剥离与三态读取都在 core 的 HarnessConfig/HarnessUrl（tech/android-client 的
  * pure-logic-in-core），这里只做框架装配与状态暴露。
  */
-class AppGraph(context: Context) {
+class AppGraph private constructor(context: Context) {
     enum class ConfigState { NeedsSetup, InvalidConfig, Ready }
 
     /** 内嵌 tailnet 隧道（可选；android-tstunnel 交付）。 */
@@ -77,5 +79,15 @@ class AppGraph(context: Context) {
     /** 软重载：不重读磁盘（状态机内部驱动用，如代理覆盖生效、隧道连上自动加载）。 */
     fun requestReloadSoft() {
         reloadTick++
+    }
+
+    companion object {
+        @Volatile
+        private var instance: AppGraph? = null
+
+        fun get(context: Context): AppGraph =
+            instance ?: synchronized(this) {
+                instance ?: AppGraph(context.applicationContext).also { instance = it }
+            }
     }
 }

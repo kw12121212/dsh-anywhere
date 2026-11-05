@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: android-mime-startactivity-91-f27a30
+  title: Android 调起系统安装器的验收必须看到安装器界面：意图 MIME 拼错时 startActivity 不抛异常、只在系统日志返回 -91
+category: testing
+status: active
+created_at: '2026-11-05T06:38:11.768Z'
+updated_at: '2026-11-05T06:38:11.768Z'
+context: android-self-update 以 ACTION_VIEW + FileProvider URI 调起系统安装器完成覆盖升级，调用包在 runCatching 中。
+observation: MIME 写成 application/vnd.android-package-archive（应为 application/vnd.android.package-archive）：startActivity 不抛异常，ActivityTaskManager 记录 START … result code=-91（意图无法解析），界面毫无反应；归档时的验收没有观察到安装器界面，缺陷随里程碑交付。
+takeaway: 调起系统组件（安装器、授权页、分享）的验收要断言目标 Activity 真的成为 topResumedActivity（dumpsys activity activities），或用 cmd package query-activities 预先确认意图可解析；被 runCatching 吞掉的 startActivity 失败只能从 logcat 的 START result code 看到。
+applies_when: Android 代码经隐式意图调起系统或第三方 Activity（尤其 MIME/scheme 匹配的意图）且调用被 runCatching/try 包住时
+occurrences:
+  - origin: fix-android-update-lifecycle
+    date: '2026-11-05'
+    evidence: 2026-11-05 模拟器 API 36.1：修复前授权返回后 START typ=application/vnd.android-package-archive result code=-91；修正 MIME 后系统安装器显示 Update this app? 并完成覆盖安装（App updated）

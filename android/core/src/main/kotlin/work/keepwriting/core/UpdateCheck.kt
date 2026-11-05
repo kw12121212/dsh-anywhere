@@ -41,6 +41,20 @@ object UpdateCheck {
     /** 组合判定：最新 Release 是否含比 [currentVersionCode] 更新的可安装 APK。 */
     data class UpdateInfo(val version: String, val apkAsset: String, val sha256Asset: String, val versionCode: Int)
 
+    /** 检查更新后的界面结论（fix-android-update-lifecycle）。 */
+    enum class CheckOutcome { READY, AVAILABLE, UP_TO_DATE }
+
+    /**
+     * 合并「最新 Release 的可更新版本」[latestVersion]（无则 null）与「磁盘上已校验的
+     * 更新包版本」[readyVersion]：已校验包就是最新版本或没有更新的 Release 时保持可安装
+     * （再次检查不回退到可下载）；更新的 Release 取代旧的已校验包。
+     */
+    fun afterCheck(latestVersion: String?, readyVersion: String?): CheckOutcome = when {
+        readyVersion != null && (latestVersion == null || latestVersion == readyVersion) -> CheckOutcome.READY
+        latestVersion != null -> CheckOutcome.AVAILABLE
+        else -> CheckOutcome.UP_TO_DATE
+    }
+
     fun isNewer(tag: String?, assetNames: List<String>, currentVersionCode: Int): UpdateInfo? {
         val version = parseTagName(tag) ?: return null
         val code = versionCodeOf(version) ?: return null

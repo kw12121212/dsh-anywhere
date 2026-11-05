@@ -1,5 +1,10 @@
 package work.keepwriting.dshanywhere
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import work.keepwriting.core.HarnessUrl
 import work.keepwriting.core.TunnelStateMachine
 
@@ -119,6 +125,8 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
 @Composable
 private fun UpdateCard(updates: UpdateManager) {
     val context = LocalContext.current
+    // 通知权限（API 33+）：点击下载时至多请求一次，结果不影响下载（拒绝时设置页仍可手动安装）。
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val pm = context.packageManager
     @Suppress("DEPRECATION")
     val currentVersion = try { pm.getPackageInfo(context.packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" }
@@ -139,7 +147,16 @@ private fun UpdateCard(updates: UpdateManager) {
                 UpdateManager.State.AVAILABLE -> {
                     Text(stringResource(R.string.update_available, updates.availableVersion ?: "?"), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { updates.download() }) { Text(stringResource(R.string.update_download)) }
+                    Button(onClick = {
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                                PackageManager.PERMISSION_GRANTED
+                            if (updates.claimNotificationPermissionRequest(granted)) {
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                        updates.download()
+                    }) { Text(stringResource(R.string.update_download)) }
                 }
                 UpdateManager.State.DOWNLOADING -> Text(
                     stringResource(R.string.update_downloading, (updates.downloadProgress * 100).toInt()),

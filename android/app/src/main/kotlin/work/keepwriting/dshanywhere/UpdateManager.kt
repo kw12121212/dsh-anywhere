@@ -7,16 +7,17 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import work.keepwriting.core.UpdateCheck
+import work.keepwriting.core.UpdateDownloader
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 
 /**
  * 自更新管理器（android-self-update）：GitHub API 匿名查询（直连不经隧道——github.com
@@ -37,18 +38,37 @@ class UpdateManager(context: Context) {
 
     private val appContext = context.applicationContext
     private val updatesDir = File(context.filesDir, "updates")
-    private var currentInfo: UpdateCheck.UpdateInfo? = null
-    private var autoPromptUsed = false
+    @Volatile private var currentInfo: UpdateCheck.UpdateInfo? = null
+    @Volatile private var autoPromptUsed = false
+    @Volatile private var startupCheckDone = false
+    /** 已打开「安装未知应用」授权页、等用户返回后调起安装器（只等一次，不循环跳转）。 */
+    @Volatile private var installAfterGrant = false
+    /** 授权页已覆盖本 App（onStop 之后）：只有真正从授权页返回的那次 onResume 才处理，
+     *  避免 onCreate/onNewIntent 中发起跳转时 Activity 自身的 onResume 提前清掉标记。 */
+    @Volatile private var installAwaitingReturn = false
+    private val prefs = appContext.getSharedPreferences("updates", Context.MODE_PRIVATE)
+    private val downloader = UpdateDownloader(updatesDir) { name ->
+        "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
+    }
+
+    init {
+        // 已校验的更新包在进程重启后仍可安装（磁盘上的正式 APK 即已校验）。
+        restoreReady()
+    }
 
     /** 前后台标志（Activity onStart/onStop 维护）：后台调起安装器会被系统静默丢弃，
      *  必须主动分流到通知（Android 10+ 的 BAL 限制不抛异常）。 */
     @Volatile
     var appInForeground: Boolean = false
 
-    fun downloadedApk(): File? {
-        val info = currentInfo ?: return null
-        val f = File(updatesDir, info.apkAsset)
-        return if (f.isFile) f else null
+    /** 已校验、版本高于本机的更新包（读磁盘：冷启动的通知点击同样可用）。 */
+    fun downloadedApk(): File? = downloader.readyApk(currentVersionCode())?.second
+
+    /** 启动后自动检查：每个进程至多一次（Activity 重建不重复检查）。 */
+    fun checkOnStartup() {
+        if (startupCheckDone) return
+        startupCheckDone = true
+        check()
     }
 
     /** 检查更新（后台线程调用；下载中不重复检查，防状态覆盖与并发写文件）。 */
@@ -63,7 +83,7 @@ class UpdateManager(context: Context) {
                 conn.setRequestProperty("Accept", "application/vnd.github+json")
                 try {
                     if (conn.responseCode != 200) {
-                        fail("检查更新失败（HTTP ${conn.responseCode}）")
+                        if (!restoreReady()) fail("检查更新失败（HTTP ${conn.responseCode}）")
                         return@Thread
                     }
                     val body = conn.inputStream.bufferedReader().use { it.readText() }
@@ -72,22 +92,22 @@ class UpdateManager(context: Context) {
                     val names = release.optJSONArray("assets")?.let { arr ->
                         List(arr.length()) { arr.optJSONObject(it)?.optString("name") ?: "" }
                     } ?: emptyList()
-                    val current = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
-                    @Suppress("DEPRECATION")
-                    val currentCode = current.versionCode
-                    val info = UpdateCheck.isNewer(tag, names, currentCode)
-                    if (info == null) {
-                        state = State.UP_TO_DATE
-                    } else {
-                        currentInfo = info
-                        availableVersion = info.version
-                        state = State.AVAILABLE
+                    val info = UpdateCheck.isNewer(tag, names, currentVersionCode())
+                    if (info != null) currentInfo = info
+                    val ready = downloader.readyApk(currentVersionCode())
+                    when (UpdateCheck.afterCheck(info?.version, ready?.first)) {
+                        UpdateCheck.CheckOutcome.READY -> restoreReady()
+                        UpdateCheck.CheckOutcome.AVAILABLE -> {
+                            availableVersion = info!!.version
+                            state = State.AVAILABLE
+                        }
+                        UpdateCheck.CheckOutcome.UP_TO_DATE -> state = State.UP_TO_DATE
                     }
                 } finally {
                     conn.disconnect()
                 }
             } catch (e: Exception) {
-                fail("检查更新失败（${e.javaClass.simpleName}）")
+                if (!restoreReady()) fail("检查更新失败（${e.javaClass.simpleName}）")
             }
         }.start()
     }
@@ -99,29 +119,8 @@ class UpdateManager(context: Context) {
         state = State.DOWNLOADING
         Thread {
             try {
-                updatesDir.mkdirs()
-                // 新下载开始前清理旧 APK（安装完成前不删当前已就绪包）。
-                if (state == State.DOWNLOADING) {
-                    updatesDir.listFiles()?.forEach {
-                        if (it.name != info.apkAsset && it.name != info.sha256Asset) it.delete()
-                    }
-                }
-                val apkFile = File(updatesDir, info.apkAsset)
-                val shaFile = File(updatesDir, info.sha256Asset)
-                downloadAsset(info.sha256Asset, shaFile)
-                downloadAsset(info.apkAsset, apkFile) { done, total ->
+                downloader.download(info) { done, total ->
                     downloadProgress = if (total > 0) done.toFloat() / total else 0f
-                }
-                // 校验：.sha256 与 APK 内容恒时比对。
-                val expected = UpdateCheck.parseSha256(shaFile.readText())
-                val actual = sha256Of(apkFile)
-                if (expected == null || actual == null ||
-                    !MessageDigest.isEqual(expected.toByteArray(), actual.toByteArray())
-                ) {
-                    apkFile.delete()
-                    shaFile.delete()
-                    fail("校验失败：已删除下载文件，未安装")
-                    return@Thread
                 }
                 downloadProgress = 1f
                 state = State.READY_TO_INSTALL
@@ -130,21 +129,60 @@ class UpdateManager(context: Context) {
                     autoPromptUsed = true
                     if (appInForeground) promptInstall() else notifyReady()
                 }
+            } catch (_: UpdateDownloader.VerificationFailed) {
+                fail("校验失败：已删除下载文件，未安装")
             } catch (e: Exception) {
                 fail("下载失败（${e.javaClass.simpleName}）")
             }
         }.start()
     }
 
-    /** 调起系统安装器（前台直接调起；本方法由 UI/通知点击调用）。 */
+    /**
+     * 调起系统安装器（前台直接调起；本方法由 UI/通知点击调用）。未授权「安装未知应用」
+     * 时按需打开本 App 的授权页，用户返回后由 [onResumed] 决定是否调起。
+     */
     fun promptInstall() {
         val apk = downloadedApk() ?: return
+        if (Build.VERSION.SDK_INT >= 26 && !appContext.packageManager.canRequestPackageInstalls()) {
+            installAfterGrant = true
+            installAwaitingReturn = false
+            runCatching {
+                appContext.startActivity(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${appContext.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.onFailure { installAfterGrant = false }
+            return
+        }
         val uri: Uri = FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android-package-archive")
+            setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         runCatching { appContext.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** Activity 回到前台：从授权页返回且已授权则调起安装器；未授权只清除标记，不再跳转。 */
+    fun onResumed() {
+        if (!installAfterGrant || !installAwaitingReturn) return
+        installAfterGrant = false
+        installAwaitingReturn = false
+        if (Build.VERSION.SDK_INT < 26 || appContext.packageManager.canRequestPackageInstalls()) promptInstall()
+    }
+
+    /** Activity 退到后台（onStop）：若正等待授权页返回，则下一次 onResume 即为返回。 */
+    fun onLeftForeground() {
+        if (installAfterGrant) installAwaitingReturn = true
+    }
+
+    /**
+     * 通知权限（Android 13+）是否应在本次下载时请求：未授权且从未请求过才返回 true，
+     * 并记下已请求——至多请求一次，拒绝后不再打扰。
+     */
+    fun claimNotificationPermissionRequest(granted: Boolean): Boolean {
+        if (granted || prefs.getBoolean(PREF_NOTIFICATION_ASKED, false)) return false
+        prefs.edit().putBoolean(PREF_NOTIFICATION_ASKED, true).apply()
+        return true
     }
 
     private fun notifyReady() {
@@ -168,56 +206,18 @@ class UpdateManager(context: Context) {
         runCatching { nm.notify(NOTIFY_ID, notification) }
     }
 
-    private fun downloadAsset(name: String, target: File, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
-        val url = "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
-        var conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 30_000
-        conn.readTimeout = 30_000
-        try {
-            // 断点续传：已有部分文件时带 Range。
-            if (target.isFile && target.length() > 0) {
-                conn.setRequestProperty("Range", "bytes=${target.length()}-")
-            }
-            val resumeFrom = if (conn.responseCode == 206) target.length() else 0L
-            if (conn.responseCode != 200 && conn.responseCode != 206) {
-                throw java.io.IOException("HTTP ${conn.responseCode}")
-            }
-            val total = (conn.contentLengthLong.takeIf { it > 0 } ?: 0L) + resumeFrom
-            val out = java.io.RandomAccessFile(target, "rw").apply {
-                if (resumeFrom == 0L) setLength(0) // 服务器忽略 Range：从零重写并截断旧尾部
-                seek(resumeFrom)
-            }
-            conn.inputStream.use { input ->
-                val buf = ByteArray(64 * 1024)
-                var done = resumeFrom
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    out.write(buf, 0, n)
-                    done += n
-                    onProgress(done, total)
-                }
-            }
-            out.close()
-        } finally {
-            conn.disconnect()
-        }
+    /** 磁盘上有已校验的更新包时恢复为可安装（返回是否恢复）。 */
+    private fun restoreReady(): Boolean {
+        val ready = downloader.readyApk(currentVersionCode()) ?: return false
+        availableVersion = ready.first
+        downloadProgress = 1f
+        state = State.READY_TO_INSTALL
+        return true
     }
 
-    private fun sha256Of(f: File): String? = try {
-        val md = MessageDigest.getInstance("SHA-256")
-        f.inputStream().use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                md.update(buf, 0, n)
-            }
-        }
-        md.digest().joinToString("") { "%02x".format(it) }
-    } catch (_: Exception) {
-        null
-    }
+    @Suppress("DEPRECATION")
+    private fun currentVersionCode(): Int =
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionCode
 
     private fun fail(reason: String) {
         failureReason = reason
@@ -229,5 +229,6 @@ class UpdateManager(context: Context) {
         const val CHANNEL_ID = "dsh_update"
         const val NOTIFY_ID = 4101
         const val ACTION_INSTALL_READY = "work.keepwriting.dshanywhere.INSTALL_READY"
+        private const val PREF_NOTIFICATION_ASKED = "notification_permission_asked"
     }
 }

@@ -14,6 +14,11 @@ categories:
       status: obsolete
       occurrences: 1
       path: .strict-spec-driven/lessons/architecture/wails-80aace.yaml
+    activity-6a9786:
+      title: 进程级资源（监听端口、下载状态）挂在 Activity 级对象上，配置变化重建即泄漏并丢状态
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/architecture/activity-6a9786.yaml
   security:
     wails-seturl-token-e08b6a:
       title: Wails SetURL 会在内存中保留并可能重放带 token 的地址
@@ -81,6 +86,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/socket-tls-tls-https-tls-283aef.yaml
+    android-mime-startactivity-91-f27a30:
+      title: Android 调起系统安装器的验收必须看到安装器界面：意图 MIME 拼错时 startActivity 不抛异常、只在系统日志返回 -91
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/android-mime-startactivity-91-f27a30.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-android-update-lifecycle
+  status: proposed
+summary:
+  what:
+    - 修复 Android 自更新与 Activity 生命周期的三处缺陷：(1) 启动/每次回到前台不再强制跳转「安装未知应用」设置页并反复请求通知权限，改为安装时按需引导安装权限、开始下载更新时至多请求一次通知权限；(2) 更新下载断点续传对已完整的 .sha256 或 APK 文件不再因 HTTP 416 永久失败，已校验的更新包在重新检查、Activity 重建与进程重启后仍保持「可安装」；(3) App 装配（代理桥、更新管理）改为进程内单例，Activity 重建（深色模式、语言等配置变化）不再泄漏代理桥监听端口、不丢更新状态，通知点击在冷启动后仍能调起安装器。
+    - 修正调起系统安装器的 MIME 类型：application/vnd.android-package-archive（连字符）改为 application/vnd.android.package-archive，否则系统找不到安装器、安装入口点击无效。
+  why:
+    - 模拟器实测（Medium_Phone_API_36.1，2026-11-05，origin/dev 构建）：未授权安装未知应用时启动即跳到系统设置页，返回后弹通知权限框，再返回又跳回设置页，App 无法使用；UpdateManager 对已存在的完整文件发 Range 续传请求，服务器 416 即抛错，下载永久失败，且就绪后再点「检查更新」会回到「可下载」进而触发该失败；切换深色模式两次后 App 进程监听的回环端口从 1 个代理桥增至 3 个（旧桥仍持有效凭据在听），通知冷启动点击因内存态丢失不做任何事。违反 android-app 主规格 update-check-and-verify、update-install-flow 与 proxy-isolation。
+    - 模拟器验收中授权后调起安装器，ActivityTaskManager 记录 START … typ=application/vnd.android-package-archive result code=-91（意图无法解析）；系统包安装器 InstallStart 注册的类型为 application/vnd.android.package-archive。该拼写错误使前台安装、通知点击安装全部无效，同样违反 update-install-flow。
+scope:
+  in:
+    - android/core：新增 UpdateDownloader（.sha256 每次全新下载、APK 写入 .part 并断点续传、416 视为已下载完整、校验通过才改名为正式 APK、按文件名恢复已校验更新包、清理已安装或其他版本的残留）与 UpdateDownloaderTest（JDK HttpServer 驱动）
+    - android/app UpdateManager：改用 UpdateDownloader；启动时恢复已校验的更新包；检查更新不回退就绪状态；安装时按需引导安装未知应用权限（返回后已授权才调起安装器，未授权不再跳转）；进程内只自动检查一次
+    - android/app MainActivity / AppGraph：AppGraph 进程内单例；移除 onResume 中的权限跳转与通知权限请求
+    - android/app SettingsScreen：点击下载更新时（API 33+、未授权且从未请求过）请求一次通知权限
+    - android-app 主规格 update-check-and-verify、update-install-flow、proxy-isolation 增补对应场景（MODIFIED）
+    - android/app UpdateManager.promptInstall：安装意图 MIME 类型改为 application/vnd.android.package-archive
+  out:
+    - 更新源与资产命名、tag 版本判定（UpdateCheck）
+    - 隧道 auth key 与错误分类（fix-android-tunnel-auth-key 处理）、隧道健康监测与网络切换
+    - WebView、探测与导航策略
+unchanged_behavior:
+  - 只有 tag 版本高于本机且含 DSH-Anywhere-<版本>.apk 与 .sha256 的 Release 才提示更新；校验不一致或缺 .sha256 时删除文件且不调起安装器
+  - 前台调起系统安装器、后台发「新版本已就绪」通知；每进程自动调起至多一次；设置页始终保留手动安装入口；不静默安装
+  - 代理桥凭据、407、回环拒绝、明文门控与并发上限；隧道生命周期
+  - 首次设置、设置页、主页面加载、会话与导航行为

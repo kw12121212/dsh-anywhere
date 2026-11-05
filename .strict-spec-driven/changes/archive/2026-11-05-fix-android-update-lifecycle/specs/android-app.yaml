@@ -1,0 +1,81 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED: {}
+  MODIFIED:
+    update-check-and-verify:
+      strength: MUST
+      statement: App 在启动后（每个进程至多自动一次）与设置页手动触发时检查公开 GitHub 仓库的最新 Release（匿名、经手机网络）：仅当 Release 含 DSH-Anywhere-<版本>.apk 资产且其 tag 派生的版本号高于本机安装版本时提示更新（无 APK 资产的 Release 视为无新版本）；下载到 App 私有目录支持断点续传：下载中断后重试从已下载处继续，已下载完整但尚未校验的文件不会被重复下载或导致下载失败；下载完成后读取同名 .sha256（每次重新获取）校验：一致才允许安装，不一致或缺失 .sha256 时删除文件、提示失败且不调起安装器；校验通过的更新包在再次检查更新、界面重建与 App 重启后仍保持可安装（直至安装完成）；开始下载新版本前清理旧 APK，安装完成前不删除已校验的文件；更新检查与下载失败（网络、限流）不打扰用户，只在设置页显示原因。
+      scenarios:
+        newer-release-prompted:
+          - GIVEN: 本机安装 1.0.0，最新 Release v1.1.0 含 DSH-Anywhere-1.1.0.apk 与 .sha256
+          - WHEN: 启动后自动检查或手动触发
+          - THEN: 设置页显示新版本 1.1.0 可下载，下载进度可见，校验通过后提供安装入口
+        checksum-mismatch-rejected:
+          - GIVEN: 下载完成但 APK 内容与 .sha256 不一致（或 Release 缺 .sha256）
+          - WHEN: 校验执行
+          - THEN: 已下载文件被删除、提示校验失败，系统安装器没有被调起
+        no-apk-release-silent:
+          - GIVEN: 最新 Release 只含桌面安装包（无 APK 资产）
+          - WHEN: 检查更新
+          - THEN: 视为无新版本，不提示更新
+        interrupted-download-resumes:
+          - GIVEN: 上次下载在 .sha256 已下载完整、APK 只下载了一部分（或已下载完整但尚未校验）时被中断
+          - WHEN: 再次点击下载
+          - THEN: APK 从已下载处继续（或直接进入校验），校验通过后提供安装入口，不出现下载失败
+        ready-survives-recheck-restart:
+          - GIVEN: 更新包已下载并校验通过，设置页显示安装入口
+          - WHEN: 再次点击「检查更新」，或强杀后重新启动 App
+          - THEN: 设置页仍显示安装入口，不回到「可下载」，不重新下载
+    update-install-flow:
+      strength: MUST
+      statement: 校验通过的更新包经系统安装器完成覆盖升级：App 在前台时直接调起安装器，在后台时发送「新版本已就绪」通知、点击通知后调起安装器（App 进程已被回收后点击同样有效）；每个进程会话自动调起至多一次，设置页始终保留手动安装入口；安装调起需要用户在系统安装器中确认，App 不静默安装。App 启动或回到前台时不跳转任何系统权限页、不请求通知权限：仅在即将调起安装器而未授权「安装未知应用」时打开该 App 的授权页，用户返回后已授权则调起安装器、未授权则停留在 App 内且不再跳转；通知权限（Android 13+）只在用户点击下载更新时请求，至多请求一次，拒绝后不再请求。
+      scenarios:
+        foreground-install-invoked:
+          - GIVEN: 下载与校验完成，App 在前台
+          - WHEN: 用户点击安装（或本会话首次自动触发）
+          - THEN: 系统安装器被调起并显示升级确认，用户确认后完成覆盖升级，新版 versionName 高于旧版
+        background-notification:
+          - GIVEN: 下载与校验完成时 App 已在后台
+          - WHEN: 下载完成
+          - THEN: 收到「新版本已就绪」通知，点击通知后系统安装器被调起
+        notification-after-process-death:
+          - GIVEN: 「新版本已就绪」通知已发出，之后 App 进程被系统回收
+          - WHEN: 点击通知
+          - THEN: App 冷启动并调起系统安装器
+        launch-no-permission-jump:
+          - GIVEN: App 未被授予「安装未知应用」与通知权限
+          - WHEN: 启动 App、切到后台再回到前台
+          - THEN: 界面停留在 App 内（首次设置页或主页面），不打开系统设置页，不弹出权限请求
+        install-asks-unknown-sources-on-demand:
+          - GIVEN: 更新包已校验，App 未被授予「安装未知应用」
+          - WHEN: 点击安装
+          - THEN: 打开该 App 的「安装未知应用」授权页；授权后返回即调起系统安装器，未授权返回则停留在设置页且不再跳转，安装入口仍在
+        notification-permission-once:
+          - GIVEN: Android 13+，App 从未请求过通知权限
+          - WHEN: 在设置页点击下载更新，拒绝通知权限后再次下载
+          - THEN: 第一次点击时请求一次通知权限，之后不再请求，下载照常进行
+    proxy-isolation:
+      strength: MUST
+      statement: 本地代理桥只监听手机本机回环的随机端口并要求本进程随机生成的代理凭据：不带或带错凭据的访问得到 407 且不连接任何目标；手机本机回环目标（127.0.0.0/8、::1、localhost）经桥的访问被拒绝；明文 http 转发只允许已保存 harness 的源，其他主机的明文请求被拒绝（https 的 CONNECT 隧道不受此限）；在役连接数有上限，超限直接关闭；App 进程内同一时刻至多一个代理桥在听，界面重建（深色模式、语言等配置变化）不新增监听端口。
+      scenarios:
+        no-credential-407:
+          - GIVEN: 代理桥在役（端口 P）
+          - WHEN: 同机其他进程（如 adb shell 下 curl）不带凭据访问 127.0.0.1:P
+          - THEN: 得到 407，且桥没有向任何目标发起连接
+        loopback-rejected:
+          - GIVEN: WebView 经桥请求 127.0.0.1:任意端口 或 localhost 目标
+          - WHEN: 请求到达桥
+          - THEN: 请求被拒绝，不拨号
+        cleartext-gated:
+          - GIVEN: 已保存 harness 源 http://gamepc:13080/
+          - WHEN: 经桥请求其他主机的明文 http 地址
+          - THEN: 请求被拒绝；对 harness 源的明文请求正常转发
+        single-bridge-across-recreate:
+          - GIVEN: 隧道已连接，主页面显示 harness 页面，代理桥在役
+          - WHEN: 切换系统深色模式两次（界面重建两次）
+          - THEN: App 进程监听的回环端口数量不变，主页面恢复显示 harness 页面
+  REMOVED: {}

@@ -1,0 +1,65 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-android-update-lifecycle
+sections:
+  Implementation:
+    repro-emulator:
+      text: 修复前模拟器复现（origin/dev 构建）：pm clear 后启动，顶层为 com.android.settings 的安装未知应用页，返回后为 GrantPermissionsActivity，再返回又回到设置页（循环）；隧道已连接时 cmd uimode night yes/no 各一次，App uid 的回环监听端口从 2 个（tsnet SOCKS5 + 1 个代理桥）增至 4 个。
+      status: complete
+    extract-downloader:
+      text: 把 UpdateManager 的 downloadAsset 与 sha256 校验原样搬入 android/core 的 UpdateDownloader（资产 URL 由调用方注入），:app 改为调用它，行为不变。
+      status: complete
+    repro-failing-test:
+      text: 新增 android/core/src/test/kotlin/work/keepwriting/core/UpdateDownloaderTest.kt（JDK HttpServer，Range 越界返回 416）：.sha256 已完整存在时重试下载应成功；修复前以 HTTP 416 失败。
+      status: complete
+      command: android/gradlew -p android/core test --tests work.keepwriting.core.UpdateDownloaderTest
+    fix-downloader:
+      text: UpdateDownloader：.sha256 每次全新下载；APK 写 .part 并续传（200 重写、206 追加、416 视为完整）；校验通过改名为正式 APK，否则删除 .part 与 .sha256；readyApk 按文件名恢复高于本机版本的已校验包并删除不高于本机的残留；补续传、完整 .part、校验失败、缺 .sha256、就绪恢复用例。
+      status: complete
+    fix-update-manager:
+      text: UpdateManager：构造时恢复已校验包为可安装；check 不回退就绪；downloadedApk 读磁盘；promptInstall 未授权安装未知应用时打开授权页并记待安装标记，onResumed 已授权才调起安装器、否则清除标记；自动检查每进程一次；记录通知权限是否已请求。
+      status: complete
+    fix-activity-lifecycle:
+      text: AppGraph 改为进程内单例；MainActivity 移除 onResume 的权限跳转与通知权限请求，改调 updates.onResumed()；SettingsScreen 下载按钮在 API 33+ 未授权且从未请求过时经 ActivityResult 请求一次通知权限。
+      status: complete
+    fix-install-mime:
+      text: UpdateManager.promptInstall 的安装意图 MIME 类型改为 application/vnd.android.package-archive（修复前模拟器 START 返回 -91，系统包安装器 InstallStart 只注册该类型）。
+      status: complete
+    review-fixes:
+      text: 评审修复：INSTALL_READY 只在首次创建且非从最近任务进入时消费（重建/最近任务不再调起安装器或授权页）；待安装标记在 onStop 之后才武装，onCreate/onNewIntent 中发起授权跳转时 Activity 自身的 onResume 不再提前清除；跨线程标记加 @Volatile；检查结论合并下沉 core 的 UpdateCheck.afterCheck；.sha256 缺失（404）按校验失败处理并删除已下载部分；补 416 不重下、200 重写、清理其他版本、afterCheck 用例。
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查。
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与 80% 行覆盖率门槛。
+      status: complete
+      command: npm run test:coverage
+    test-core:
+      text: 运行 core JUnit 测试（含 UpdateDownloaderTest）。
+      status: complete
+      command: android/gradlew -p android/core test
+    test-emulator:
+      text: 模拟器验收（debug APK）：pm clear 后启动停留在首次设置页、前后台切换不跳转；隧道已连接时两次切换深色模式回环监听端口数不变且主页面恢复；向 files/updates 放入已校验命名的更新包后设置页显示安装入口，未授权安装未知应用时点安装打开授权页、未授权返回不再跳转、授权返回调起安装器；强杀后发送 INSTALL_READY 冷启动调起系统安装器。
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Linux 本地以 xvfb-run 包裹提供显示服务器）。
+      status: complete
+      command: xvfb-run -a bash -c 'npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test'
+  Verification:
+    verify-change:
+      text: 运行 strict-spec-cli verify 确认任务与产物一致。
+      status: complete
+      command: strict-spec-cli verify fix-android-update-lifecycle
+    archive-readiness:
+      text: 运行 strict-spec-cli ready 确认归档就绪，并确认模拟器与完整回归证据齐备。
+      status: complete
+      command: strict-spec-cli ready fix-android-update-lifecycle
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-core

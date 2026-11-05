@@ -25,15 +25,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        graph = AppGraph(applicationContext)
+        // 进程内单例：Activity 重建复用在役代理桥与更新状态。
+        graph = AppGraph.get(applicationContext)
         graph.load()
         // 隧道按需启动（未配置时不触碰 tsnet；已连接时幂等直返）——
         // 重启后凭持久状态自动重连（tunnel-reconnect-after-restart）。
         graph.tunnel.ensureUp()
-        // 启动后静默检查更新（失败不打扰；android-self-update）。
-        graph.updates.check()
+        // 启动后静默检查更新（每进程一次，失败不打扰；android-self-update）。
+        graph.updates.checkOnStartup()
         // 通知点击冷启动路径：消费 INSTALL_READY action（通知 → 点击 → 调起安装器）。
-        handleInstallReady(intent)
+        // 只在首次创建时消费：界面重建（savedInstanceState 非空）与从最近任务重新进入
+        // （启动意图仍是 INSTALL_READY）都不得再次调起安装器或授权页。
+        if (savedInstanceState == null &&
+            (intent.flags and android.content.Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+        ) {
+            handleInstallReady(intent)
+        }
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -72,6 +79,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         graph.updates.appInForeground = false
+        graph.updates.onLeftForeground()
         CookieManager.getInstance().flush()
     }
 
@@ -82,22 +90,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // POST_NOTIFICATIONS（API 33+）运行时请求：后台更新就绪通知依赖它。
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4301)
-            }
-        }
-        // REQUEST_INSTALL_PACKAGES 引导（design 承诺）：未授权「安装未知应用」时跳系统设置。
-        if (android.os.Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
-            runCatching {
-                startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                    data = android.net.Uri.parse("package:$packageName")
-                })
-            }
-        }
+        // 启动与回到前台不跳转任何权限页：「安装未知应用」只在调起安装器时按需引导，
+        // 从授权页返回后由更新管理器决定是否调起（未授权不再跳转）；通知权限在设置页
+        // 点击下载时至多请求一次。
+        graph.updates.onResumed()
     }
 
     override fun onPause() {

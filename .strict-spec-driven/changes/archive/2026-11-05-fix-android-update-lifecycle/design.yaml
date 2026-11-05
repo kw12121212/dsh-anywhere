@@ -1,0 +1,38 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-android-update-lifecycle
+approach:
+  - 下载逻辑下沉 core 的 UpdateDownloader（纯 JVM，HttpURLConnection + File + MessageDigest，资产 URL 由调用方注入）：先把 UpdateManager 的 downloadAsset 与校验原样搬入 core 并以 JUnit 复现 416，再修复——.sha256 每次不带 Range 全新下载；APK 写入 <apk>.part 并对已有部分带 Range 续传，200 从头重写、206 追加、416 视为已完整；校验通过才把 .part 改名为正式 <apk>，不一致或缺 .sha256 删除 .part 与 .sha256。磁盘上存在正式 <apk> 即等于「已校验可安装」，readyApk(当前 versionCode) 据文件名恢复版本、顺手删除版本不高于本机（已安装）的残留。
+  - UpdateManager 构造时调用 readyApk 恢复就绪态；check 结果与磁盘上已校验包的版本一致或无更高版本时保持 READY_TO_INSTALL；downloadedApk 改读磁盘，因此通知冷启动点击可调起安装器。promptInstall 在 API 26+ 未授权安装未知应用时打开该 App 的授权页并记下待安装标记，MainActivity.onResume 调 onResumed()：标记在且已授权则调起安装器，否则清除标记、不再跳转。通知权限从 onResume 移到设置页「下载」按钮：API 33+ 未授权且从未请求过（偏好里记录）时经 ActivityResult 请求一次。AppGraph 改为与 TunnelManager 同款的进程内单例，自动更新检查每进程一次。
+decisions:
+  downloader-in-core:
+    decision: 下载、续传、校验与就绪恢复放在 core 的 UpdateDownloader，以 JDK HttpServer 驱动的 JUnit 覆盖
+    rationale: tech/android-client 的 pure-logic-in-core：这些逻辑不依赖 android.*；留在 :app 时没有任何回归信号，416 缺陷正因此漏网；core 测试进入完整回归命令
+  verified-by-rename:
+    decision: 以「.part 校验通过后改名」表达已校验状态，不另存标记文件
+    rationale: 改名是原子的单一事实来源：进程在下载或校验中途被杀只会留下 .part，下次续传或 416 后重新校验；正式文件名存在即可安装，冷启动通知与重新检查都据此恢复，无需额外状态文件
+  on-demand-permissions:
+    decision: 安装未知应用权限只在调起安装器时按需引导，通知权限只在用户点击下载时请求至多一次
+    rationale: 用户 2026-11-05 选定「按需提示」：启动不跳转；拒绝后不再请求，设置页手动安装入口保留
+  appgraph-singleton:
+    decision: AppGraph 进程内单例（与 TunnelManager 同款），Activity 只持有引用
+    rationale: 代理桥与更新状态的生命周期属于进程而非 Activity；单例后重建复用在役桥端口与凭据，MainWebScreen 的代理覆盖在新组合中重新应用，不再起第二个桥
+  consume-install-intent-once:
+    decision: INSTALL_READY 只在 savedInstanceState 为空且非 FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY 时消费
+    rationale: AppGraph 单例后 downloadedApk 读磁盘，重建或从最近任务重进时重放启动意图会再次调起安装器或授权页，正是 launch-no-permission-jump 要消除的行为
+  arm-after-stop:
+    decision: 待安装标记在 Activity onStop 后才武装，onResume 只处理武装后的那一次
+    rationale: 在 onCreate/onNewIntent 中 startActivity 时 Activity 仍会先走一次自身 onResume；不武装会在用户到达授权页前就清除标记，通知冷启动路径授权返回后不调起安装器
+  missing-sha-is-verification-failure:
+    decision: Release 缺 .sha256（404）按校验失败处理并删除已下载部分
+    rationale: 主规格 update-check-and-verify 要求缺失 .sha256 时删除文件并提示失败；其他网络错误仍保留 .part 以便续传
+alternatives:
+  - option: 在 AndroidManifest 的 configChanges 中补 uiMode/locale 等避免重建
+    reason: 无法覆盖全部配置变化与系统回收重建，泄漏根因（进程级资源挂在 Activity 级对象上）仍在
+  - option: 继续用 releases/latest 内存态记录下载信息、在 SharedPreferences 记录已校验
+    reason: 两处状态（文件与偏好）可能不一致，强杀时序下会出现标记已写而文件残缺；改名方案只有一个事实来源
+risks:
+  - 未授权安装未知应用时自动安装会转为打开授权页（用户刚点下载，属于按需引导）；授权后返回即调起安装器
+  - UpdateDownloaderTest 依赖 JDK 内置 com.sun.net.httpserver，core 测试只需 JDK 17+，不新增外部依赖

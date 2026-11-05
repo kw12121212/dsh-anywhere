@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: activity-6a9786
+  title: 进程级资源（监听端口、下载状态）挂在 Activity 级对象上，配置变化重建即泄漏并丢状态
+category: architecture
+status: active
+created_at: '2026-11-05T06:38:11.938Z'
+updated_at: '2026-11-05T06:38:11.938Z'
+context: android-app 的 AppGraph（持有代理桥 ProxyBridge 与 UpdateManager）在 MainActivity.onCreate 中 new 出来，而 TunnelManager 是进程单例；manifest configChanges 只覆盖 orientation/screenSize 等。
+observation: 切换深色模式（uiMode 不在 configChanges）使 Activity 重建：每次新建一个代理桥，旧桥持有效凭据继续监听（模拟器两次切换后回环监听端口 2→4），更新状态与通知冷启动所需的内存信息丢失。
+takeaway: 服务、监听 socket、后台任务与其状态的生命周期属于进程：放进 Application 级单例（或 ViewModel 并在 onCleared 释放），Activity 只持引用；验收用 cmd uimode night yes/no 强制重建并比对 /proc/net/tcp 中本 uid 的 LISTEN 条目。
+applies_when: Android 中在 Activity/Composable 作用域内创建会占用系统资源（端口、线程、文件锁）或需跨界面重建保留的状态的对象时
+occurrences:
+  - origin: fix-android-update-lifecycle
+    date: '2026-11-05'
+    evidence: 2026-11-05 模拟器：修复前两次切换深色模式后 App uid 的回环 LISTEN 从 2 增至 4；AppGraph 单例后两次切换端口集合不变、主页面恢复
