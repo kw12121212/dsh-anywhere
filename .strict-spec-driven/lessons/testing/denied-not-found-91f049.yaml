@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: denied-not-found-91f049
+  title: 按错误文本子串分类时，宽泛短语（denied、not found）会吞掉本机与网络错误，先排除系统错误签名再匹配业务短语
+category: testing
+status: active
+created_at: '2026-11-05T07:03:09.308Z'
+updated_at: '2026-11-05T07:03:09.308Z'
+context: android-tstunnel 的 TunnelStateMachine.classifyUpFailure 用子串把 tsnet Up 失败分为需要 key 与失败，以决定提示用户换 key 还是显示原因。
+observation: '列表含裸 denied 与 not found：tsnet 在 Android 实测的 netlinkrib: permission denied、x509 certificate has expired 等本机/证书错误都被判为需要 key，引导用户换 key 却无效；表驱动测试只有正向的业务短语，没有系统错误形态的负向用例。'
+takeaway: 基于错误文本的分类器要先匹配并排除操作系统/网络/TLS 的通用签名（permission denied、x509、no such host、connection refused、i/o timeout），业务短语用完整词组（node not found、access denied）；测试表必须包含这些系统错误的负向行，且至少一行取自真机实测的错误原文。
+applies_when: 根据第三方库或远端返回的错误字符串做状态分类（需要重新认证/重试/失败）时
+occurrences:
+  - origin: fix-android-tunnel-auth-key
+    date: '2026-11-05'
+    evidence: '2026-11-05：TunnelStateMachineTest 新增负向用例修复前『netlinkrib: permission denied』判 NEEDS_KEY 失败；修复后 58 个 core 测试通过；模拟器截断 key 时仍正确判需要 key'

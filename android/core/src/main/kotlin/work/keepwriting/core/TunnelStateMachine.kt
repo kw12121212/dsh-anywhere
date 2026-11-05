@@ -25,16 +25,23 @@ object TunnelStateMachine {
     }
 
     /**
-     * Up 失败分类：错误文本含 needs-login / 节点被删除 / key 无效或过期 / 拒绝类
-     * →NEEDS_KEY（重新输入 key 可恢复）；其余 →FAILED（附原因）。
+     * Up 失败分类：本机权限/证书/网络类错误 →FAILED；错误文本含 needs-login / 节点
+     * 被删除 / key 无效或过期 / 拒绝类 →NEEDS_KEY（重新输入 key 可恢复）；其余 →FAILED（附原因）。
      */
     fun classifyUpFailure(errorText: String): State {
         val lower = errorText.lowercase()
+        // 本机权限、证书、DNS 与网络类错误不是 key 问题：先判失败（附原因），避免
+        // "permission denied"、"certificate has expired" 被下面的短语误判为需要 key。
+        val localOrNetwork = listOf(
+            "permission denied", "x509", "certificate", "no such host",
+            "network is unreachable", "connection refused", "i/o timeout",
+        ).any { lower.contains(it) }
+        if (localOrNetwork) return State.FAILED
         val needsKey = listOf(
             "needs-login", "needslogin",
             // 真机实测 tsnet 报 "invalid key: unable to validate API key"（无 auth 一词）。
             "invalid key", "invalid auth", "expired", "already used",
-            "node no longer exists", "not found", "unauthorized", "denied",
+            "node no longer exists", "node not found", "unauthorized", "access denied",
         ).any { lower.contains(it) }
         return if (needsKey) State.NEEDS_KEY else State.FAILED
     }

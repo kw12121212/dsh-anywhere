@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-android-tunnel-auth-key
+  status: proposed
+summary:
+  what:
+    - 节点注册成功（隧道进入已连接）后删除 App 私有存储中的 tailscale auth key，此后重连只凭持久节点状态；收窄隧道失败分类：本机权限、证书与网络类错误（如 permission denied、x509、no such host）判为失败并附原因，而不是需要 key。
+  why:
+    - '模拟器实测（2026-11-05）：用 tagged auth key 连接成功后 shared_prefs/tunnel.xml 仍明文保存完整 auth key，且重启重连时继续携带该 key——可复用 key 被无限期留存，节点被删除后会被静默重新注册而不进入需要 key；classifyUpFailure 以子串 denied、not found 判需要 key，tsnet 在 Android 上实测的 netlinkrib: permission denied 等本机错误会被误报为需要 key，引导用户换 key 却无法解决。违反 android-app 主规格 tunnel-states（被拒绝或过期才进入需要 key、其他错误进入失败）。'
+scope:
+  in:
+    - android/app TunnelManager：startNode 成功后从 SharedPreferences 删除 auth key
+    - android/core TunnelStateMachine.classifyUpFailure：本机权限/证书/网络类错误优先判 FAILED，节点不存在类改为精确短语 node not found；TunnelStateMachineTest 增加负向用例
+    - android-app 主规格 tunnel-states MODIFIED：注册成功后不保留 key、错误分类场景
+  out:
+    - 隧道健康监测（已连接后的状态变化）与网络切换后的接口快照刷新：需要单独设计，作为后续变更
+    - auth key 的加密存储（注册前的短暂保留沿用私有 SharedPreferences）
+unchanged_behavior:
+  - 未配置时不启动隧道；粘贴 key 连接、清除回到未配置；五态显示与 key 不回显
+  - 已连接后强杀重启凭持久状态免 key 重连（tunnel-reconnect-after-restart）
+  - 被拒绝、key 无效或过期、需要登录类错误仍判为需要 key

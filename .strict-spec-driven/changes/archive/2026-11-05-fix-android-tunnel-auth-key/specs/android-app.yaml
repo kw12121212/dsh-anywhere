@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED: {}
+  MODIFIED:
+    tunnel-states:
+      strength: MUST
+      statement: 隧道状态为五种并在设置页 Tailscale 卡片实时显示：未配置、连接中、已连接（含节点名）、需要 key（已有节点状态但被 tailnet 拒绝或 key 过期，提示重新输入 key）、失败（附原因说明）；粘贴 auth key 后进入连接中，成功进入已连接，被拒绝或过期进入需要 key，其他错误（包括本机权限、证书与网络类错误）进入失败；auth key 不出现在界面回显、日志与错误信息中，节点注册成功后 App 不再保留 auth key（此后重连只凭持久节点状态）。
+      scenarios:
+        connect-with-key:
+          - GIVEN: 卡片处于未配置或需要 key
+          - WHEN: 粘贴 tagged auth key 并点击连接
+          - THEN: 卡片进入连接中，节点注册成功后显示已连接与节点名，key 不被回显
+        needs-key-on-rejection:
+          - GIVEN: 已有节点状态，节点在 tailnet 被删除或 key 过期
+          - WHEN: 隧道尝试连接
+          - THEN: 卡片显示需要 key，提示重新输入，不显示 key 值
+        failed-with-reason:
+          - GIVEN: 连接因网络或其他错误失败
+          - WHEN: 连接尝试结束
+          - THEN: 卡片显示失败与原因说明（不含 key）
+        key-not-retained-after-connect:
+          - GIVEN: 用 tagged auth key 连接且节点注册成功（卡片显示已连接）
+          - WHEN: 检查 App 私有存储中的偏好与文件
+          - THEN: 不含该 auth key；强杀重启后仍凭节点状态回到已连接
+        local-error-not-needs-key:
+          - GIVEN: 连接因本机权限错误（如 permission denied）或证书错误失败
+          - WHEN: 连接尝试结束
+          - THEN: 卡片显示失败与原因说明，而不是需要 key
+  REMOVED: {}

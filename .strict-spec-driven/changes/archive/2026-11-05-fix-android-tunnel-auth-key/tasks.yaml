@@ -1,0 +1,53 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-android-tunnel-auth-key
+sections:
+  Implementation:
+    repro-emulator:
+      text: 修复前模拟器复现（origin/dev 构建，Medium_Phone_API_36.1）：设置页粘贴 tagged auth key 连接到已连接后，run-as cat shared_prefs/tunnel.xml 仍含完整 auth_key（输出中已脱敏）。
+      status: complete
+    repro-failing-test:
+      text: 'TunnelStateMachineTest.classifyUpFailureTable 增加负向用例：netlinkrib: permission denied、x509 证书过期、no such host、open …: not found 类文件错误判 FAILED；修复前 permission denied 与 x509 expired 用例判为 NEEDS_KEY 而失败。'
+      status: complete
+      command: android/gradlew -p android/core test --tests work.keepwriting.core.TunnelStateMachineTest
+    fix-classify:
+      text: TunnelStateMachine.classifyUpFailure：本机/证书/网络签名优先判 FAILED；not found 收窄为 node not found，denied 收窄为 access denied。
+      status: complete
+    fix-drop-key:
+      text: TunnelManager.startNode：Up 成功置为已连接时从 SharedPreferences 删除 auth key；失败时保留。
+      status: complete
+  Testing:
+    test-typecheck:
+      text: 运行 TypeScript 类型检查。
+      status: complete
+      command: npm run typecheck
+    test-unit:
+      text: 运行 Vitest 单元测试与 80% 行覆盖率门槛。
+      status: complete
+      command: npm run test:coverage
+    test-core:
+      text: 运行 core JUnit 测试（含扩展后的 TunnelStateMachineTest）。
+      status: complete
+      command: android/gradlew -p android/core test
+    test-emulator:
+      text: 模拟器验收（debug APK）：清除数据后粘贴 tagged key 连接到已连接，shared_prefs/tunnel.xml 不含 auth_key；强杀重启后卡片先连接中再回到已连接（免 key 重连）；清除后回到未配置；主页面 tailnet https 地址经节点探测可达。
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    test-regression:
+      text: 运行 config.yaml 中 review_evidence.project_regression 的完整回归命令（Linux 本地以 xvfb-run 包裹提供显示服务器）。
+      status: complete
+      command: xvfb-run -a bash -c 'npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test'
+  Verification:
+    verify-change:
+      text: 运行 strict-spec-cli verify 确认任务与产物一致。
+      status: complete
+      command: strict-spec-cli verify fix-android-tunnel-auth-key
+    archive-readiness:
+      text: 运行 strict-spec-cli ready 确认归档就绪，并确认模拟器与完整回归证据齐备。
+      status: complete
+      command: strict-spec-cli ready fix-android-tunnel-auth-key
+testing_gates:
+  validation_task: test-typecheck
+  unit_test_task: test-core

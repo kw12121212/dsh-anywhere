@@ -16,7 +16,8 @@ import java.io.File
  * 内嵌 tailnet 隧道生命周期（android-tstunnel）：进程内单例、按需启动，全部
  * tsnet 调用（阻塞）只在单一后台线程执行，不使用前台服务。状态转移判定在
  * core 的 TunnelStateMachine；节点状态持久 filesDir/tstunnel（免 key 重连的
- * 持久层），auth key 只存 App 私有 SharedPreferences，绝不进日志与界面。
+ * 持久层），auth key 只在注册完成前存 App 私有 SharedPreferences（注册成功即删除），
+ * 绝不进日志与界面。
  *
  * 隧道可选（milestone intake 问题 tunnel-optional）：无 key 且无节点状态时
  * ensureUp 不触碰 tsnet（Up 无 key 无状态会永久阻塞）。
@@ -97,6 +98,9 @@ class TunnelManager private constructor(context: Context) {
             n.up()
             socksEndpoint = SocksEndpoint(n.loopback(), n.proxyCredential())
             failureReason = ""
+            // 注册已完成：节点身份已持久在 stateDir，免 key 重连不再需要 key——不再留存
+            // 可复用的 auth key（节点被删后进入需要 key，而不是被静默重新注册）。
+            prefs.edit().remove(PREF_AUTH_KEY).apply()
             setState(TunnelStateMachine.State.CONNECTED)
         } catch (t: Throwable) {
             val raw = t.message ?: node?.errmsg() ?: t.javaClass.simpleName

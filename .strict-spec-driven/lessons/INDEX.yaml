@@ -91,6 +91,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/android-mime-startactivity-91-f27a30.yaml
+    denied-not-found-91f049:
+      title: 按错误文本子串分类时，宽泛短语（denied、not found）会吞掉本机与网络错误，先排除系统错误签名再匹配业务短语
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/denied-not-found-91f049.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

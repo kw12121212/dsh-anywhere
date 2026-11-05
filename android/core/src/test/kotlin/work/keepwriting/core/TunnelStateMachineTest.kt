@@ -41,6 +41,13 @@ class TunnelStateMachineTest {
             "dial tcp: i/o timeout" to TunnelStateMachine.State.FAILED,
             "context deadline exceeded" to TunnelStateMachine.State.FAILED,
             "connection refused" to TunnelStateMachine.State.FAILED,
+            // 失败：本机权限、证书与 DNS 类错误不是 key 问题，换 key 无济于事（fix-android-tunnel-auth-key）。
+            "tsnet: route ip+net: netlinkrib: permission denied" to TunnelStateMachine.State.FAILED,
+            "x509: certificate has expired or is not yet valid" to TunnelStateMachine.State.FAILED,
+            "dial tcp: lookup controlplane.tailscale.com: no such host" to TunnelStateMachine.State.FAILED,
+            "open /data/user/0/x/files/tstunnel/derpmap.json: not found" to TunnelStateMachine.State.FAILED,
+            // 需要 key：节点在 tailnet 侧不存在。
+            "register request: node not found" to TunnelStateMachine.State.NEEDS_KEY,
             "" to TunnelStateMachine.State.FAILED,
         )
         for ((idx, case) in cases.withIndex()) {
