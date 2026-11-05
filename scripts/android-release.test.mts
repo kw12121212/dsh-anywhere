@@ -3,6 +3,11 @@
 import { describe, expect, it } from 'vitest'
 import { assetExists, certificatesMatch, apkArtifactName, main, preflight } from './android-release.mts'
 import type { Runner } from './android-release.mts'
+import { readPackageVersion } from './package-version.mts'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
 const OK = { status: 0, stdout: '', stderr: '' }
 
@@ -110,9 +115,10 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
   }
 
   it('同名资产已存在且无 --overwrite 时拒绝（不出现 upload）', () => {
+    // 资产名按当前版本派生，避免升版后与 package.json 脱节误走后续构建。
     const r = fakeRunner([
       ...goodGit,
-      { match: (c) => c === 'gh' && c !== undefined, result: { status: 0, stdout: '{"assets":[{"name":"DSH-Anywhere-1.0.1.apk"}]}', stderr: '' } },
+      { match: (c) => c === 'gh' && c !== undefined, result: { status: 0, stdout: `{"assets":[{"name":"${apkArtifactName(readPackageVersion(join(repoRoot, 'package.json')))}"}]}`, stderr: '' } },
     ])
     const { exits } = withExitStubbed(() => {
       expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties' }, () => true)).toThrow(/exit/)
