@@ -1,0 +1,11 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-api-spike
+  milestone: dsbot-native-chat
+status: planned
+summary: 用真实 dsh 验证原生调用 DS-Bot API 的可行路径，盘点网页端各功能走 /api/bot 还是 dsh 会话接口，产出 dsbot-api 技术标准与脱敏测试夹具
+details: 在 WSL 内以纯 JVM 原型（复用 core 的 Socks5Dialer/TailnetRouting/DialProbe）对本机 dsh-url 输出的 tailscale 地址（不打印、不入库）验证：带 token 地址建立 dsh-auth cookie、携带 cookie 与受信 Host 调用 POST /api/bot 的 state（含 since/live 增量返回 unchanged）、chat、send，订阅 GET /api/bot/feed 并收到 hello/revision/live/message/stream 事件，以及 401/403 的触发条件。确认远端 DS-Bot 与 dsh 版本的读取方式（候选：update-check 的当前版本字段），以及在 Android 上从 WebView CookieManager 读出已有 dsh-auth cookie（HttpOnly）以便升级迁移是否可行。对照 ds-bot 0.3.2 的 client.js 与 channel.js，逐项列出网页端功能使用的端点，标出不经 /api/bot 的部分（带附件发送、图片地址、斜杠命令、会话状态绑定等）在 dsh 0.2.2-rc.1 中对应的接口与鉴权方式，给出附件路径结论（回答里程碑 attachment-path 问题，结论写入 dsbot-api 技术标准与里程碑 intake 问题）。产出：经 strict-tech-edit 新建 dsbot-api 技术标准（端点清单、事件格式、增量同步、鉴权与 Host 要求、版本来源与基准、降级规则），以及从真实响应脱敏得到的 JSON 夹具（state、state unchanged、chat 条目、feed 事件流、错误响应），放在 core 测试资源下供后续 JUnit 使用；夹具中不得含 token、cookie、密钥与私人对话内容。本变更不改 :app 行为。
+depends_on: []

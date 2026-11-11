@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-bot-chat
+  milestone: dsbot-native-chat
+status: planned
+summary: 私聊：聊天条目原生渲染（Markdown、代码、工具调用、图片）、更早记录分页、流式回复、发送文字、停止与恢复工作、分段与运行统计、Bot 间消息记录与文件查看
+details: chat/earlier 端点取聊天条目并按 DS-Bot 网页端语义渲染：用户与 Bot 消息、Markdown（标题、列表、表格、链接交给系统浏览器、代码块可复制）、工具调用折叠卡、checkpoint 与分段边界不可见（与网页端一致只显示一条连续聊天）、消息中的图片可点开查看；feed 的 stream 事件逐字追加正在写的回复，message 事件追加新条目。底部输入框发送文字（send），Enter 行为遵循团队偏好；停止 Bot 当前工作（abandon-work/stop-member-work）、恢复中断工作（resume）、新开分段与打开旧分段（bot-new-part/bot-open-part）、运行统计（run-stats）；查看 Bot 之间的消息记录（exchange/exchange-text）与消息中引用的文件文本（file-text）。长聊天虚拟化渲染保持流畅，切回前台补齐期间的消息。
+depends_on:
+  - dsbot-team-home

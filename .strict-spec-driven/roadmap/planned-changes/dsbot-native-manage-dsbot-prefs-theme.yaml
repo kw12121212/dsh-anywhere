@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-prefs-theme
+  milestone: dsbot-native-manage
+status: planned
+summary: 团队偏好与外观：主题、强调色、消息布局、头像动画等级、Enter 键行为与新 Bot 默认模型，App 按偏好渲染
+details: 设置页 General 部分经 set-prefs 读写团队偏好：主题（浅色、深色、跟随系统）、强调色、消息布局（气泡或平铺）、头像动画等级（安静、普通、活泼）、Enter 键发送或换行、新 Bot 默认模型。网页端的消息宽度滑杆在手机上不显示，App 写偏好时原样保留服务端已存的宽度值。App 的 Compose 主题、聊天布局与头像动画按偏好渲染，偏好变化经 feed 同步到 App 与网页端；在 android-dsbot 规格中写明宽度设置不在手机上提供。
+depends_on:
+  - dsbot-team-home

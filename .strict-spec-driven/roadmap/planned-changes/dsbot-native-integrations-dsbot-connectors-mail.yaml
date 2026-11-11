@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-connectors-mail
+  milestone: dsbot-native-integrations
+status: planned
+summary: 连接器与邮箱：连接、断开、重试、登录码与客户端配置，导入扫描，以及邮箱账号、规则与待发邮件确认
+details: Settings → Connectors 原生页：connector-connect/disconnect/retry/cancel/request-cancel、connector-sign-in-code（显示设备登录码与可复制链接，在手机或电脑浏览器完成授权）、connector-client/set/add/remove、connector-import-scan/import；邮箱 mail-account-add/remove、mail-rule-set、mail-sign-in-code、mail-send-answer（确认或拒绝 Bot 待发邮件）。需要 OAuth 回调到电脑本机的流程若手机无法完成，界面明确提示在电脑上完成，验收时逐个记录。凭据输入不回显、不入日志。
+depends_on:
+  - dsbot-native-shell

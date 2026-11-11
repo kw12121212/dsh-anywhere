@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-interactive-cards
+  milestone: dsbot-native-chat
+status: planned
+summary: 聊天中的交互卡片：审批、ask_user 提问、show_view 卡片（含表单、公式与沙箱 HTML）、密钥请求卡、学习问答与 Bot 浏览器交接卡，作答结果与网页端同步
+details: 按 DS-Bot 网页端的选项与语义原生实现：审批卡（approval-answer）、ask_user 提问（answer-question、dismiss-question）、show_view 卡片的文本、指标、表格、图表、带本地公式的输入、进度、选择、确认与短表单（view-reply、dismiss-view），沙箱 HTML 卡片只在禁用网络、禁止导航与本地接口的隔离视图中显示；密钥请求卡（secret-set/secret-allow/secret-cancel）输入框不回显、值不进日志与诊断上报；学习问答（learning-answer）；Bot 浏览器交接卡的完成与跳过（browser-give-back 带 done/skip，callId 过期时显示服务端的 bot/stale 原因）。手机不充当 Bot 浏览器宿主，不调用 browser-wait/browser-result。Bot 内容视为不可信：core 中做卡片格式校验、嵌套深度与大小上限，超限或未知类型降级为只读文本，并以 JUnit 覆盖。团队页「需要你」与卡片状态一致，已处理后两端同步消失。
+depends_on:
+  - dsbot-bot-chat

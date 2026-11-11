@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-im-bridges
+  milestone: dsbot-native-integrations
+status: planned
+summary: IM 接入：新增、修改、删除 IM 通道，配对与解除配对、指定聊天、重试，以及在手机上完成登录流程
+details: Settings 中 IM 原生页：im-add/update/remove、im-pair/unpair、im-chat、im-retry；im-login-start/im-login-wait 的登录流程在手机上显示二维码（供另一台设备扫描）或可复制链接，并显示等待与结果状态。支持的平台以 DS-Bot 0.3.2 的 im-platforms 为准，凭据不回显、不入日志。
+depends_on:
+  - dsbot-native-shell

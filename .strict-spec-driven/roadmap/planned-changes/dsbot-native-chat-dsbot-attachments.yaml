@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-attachments
+  milestone: dsbot-native-chat
+status: planned
+summary: 随消息发送图片与文件附件（相册、相机、文件选择器），并在私聊与群聊中查看收到的图片与附件
+details: 按 dsbot-api-spike 确定的接口实现附件上传与带附件发送（DS-Bot send 只收文本，预计需经 dsh 自身会话接口）；手机端从系统相册、相机与文件选择器选取，发送前可预览与移除，显示上传进度与失败原因，大图按 dsh 限制处理；对不能读图的模型由 DS-Bot 服务端的视觉模型转写，App 不做处理。聊天中的图片与文件附件可查看、保存到手机或交给其他 App 打开。附件内容只走与 API 相同的分流路径，不写入日志。若 spike 结论为原生无法稳定实现，需回到路线图调整而不是改用 WebView。
+depends_on:
+  - dsbot-bot-chat

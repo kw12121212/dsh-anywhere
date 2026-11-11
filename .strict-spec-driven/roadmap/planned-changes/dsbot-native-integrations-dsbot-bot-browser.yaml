@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-bot-browser
+  milestone: dsbot-native-integrations
+status: planned
+summary: Bot 浏览器控制：显示各 Bot 浏览器的持有状态，接管、交还与停止；dsh Web 宿主上显示不可用
+details: 在 Bot 详情页与 Settings → Browser 显示浏览器持有状态（Bot 使用中、等待用户交接、用户已接管、已停止）；browser-takeover 接管、browser-give-back 交还（面板交还不带 outcome）、browser-stop 停止 Bot 工作并转为用户持有。服务端返回 bot/browser-off 时显示「此宿主未启用 Bot 浏览器」而非报错。手机不调用 browser-wait/browser-result、不显示画面（见里程碑 bot-browser-mobile 问题）。
+depends_on:
+  - dsbot-interactive-cards

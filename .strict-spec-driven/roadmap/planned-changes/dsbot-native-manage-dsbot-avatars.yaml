@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-avatars
+  milestone: dsbot-native-manage
+status: planned
+summary: 头像库：浏览可复用头像、从手机相册或相机导入照片、删除，并设给 Bot
+details: avatar-library 列出头像库；avatar-import 把手机上选取并裁剪为方形的图片（按服务端大小与格式限制压缩）以 data URL 导入；avatar-delete 删除（二次确认，正在使用时显示服务端结果）。在 Bot 外观设置中可从头像库选择。头像图片只经 API 传输，不写入日志。
+depends_on:
+  - dsbot-bot-manage

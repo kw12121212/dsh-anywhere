@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-sidebar-sections
+  milestone: dsbot-native-manage
+status: planned
+summary: 团队页侧栏分组：新建、重命名、排序、删除分组，以及把 Bot 与群移入分组
+details: 实现 section-save（新建、重命名、成员归入）、section-order（拖动排序）、section-delete（二次确认，组内条目回到默认位置）。手机上通过长按条目或分组标题进入编辑模式，拖动排序；结果与网页端侧栏一致并经 feed 同步。
+depends_on:
+  - dsbot-team-home

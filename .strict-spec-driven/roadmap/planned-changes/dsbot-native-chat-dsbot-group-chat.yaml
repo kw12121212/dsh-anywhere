@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-group-chat
+  milestone: dsbot-native-chat
+status: planned
+summary: 群聊：成员归属的群消息、群进度、@ 成员选择、引用另一个聊天、停止群工作、群目标查看与控制
+details: 群聊页显示带成员头像与名称的消息流（成员 [PASS] 不显示，与网页端一致）、管理员与回复模式、群公告；room-progress 显示成员工作进度；输入 @ 弹出成员列表插入提及，同一消息 @ 多个成员并行开工；「+ → 引用一个聊天」把另一个 Bot 的聊天作为上下文附上；停止群内全部或单个成员的工作（stop-room-work/stop-member-work）；群目标（Goal）按阶段显示任务与证据，支持确认草稿与控制推进（goal-draft/goal-control）。流式回复与新消息经 feed 实时更新，并与私聊共用条目渲染组件。
+depends_on:
+  - dsbot-bot-chat

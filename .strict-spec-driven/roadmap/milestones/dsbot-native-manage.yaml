@@ -1,0 +1,43 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  dsbot-native-manage:
+    title: 原生 DS-Bot：Bot、群与团队管理
+order: 700
+goal: 在 Android 原生 DS-Bot 界面中完成 Bot 团队的全部日常管理：新建、编辑、复制与删除 Bot，设置 Main Bot、模型、思考强度、权限预设与私有标记；管理群聊、成员与侧栏分组；为 Bot 与群选择工作文件夹；管理头像库、记忆与成员 Agent；调整团队外观与偏好。功能与 DS-Bot 网页端对应设置一致，布局适合手机。
+scope:
+  in:
+    - Bot 管理：create-bot、update-bot、duplicate-bot、delete-bot、set-main、private-release、set-flags；名称、角色、指令、模型、思考强度、权限预设、外观
+    - 群聊管理：create-room、update-room、delete-room；成员、管理员、回复模式、公告、统一权限预设；侧栏分组 section-save、section-order、section-delete
+    - 工作文件夹：folders、folder-list、team-workspace，以文件夹列表浏览替代电脑上的系统选文件夹对话框
+    - 头像库（avatar-library、avatar-import 从手机相册导入、avatar-delete）、记忆（memory-view、memory-ask、memory-pin、memory-forget、memory-move、memory-layer、memory-history、memory-restore、memory-tidy-undo）、成员 Agent（add-agent、agent-session、agent-adopt、agent-archive、agent-rename、remove-agent）、团队偏好（set-prefs）
+  out:
+    - 模型服务商、密钥设置页、连接器、能力、日程、用量、IM、本地 Agent、Bot 浏览器、更新与诊断（dsbot-native-integrations 里程碑）
+    - 生物识别解锁、推送通知；在手机本地存储团队数据
+done_criteria:
+  - 在 App 中新建一个 Bot 并设置名称、角色、指令、模型、思考强度与权限预设后，网页端立即显示相同设置；复制、删除、设为 Main Bot、标记私有在两端一致
+  - 在 App 中新建群聊、增删成员、设管理员与回复模式、改公告后，网页端一致；侧栏分组的新建、排序与删除在两端一致
+  - 为 Bot 与群从文件夹列表选择工作文件夹并保存，被拒绝的位置（dsh 数据目录等）显示服务端给出的原因；需要审批的设置走聊天中的审批卡
+  - 从手机相册导入头像并设给 Bot；查看、提问、置顶、遗忘与恢复某个 Bot 的记忆，结果与网页端一致
+  - 修改主题、强调色、消息布局与头像动画等级后，App 与网页端均按新偏好显示；完整回归命令通过
+intake_questions:
+  - id: folder-picker
+    question: 手机上如何替代电脑本机的系统选文件夹对话框？
+    context: 网页端 folder-pick 在电脑上弹出系统对话框，手机无法操作电脑桌面。
+    impact: 决定 dsbot-folders 的交互。
+    recommendation: 已确认（2026-11-11，沿用上游手机端设计）：用 folder-list 在手机上逐级浏览电脑上的文件夹并选择，不调用 folder-pick。
+planned_changes: {}
+dependencies:
+  - dsbot-native-chat 里程碑完成：API 客户端、原生外壳、团队页与聊天页可用
+  - 用户 dsh 服务启用 ds-bot 插件；验收用本机 dsh-url 输出的 tailscale 地址
+risks:
+  - 设置项与端点参数随 DS-Bot 版本变化较快；以 DS-Bot 0.3.2 网页端为准，未知字段降级为只读显示
+  - 删除 Bot、删除群、遗忘记忆等不可逆操作须在手机上二次确认，误触成本高
+  - 部分设置（文件夹移出团队工作区、把 Bot 加入在外部文件夹工作的群）会触发 Bot 侧审批而非立即生效，界面需正确表达待审批状态
+status: proposed
+notes:
+  - 功能对等基准：ds-bot 0.3.2 client.js 中的 Bot 设置、群设置、详情面板与 Settings 的 General/Bots/Group chats 页；手机端布局参考上游 docs/plans/2026-10-24-mobile-app.md 的页面清单
+  - 端点参数与校验以 dsbot-api 技术标准（由 dsbot-api-spike 建立）与 channel.js 为准
+details: 界面形态：Bot 与群的详情与设置在手机上为全屏页或底部抽屉，分节表单；列表选择器（模型、思考强度、权限预设、文件夹）用全屏选择页；破坏性操作统一二次确认。所有写操作经 dsbot-api-client 发出，不自动重试，失败时显示服务端原因；成功后依赖 feed 的 revision 事件刷新状态而非本地乐观修改。参数构造与校验等纯逻辑放 core 以 JUnit 覆盖；设备验收对照网页端截图逐项核对。

@@ -23,3 +23,15 @@ milestones:
     title: Android App（内嵌 Tailscale）
     path: roadmap/milestones/android-app.yaml
     status: complete
+  dsbot-native-chat:
+    title: 原生 DS-Bot：连接、团队与对话
+    path: roadmap/milestones/dsbot-native-chat.yaml
+    status: proposed
+  dsbot-native-manage:
+    title: 原生 DS-Bot：Bot、群与团队管理
+    path: roadmap/milestones/dsbot-native-manage.yaml
+    status: proposed
+  dsbot-native-integrations:
+    title: 原生 DS-Bot：模型、集成与系统设置
+    path: roadmap/milestones/dsbot-native-integrations.yaml
+    status: proposed

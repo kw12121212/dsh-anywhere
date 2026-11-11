@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-system-about
+  milestone: dsbot-native-integrations
+status: planned
+summary: 关于 DS Bot、更新与诊断：显示远端 DS-Bot 与 dsh 版本及基准版本，检查与安装 DS-Bot/dsh 更新，查看与清理 DS-Bot 诊断日志
+details: Settings → About DS Bot 原生页：远端 DS-Bot 与 dsh 版本、App 基准版本与是否一致、repo-stars 等链接信息；update-check 检查、update-install 与 dsh-update-install 在电脑上安装更新（执行前提示服务可能重启、会话可能失效与版本将偏离基准，二次确认），重连后刷新版本提示；Settings → Feedback/诊断：diagnostics、diagnostics-log 查看、diagnostics-clear 清理（二次确认）。不改变本 App 自身的自更新与诊断上报行为。
+depends_on:
+  - dsbot-native-shell

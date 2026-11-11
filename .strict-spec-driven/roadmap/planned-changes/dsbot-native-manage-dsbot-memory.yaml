@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-memory
+  milestone: dsbot-native-manage
+status: planned
+summary: 记忆：查看每个 Bot、群与团队的记忆，提问、置顶、移动层级、遗忘、查看历史与恢复，撤销整理
+details: 记忆页按 Bot 记忆、群记忆、团队共享记忆分组（memory-view、memory-layer），支持对记忆提问（memory-ask，按 dsbot-api 技术标准记录的返回方式显示，请求进行中可见加载状态）、置顶（memory-pin）、在层级间移动（memory-move）、遗忘（memory-forget，二次确认）、查看历史与恢复（memory-history、memory-restore）、撤销自动整理（memory-tidy-undo）。私有 Bot 的记忆遵循服务端的可见性规则，App 只显示服务端返回的内容。长文本条目可展开与复制。
+depends_on:
+  - dsbot-bot-manage

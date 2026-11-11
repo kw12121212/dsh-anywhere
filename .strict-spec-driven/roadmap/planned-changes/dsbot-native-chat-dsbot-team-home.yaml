@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-team-home
+  milestone: dsbot-native-chat
+status: planned
+summary: 团队页：Bot 与群列表、分组与置顶、未读与工作状态、搜索，以及汇总所有待处理审批、提问与卡片的「需要你」
+details: 依据 state 端点渲染 Bot 与群聊列表：头像（角色形象与颜色或自定义照片）、名称、角色、Main Bot 标记、私有标记、正在工作/空闲状态、最后一条消息摘要、未读数，按侧栏分组与置顶排序，与网页端顺序一致；支持按名称与内容搜索；顶部「需要你」入口汇总所有等待用户的审批、ask_user 提问与交互卡片，点击跳到对应聊天位置。feed 的 revision/live 事件触发刷新，下拉刷新手动补齐。空团队时显示 DS-Bot 首次创建的 Chief。手机布局：单列列表、长名称截断、头像与状态点适配深浅色主题。
+depends_on:
+  - dsbot-native-shell

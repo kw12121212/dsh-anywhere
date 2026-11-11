@@ -1,0 +1,71 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  dsbot-native-chat:
+    title: 原生 DS-Bot：连接、团队与对话
+order: 600
+goal: Android App 不再加载 harness 网页，改为直接调用远程 dsh 上 DS-Bot 插件的 API（POST /api/bot 与 /api/bot/feed 实时推送，必要时辅以 dsh 自身会话接口），经内嵌 Tailscale 或手机网络连到用户配置的 harness，以适合手机的原生布局呈现 DS-Bot 团队：团队列表与「需要你」、私聊、群聊、审批/提问/卡片、附件与 Side chat，日常与 Bot 团队对话的功能与 DS-Bot 网页端一致。
+scope:
+  in:
+    - core 纯 JVM 模块：DS-Bot API 请求封装与错误码映射、SSE feed 解析与断线重连后按 revision 补齐、团队状态与聊天条目的解码模型、远端 DS-Bot/dsh 版本比对
+    - App 侧原生 HTTP 传输：经现有 tailnet 分流路径（tailnet 目标走内嵌节点 SOCKS5，其余直连）携带 dsh-auth 会话 cookie 访问 harness；带 token 地址只用一次建立会话、cookie 存 App 私有存储跨重启保留、401 显示重新认证页
+    - 主页面替换为原生 Compose 界面并移除 WebView 承载的 harness 网页主页面及其专用的本地代理桥、网页导航范围与网页内返回键行为；设置、Tailscale、会话认证、自更新、诊断上报保留
+    - 团队页（Bot 与群列表、分组、置顶、未读、工作状态、搜索、「需要你」汇总）、私聊（历史分页、流式回复、工具调用、图片、停止工作、分段）、群聊（成员归属、进度、@ 提及、停止群工作、群目标）、审批/提问/show_view 卡片/密钥卡/学习问答、发送图片与文件附件、Side chat 与 btw 卡片
+    - 以 DS-Bot 0.3.2 与 dsh 0.2.2-rc.1 为基准；连接时读取远端版本，不一致时显示提示但尽力可用，未知端点与字段降级显示
+  out:
+    - Bot、群、记忆、模型服务商、密钥设置、连接器、能力、日程、用量、IM、本地 Agent、Bot 浏览器、更新与诊断等管理与设置页面（由 dsbot-native-manage 与 dsbot-native-integrations 里程碑承接）
+    - 推送通知、常驻前台服务与后台保活；高权限操作前的生物识别解锁
+    - DS-Bot 以外的 dsh 插件与 dsh 通用会话界面；在手机上运行 Agent 或缓存团队数据与聊天记录
+    - 中转服务器、扫码配对与端到端加密通道（连接由 Tailscale 与 dsh 会话 cookie 承担）；iOS；桌面端任何对外行为变化
+done_criteria:
+  - 模拟器与真机上，用本机 dsh-url 输出的 tailscale 地址（不打印、不入库）完成首次设置后，App 打开即显示原生团队页而非网页，列出与 DS-Bot 网页端一致的 Bot、群、分组与未读；强杀重开后无需重新输入即恢复且仍处于登录状态
+  - 在私聊中发送文字后，Bot 回复以流式逐字出现，结束后与网页端同一会话显示的内容一致；上滑加载更早记录；停止 Bot 工作后网页端同时显示已停止
+  - 群聊中 @ 某成员发消息，被 @ 成员开始工作并在群里回复，进度与成员归属正确显示；停止群工作生效
+  - Bot 发起的审批、ask_user 提问、show_view 卡片与密钥卡在 App 中可作答，网页端同步显示已处理；密钥值不回显、不进日志与诊断上报
+  - 从手机相册选图片或文件随消息发送，Bot 能读取；聊天中的图片可查看；Side chat 可新建、提问与关闭
+  - 断网或 dsh 重启时页面显示已断开，恢复后自动重连并补齐期间的消息与状态，写操作不自动重试、不重复发送；会话失效显示本地重新认证页，粘贴新地址后无需重启 App 即恢复
+  - 远端 DS-Bot 或 dsh 版本与基准不一致时显示版本提示，App 仍可进入；完整回归命令通过，core 新增逻辑有 JUnit 覆盖（含 SSE 解析、重连补齐、错误码映射与版本比对）
+  - 已在 WebView 版本中登录的手机覆盖升级到原生版本后，无需重新粘贴带 token 地址即进入原生团队页；迁移不到会话时显示本地重新认证页而不是空白或报错
+intake_questions:
+  - id: webview-fate
+    question: 原生 DS-Bot 界面上线后 WebView 承载的 harness 网页主页面如何处理？
+    context: 现有 App 主页面以 WebView 加载 harness 网页并配套本地代理桥与导航范围。
+    impact: 决定主界面结构、需删除的代码与 android-app 主规格的改写范围。
+    recommendation: 已确认（2026-11-11）：原生替换，WebView 主页面移除；Tailscale、设置、会话认证、自更新、诊断上报保留。
+  - id: parity-boundary
+    question: 功能对等的边界是什么？是否包含上游手机端设计中的推送通知与生物识别解锁？
+    context: 上游 DS-Bot 手机端设计包含经中转服务器的端到端加密推送与高权限操作前解锁；本项目无中转服务器，现有 App 不常驻后台。
+    impact: 决定是否需要前台服务、推送通道与生物识别依赖。
+    recommendation: 已确认（2026-11-11）：对等基准为 DS-Bot 网页端功能；推送与生物识别都不做。只能在电脑本机做的操作换做法：系统选文件夹换成文件夹列表浏览（dsbot-folders）；Bot 浏览器手机不当宿主、不显示画面，只显示持有状态并接管、交还、停止，dsh Web 宿主上显示未启用（dsbot-bot-browser）。
+  - id: version-compat
+    question: App 如何应对 DS-Bot 与 dsh 版本变化？
+    context: /api/bot 是插件内部接口，不保证跨版本稳定；当前最新为 DS-Bot 0.3.2、dsh 0.2.2-rc.1。
+    impact: 决定版本检测与降级策略。
+    recommendation: 已确认（2026-11-11）：锁定 DS-Bot 0.3.2 与 dsh 0.2.2-rc.1 为已测基准；连接时读取远端版本，不一致时提示但尽力可用，未知端点与字段降级显示。
+  - id: attachment-path
+    question: 带附件的发送与图片显示走哪条接口？
+    context: DS-Bot send 端点只收文本，网页端附件经 dsh 会话接口发送。
+    impact: 决定 dsbot-attachments 的实现路径与是否需要接入 dsh JSON-RPC 通道。
+    recommendation: 待 dsbot-api-spike 用真实 dsh 验证后确定；优先选择不需要长期 WebSocket 会话的 HTTP 方式。
+planned_changes: {}
+dependencies:
+  - android-app 里程碑已完成：内嵌 Tailscale、tailnet 分流、会话认证、设置页与自更新作为基础
+  - 用户 dsh 服务（systemd 用户服务 dsh-web）启用 ds-bot 插件，经 tailscale serve 暴露，trusted-host 包含 tailnet 地址；验收用本机 dsh-url 脚本输出的 tailscale 地址
+  - Windows 宿主 GAMEPC 上的 Android 模拟器（经 interop 驱动）与用户真机用于验收
+risks:
+  - /api/bot 是 DS-Bot 前后端之间的内部接口、未承诺稳定：129 个端点与条目结构可能随 DS-Bot 升级变化，需版本提示、降级显示与基于真实响应的测试夹具
+  - DS-Bot 的 send 端点只接受纯文本：网页端带附件的发送、图片地址与部分斜杠命令走 dsh 自身会话接口（JSON-RPC 通道），原生调用方式需 spike 验证
+  - dsh 共享 /api 通道按 Host 白名单与 Origin 校验拦截请求：原生请求须带与 trusted-host 一致的 Host 且不带跨站标记；cookie 绑定 host:port 并为 SameSite=Strict、HttpOnly，需在原生 cookie 存储中正确处理
+  - show_view 卡片含沙箱 HTML 与本地公式：Bot 内容不可信，手机端须按固定格式渲染并设深度与大小上限，HTML 卡片只能在禁网、隔离的视图中显示
+  - 移除 WebView 主页面会使 android-app 主规格中网页承载、导航范围、本地代理桥 407 与明文策略相关条目失效，需在同一变更中改写规格与回归测试，避免残留
+  - 从现有 WebView 版本升级时，已建立的 dsh-auth 会话 cookie 存在 WebView CookieManager 中，原生 cookie 存储为空；不迁移则所有已安装用户升级后都要重新粘贴带 token 地址
+status: proposed
+notes:
+  - 参考上游 Fei2411/DS-Bot：ds-bot/src/host/channel.js（端点分发）、feed.js（SSE 事件 hello/revision/live/message/stream）、constants.js（ROUTE=/api/bot）、client.js（网页端渲染与交互，作为功能对等基准）、docs/plans/2026-10-24-mobile-app.md（手机端功能清单与替代做法）、app/（自绘界面的桌面应用）；本机安装位置 ~/.dsh/profiles/web/node_modules/ds-bot
+  - dsh 鉴权参考 @deepseek-ai/dsh-client-connection：浏览器 cookie（dsh-auth-*）认证后获得 owner Peer，可调用插件注册的 Fetch 路由；无 Origin 的原生请求只要 Host 受信即通过
+  - 规格归属建议：新建 android-dsbot 主规格描述原生 DS-Bot 界面的可观察行为，android-app 主规格保留设置、隧道、会话、更新与诊断，并删去网页承载相关条目
+  - DS-Bot state 端点支持增量：请求带 since=当前 revision 与 live 键时，无变化返回 unchanged，可用于 feed 的 revision/live 事件后的轻量补齐；update-check 返回 DS-Bot 更新信息并附 dsh 字段，远端版本的确切来源由 dsbot-api-spike 确认
+  - 受影响的现有标准与规格：tech/webview-isolation 与 tech/android-client 中 WebView 相关约定、specs/android-app 中网页承载条目、specs/diagnostics-reporting 中“主页面显示本地错误页时产生错误态报告”的要求（原生主页面的连接错误页继续适用）
+details: 技术形态：Kotlin + Jetpack Compose Material3，单 Activity，导航为 团队页 → 私聊/群聊 → 详情面板，手机竖屏单栏布局（列表、聊天与面板分屏而不是桌面三栏）。网络：core 中已有 Socks5Dialer、TailnetRouting、DialProbe 构成原生 HTTP 路径，扩展为通用请求与 SSE 长连接；请求携带 dsh-auth cookie 与正确 Host。同步：进入前台时取 state，订阅 feed，revision/live 事件触发重新取 state，message/stream 事件增量更新当前聊天；App 进入后台即断开 feed，回到前台补齐。纯逻辑（解码、SSE、重连状态机、错误映射、版本比对、卡片格式校验与上限）放 core 并以 JUnit 覆盖，测试夹具取自真实 dsh 响应并脱敏；:app 构建与设备验收不进回归命令，由各变更验收任务覆盖。

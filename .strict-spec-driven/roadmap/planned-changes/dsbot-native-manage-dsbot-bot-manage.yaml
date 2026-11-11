@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-bot-manage
+  milestone: dsbot-native-manage
+status: planned
+summary: Bot 详情与设置：新建、编辑、复制、删除 Bot，设 Main Bot、私有与标记，配置模型、思考强度、权限预设与外观
+details: Bot 详情页（从私聊页头像或菜单进入）展示名称、角色、指令、模型、思考强度、权限预设、私有状态、Main Bot 标记、工作文件夹与成员 Agent 入口。实现 create-bot、update-bot、duplicate-bot、delete-bot（二次确认）、set-main、private-release（释放保留的私有 Bot 文件夹）、set-flags（置顶等）；模型、思考强度来自 models/efforts/thinking 端点的选项；外观选择 20 个角色形象与 12 种颜色或头像库照片（头像库在 dsbot-avatars）。权限预设只有用户能改，与网页端一致。保存后以 feed 刷新确认，两端设置一致。
+depends_on:
+  - dsbot-bot-chat

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-capabilities
+  milestone: dsbot-native-integrations
+status: planned
+summary: 能力：查看 MCP、技能与能力包，保存、批准、删除，以及为单个 Bot 开关能力
+details: Settings → Capabilities 原生页：列出能力及其来源与状态；capability-save 新增或编辑（技能内容等长文本用全屏编辑器）、capability-approve 批准 Bot 提议的能力、capability-delete 删除（二次确认）；Bot 详情页中 bot-capability 为单个 Bot 开关能力。结果与网页端一致并经 feed 同步。
+depends_on:
+  - dsbot-bot-manage

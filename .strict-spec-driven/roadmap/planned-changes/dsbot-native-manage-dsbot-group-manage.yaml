@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-group-manage
+  milestone: dsbot-native-manage
+status: planned
+summary: 群聊设置：新建、编辑与删除群，管理成员、管理员、回复模式、公告与统一权限预设
+details: 群设置页实现 create-room、update-room（名称、公告、成员增删、管理员、回复模式 admin-first 与 all-members、统一权限预设「对所有成员相同」）、delete-room（二次确认）。成员选择用可搜索的 Bot 列表；把 Bot 加入在外部文件夹工作的群等需审批的情况，界面显示等待审批并在聊天中出现审批卡。角色权限（用户、Main Bot、群管理员、成员）由服务端执行，App 只按服务端结果显示。
+depends_on:
+  - dsbot-group-chat
+  - dsbot-bot-manage

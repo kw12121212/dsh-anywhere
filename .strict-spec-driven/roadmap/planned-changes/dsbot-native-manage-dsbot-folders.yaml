@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-folders
+  milestone: dsbot-native-manage
+status: planned
+summary: 工作文件夹：为 Bot 与群在手机上逐级浏览电脑文件夹并选择，查看与设置团队工作区
+details: 用 folders 与 folder-list 在手机上浏览电脑上的目录树（面包屑、返回上级），选定后经 update-bot/update-room 保存；team-workspace 查看与修改团队工作区位置。服务端拒绝的位置（dsh 数据目录、团队数据等）显示其原因；需要审批的变更提示等待聊天中的审批卡。不调用 folder-pick。变更后聊天在新文件夹的新分段继续，与网页端一致。
+depends_on:
+  - dsbot-bot-manage

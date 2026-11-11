@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-member-agents
+  milestone: dsbot-native-manage
+status: planned
+summary: 成员 Agent：为 Bot 添加、查看、接管、归档、重命名与移除成员 Agent
+details: 在 Bot 详情页的成员 Agent 列表中实现 add-agent、agent-session（查看该 Agent 会话内容，复用聊天条目渲染）、agent-adopt、agent-archive、agent-rename、remove-agent（二次确认），状态与网页端详情面板一致并经 feed 更新。
+depends_on:
+  - dsbot-bot-manage

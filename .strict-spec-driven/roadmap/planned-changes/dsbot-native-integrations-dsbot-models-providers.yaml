@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-models-providers
+  milestone: dsbot-native-integrations
+status: planned
+summary: 模型与服务商设置：查看可用模型与思考强度，新增与删除服务商、填写 key、拉取并选择服务商模型
+details: Settings → Models 原生页：models/efforts/thinking 展示可用模型、思考强度与 thinking 选项；providers 列出服务商；provider-add 新增、provider-key 填写或更新 key（不回显，值不进日志与诊断上报、不留剪贴板）、provider-models 拉取并勾选模型、provider-remove 删除（二次确认）。选定模型可在 Bot 设置中使用。错误按服务端原因显示（key 无效、网络失败等）。
+depends_on:
+  - dsbot-bot-manage

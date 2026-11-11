@@ -1,0 +1,47 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  dsbot-native-integrations:
+    title: 原生 DS-Bot：模型、集成与系统设置
+order: 800
+goal: 在 Android 原生 DS-Bot 界面中完成 DS-Bot Settings 的其余页面：模型与服务商、密钥、连接器与邮箱、能力、日程、用量、IM 接入、本地 Agent、Bot 浏览器控制、更新与诊断及关于 DS Bot，功能与网页端一致，布局适合手机，至此原生界面覆盖 DS-Bot 网页端的全部功能。
+scope:
+  in:
+    - 模型与服务商：models、efforts、thinking、providers、provider-key、provider-add、provider-models、provider-remove
+    - 密钥设置页：secret-update、secret-delete 与列表；连接器与邮箱：connector-*、mail-account-add/remove、mail-rule-set、mail-send-answer、mail-sign-in-code
+    - 能力：capability-save/delete/approve、bot-capability；日程：schedules、schedule-create、schedule-delete；用量：usage（时间范围、按 Bot、按模型）
+    - IM 接入：im-add/update/remove/pair/unpair/chat/retry/login-start/login-wait；本地 Agent：local-agents、local-agent-models/refresh/add/update/remove
+    - Bot 浏览器控制：browser-takeover、browser-give-back、browser-stop 与持有状态显示（手机不当浏览器宿主）；系统：update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear、关于 DS Bot 版本信息
+  out:
+    - 生物识别解锁、推送通知
+    - 在手机上显示或操作 Bot 浏览器画面（浏览器在电脑上的 DS-Bot 桌面应用或 dsh Desktop 内运行，/api/bot 不提供画面流）；手机充当浏览器宿主
+    - 本 App（DSH Anywhere）自身的更新与诊断上报（已由 android-app 与 diagnostics-reporting 承担，不变）
+done_criteria:
+  - 在 App 中新增模型服务商、填 key（不回显）、选模型并设为某 Bot 的模型后，Bot 用新模型回复，网页端设置一致；删除服务商在两端一致
+  - 在密钥设置页新增、更新、删除密钥，值不回显、不进日志与诊断上报；连接器连接、断开、重试与登录码流程在 App 中可完成
+  - 新建一个日程任务后按时触发，App 可查看与删除；能力的保存、批准与删除和网页端一致；用量页按时间范围、Bot 与模型显示的 token 数与网页端一致
+  - IM 接入的新增与扫码或登录码登录流程可在手机上完成（二维码显示在手机上供另一台设备扫描或给出可复制链接）；本地 Agent 的增删改与刷新和网页端一致
+  - dsh Web 宿主上 Bot 浏览器显示为不可用（bot/browser-off）而非报错；有桌面宿主时接管、交还、停止在两端一致
+  - 关于页显示远端 DS-Bot 与 dsh 版本及基准版本；检查更新与安装更新（服务端执行）可从 App 触发；诊断日志可查看与清理；完整回归命令通过
+intake_questions:
+  - id: bot-browser-mobile
+    question: 手机上 Bot 浏览器做到什么程度？
+    context: Bot 浏览器是 dsh Desktop 与 DS-Bot 桌面应用里每个 Bot 独立的浏览器面板，dsh Web 没有该功能；/api/bot 只有持有状态与接管、交还、停止，没有画面流；用户当前宿主是 dsh Web。
+    impact: 决定 dsbot-bot-browser 范围。
+    recommendation: 已确认（2026-11-11）：只做持有状态显示与接管、交还、停止；dsh Web 宿主上（bot/browser-off）显示「此宿主未启用 Bot 浏览器」；不显示画面、手机不当浏览器宿主。
+planned_changes: {}
+dependencies:
+  - dsbot-native-chat 里程碑完成；dsbot-native-manage 中的 Bot 设置页完成（模型与能力的按 Bot 设置挂在其上）
+  - 用户 dsh 服务启用 ds-bot 插件；验收用本机 dsh-url 输出的 tailscale 地址；IM、邮箱与连接器验收需用户提供的测试账号
+risks:
+  - IM、邮箱与连接器的登录流程依赖第三方（OAuth 回调、二维码、登录码），部分回调可能只能在电脑浏览器完成，需在对应变更中逐个确认手机上的替代做法
+  - update-install 与 dsh-update-install 会在电脑上升级 DS-Bot 或 dsh 并可能重启服务，使会话失效或版本偏离基准；App 需提示后果并在重连后显示版本提示
+  - 服务商 key、密钥、邮箱密码等敏感值经 App 输入：必须不回显、不入日志与诊断上报、不在剪贴板残留，且只在用户配置的 harness 连接上发送
+  - DS-Bot 设置页更新频繁，端点参数可能变化；以 DS-Bot 0.3.2 为准并对未知字段降级
+status: proposed
+notes:
+  - Bot 浏览器：browser-wait/browser-result 是浏览器宿主（桌面应用窗口）轮询并执行浏览器请求的接口，手机不调用；dsh Web 宿主上 rt.browserChannel 不存在，相关端点返回 bot/browser-off
+  - 功能对等基准：ds-bot 0.3.2 client.js 中 Settings 的 Models、Connectors、Capabilities、Browser、Scheduled tasks、Usage、Secrets、Feedback、About DS Bot 页；上游 docs/plans 下 connectors、im、local-agents、memory-layers 等设计说明
+details: 界面形态：设置页为分组列表，进入各子页为全屏页；敏感输入使用不回显的密码输入框并禁止截屏预览中显示；图表（用量）用原生绘制，支持时间范围选择。所有写操作经 dsbot-api-client 发出、不自动重试，成功后以 feed 刷新。参数构造、敏感字段脱敏与用量聚合显示等纯逻辑放 core 以 JUnit 覆盖；第三方登录流程的设备验收逐项记录证据。

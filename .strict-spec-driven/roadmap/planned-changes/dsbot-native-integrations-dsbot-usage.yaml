@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-usage
+  milestone: dsbot-native-integrations
+status: planned
+summary: 用量：按时间范围（24 小时至 12 个月或日历选日）、按 Bot、按模型查看 token 用量，含 Bot 与模型的详情页
+details: Settings → Usage 原生页：usage 端点数据以原生图表展示，时间范围切换与日历选日，按 Bot 与按模型的排行与详情页；只显示 token 数不显示费用，与网页端一致。聚合与时间桶的显示换算放 core 以 JUnit 覆盖，对照网页端同一范围的数字验收。
+depends_on:
+  - dsbot-native-shell
