@@ -6,6 +6,11 @@
 /coverage
 /test-results
 /playwright-report
+# build/ 仅入库 electron-builder 图标，开发过程临时脚本与中间产物不入库
+/build/*
+!/build/appicon.png
+!/build/icon.icns
+!/build/icon.ico
 
 # Android 工程（android/，构建产物与本地配置不入库）
 # ** 覆盖根与各独立构建（core 是 includeBuild，自带 .gradle/ 与 .kotlin/）
