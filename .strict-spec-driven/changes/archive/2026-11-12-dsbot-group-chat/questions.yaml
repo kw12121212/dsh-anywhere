@@ -1,0 +1,56 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-group-chat
+open: []
+resolved:
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: Roadmap planned-change dsbot-group-chat details 与已归档变更（bot-chat/attachments）提供范围证据；答案按 roadmap 细节整理
+    answer: 按 planned change details 字面：群聊页=消息流+成员标识+公告+进度；交互=@提及/引用/停止/目标控制；渲染复用私聊组件。room-progress 属群聊页信息（非独立页）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: Roadmap planned-change dsbot-group-chat details 与已归档变更（bot-chat/attachments）提供范围证据；答案按 roadmap 细节整理
+    answer: 不变：私聊链路（chat/send/earlier/附件）、feed 事件处理、连接状态机、团队页结构、桌面端、群管理页（后续里程碑）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: Roadmap planned-change dsbot-group-chat details 与已归档变更（bot-chat/attachments）提供范围证据；答案按 roadmap 细节整理
+    answer: 模拟器上进入群聊看到成员消息流与公告，@提及发送后多成员并行工作并有流式回复，停止群/成员生效，目标阶段/确认/推进可操作且 room-progress 更新；真实 dsh 群一轮对话与网页端一致
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: Roadmap planned-change dsbot-group-chat details 与已归档变更（bot-chat/attachments）提供范围证据；答案按 roadmap 细节整理
+    answer: 当前原生端只能私聊：群聊无入口，成员消息/提及/引用/群工作控制/群目标均不可用，用户必须回网页端操作群
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this, and what if we defer?
+    context: Roadmap planned-change dsbot-group-chat details 与已归档变更（bot-chat/attachments）提供范围证据；答案按 roadmap 细节整理
+    answer: 私聊与附件已归档闭环；群聊是网页端群协作的主交互面，里程碑 dsbot-native-chat 的核心剩余件；推迟则原生端对多 Bot 协作不可用
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: q-room-endpoints
+    question: 群聊各端点（chat 对 room 的形态、群消息提交与提及/引用字段、stop-room-work、room-progress、goal-draft/goal-control）在 0.3.5 的确切 wire 形态是什么？
+    context: FINDINGS 只登记了 chat {botId}（私聊）与 stop-member-work 一笔带过；群聊相关端点未实测（lesson spike-bd9881：spike 期结论必须按目标版本实测复验）。影响：core 构造与 mock 保真度（core-room-models/mock-group 任务）——probe-endpoints 任务先在真实服务器用最小探针收敛（无效 roomId 探路由、错误信息逐层校准 payload），实测结果回填 tech/dsbot-api；不阻塞 spec 范围（群聊行为需求不变）。推荐：实现前先探针，mock 按实测形态构造
+    answer: probe-endpoints 任务先在真实 0.3.5 服务器用最小探针实测（无效 roomId 探路由、按错误信息逐层收敛 payload），mock 按实测形态构造并显式拒绝非法输入；实测结果回填 tech/dsbot-api endpoint-inventory-source。不阻塞范围（群聊行为需求已定），探针在实施第一步执行
+    status: resolved
+    kind: requirement
+    answered_by: assumption
+  - id: q-degrade-records
+    question: 管理员/回复模式标识与引用聊天的结构化提交字段、goal 阶段/任务/证据视图的数据源在 0.3.5 的形态是什么？
+    context: 设备验收探针已实证 room-chat/prompt/stop/progress/goal 端点外壳与 room-chat 条目（botId/name/color），但：room-chat 条目未见管理员/回复模式字段、引用聊天无独立提交字段（prompt content 仅 text/file/image 三形态）、真实群无 goal 实例故阶段视图数据源未取证。影响：delta statement 已按降级弱化（引用=文本标注近似、管理员标识暂缺、goal 视图=应答可读降级），实现一致；三项待后续版本实测补齐并回填 tech/dsbot-api。推荐：后续变更在有 goal 的群与含引用的消息上取证后补结构化实现
+    answer: 三项（管理员标识/引用结构化字段/goal 阶段视图数据源）在 0.3.5 均无实样本可取证；delta statement 已按降级弱化与实现一致；后续变更在具备条件时实测补齐并回填 tech 登记
+    status: resolved
+    kind: requirement
+    answered_by: assumption

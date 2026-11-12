@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-api-spike
+approach:
+  - 在 android/core 内增加独立的 spike source set（不进 main/test 产物）与 JavaExec 运行任务：原型 main 复用 core 的 Socks5Dialer、TailnetRouting、DialProbe 拨号原语与手写 HTTP/1.1 请求风格，经环境变量接收 dsh-url 输出的带 token tailscale 地址与可选 SOCKS5 代理端点（默认 WSL 本机 tailscale 直连路径），在 WSL（JDK 21+）对真实 dsh-web 逐项验证并把原始响应 dump 到仓库外临时目录；随后从 dump 提炼脱敏夹具与结论，以 delta-tech 落成 dsbot-api 技术标准、夹具入 core 测试资源并配加载校验测试，附件路径结论经 roadmap CLI 回写里程碑 intake 问题。原型代码与验证结论文档作为取证现场保留在 spike source set 内。
+decisions:
+  spike-harness-in-core:
+    decision: 原型放 android/core 的独立 spike source set，经 Gradle JavaExec 任务运行，不进 main/test 产物
+    rationale: core 是被复用拨号类的唯一构建载体，独立 source set 让原型直接编译引用 core 源码又零生产影响；WSL 内只需 JDK 17+ 与 Gradle wrapper 即可运行，与 core 回归命令环境一致
+  secrets-env-gated:
+    decision: token 地址、认证材料与代理凭据一律经环境变量传入，日志、dump 与夹具中不出现 token、cookie、密钥与私人对话内容
+    rationale: dsh-url 输出本身含 token，打印或入库即泄露；这是 config 凭据规则与 security-secrets 标准的硬约束，spike 不得例外
+  fixture-from-real-responses:
+    decision: 夹具从真实响应脱敏而来：token/cookie/密钥字段替换为占位值，对话内容换合成文本，结构与字段形态原样保留
+    rationale: 后续 SSE 解析、增量同步与错误码映射的 JUnit 需要真实结构而非编造样本；仓库同时不得含私人内容，脱敏必须可复核
+  no-delta-spec:
+    decision: 本变更为纯技术 spike：只产出验证结论、dsbot-api 技术标准与脱敏测试夹具，不改变任何用户可观察行为，specs/ 有意留空
+    rationale: planned change 明确不改 :app 行为；主规格描述可观察行为，spike 不新增或修改任何主规格需求，接口契约以技术标准（delta-tech dsbot-api）承载
+alternatives:
+  - option: 在 :app 里做 instrumented spike 直接从 Android 模拟器对真实 dsh 验证
+    reason: ':app 构建与设备验收不进回归命令，结论未定时先动 App 工程会把 spike 废料带进生产代码路径，且迭代速度远慢于 JVM 原型'
+  - option: 用 Go tstunnel 的 spike 模式扩展验证 DS-Bot API
+    reason: Go spike 面向 ACL 连通性取证，无法复用 core 的 Kotlin 拨号与解码类，结论对 Android 生产路径的代表性不足
+risks:
+  - WSL 内 tailscale 或 dsh-web 状态变化导致 live 验证不可复现：dump 与脱敏夹具保留为可复核证据，live 命令记录在任务 command 中可重跑
+  - DS-Bot 内部接口随上游升级漂移：标准中锁定 DS-Bot 0.3.2 与 dsh 0.2.2-rc.1 为已测基准并登记版本来源与降级规则，供后续变更检测

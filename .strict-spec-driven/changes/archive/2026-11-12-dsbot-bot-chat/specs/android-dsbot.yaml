@@ -1,0 +1,45 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    bot-chat-render:
+      strength: MUST
+      statement: 私聊页按 DS-Bot 网页端语义渲染聊天条目：用户与 Bot 消息气泡、Markdown（标题、列表、表格、链接交给系统浏览器、代码块可复制）、工具调用以折叠卡显示、分段边界与 checkpoint 不产生可见分隔（显示为一条连续聊天）、消息中的图片引用可显示并点开查看；未知语法或字段降级为纯文本不崩溃；向上滚动加载更早记录（分页），历史不足时提示已到最早。
+      scenarios:
+        'renders-like-web:':
+          - GIVEN: 已连接团队的某 Bot 聊天含 Markdown 回复与工具调用
+          - WHEN: 从团队页进入该 Bot 私聊
+          - THEN: 气泡、Markdown、工具折叠卡与网页端同源数据呈现一致，分段边界不可见，无空白或崩溃
+        'earlier-paging:':
+          - GIVEN: 聊天条目多于一页
+          - WHEN: 滚动到列表顶部
+          - THEN: 加载更早记录并保持滚动位置，全部加载完显示已到最早
+    bot-chat-send-stream:
+      strength: MUST
+      statement: 私聊底部输入框发送文字消息（send 端点，纯文本；Enter 行为遵循团队偏好）：Bot 回复经 feed 的 stream 事件逐字追加到正在写的气泡，stream end 后由 message 事件定格为完整条目，与 DS-Bot 网页端同一会话显示的内容一致；发送失败显示可读错误且不自动重试（不重复发送）。
+      scenarios:
+        'send-streams-reply:':
+          - GIVEN: 私聊页已打开、Bot 空闲
+          - WHEN: 输入文字并发送
+          - THEN: 用户消息立即出现，Bot 回复逐字流式追加并定格，内容与网页端一致
+        'send-fail-no-retry:':
+          - GIVEN: 网络中断
+          - WHEN: 发送消息失败
+          - THEN: 显示失败提示，不自动重试、不重复发送
+    bot-chat-work-control:
+      strength: MUST
+      statement: 私聊页提供停止 Bot 当前工作的入口（stop/abandon 语义）：停止后网页端同步显示已停止；中断的 Bot 可从私聊页恢复（resume）；提供新开分段（bot-new-part）与打开旧分段（bot-open-part）入口，分段切换后聊天显示对应分段条目；聊天页可查看运行统计（run-stats）与 Bot 之间的消息记录（exchange）。消息引用的文件文本（file-text）与记录文本详情（exchange-text）在 0.3.x 未观测到实样本，移交附件里程碑（dsbot-attachments）实测后接入。
+      scenarios:
+        'stop-works:':
+          - GIVEN: Bot 正在工作中
+          - WHEN: 点击停止
+          - THEN: Bot 停止工作（网页端同步显示已停止），聊天不再追加
+        'parts-switch:':
+          - GIVEN: Bot 有多个分段
+          - WHEN: 打开旧分段
+          - THEN: 聊天切换显示该分段条目，可切回当前分段
+  MODIFIED: {}
+  REMOVED: {}

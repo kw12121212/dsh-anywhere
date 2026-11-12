@@ -1,15 +1,8 @@
 package work.keepwriting.core
 
-import java.io.File
 import java.net.InetAddress
 import java.net.Socket
-import java.nio.file.Files
-import java.security.KeyStore
-import javax.net.ssl.KeyManagerFactory
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocketFactory
-import javax.net.ssl.TrustManagerFactory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,7 +25,7 @@ class DialProbeHttpsTest {
     @Test
     fun httpsResponseMeansReachable() {
         val port = startTlsServer("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-        val result = DialProbe.probe("https://dsh.test:$port/", dialTo(port), tls = trustingFactory)
+        val result = DialProbe.probe("https://dsh.test:$port/", dialTo(port), tls = TestTls.trustingFactory)
         assertEquals(DialProbe.ProbeResult.Reachable, result)
     }
 
@@ -43,13 +36,13 @@ class DialProbeHttpsTest {
             "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\n" +
                 "Content-Length: ${marker.length}\r\nConnection: close\r\n\r\n$marker",
         )
-        assertTrue(DialProbe.isSessionExpired("https://dsh.test:$port/", "session=s1", dialTo(port), tls = trustingFactory))
+        assertTrue(DialProbe.isSessionExpired("https://dsh.test:$port/", "session=s1", dialTo(port), tls = TestTls.trustingFactory))
     }
 
     @Test
     fun httpsOtherResponseIsNotSessionExpired() {
         val port = startTlsServer("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
-        assertFalse(DialProbe.isSessionExpired("https://dsh.test:$port/", "session=s1", dialTo(port), tls = trustingFactory))
+        assertFalse(DialProbe.isSessionExpired("https://dsh.test:$port/", "session=s1", dialTo(port), tls = TestTls.trustingFactory))
     }
 
     @Test
@@ -64,7 +57,7 @@ class DialProbeHttpsTest {
     fun hostnameMismatchIsTlsFailure() {
         // 证书只签给 dsh.test：主机名校验保持开启，其他主机名判为安全连接失败。
         val port = startTlsServer("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-        val result = DialProbe.probe("https://other.test:$port/", dialTo(port), tls = trustingFactory)
+        val result = DialProbe.probe("https://other.test:$port/", dialTo(port), tls = TestTls.trustingFactory)
         assertEquals(DialProbe.ProbeResult.Unreachable(ProbeFailure.Reason.TLS), result)
     }
 
@@ -72,8 +65,8 @@ class DialProbeHttpsTest {
 
     /** 起 TLS 服务端：读到请求头结束即写回固定响应。 */
     private fun startTlsServer(rawResponse: String): Int {
-        val ss = serverContext.serverSocketFactory
-            .createServerSocket(0, 8, InetAddress.getByName("127.0.0.1")) as SSLServerSocket
+        val ss = TestTls.serverContext().serverSocketFactory
+            .createServerSocket(0, 8, InetAddress.getByName("127.0.0.1")) as javax.net.ssl.SSLServerSocket
         cleanups += { ss.close() }
         Thread {
             while (!ss.isClosed) {
@@ -102,37 +95,4 @@ class DialProbeHttpsTest {
         return ss.localPort
     }
 
-    companion object {
-        private const val PASSWORD = "changeit"
-
-        /** 测试时生成一次的自签证书（SAN=dsh.test）所在 keystore。 */
-        private val keyStore: KeyStore by lazy {
-            val dir = Files.createTempDirectory("dialprobe-tls").toFile()
-            val file = File(dir, "server.p12")
-            val keytool = File(System.getProperty("java.home"), "bin/keytool").path
-            val process = ProcessBuilder(
-                keytool, "-genkeypair", "-alias", "server", "-keyalg", "RSA", "-keysize", "2048",
-                "-validity", "2", "-dname", "CN=dsh.test", "-ext", "san=dns:dsh.test",
-                "-storetype", "PKCS12", "-keystore", file.path,
-                "-storepass", PASSWORD, "-keypass", PASSWORD,
-            ).redirectErrorStream(true).start()
-            val output = process.inputStream.readBytes().toString(Charsets.UTF_8)
-            check(process.waitFor() == 0) { "keytool 生成测试证书失败：$output" }
-            KeyStore.getInstance("PKCS12").apply { file.inputStream().use { load(it, PASSWORD.toCharArray()) } }
-                .also { dir.deleteRecursively() }
-        }
-
-        private val serverContext: SSLContext by lazy {
-            val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
-            kmf.init(keyStore, PASSWORD.toCharArray())
-            SSLContext.getInstance("TLS").apply { init(kmf.keyManagers, null, null) }
-        }
-
-        /** 只信任测试证书的客户端 TLS 工厂（注入 DialProbe）。 */
-        private val trustingFactory: SSLSocketFactory by lazy {
-            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-            tmf.init(keyStore)
-            SSLContext.getInstance("TLS").apply { init(null, tmf.trustManagers, null) }.socketFactory
-        }
-    }
 }

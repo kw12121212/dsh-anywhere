@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="updates" path="updates/" />
+    <!-- dsbot-attachments：相机拍照输出（cache/camera/，拍完读字节即抛弃）
+         与文件附件查看的临时文件（cache/attachments/，交系统查看器后系统回收） -->
+    <cache-path name="camera" path="camera/" />
+    <cache-path name="attachments" path="attachments/" />
 </paths>

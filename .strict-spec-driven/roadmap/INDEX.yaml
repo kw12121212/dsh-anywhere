@@ -26,7 +26,7 @@ milestones:
   dsbot-native-chat:
     title: 原生 DS-Bot：连接、团队与对话
     path: roadmap/milestones/dsbot-native-chat.yaml
-    status: proposed
+    status: complete
   dsbot-native-manage:
     title: 原生 DS-Bot：Bot、群与团队管理
     path: roadmap/milestones/dsbot-native-manage.yaml

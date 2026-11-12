@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-team-home
+open: []
+resolved:
+  - id: context-from-prior-changes
+    question: 团队页的数据与界面前提依据是什么？
+    context: 影响列表组装、未读/状态来源、搜索与需要你汇总的实现与规格。
+    answer: dsbot-api-spike/api-client/native-shell 均已归档：DsbotModels 解码 state（可降级、raw 保留）；DsbotConnection 状态机与 feed 生命周期在役（revision/live 触发刷新、retry 重取全量）；android-dsbot 主规格已有导航/连接状态/版本提示基线；tech/dsbot-api 的 endpoint-inventory 登记 state 视图字段（bots/rooms/sections/questions/views/work.approvals 等）；0.3.2 client.js 的侧栏排序与需要你语义为对等基准。
+    status: resolved
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change 字面范围：团队页列表/搜索/需要你/刷新/空团队引导；聊天跳转本变更内只到对应会话骨架页（bot-chat/group-chat 后续填充内容）；分组与 Bot 管理不在本变更
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不做聊天页内容、审批/卡片作答界面、分组管理、Bot/群管理、头像上传；连接/会话/设置等既有行为不变
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 团队页渲染真实团队（分组/置顶/状态/摘要/未读与网页端一致）；搜索即时过滤；需要你汇总计数与跳转；下拉刷新重取；空团队引导；core 组装器夹具驱动测试通过
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 团队页仍是骨架占位，用户无法在原生界面看到团队构成与待处理事项
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: native-shell 已归档（骨架与数据管道就绪），roadmap-recommend 当前唯一合格候选；bot-chat/group-chat 依赖团队页入口
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

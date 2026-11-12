@@ -1,0 +1,45 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-side-chat
+sections:
+  Implementation:
+    probe-side-endpoints:
+      text: 真实 0.3.5 探针复验 side 端点族（side-new/side-ask/side-cancel/side-close/btw-delete）payload 形态与 side 会话的消息流/流式事件归属；回填 tech/dsbot-api
+      status: complete
+      command: curl/python 探针 + tech-edit
+    core-side-models:
+      text: core SideChat 构造/解码：side-new/ask/cancel/close payload、side 消息页解码（复用 ChatItem）、btw 条目渲染模型与 btw-delete 构造；JUnit 覆盖
+      status: complete
+      command: android/gradlew -p android/core test
+    mock-side:
+      text: mock side 端点族与 btw 夹具：side-new 建会话、side-ask 应答经 feed 推流式/消息（side sessionId 归属）、side-cancel/close、btw 条目与 btw-delete；非法输入显式拒绝
+      status: complete
+    app-side-panel:
+      text: App Side chat 面板：私聊页「侧问」入口打开底部抽屉——SideChatController（独立 rows/流式/会话）、side-ask 附主聊天尾部快照、side-cancel/close、不接受附件、后台返回保留进行中状态；btw 卡渲染与删除
+      status: complete
+  Testing:
+    core-junit-side:
+      text: core JUnit：side 构造/解码/btw 渲染测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实 tailnet 验收：mock 侧问全链路（打开/提问/流式/取消/关闭/后台恢复）、btw 卡删除；真实 dsh 一轮侧问与网页端一致
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-side-chat 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-side-chat
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec 与实现一致；ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-side-chat
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-side

@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-side-chat
   milestone: dsbot-native-chat
-status: planned
+status: complete
 summary: Side chat 与 btw 卡片：基于 Bot 聊天快照的旁路提问（不运行工具、不打断工作），以及 btw 卡片的查看与删除
 details: 在私聊页的更多菜单与 /side 输入中打开 Side chat 面板（手机上为底部抽屉或独立页）：side-new 新建、side-ask 提问（可附带最近消息）、side-cancel 取消正在回答的问题、side-close 关闭；Side chat 不接受附件，与网页端提示一致。btw 卡片在聊天中显示并可删除（btw-delete）。Side chat 的回答流式显示，切换聊天或进入后台后再回来仍可看到进行中的回答状态。
 depends_on:

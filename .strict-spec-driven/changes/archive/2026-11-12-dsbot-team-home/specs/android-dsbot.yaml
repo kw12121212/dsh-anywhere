@@ -1,0 +1,41 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    team-page-list:
+      strength: MUST
+      statement: 团队页显示 Bot 与群聊的分组列表：每个条目显示名称（超长截断）与工作/空闲状态点；工作状态、最后一条消息摘要、未读数、置顶与分组、Main/私有标记等字段在远端返回时显示、缺失时降级为不显示（条目仍在列表中，排序按名称稳定排序，头像以颜色圈呈现）；feed 的团队变更事件自动刷新列表，工具栏刷新入口手动重取全量；空团队显示首次创建引导（创建第一个 Chief）。
+      scenarios:
+        'list-matches-web:':
+          - GIVEN: 已连接团队，远端 state 含分组与条目字段
+          - WHEN: 进入团队页
+          - THEN: 分组结构与条目按返回数据渲染，返回了摘要/未读/置顶字段时对应显示，字段缺失时条目仍显示且不崩溃，与 DS-Bot 网页端同源数据的呈现一致
+        'empty-team-guide:':
+          - GIVEN: 远端团队为全新空团队
+          - WHEN: 进入团队页
+          - THEN: 显示首次创建引导（创建第一个 Chief），不显示空白列表
+        'fields-missing-degrade:':
+          - GIVEN: 远端 state 的条目缺 preview/unread/pinned 字段
+          - WHEN: 团队页渲染
+          - THEN: 条目正常显示名称与状态，摘要/未读/置顶不显示，无错误或空白页
+    team-search:
+      strength: MUST
+      statement: 团队页提供搜索框：按名称与最近消息内容过滤当前列表条目，输入即时过滤、清空恢复完整列表；搜索不改变分组与排序结构，无结果时显示无匹配提示。
+      scenarios:
+        'search-filters:':
+          - GIVEN: 团队页显示完整列表
+          - WHEN: 输入某 Bot 名称片段
+          - THEN: 列表只剩名称或摘要含该片段的条目，结构仍按分组；清空输入后恢复完整列表
+    needs-you-summary:
+      strength: MUST
+      statement: 团队页顶部提供「需要你」入口并显示待处理计数：汇总所有等待用户处理的审批、ask_user 提问与交互卡片；打开汇总页逐项显示类型与摘要（有来源会话时显示会话标识），点击条目跳转到对应聊天位置；无待处理时入口不显示计数。
+      scenarios:
+        'needs-you-jump:':
+          - GIVEN: 一个 Bot 发起了 ask_user 提问
+          - WHEN: 打开需要你汇总并点击该条目
+          - THEN: 进入该 Bot 的聊天页（本变更内为对应会话的骨架跳转），返回后计数减少
+  MODIFIED: {}
+  REMOVED: {}

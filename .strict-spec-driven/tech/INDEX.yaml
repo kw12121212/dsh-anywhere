@@ -19,6 +19,10 @@ standards:
     title: 诊断上报端点与被动能力
     category: security
     path: .strict-spec-driven/tech/diagnostics.yaml
+  - id: dsbot-api
+    title: DS-Bot API 接入契约
+    category: architecture
+    path: .strict-spec-driven/tech/dsbot-api.yaml
   - id: electron-layout-security
     title: Electron 工程布局与安全基线
     category: security

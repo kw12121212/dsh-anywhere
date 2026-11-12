@@ -80,160 +80,64 @@ requirements:
         - THEN: 内容为 http://127.0.0.1:13080/，不含 abc123
   main-page-load:
     strength: MUST
-    statement: App 已保存有效 harness URL 时，主页面先显示本地「正在连接」提示并对干净地址做可达性检查：地址返回任何 HTTP 响应（包括 401、5xx 与重定向；https 地址在 TLS 握手与证书、主机名校验通过后收到的响应同样计入）视为可达并在 WebView 中打开干净地址；DNS 解析失败、连接被拒绝、超时（默认 10 秒）或 TLS 错误时显示本地错误页；两种结果都不显示首次设置页。
+    statement: App 已保存有效 harness URL 时启动进入原生骨架（android-dsbot）的连接流程：先对干净地址做可达性检查（任何 HTTP 响应视为可达；https 经 TLS 握手与主机名校验），可达且会话有效时进入团队页骨架并启动 feed 同步；DNS 失败、拒绝、超时或 TLS 错误显示本地连接错误页；两种结果都不显示首次设置页。
     scenarios:
-      reachable-opens-webview:
-        - GIVEN: 已保存 http://10.0.2.2:13080/，该地址有服务响应
-        - WHEN: 启动 App（或刷新）
-        - THEN: 主页面先显示「正在连接」，随后 WebView 打开 http://10.0.2.2:13080/ 显示远程内容
-      http-errors-reachable:
-        - GIVEN: 已保存地址返回 502
+      'reachable-native-shell:':
+        - GIVEN: 已保存地址可达且会话有效
         - WHEN: 启动 App
-        - THEN: WebView 打开该地址显示远程返回的内容，不显示本地错误页
-      connecting-then-error:
-        - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
+        - THEN: 进入团队页骨架，连接状态条从连接中转为在线，不显示任何网页
+      'unreachable-native-error:':
+        - GIVEN: 已保存地址不可达
         - WHEN: 启动 App
-        - THEN: 主页面先显示「正在连接」，随后显示本地错误页，不显示首次设置页
-      https-reachable-opens-webview:
-        - GIVEN: 已保存 https://example.com/，该地址以受信任证书提供 https 服务
-        - WHEN: 启动 App（或刷新）
-        - THEN: 主页面先显示「正在连接」，随后 WebView 打开 https://example.com/ 显示远程内容，不显示本地错误页
-      https-untrusted-cert-error:
-        - GIVEN: 已保存的 https 地址使用不受信任的证书
-        - WHEN: 启动 App
-        - THEN: 主页面显示本地错误页，说明为安全连接失败
+        - THEN: 显示本地连接错误页，不显示首次设置页
   load-error-page:
     strength: MUST
-    statement: harness 地址不可达时主页面显示本地错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），并提供「重试」与「修改地址」按钮；点击「重试」重新检查地址，恢复可达时打开 harness 页面，仍不可达时继续显示错误页；点击「修改地址」进入设置页并回显当前地址。
+    statement: harness 地址不可达时原生骨架显示本地错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），并提供「重试」与「修改地址」按钮；点击「重试」重新检查地址，恢复可达时回到团队页骨架；点击「修改地址」进入设置页并回显当前地址。
     scenarios:
-      refused-error-page:
-        - GIVEN: 已保存 http://10.0.2.2:13080/，该端口没有服务
-        - WHEN: 启动 App
-        - THEN: 错误页包含 http://10.0.2.2:13080/ 与连接被拒绝的说明，以及「重试」「修改地址」按钮
-      retry-recovers:
-        - GIVEN: 错误页显示后该地址的服务已启动
-        - WHEN: 点击「重试」
-        - THEN: 主页面打开 harness 页面
-      change-address-opens-settings:
-        - GIVEN: 主页面显示错误页
-        - WHEN: 点击「修改地址」
-        - THEN: 进入设置页，输入框回显当前已保存地址
+      'native-error-buttons:':
+        - GIVEN: 已保存地址不可达，错误页显示
+        - WHEN: 点击修改地址
+        - THEN: 进入设置页且回显当前地址；保存新地址后回到原生骨架重新连接
   refresh-entry:
     strength: MUST
-    statement: 主页面提供刷新入口：点击后重新检查并打开已保存的干净 harness 地址——可达时重新加载 harness 页面，不可达时显示本地错误页；没有有效配置时回到首次设置页。
+    statement: 原生骨架提供刷新入口：点击后重新检查已保存的干净 harness 地址并重连——可达且会话有效时回到团队页骨架（重新取全量 state），不可达时显示本地错误页；没有有效配置时回到首次设置页。
     scenarios:
-      refresh-reloads:
-        - GIVEN: 主页面正在显示已保存的 harness 页面
+      'native-refresh-reconnects:':
+        - GIVEN: 团队页骨架在线显示
         - WHEN: 点击刷新入口
-        - THEN: 主页面重新加载已保存地址并显示该页面
-      refresh-unreachable:
-        - GIVEN: 已保存地址的服务已停止
-        - WHEN: 点击刷新入口
-        - THEN: 主页面显示本地错误页
-      refresh-without-config:
-        - GIVEN: 配置文件已损坏，主页面显示 harness 页面
-        - WHEN: 点击刷新入口
-        - THEN: 回到首次设置页并提示已有配置无效
-  back-key-web-history:
-    strength: MUST
-    statement: 系统返回键在 WebView 网页历史可后退时先在网页历史中后退，没有可后退的网页历史时退出 App；设置页的返回行为不受影响。
-    scenarios:
-      back-navigates-web:
-        - GIVEN: WebView 显示 harness 站内第二个页面（历史中已有前一页）
-        - WHEN: 按系统返回键
-        - THEN: WebView 后退到前一页面，App 不退出
-      back-exits:
-        - GIVEN: WebView 没有可后退的网页历史
-        - WHEN: 按系统返回键
-        - THEN: App 退出（系统默认行为）
-  navigation-scope-android:
-    strength: MUST
-    statement: WebView 中与已保存 harness 地址同源（协议、主机、端口均相同）的链接，包括 target=_blank 与 window.open 请求，都在 WebView 内打开；指向非同源 http/https 地址的链接与 window.open 请求交给系统默认浏览器打开，WebView 仍停留在当前页面；其他协议（如 file:、javascript:）的打开请求被忽略，不创建任何新窗口。
-    scenarios:
-      same-origin-link-stays:
-        - GIVEN: WebView 显示 harness 页面 http://10.0.2.2:13080/
-        - WHEN: 点击指向 http://10.0.2.2:13080/sessions/1 的链接
-        - THEN: WebView 打开 http://10.0.2.2:13080/sessions/1，系统浏览器没有被打开
-      external-link-to-browser:
-        - GIVEN: WebView 显示 harness 页面 http://10.0.2.2:13080/
-        - WHEN: 点击指向 https://example.org/docs 的链接
-        - THEN: 系统默认浏览器打开该地址，WebView 仍显示原 harness 页面
-      window-open-same-origin:
-        - GIVEN: WebView 显示 harness 页面
-        - WHEN: 页面调用 window.open("/sessions/2")
-        - THEN: WebView 打开同源地址，没有弹出新窗口
-      window-open-external:
-        - GIVEN: WebView 显示 harness 页面
-        - WHEN: 页面调用 window.open("https://example.org/popup")
-        - THEN: 系统浏览器打开该地址，WebView 仍显示原页面，没有新窗口
-      other-protocol-ignored:
-        - GIVEN: WebView 显示 harness 页面
-        - WHEN: 页面请求打开 file:///etc/passwd
-        - THEN: 系统浏览器没有被打开，WebView 不变
+        - THEN: 重新走可达性与会话检查并回到团队页骨架（重新取全量 state），不出现网页
   cleartext-restriction:
     strength: MUST
-    statement: App 只对已保存 harness 源放行明文 http 请求：WebView 中对其他主机的 http 子资源请求被拦截（不发出网络请求），页面其余内容继续加载；App 自身发出的探测请求只针对已保存的干净地址；https 请求不受限制。
+    statement: App 的原生网络请求只对已保存 harness 的源放行明文 http：对其他主机的明文请求不发出（原生请求目标本身限定已保存源）；https 请求不受限制。WebView 承载移除后不再存在网页子资源加载面。
     scenarios:
-      cross-host-http-blocked:
-        - GIVEN: 已保存 http://10.0.2.2:13080/，harness 页面引用 http://other.example.test/pixel.js
-        - WHEN: WebView 加载该页面
-        - THEN: 对 other.example.test 的 http 请求被拦截失败，harness 页面其余内容正常显示
-      harness-http-allowed:
+      'native-http-gated-to-origin:':
         - GIVEN: 已保存 http://10.0.2.2:13080/
-        - WHEN: 加载 harness 页面及其同源子资源
-        - THEN: 全部正常加载，不被拦截
-      https-not-restricted:
-        - GIVEN: 已保存 https://dsh.example.test/
-        - WHEN: 页面引用任意主机的 https 资源
-        - THEN: 请求按正常网络行为发出，不受明文限制影响
-  remote-isolation-android:
-    strength: MUST
-    statement: WebView 中的远程 harness 页面无法调用 App 的任何本地能力：不注册任何 JavascriptInterface、不暴露任何本地服务接口，禁用文件与内容 URL 访问；远程页面的脚本尝试改写配置或调用本地接口全部失败；cookie 与本地存储保存在 App 私有数据目录，不与其他应用共享。
-    scenarios:
-      no-js-interface:
-        - GIVEN: WebView 显示远程 harness 页面
-        - WHEN: 页面脚本枚举 window 上的注入对象并尝试调用任何本地保存接口
-        - THEN: 不存在任何注入对象，调用失败，App 配置文件内容不变，WebView 不被导航到其他地址
-      no-file-access:
-        - GIVEN: WebView 显示远程页面
-        - WHEN: 页面尝试加载 file:// 或 content:// 资源
-        - THEN: 访问被禁用失败
+        - WHEN: 原生客户端请求该源的 /api 端点
+        - THEN: 请求正常发出；对任何其他主机的明文请求不会发生（请求构造即限定已保存源）
   session-establish:
     strength: MUST
-    statement: 在首次设置页、设置页保存带有效 token 的地址后，App 把原始地址（含 token）交给 WebView 只加载一次：dsh 服务签发会话 cookie 并重定向到干净地址后，WebView 停留在干净地址；带 token 地址不残留在 WebView 导航历史、配置文件或日志中；会话建立时机把 cookie 持久化到磁盘（强杀后仍保留）。
+    statement: 在首次设置页、设置页保存带有效 token 的地址后，App 以原生 HTTP 只请求一次带 token 地址建立会话（跟随同源重定向并携带过程中签发的 cookie），成功后把 dsh-auth cookie 持久化到 App 私有存储（强杀后仍保留）并进入原生骨架（不再加载任何网页）；带 token 地址不进入配置文件或日志。原生建立失败（网络错误、终态未取得会话）时按连接失败或会话失效的既有页面分流，不进入主界面。
     scenarios:
-      token-url-redirects-clean:
-        - GIVEN: 已保存配置为空，mock/真实 dsh 服务在 http://10.0.2.2:13080/，用户粘贴 http://10.0.2.2:13080/?token=abc123 并保存
-        - WHEN: 首次设置页点击「开始使用」（或设置页保存）
-        - THEN: WebView 先加载带 token 地址，经服务端重定向后显示干净地址的 harness 页面，配置只存干净地址，导航历史中没有含 abc123 的条目
-      history-cleared:
-        - GIVEN: 会话建立完成，WebView 显示干净地址的 harness 页面
-        - WHEN: 检查 WebView 导航历史
-        - THEN: 历史中不存在任何含 token 查询参数的条目，当前地址为干净地址
+      'establish-enters-native-shell:':
+        - GIVEN: mock dsh 在 http://10.0.2.2:13080/，用户粘贴带 token 地址并保存
+        - WHEN: 首次设置页点击开始使用
+        - THEN: 原生请求一次带 token 地址取得会话 cookie，进入团队页骨架（无网页加载），配置只存干净地址
   session-persist-restart:
     strength: MUST
-    statement: 会话建立后强杀并重启 App：无需重新输入地址，直接显示干净地址的 harness 页面（会话 cookie 已持久化）；只要会话仍有效，重启后不出现首次设置页或重新认证页。
+    statement: 会话建立后强杀并重启 App：无需重新输入地址，直接进入团队页骨架（会话 cookie 已持久化）；只要会话仍有效，重启后不出现首次设置页或重新认证页。
     scenarios:
-      kill-restart-keeps-session:
-        - GIVEN: 用户已通过带 token 地址建立会话，WebView 显示 harness 页面
+      'kill-restart-keeps-session:':
+        - GIVEN: 用户已建立会话并停留在团队页骨架
         - WHEN: 强杀 App 后重新启动
-        - THEN: App 直接显示干净地址的 harness 页面（会话 cookie 生效），不出现首次设置页或重新认证页
+        - THEN: 直接进入团队页骨架，不出现首次设置页或重新认证页
   session-expired-reauth:
     strength: MUST
-    statement: 会话失效时（dsh 对干净地址返回 401 且正文为 dsh 的固定提示文本，http 与 https 地址同样判定），App 先以当前干净地址自动重试一次，仍失效则把主页面切换为本地重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供「打开设置」按钮；提示页不显示 token，也不显示 dsh 返回的 401 原文。在重新认证提示页经设置页粘贴新的带 token 地址并保存后，无需重启 App 即恢复显示 harness 页面。
+    statement: 会话失效时（原生请求对干净地址收到 401，http 与 https 地址同样判定），App 先自动重试一次，仍失效则把主界面切换为本地重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供「打开设置」按钮；提示页不显示 token，也不显示 dsh 返回的 401 原文。在重新认证提示页经设置页粘贴新的带 token 地址并保存后，无需重启 App 即恢复团队页骨架。
     scenarios:
-      expired-shows-reauth:
-        - GIVEN: 已建立会话并显示 harness 页面，之后 dsh 服务重启使会话失效
-        - WHEN: 刷新或重新加载 harness 页面
-        - THEN: App 自动重试一次后显示本地重新认证提示页（含运行 dsh-url 的说明与「打开设置」按钮），不显示 401 原文，不含 token
-      reauth-recovers:
-        - GIVEN: 主页面显示重新认证提示页
-        - WHEN: 点击「打开设置」，粘贴 dsh-url 输出的新带 token 地址并保存
-        - THEN: 设置页关闭，主页面经一次带 token 加载后恢复显示干净地址的 harness 页面，配置只存干净地址
-      https-expired-shows-reauth:
-        - GIVEN: 已保存 https 的 dsh 地址（如 https://<主机>.ts.net:13080/），dsh 对该地址返回 401 与固定提示文本
-        - WHEN: 主页面加载该地址
-        - THEN: App 自动重试一次后显示本地重新认证提示页，而不是停留在 401 页面或显示连接错误页
+      'reauth-recovers-native:':
+        - GIVEN: 主界面显示重新认证提示页
+        - WHEN: 点击打开设置，粘贴新带 token 地址并保存
+        - THEN: 设置页关闭，主界面经一次原生建立后恢复团队页骨架，配置只存干净地址
   tunnel-optional-onboarding:
     strength: MUST
     statement: App 内嵌可选的 Tailscale 隧道（进程内 userspace 节点）：从未配置 auth key 且无已注册节点状态时，隧道完全不启动（不发起登录）；首次设置页的 auth key 输入可留空，留空且地址不在 tailnet 时首次设置、设置页与主页面行为与无隧道时一致；在首次设置页填写 auth key 或在设置页 Tailscale 卡片粘贴 tagged auth key 都会发起连接；卡片未配置时显示未配置状态，可清除 key 与节点状态回到未配置。
@@ -284,52 +188,20 @@ requirements:
         - THEN: 隧道凭持久状态自动重连，卡片先显示连接中随后回到已连接，全程无需输入 key
   proxy-split-routing:
     strength: MUST
-    statement: WebView 的全部网络请求经 App 进程内的本地代理桥按目标分流：tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）经内嵌 Tailscale 节点转发，其他目标经手机网络直连；harness 的流式回答与 WebSocket 经桥正常工作；非 tailnet 的 harness 地址在隧道任何状态下都照常直连，不受隧道影响。
+    statement: App 的全部原生网络请求（探测、会话建立、API、feed 长连接）按目标分流：tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）经内嵌 Tailscale 节点的 SOCKS5 转发，其他目标经手机网络直连；feed 的 SSE 长连接在同一分流路径上持续工作；非 tailnet 的 harness 地址在隧道任何状态下都照常直连，不受隧道影响；不存在本机监听的代理端口。
     scenarios:
-      tailnet-harness-loads:
-        - GIVEN: 已配置 tailnet 上的 harness 地址（如 http://gamepc:13080/），隧道已连接
-        - WHEN: 打开主页面
-        - THEN: WebView 经内嵌节点加载 harness 页面，流式回答持续渲染
-      non-tailnet-unaffected:
-        - GIVEN: 已配置公网/局域网 harness 地址，隧道处于任意状态（含未配置）
-        - WHEN: 打开主页面并使用
-        - THEN: 请求经手机网络直连，行为与无隧道时一致
-  proxy-isolation:
-    strength: MUST
-    statement: 本地代理桥只监听手机本机回环的随机端口并要求本进程随机生成的代理凭据：不带或带错凭据的访问得到 407 且不连接任何目标；手机本机回环目标（127.0.0.0/8、::1、localhost）经桥的访问被拒绝；明文 http 转发只允许已保存 harness 的源，其他主机的明文请求被拒绝（https 的 CONNECT 隧道不受此限）；在役连接数有上限，超限直接关闭；App 进程内同一时刻至多一个代理桥在听，界面重建（深色模式、语言等配置变化）不新增监听端口。
-    scenarios:
-      no-credential-407:
-        - GIVEN: 代理桥在役（端口 P）
-        - WHEN: 同机其他进程（如 adb shell 下 curl）不带凭据访问 127.0.0.1:P
-        - THEN: 得到 407，且桥没有向任何目标发起连接
-      loopback-rejected:
-        - GIVEN: WebView 经桥请求 127.0.0.1:任意端口 或 localhost 目标
-        - WHEN: 请求到达桥
-        - THEN: 请求被拒绝，不拨号
-      cleartext-gated:
-        - GIVEN: 已保存 harness 源 http://gamepc:13080/
-        - WHEN: 经桥请求其他主机的明文 http 地址
-        - THEN: 请求被拒绝；对 harness 源的明文请求正常转发
-      single-bridge-across-recreate:
-        - GIVEN: 隧道已连接，主页面显示 harness 页面，代理桥在役
-        - WHEN: 切换系统深色模式两次（界面重建两次）
-        - THEN: App 进程监听的回环端口数量不变，主页面恢复显示 harness 页面
+      'native-split-dial:':
+        - GIVEN: 已配置 tailnet 上的 harness 地址，隧道已连接
+        - WHEN: App 发起探测、API 请求与 feed 订阅
+        - THEN: 请求全部经内嵌节点发出，feed 持续收到事件；非 tailnet 地址的全部请求经手机网络直连
   tunnel-gated-tailnet-load:
     strength: MUST
-    statement: 配置的 harness 地址为 tailnet 目标时，主页面按隧道状态联动：隧道未配置时显示需要接入 tailnet 的本地说明与「去设置」入口，不加载网页；隧道连接中、需要 key 或失败时显示隧道状态与「重试连接」「去设置」入口，不加载网页；隧道变为已连接后自动加载 harness；连接探测与会话失效探测经与 WebView 相同的分流路径发出（tailnet 目标经节点），保证可达性判定一致。
+    statement: 配置的 harness 地址为 tailnet 目标时，原生骨架按隧道状态联动：隧道未配置时显示需要接入 tailnet 的本地说明与「去设置」入口，不发起连接；隧道连接中、需要 key 或失败时显示隧道状态与「重试连接」「去设置」入口；隧道变为已连接后自动进入连接流程（探测、feed 同步）；全部网络请求（探测、会话、API、feed）经同一分流路径发出（tailnet 目标经内嵌节点 SOCKS5、其余直连）。
     scenarios:
-      unconfigured-tailnet-prompt:
-        - GIVEN: 已配置 http://gamepc:13080/（tailnet 目标），隧道未配置
-        - WHEN: 打开主页面
-        - THEN: 显示需要接入 tailnet 的说明与去设置入口，不出现空白页或连接错误页
-      tunnel-not-ready-waits:
-        - GIVEN: 配置同上，隧道处于连接中/需要 key/失败
-        - WHEN: 打开主页面
-        - THEN: 显示隧道状态与重试连接、去设置入口，不加载网页
-      auto-load-on-connected:
-        - GIVEN: 配置同上，主页面显示隧道等待面板
+      'auto-connect-on-tunnel-up:':
+        - GIVEN: 已配置 tailnet 地址，骨架显示隧道等待面板
         - WHEN: 隧道变为已连接
-        - THEN: 主页面自动探测并加载 harness 页面
+        - THEN: 骨架自动走可达性与会话检查并进入团队页骨架（feed 同步开始）
   update-check-and-verify:
     strength: MUST
     statement: App 在启动后（每个进程至多自动一次）与设置页手动触发时检查公开 GitHub 仓库的最新 Release（匿名、经手机网络）：仅当 Release 含 DSH-Anywhere-<版本>.apk 资产且其 tag 派生的版本号高于本机安装版本时提示更新（无 APK 资产的 Release 视为无新版本）；下载到 App 私有目录支持断点续传：下载中断后重试从已下载处继续，已下载完整但尚未校验的文件不会被重复下载或导致下载失败；下载完成后读取同名 .sha256（每次重新获取）校验：一致才允许安装，不一致或缺失 .sha256 时删除文件、提示失败且不调起安装器；校验通过的更新包在再次检查更新、界面重建与 App 重启后仍保持可安装（直至安装完成）；开始下载新版本前清理旧 APK，安装完成前不删除已校验的文件；更新检查与下载失败（网络、限流）不打扰用户，只在设置页显示原因。
@@ -446,3 +318,23 @@ requirements:
         - GIVEN: 已保存 tailnet 地址，隧道处于失败或需要 key
         - WHEN: 打开主页面
         - THEN: 隧道面板显示检查设置中 Tailscale auth key 与隧道状态的提示，以及「打开设置」与「重试连接」按钮
+  webview-cookie-migration:
+    strength: MUST
+    statement: 从 WebView 版本（会话 cookie 只在 WebView CookieManager 中）覆盖升级到本版本后首次启动：App 用 CookieManager.getCookie 读取该保存源的 dsh-auth cookie 并迁入原生存储，成功后直接进入主页面显示 harness 页面，无需重新粘贴带 token 地址；迁移不到或读出的 cookie 无效时显示本地重新认证页，不显示空白页或报错崩溃，重新粘贴新地址后即恢复。
+    scenarios:
+      'upgrade-migrates-cookie:':
+        - GIVEN: 旧版本 App 已建立 dsh 会话（cookie 在 WebView CookieManager），覆盖安装升级到本版本
+        - WHEN: 首次启动
+        - THEN: App 迁移该源的 dsh-auth cookie 到原生存储并直接进入主页面，无需重新输入地址
+      'migration-miss-shows-reauth:':
+        - GIVEN: 旧版本从未建立会话或 cookie 已失效（CookieManager 无该源的 dsh-auth cookie）
+        - WHEN: 升级后首次启动
+        - THEN: 显示本地重新认证页（含运行 dsh-url 说明与打开设置按钮），不出现空白或崩溃，粘贴新带 token 地址保存后恢复主页面
+  forbidden-host-hint:
+    strength: MUST
+    statement: 原生请求对已保存 harness 源收到 403（Host 与 dsh trusted-host 配置不一致）时，主页面显示本地提示页说明需要在 DSH 主机把该地址加入 trusted-host（dsh web 的 --trusted-host 参数），并提供「打开设置」按钮；提示不显示 token 与 cookie。
+    scenarios:
+      'forbidden-shows-hint:':
+        - GIVEN: 已保存地址的 Host 未列入 dsh 服务的 trusted-host（原生探测返回 403）
+        - WHEN: 启动 App 或刷新
+        - THEN: 主页面显示 trusted-host 配置提示页与「打开设置」按钮，不显示 403 原文

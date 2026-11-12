@@ -22,8 +22,11 @@ class AppGraph private constructor(context: Context) {
     /** 内嵌 tailnet 隧道（可选；android-tstunnel 交付）。 */
     val tunnel = TunnelManager.get(context)
 
-    /** 进程内代理桥（android-proxy-routing）：分流拨号与明文门控锚定当前配置。 */
-    val proxyBridge = ProxyBridge(context.applicationContext, tunnel) { cleanUrl }
+    /** 原生分流拨号（dsbot-native-shell）：tailnet 目标经内嵌节点 SOCKS5、其余直连。 */
+    val nativeDial = NativeDial(tunnel)
+
+    /** 原生会话（dsbot-api-client）：建会话/cookie 持久化/WebView 迁移与 gate 判定。 */
+    val nativeSession = NativeSession(context.applicationContext) { h, p -> nativeDial.dial(h, p) }
 
     /** 自更新（android-self-update）。 */
     val updates = UpdateManager(context)
@@ -45,6 +48,7 @@ class AppGraph private constructor(context: Context) {
 
     fun load() {
         diagnostics.start(diagnosticsBuildInfo(appContext))
+        nativeSession.load()
         when (val load = harnessConfig.load()) {
             HarnessConfig.Load.Missing -> configState = ConfigState.NeedsSetup
             HarnessConfig.Load.Invalid -> configState = ConfigState.InvalidConfig
@@ -62,7 +66,9 @@ class AppGraph private constructor(context: Context) {
         val clean = harnessConfig.save(rawUrl)
         cleanUrl = clean
         configState = ConfigState.Ready
-        pendingRawUrl = rawUrl
+        // 原始地址同样去首尾空白：输入法可能带入尾部空格，带进 java.net.URI 会直接
+        // 抛 URISyntaxException（旧 WebView 路径能容忍、原生建会话不能）。
+        pendingRawUrl = rawUrl.trim()
         return clean
     }
 
@@ -72,7 +78,7 @@ class AppGraph private constructor(context: Context) {
         SetupCheck.verify(
             rawUrl, keyInput, tunnel.state,
             connectTunnel = { key -> tunnel.connectAndAwait(key) },
-            probe = { clean -> DialProbe.probe(clean, DialProbe.Dial { h, p -> proxyBridge.dialForBridge(h, p) }) },
+            probe = { clean -> DialProbe.probe(clean, DialProbe.Dial { h, p -> nativeDial.dial(h, p) }) },
             onStage = onStage,
         )
 
@@ -83,18 +89,13 @@ class AppGraph private constructor(context: Context) {
         return raw
     }
 
-    /** 刷新计数：主页面（或设置页保存后）调用后递增，驱动 WebView 重新探测加载。 */
+    /** 连接周期计数：设置页保存后递增，驱动原生外壳重新走连接流程（NativeShell 观察）。 */
     var reloadTick by mutableStateOf(0)
         private set
 
-    /** 重读配置并请求主页面重新加载；配置失效时调用方应回到首次设置页。 */
+    /** 重读配置并请求原生外壳重新连接；配置失效时调用方应回到首次设置页。 */
     fun requestReload() {
         load()
-        reloadTick++
-    }
-
-    /** 软重载：不重读磁盘（状态机内部驱动用，如代理覆盖生效、隧道连上自动加载）。 */
-    fun requestReloadSoft() {
         reloadTick++
     }
 

@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-api-spike
+  status: proposed
+summary:
+  what:
+    - 用纯 JVM 原型（复用 core 的 Socks5Dialer/TailnetRouting/DialProbe 拨号原语与手写 HTTP/1.1 请求风格）对真实 dsh（WSL 内 dsh-web + ds-bot 0.3.2，经 dsh-url 输出的 tailscale 地址）验证原生调用 DS-Bot API 的完整路径：带 token 地址建立 dsh-auth cookie、携带 cookie 与受信 Host 调 POST /api/bot 的 state（含 since/live 增量返回 unchanged）、chat、send，订阅 GET /api/bot/feed 收到 hello/revision/live/message/stream 事件，并记录 401/403 的触发条件
+    - 确认远端 DS-Bot 与 dsh 版本的读取方式（候选 update-check 当前版本字段），并验证 Android 上从 WebView CookieManager 读出已有 dsh-auth cookie（HttpOnly）用于升级迁移是否可行
+    - 对照 ds-bot 0.3.2 的 client.js 与 channel.js 盘点网页端功能使用的端点清单，标出不走 /api/bot 的部分（带附件发送、图片地址、斜杠命令、会话状态绑定）在 dsh 0.2.2-rc.1 中的对应接口与鉴权方式，给出附件路径结论（回答里程碑 attachment-path 问题）
+    - 产出：新建 dsbot-api 技术标准（端点清单、事件格式、增量同步、鉴权与 Host 要求、版本来源与基准、降级规则），以及从真实响应脱敏得到的 JSON 夹具（state、state unchanged、chat 条目、feed 事件流、错误响应）放入 core 测试资源供后续 JUnit 使用
+  why:
+    - milestone dsbot-native-chat 其余 8 个 planned change 全部依赖本 spike 的端点清单、鉴权结论与附件路径结论，本变更是整个里程碑的解锁点
+    - DS-Bot 的 /api/bot 是前后端之间的内部接口、不保证跨版本稳定，且 send 端点只收纯文本、附件等要走 dsh 会话接口，原生调用方式必须先经真实 dsh 验证
+scope:
+  in:
+    - android/core 增加 spike 专用 source set 与 Gradle JavaExec 运行任务：原型 main 复用 core 拨号类，token 地址与代理端点经环境变量传入，不打印、不入库
+    - 对真实 dsh-web 逐项验证：token 建会话拿 dsh-auth cookie、cookie+Host 调 /api/bot state（含 since/live unchanged）、chat、send、GET /api/bot/feed 的 SSE 事件流、401/403 触发条件，原始响应按环境门控 dump 到仓库外临时目录
+    - 版本来源确认：update-check 返回的当前版本字段（DS-Bot 与 dsh）实测确认；CookieManager HttpOnly 读取可行性经 AOSP 实现源码或模拟器实测任一可复核方式确认
+    - 端点盘点：逐项列出 ds-bot 0.3.2 网页端功能使用的端点，标注经 /api/bot 与不经 /api/bot 的部分及后者的 dsh 接口与鉴权
+    - 脱敏夹具：从 dump 的真实响应替换 token/cookie/密钥字段、对话内容换合成文本，保留结构与字段形态，放 android/core/src/test/resources 下并加 JUnit 加载校验
+    - dsbot-api 技术标准以 delta-tech 形式写入本变更，附件路径结论同时回写里程碑 attachment-path intake 问题
+  out:
+    - 不修改 :app 行为（无界面、无网络层生产代码变更）
+    - 不实现原生 DS-Bot 界面或 dsh JSON-RPC 通道的生产实现（后续 planned change 承接）
+    - 不改动任何主规格（specs/ 留空）
+unchanged_behavior:
+  - 桌面客户端与 Android App 的现有行为完全不变
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-api-spike

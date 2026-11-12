@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    side-chat:
+      strength: MUST
+      statement: 私聊页提供 Side chat 旁路提问：从更多入口或 /side 输入打开侧问面板（底部抽屉或独立页）——side-new 新建旁路会话、side-ask 提问（可附最近消息快照，不运行工具不打断 Bot 工作）、side-cancel 取消进行中回答、side-close 关闭；Side chat 不接受附件（与网页端提示一致）；回答流式显示，切换聊天或进入后台再回来仍可见进行中回答状态；btw 卡片（插话引用）在聊天中显示并可删除（btw-delete），删除后与网页端同步消失
+      scenarios:
+        side-ask-streams:
+          - GIVEN: 私聊页已打开且 Bot 可能有工作
+          - WHEN: 打开侧问面板提问（附最近消息快照）
+          - THEN: 旁路回答流式显示不打断主聊天，切换聊天或后台返回后进行中状态保留，取消/关闭生效
+        btw-card-delete:
+          - GIVEN: 聊天含 btw 卡片
+          - WHEN: 查看并删除该卡片
+          - THEN: 卡片显示插话内容与来源，删除后本地消失且与网页端同步
+  MODIFIED: {}
+  REMOVED: {}

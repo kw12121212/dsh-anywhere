@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    attachments-send:
+      strength: MUST
+      statement: 私聊输入区提供附件入口：从系统相册、相机与文件选择器选取图片或文件，发送前以缩略图/文件条目预览并可移除；附件先经 uploadFileBinary 上传（进行中与失败态可见、失败给出可读原因且可单件重试），receipt 齐备后与输入文本一起作为带附件消息提交（纯文本消息仍走 send 不变）；发送后用户消息立即上屏，回显与 Bot 回复照常经 feed 呈现；附件字节只经与 API 相同的分流路径传输，不写入任何日志
+      scenarios:
+        attach-send-works:
+          - GIVEN: 私聊页已打开且会话就绪
+          - WHEN: 选取一张图片与一个文件、输入文字并发送
+          - THEN: 附件栏显示预览与上传状态，上传完成后消息提交，用户消息（含附件引用）上屏，Bot 回复经流式/事件呈现，与网页端同一会话一致
+        attach-upload-fails:
+          - GIVEN: 网络中断或服务端拒绝（超过大小限制等）
+          - WHEN: 附件上传失败
+          - THEN: 该附件显示失败原因，消息不发出，可重试该附件或移除后仅发文本，不自动重试
+    attachments-view:
+      strength: MUST
+      statement: 聊天中的图片与文件附件可点开查看：图片全屏查看，文件交给系统查看器打开；提供保存（图片存入系统相册、文件经系统文件保存器）；查看与保存经 readAttachment 会话接口取回字节，失败给可读提示；附件内容不写入日志
+      scenarios:
+        attach-view-open:
+          - GIVEN: 聊天含图片或文件附件条目
+          - WHEN: 点击附件
+          - THEN: 图片全屏显示或文件经系统查看器打开，字节经会话接口取回，内容不落日志
+        attach-save:
+          - GIVEN: 正在查看附件
+          - WHEN: 选择保存
+          - THEN: 图片出现在系统相册或文件经保存器落盘，成功失败均有提示
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,40 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-team-home
+sections:
+  Implementation:
+    core-team-assembly:
+      text: core 新增 TeamHome：State+live → 分组条目树（sections、置顶优先、网页端顺序、Main/私有标记、工作状态、最后摘要、未读）与「需要你」待处理汇总（approvals/questions/views）、搜索过滤纯函数；JUnit 夹具驱动（含未知字段降级）
+      status: complete
+    app-team-page:
+      text: App 团队页替换骨架：LazyColumn 分组列表（彩色头像+状态点、名称截断、摘要、未读徽标）、搜索框、「需要你」入口与汇总页（跳转对应会话）、下拉刷新（retry 重取全量）、空团队首次创建引导；NativeShellConnection 暴露 state 缓存
+      status: complete
+    update-delta-specs:
+      text: android-dsbot 新增团队页可观察需求（列表内容与排序一致性、搜索、需要你汇总与跳转、未读与工作状态、下拉刷新、空团队引导），场景与实现一致
+      status: complete
+  Testing:
+    core-junit-team:
+      text: core JUnit 全量通过（含 TeamHome 组装/搜索/需要你/降级新测试）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器验收通过（2026-11-12，enriched mock 两轮）：团队页渲染分组列表（常用/未分组、置顶、主标记、摘要、未读徽标）；需要你计数与汇总页（审批+提问、类型+摘要+会话尾标）；点击待办与条目跳转正确 sessionId 骨架页、BACK 返回；feed 事件路径两轮验证——第一轮 mock 回全量应答（live 5s + revision 10s 后列表持久），第二轮 mock 按契约对 since+live 回最小 unchanged 形态（首次带 work 变化档、之后纯三键），列表与需要你计数均持久且无空团队页翻转。M1（增量清空）的回归锁定以 core 夹具测试为准（增量夹具不再被误判为全量 + mergeDelta 合并测试），设备验证补充路径覆盖。搜索过滤逻辑由 core 夹具测试覆盖（中文用例；ADB 不支持中文注入，UI 搜索框渲染已验证）；空团队引导由 core isEmpty 与 strings 覆盖。过程修复：ShellPage when 分支 NeedsYou 强转崩溃、decodeState 键形态判别、live 字段合并
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-team-home 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-team-home
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec 与实现一致；ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-team-home
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-team

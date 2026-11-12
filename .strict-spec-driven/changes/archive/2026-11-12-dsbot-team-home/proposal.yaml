@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-team-home
+  status: proposed
+summary:
+  what:
+    - 团队页实际内容：依据 state 端点渲染 Bot 与群聊列表——头像（颜色/角色形象/自定义照片）、名称、角色、Main Bot 标记、私有标记、正在工作/空闲状态点、最后一条消息摘要与未读数，按侧栏分组与置顶排序（与网页端顺序一致）；按名称与内容搜索；顶部「需要你」入口汇总所有等待用户的审批、ask_user 提问与交互卡片并跳转到对应聊天；feed 的 revision/live 事件驱动刷新、下拉刷新手动补齐；空团队显示 DS-Bot 首次创建引导；手机单列列表、长名称截断、深浅色主题适配
+  why:
+    - dsbot-native-shell 交付的团队页只是骨架，里程碑核心目标（原生呈现 DS-Bot 团队）需要真实的团队首页；bot-chat/group-chat 等后续聊天页依赖团队页的入口与未读状态
+scope:
+  in:
+    - core：state 视图到团队列表条目（分组、置顶、未读、工作状态、摘要）的纯函数组装与搜索过滤，JUnit 夹具驱动
+    - App：团队页 Compose 列表（头像/标记/状态点/摘要/未数）、分组与置顶排序渲染、搜索框、「需要你」汇总入口与跳转、下拉刷新、空团队引导；feed 事件接线（DsbotConnection 已有）触发列表刷新
+    - android-dsbot 主规格新增团队页可观察需求（列表内容与排序、搜索、需要你、未读与状态、空团队引导）
+  out:
+    - 聊天页实际内容（bot-chat/group-chat 承接，本变更只跳转占位）
+    - 审批/提问/卡片的作答界面（dsbot-interactive-cards 承接，需要你仅汇总与跳转）
+    - 分组管理与 Bot/群管理（dsbot-native-manage 里程碑承接）
+unchanged_behavior:
+  - 连接状态条、版本提示、错误页/重新认证/403/隧道面板行为不变
+  - 设置、隧道、自更新、诊断行为不变
+  - 桌面端不变
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-team-home

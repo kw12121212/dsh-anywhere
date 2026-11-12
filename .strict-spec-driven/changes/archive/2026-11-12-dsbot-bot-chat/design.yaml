@@ -1,0 +1,21 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-bot-chat
+approach:
+  - 'core 新增 ChatRender：chat/earlier 的 items 到渲染条目（用户/Bot 气泡、Markdown 段落结构、工具调用卡、图片引用、分段边界与 checkpoint 过滤——网页端只显示连续聊天）、流式缓冲拼接（stream start/text/end 到当前气泡的逐字追加与收尾定格）、earlier 分页 cursor 组装，全部纯函数以 chat-page 夹具驱动。App 聊天页：LazyColumn 虚拟化消息列表（倒序分页加载更早）、轻量 Markdown 渲染（标题/列表/表格/粗斜体/行内代码/代码块复制，链接交系统浏览器，图片经 attachments 路径之外暂以占位与文件名显示可点开留给 attachments——本变更图片查看仅限消息内 data: 与已登记可访问引用）、输入框（多行、Enter 按团队偏好发送）、发送经 send 端点、停止/恢复/分段/统计/Bot 间记录的操作入口与对应端点调用；feed 事件经 NativeShellConnection 转发（新增聊天事件监听接口）。写操作失败不自动重试并提示。'
+decisions:
+  markdown-lite-renderer:
+    decision: App 内置轻量 Markdown 渲染（标题/列表/表格/代码块/粗斜体/链接），不引 WebView 或第三方 Markdown 库
+    rationale: 私聊主体是 Markdown 文本；自带渲染器可控且无攻击面（Bot 内容不可信，沙箱 HTML 卡片的禁网 WebView 用法留给 dsbot-interactive-cards）；表格与代码块是 DS-Bot 回复的高频形态
+  stream-buffer-in-core:
+    decision: stream 事件的逐字拼接与定格、message 事件的条目追加判定下沉 core（StreamBuffer），App 只消费渲染条目流
+    rationale: 流式拼接是纯逻辑（start/text/end 状态机+乱序容错），必须可 JUnit；App 只做 UI
+  parts-invisible:
+    decision: 分段边界与 checkpoint 在渲染层过滤（与网页端一致显示一条连续聊天），分段切换是新开/打开旧分段的显式操作
+    rationale: 网页端语义即不可见边界；显式 bot-new-part/bot-open-part 操作保留分段能力
+alternatives: []
+risks:
+  - Markdown 渲染的边角（嵌套列表、表格对齐）与网页端有差异：以夹具驱动核心形态，未知语法降级为纯文本段落不崩溃
+  - 长聊天性能：LazyColumn 虚拟化 + 每条消息独立渲染单元，流式期间只重组装当前气泡

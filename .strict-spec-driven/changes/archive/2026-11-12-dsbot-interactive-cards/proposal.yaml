@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-interactive-cards
+  status: proposed
+summary:
+  what:
+    - Android 原生 DS-Bot 聊天中的交互卡片：审批卡（approval-answer）、ask_user 提问（answer-question/dismiss-question）、show_view 卡片（文本/指标/表格/图表/本地公式输入/进度/选择/确认/短表单——view-reply/dismiss-view）、密钥请求卡（secret-set/secret-allow/secret-cancel，输入不回显值不落日志）、学习问答（learning-answer）、Bot 浏览器交接卡（browser-give-back done/skip，callId 过期显示 bot/stale）；沙箱 HTML 卡片只在禁用网络/禁止导航/无本地接口的隔离视图显示；Bot 内容不可信——core 做卡片格式校验/嵌套深度/大小上限，超限或未知类型降级只读文本；团队页「需要你」与卡片状态两端同步
+  why:
+    - planned change dsbot-interactive-cards 是里程碑收尾能力：卡片是 DS-Bot 工作流的人机交互面（审批/提问/视图/密钥），没有它原生端只能看不能答，必须回网页端
+scope:
+  in:
+    - android/core（卡片模型/校验/降级/端点构造，纯 JVM 可测）、android/app（卡片 UI 与作答交互/沙箱隔离视图/团队页状态同步）、scripts/mock-dsh-server.mjs（卡片端点与夹具）、.strict-spec-driven/specs/android-dsbot.yaml
+  out:
+    - 桌面端、Bot 管理页、手机充当 Bot 浏览器宿主（不调用 browser-wait/browser-result）
+unchanged_behavior:
+  - 私聊/群聊消息流与附件链路、feed 事件处理、连接状态机
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-interactive-cards

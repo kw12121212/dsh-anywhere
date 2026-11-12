@@ -31,3 +31,27 @@ tasks.test {
     // 测试每次都真跑：避免 up-to-date 把「没跑」当「通过」。
     outputs.upToDateWhen { false }
 }
+
+// dsbot-api-spike 的取证原型：独立 spike source set（src/spike/kotlin），编译引用
+// main 源码（复用 Socks5Dialer/TailnetRouting/DialProbe 等拨号与解析类），但不进
+// main/test 产物、不进任何 jar 与回归命令；runSpike 经环境变量接收目标与凭据
+// （tech 标准 secrets-env-gated：不打印、不入库）。无 DSH_SPIKE_TARGET 时
+// runSpike 以用法错误退出，对仓库零影响。
+sourceSets {
+    create("spike") {
+        compileClasspath += sourceSets.main.get().output
+        runtimeClasspath += sourceSets.main.get().output
+    }
+}
+
+dependencies {
+    add("spikeImplementation", kotlin("stdlib"))
+}
+
+tasks.register<JavaExec>("runSpike") {
+    group = "spike"
+    description = "对真实 dsh 运行 DS-Bot API spike（需 DSH_SPIKE_TARGET 环境变量，详见 SpikeMain 用法输出）"
+    mainClass.set("work.keepwriting.core.spike.SpikeMainKt")
+    classpath = sourceSets["spike"].runtimeClasspath
+    // JavaExec 默认继承当前进程环境变量：DSH_SPIKE_* 直接透传，无需在此登记。
+}

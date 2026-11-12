@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-bot-chat
+sections:
+  Implementation:
+    core-chat-render:
+      text: core 新增 ChatRender：chat/earlier items → 渲染条目（气泡类型、Markdown 段落解析、工具调用卡、图片引用、分段边界与 checkpoint 过滤）、StreamBuffer（stream start/text/end 逐字拼接与定格、message 追加判定）、earlier 分页 cursor；JUnit 夹具驱动（含乱序 stream、未知语法降级）
+      status: complete
+    app-markdown-renderer:
+      text: App 轻量 Markdown 渲染 Compose：标题/列表/表格/粗斜体/行内代码/代码块（可复制）/链接（交系统浏览器），未知语法降级纯文本；消息内图片引用显示与点开查看
+      status: complete
+    app-chat-page:
+      text: App 聊天页：LazyColumn 虚拟化消息列表（更早记录向上分页加载）、输入框与发送（Enter 按团队偏好）、流式气泡逐字追加、停止（abandon-work/stop-member-work）与恢复（resume）、新开/打开分段（bot-new-part/bot-open-part）、运行统计（run-stats）、Bot 间记录（exchange；exchange-text/file-text 未观测到实样本，移交 dsbot-attachments 里程碑）；feed stream/message 事件接线（NativeShellConnection 转发）；写失败提示不重试
+      status: complete
+    update-delta-specs:
+      text: android-dsbot 新增私聊可观察需求（渲染语义与网页端一致、发送与流式、停止恢复、分段、统计、分页、Bot 间记录），场景与实现一致
+      status: complete
+  Testing:
+    core-junit-chat:
+      text: core JUnit 全量通过（含 ChatRender/StreamBuffer 新测试）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实 tailnet 验收：mock chat 条目回放下消息渲染（Markdown/代码块复制/工具卡）、发送→stream 逐字→message 定格、停止/恢复、分段切换、更早记录分页、Bot 间记录；真实 dsh 私聊一轮对话与网页端一致
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-bot-chat 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-bot-chat
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec 与实现一致；ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-bot-chat
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-chat

@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-native-shell
   milestone: dsbot-native-chat
-status: planned
+status: complete
 summary: 主页面替换为原生 Compose 导航外壳，移除 WebView harness 主页面、其专用本地代理桥与网页导航范围，改写 android-app 主规格与相关技术标准并新建 android-dsbot 主规格
 details: 建立单 Activity 下的原生导航：团队页、私聊/群聊页、详情面板与设置入口，手机竖屏单栏布局；全局连接状态条（连接中、已断开、重连补齐中）与版本不一致提示条；前后台切换时断开与恢复 feed 并补齐。harness 不可达时显示本地连接错误页（重试、去设置），并按 diagnostics-reporting 规格继续产生按原因分类的错误态报告，报告不含 API 载荷与聊天内容。删除 MainWebScreen、WebView 专用的 ProxyBridge 与 ProxyController 配置、网页同源导航与外链分流、网页内返回键后退及 androidx.webkit 依赖（沙箱 HTML 卡片如需 WebView，在 dsbot-interactive-cards 中以禁网隔离用法单独引入）；返回键改为原生导航后退。首次设置、设置页、隧道状态、自更新与诊断上报继续可用。规格与标准：android-app 主规格删去网页承载、导航范围、本地代理 407 与网页明文相关要求并改写为原生行为；新建 android-dsbot 主规格记录原生界面的导航、连接状态与版本提示；经 strict-tech-edit 更新 android-client（WebView 相关约定改为原生网络与 Compose 约定）与 webview-isolation（改为只约束沙箱卡片视图或标注 Android 不再承载远程网页）。验收：模拟器上从旧版本覆盖升级后无需重新认证即进入原生团队页骨架，强杀重开恢复，会话失效显示重新认证页。
 depends_on:

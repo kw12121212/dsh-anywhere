@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-group-chat
+  status: proposed
+summary:
+  what:
+    - Android 原生 DS-Bot 群聊：群聊页消息流（成员头像与名称、成员 [PASS] 不可见与管理员/回复模式标识、群公告，与私聊共用条目渲染组件）、room-progress 成员工作进度、输入 @ 弹成员列表插入提及（同一消息 @ 多成员并行开工）、「引用一个聊天」把另一 Bot 聊天作为上下文附上、停止群内全部（stop-room-work）或单个成员（stop-member-work）工作、群目标 Goal 按阶段显示任务与证据并支持确认草稿与控制推进（goal-draft/goal-control）；流式回复与新消息经 feed 实时更新
+  why:
+    - planned change dsbot-group-chat 是 dsbot-native-chat 里程碑的核心能力之一：私聊（bot-chat）与附件（attachments）已闭环，群聊是 DS-Bot 多 Bot 协作的主要交互面；成员消息/进度/提及/引用/群工作控制/群目标构成网页端群聊的完整对等集
+scope:
+  in:
+    - android/core（群聊条目渲染与端点构造，复用 ChatRender/DsbotApi/AttachmentMessages）、android/app（群聊页/提及输入/引用选择/停止与目标 UI，复用 ChatController 模式与 NativeShellConnection 注入）、scripts/mock-dsh-server.mjs（群聊端点与夹具）、.strict-spec-driven/specs/android-dsbot.yaml（群聊 requirement）
+  out:
+    - 桌面端、群管理页（后续里程碑）、Bot 管理
+unchanged_behavior:
+  - 私聊链路（chat/send/earlier/附件）、feed 事件处理、连接状态机、团队页结构
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-group-chat

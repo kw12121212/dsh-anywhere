@@ -1,0 +1,48 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-interactive-cards
+sections:
+  Implementation:
+    probe-card-endpoints:
+      text: 真实 0.3.5 探针复验卡片端点族（approval-answer/answer-question/dismiss-question/view-reply/dismiss-view/secret-set/secret-allow/secret-cancel/learning-answer/browser-give-back）payload 形态与卡片条目在 chat/room-chat 中的字段；回填 tech/dsbot-api
+      status: complete
+      command: curl/python 探针 + tech-edit
+    core-card-models:
+      text: core 卡片模型与校验降级：CardKind 解析（审批/提问/视图/密钥/学习/浏览器交接/沙箱 HTML）、字段校验、嵌套深度与大小上限、未知类型降级只读文本；作答端点 payload 构造；JUnit 覆盖（含超限与畸形输入）
+      status: complete
+      command: android/gradlew -p android/core test
+    mock-cards:
+      text: mock 卡片端点与夹具：各卡端点显式实现（作答后经 feed 推状态变化）、chat/room-chat 夹具带各类卡片条目、非法输入显式拒绝
+      status: complete
+    app-card-render:
+      text: App 卡片渲染与作答：审批（同意/驳回）、提问（选项/提交/忽略）、视图卡（文本/指标/表格/公式输入/进度/选择/确认/短表单）、密钥请求（密码形态输入不回显、允许/取消）、学习问答、浏览器交接（完成/跳过、bot/stale 过期原因展示）；作答成功本地消隐
+      status: complete
+    app-sandbox-html:
+      text: App 沙箱 HTML 卡：WebView 隔离（禁网络/禁导航/无 JavascriptInterface/本地接口），loadDataOnly；失败与超限降级只读
+      status: complete
+  Testing:
+    core-junit-cards:
+      text: core JUnit：卡片解析/校验/降级/构造全量测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实 tailnet 验收：mock 各卡渲染与作答（含密钥不回显）、降级不崩溃、团队页需要你同步、真实 dsh 一轮卡片作答与网页端一致
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-interactive-cards 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-interactive-cards
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec 与实现一致；ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-interactive-cards
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-cards

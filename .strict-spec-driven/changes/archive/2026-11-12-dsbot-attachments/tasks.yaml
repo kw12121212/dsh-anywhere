@@ -1,0 +1,51 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-attachments
+sections:
+  Implementation:
+    core-ws-client:
+      text: core 纯 JVM WebSocket 客户端：RFC6455 握手（受信 Host 头 + dsh-auth cookie + Upgrade/Sec-WebSocket-Key）、客户端帧编码（文本帧带掩码）、服务端帧解码（分片/掩码外/关闭处理）、JSON-RPC 请求/应答封装与 readAttachment 字节取回；经 NativeDial 分流复用（无 android 依赖）
+      status: complete
+      command: android/gradlew -p android/core test
+    core-upload:
+      text: 'core 上传构造与解码：uploadFileBinary 请求（query: sessionId/name[/mediaType]，Content-Type: application/octet-stream，原始字节 body）与应答 {receiptId, file:{attachmentId,name,bytes[,width,height,mediaType]}} 解码；错误按 bot/* 信封分类'
+      status: complete
+      command: android/gradlew -p android/core test
+    mock-attach:
+      text: mock-dsh-server.mjs 补附件链路：POST /api/session/uploadFileBinary（校验 cookie/query，回 receiptId 与文件元数据）与 GET /connect 最小 WebSocket 服务端（SHA1 握手、掩码帧解析、prompt RPC 回执、readAttachment 回图片字节）；附件端点错误同样显式 bot/* 不兜底 ok
+      status: complete
+    app-attach-picker:
+      text: App 选取与附件栏：相册（PickVisualMedia）、相机（TakePicture + FileProvider 临时 URI）、文件选择器（GetContent）入口；输入框上方附件栏缩略图/文件 chip 预览、移除；选取后读字节（大小上限按服务端应答错误呈现，客户端不预压缩）
+      status: complete
+    app-attach-send:
+      text: App 附件发送：uploadFileBinary 上传（进行中/失败态与失败原因提示，失败可重试单件）→ receipt 齐备后经 HTTP unary RPC（POST /api/session/prompt 的 client-request 信封，0.3.5 实测；设计期 WS 路径见 q-prompt-blocks 校准记录）提交带附件消息（content blocks：file receipt + text）→ 用户消息乐观上屏，回显与 Bot 回复照常走 feed；纯文本消息仍走 send 不改；附件字节在 executor 后台读取
+      status: complete
+    app-attach-view:
+      text: App 附件查看：聊天中图片/附件引用点击后经 session/attachment（HTTP unary RPC）取 base64 字节——图片内存解码全屏查看（MediaStore RELATIVE_PATH 保存，API 29+），文件写 cache 临时文件交 ACTION_VIEW 打开、ACTION_CREATE_DOCUMENT 保存；附件内容不写入任何日志
+      status: complete
+  Testing:
+    core-junit-attach:
+      text: core JUnit：WebSocket 帧编解码（握手头、掩码文本帧、分片、关闭）、JSON-RPC 封装、uploadFileBinary 请求构造与应答/错误解码的单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实 tailnet 验收：mock 下相册/文件选取→预览移除→上传→带附件发送→feed 回显与 Bot 回复；图片查看/保存/交给其他 App；发送中途断网失败原因与单件重试；真实 dsh 私聊一轮带图片对话与网页端呈现一致
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-attachments 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-attachments
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec 与实现一致；ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-attachments
+testing_gates:
+  validation_task: core-junit-attach
+  unit_test_task: core-junit-attach

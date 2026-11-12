@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-team-home
+approach:
+  - core 新增 TeamHome 组装器：DsbotModels.State + live 字段 → 分组条目树（sections → 置顶优先、其余按网页端顺序；条目含 id/名称/颜色/头像引用/角色/Main标记/私有标记/工作状态/最后摘要/未读来源），未读与最后一条消息从 state 的 bots/rooms 摘要字段与 closedCards/questions 推导（增量字段缺失时降级为未知不显示）；搜索为纯函数过滤（名称与摘要文本）。App 团队页替换骨架：LazyColumn 渲染分组条目（Compose Material3 列表项：彩色头像圈+状态点、名称单行截断、摘要两行、未读徽标），顶部搜索框与「需要你」徽标入口；「需要你」汇总页列出 approvals/questions/views 待处理项（来自 state 的 work.approvals/questions/views），点击经 ShellPage.Chat 跳转对应会话；下拉刷新触发 connection.retry()（重取全量）；空团队显示首次创建引导文案。数据来源统一经 DsbotConnection 的 state 缓存——NativeShellConnection 暴露最新 State 给团队页（mutableStateOf）。
+decisions:
+  state-cache-in-connection:
+    decision: NativeShellConnection 持有最近一次 state 全量/增量合并结果并暴露为 Compose 状态，团队页直接渲染
+    rationale: DsbotConnection 已是状态与同步的单一汇聚点，feed 事件触发的刷新天然流经它；团队页无需另建数据层，后续聊天页也可复用同一缓存
+  unread-derived-from-state:
+    decision: 未读数与最后摘要优先从 state 的条目字段推导（网页端语义同源），字段缺失降级为不显示而不是猜
+    rationale: 0.3.2 的 state 视图是网页端的渲染来源，按同源字段推导保证与网页端一致；降级策略符合 version-baseline-and-degrade
+alternatives:
+  - option: 单独的未读跟踪状态机（feed message 事件计数）
+    reason: message 事件只覆盖订阅窗口内的增量，断线重连补齐期间会漏计；state 字段是权威来源
+risks:
+  - state 字段随上游漂移：组装器全部走 DsbotModels 的可降级解码，未知字段保留 raw 不阻塞渲染

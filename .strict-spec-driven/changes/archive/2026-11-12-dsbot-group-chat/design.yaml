@@ -1,0 +1,13 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-group-chat
+approach:
+  - 复用私聊管线：群聊页与私聊共用 ChatRender 条目渲染组件（renderItem 单条分发——Markdown/工具卡/附件/系统行，群聊经 RoomChat.renderRoom 委托并逐条补成员归属）与 ChatController 的 executor 收敛模式，新增 RoomChatController（群会话 id 语义、成员消息归属、@ 提及与引用的提交形态、停止群/成员、群目标状态）。端点形态先按 lesson（spike-bd9881）在真实 0.3.5 服务器用最小探针实测复验（room-chat、session/prompt 到群会话、stop-room-work、room-progress、goal-draft/goal-control——引用聊天的结构化字段 0.3.5 无实样本，按消息内文本标注近似并登记降级），再定 core 构造与 mock；提及输入为 Compose 弹层（裸 @ 触发成员名册列表，插入后继续编辑），引用聊天从成员名册选择；群目标提供草稿提交与控制操作入口（阶段视图按服务端应答可读降级呈现）；群内多成员并行流式仅作输入提示、条目以 message 事件落定去重
+decisions:
+  room-reuse-chat-pipeline:
+    decision: 群聊复用私聊的渲染组件与控制器模式（ChatRender.renderItem 单条分发与附件链路直接复用，RoomChat.renderRoom 委托分发并补 speaker 归属——不复制渲染代码；RoomChatController 只做群语义差异），不复制渲染代码
+    rationale: 网页端群聊与私聊共用条目模型（同 kind 集合）；渲染复用避免双份降级逻辑；群差异集中在提交与控制端点，探针实测后落在 core 构造与 controller
+alternatives: []
+risks: []

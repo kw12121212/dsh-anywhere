@@ -6,4 +6,10 @@ standard:
   id: webview-isolation
   title: webview 远程内容隔离
   category: security
-rules: {}
+rules:
+  android-no-remote-webview:
+    strength: MUST
+    statement: Android 端不再以 WebView 承载远程网页（主界面为原生 Compose，androidx.webkit 不再作为依赖）；本标准此后只约束禁网隔离用途的沙箱视图（如 dsbot-interactive-cards 的 HTML 卡片）：该类视图必须禁网、禁文件与内容访问、不注入任何本地接口
+    rationale: 主界面原生化后，远程内容隔离的攻击面从常驻主页面缩小为按需的沙箱卡片；标准收窄为只管沙箱视图，桌面端 Electron 的远程内容隔离不受影响
+    enforcement:
+      method: review

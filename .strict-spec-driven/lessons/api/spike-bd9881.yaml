@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: spike-bd9881
+  title: spike 期的载体结论必须按目标服务器版本实测复验后再定实现
+category: api
+status: active
+created_at: '2026-11-12T11:19:48.712Z'
+updated_at: '2026-11-12T11:19:48.712Z'
+context: dsbot-attachments 设计阶段沿用 spike（dsh 0.2.2-rc.1 源码+实测）的结论：带附件消息必须经 /connect WebSocket JSON-RPC，HTTP envelope 网关 404。core 据此实现了 WsClient/DshMux 并做了 mock 双轨
+observation: 设备验收在真实 0.3.5 服务器实测：session/prompt 与 session/attachment 都是 unary RPC，经 POST /api/session/prompt 的 client-request 信封（type/rpcId/method/payload.args.request）全通且模型真实读图回复；remote.mux 的 stream open 帧对 unary 方法回 gateway/signature-invalid；/connect 只是 launch-token 首认证入口。spike 的 404 结论随版本升级失效
+takeaway: 凡引用 spike/历史取证的协议载体结论，实现前先在当前目标服务器版本上用最小探针（无效 sessionId 探路由、按错误信息逐层收敛 payload）复验，比读源码快且以运行时为准
+applies_when: 任何基于历史 spike/文档/源码阅读确定网络协议形态（HTTP/WebSocket/RPC 信封、字段名、路径）的实现，尤其跨版本服务端
+occurrences:
+  - origin: dsbot-attachments
+    date: '2026-11-12'
+    evidence: questions.yaml q-prompt-blocks 的实测校准记录；tech/dsbot-api attachment-path 的 0.3.5 更正；core WsClient/DshMux 保留为已测组件而 App 走 HTTP client-request

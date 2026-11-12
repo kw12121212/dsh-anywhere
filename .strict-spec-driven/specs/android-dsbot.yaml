@@ -1,0 +1,188 @@
+schema: strict-spec-driven/main-spec/v1
+schema_version: 1
+artifact_type: main_spec
+schema_file: templates/strict-spec-driven/schemas/main-spec.yaml
+spec:
+  id: android-dsbot
+  title: 原生 DS-Bot 界面
+requirements:
+  native-nav-skeleton:
+    strength: MUST
+    statement: App 主界面为原生 Compose 导航骨架：团队页为根页面，从团队页可进入私聊页、群聊页与详情面板（骨架占位，内容由后续变更填充），顶部提供设置入口；系统返回键按原生导航后退（聊天页回团队页、团队页退出 App），不依赖也不加载任何远程网页。
+    scenarios:
+      'nav-back-stack:':
+        - GIVEN: App 已连接并显示团队页骨架
+        - WHEN: 进入一个私聊页后按系统返回键
+        - THEN: 回到团队页骨架；在团队页再按返回键退出 App（系统默认行为）
+      'settings-entry-reachable:':
+        - GIVEN: 任意骨架页面显示中
+        - WHEN: 点击设置入口
+        - THEN: 打开既有设置页，返回后回到原骨架页面
+  connection-status-bar:
+    strength: MUST
+    statement: 原生骨架顶部显示全局连接状态条：初次连接显示「连接中」，feed 订阅且同步完成后显示在线（或收起为不干扰内容的最小形态），断开后显示「已断开，正在重连」并按指数退避重连，回到前台或恢复后自动补齐期间的 state 变化；连接状态条不遮挡页面操作。
+    scenarios:
+      'online-after-sync:':
+        - GIVEN: App 启动且 harness 可达、会话有效
+        - WHEN: feed 订阅并完成一次 state 同步
+        - THEN: 状态条显示在线（或收起），团队页骨架可用
+      'reconnect-banner:':
+        - GIVEN: 在线状态下 harness 服务停止
+        - WHEN: feed 断开
+        - THEN: 状态条显示已断开并在后台按退避重连；服务恢复后状态条回到在线且期间的状态变化被补齐
+  version-banner:
+    strength: MUST
+    statement: 连接建立时读取远端 DS-Bot 与 dsh 版本（update-check 的 value.current 与 value.dsh.current）并与已测基准（DS-Bot 0.3.2、dsh 0.2.2-rc.1）比对：不一致时显示版本提示条说明远端版本与基准不一致、部分功能可能不可用，提供不再提示本次的关闭；一致或读不到版本（UNKNOWN）时不显示提示。
+    scenarios:
+      'mismatch-shows-banner:':
+        - GIVEN: 远端 DS-Bot 版本为 0.4.0
+        - WHEN: 连接建立完成
+        - THEN: 显示版本提示条且包含不一致说明；点击关闭后本次连接期内不再显示
+      'unknown-no-banner:':
+        - GIVEN: 远端版本字段缺失（读不到版本）
+        - WHEN: 连接建立完成
+        - THEN: 不显示版本提示条
+  native-error-page:
+    strength: MUST
+    statement: harness 不可达时原生骨架显示本地连接错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），提供「重试」与「修改地址」按钮；重试恢复可达时回到团队页骨架；错误发生时按 diagnostics-reporting 规格产生错误态报告（不含 API 载荷与聊天内容）。
+    scenarios:
+      'unreachable-error-page:':
+        - GIVEN: 已保存地址的服务已停止
+        - WHEN: 启动 App 或点击重试
+        - THEN: 显示本地错误页（干净地址、原因说明、重试与修改地址按钮），不显示首次设置页
+      'retry-recovers-native:':
+        - GIVEN: 错误页显示后服务恢复
+        - WHEN: 点击重试
+        - THEN: 回到团队页骨架，状态条进入连接中并在线
+  team-page-list:
+    strength: MUST
+    statement: 团队页显示 Bot 与群聊的分组列表：每个条目显示名称（超长截断）与工作/空闲状态点；工作状态、最后一条消息摘要、未读数、置顶与分组、Main/私有标记等字段在远端返回时显示、缺失时降级为不显示（条目仍在列表中，排序按名称稳定排序，头像以颜色圈呈现）；feed 的团队变更事件自动刷新列表，工具栏刷新入口手动重取全量；空团队显示首次创建引导（创建第一个 Chief）。
+    scenarios:
+      'list-matches-web:':
+        - GIVEN: 已连接团队，远端 state 含分组与条目字段
+        - WHEN: 进入团队页
+        - THEN: 分组结构与条目按返回数据渲染，返回了摘要/未读/置顶字段时对应显示，字段缺失时条目仍显示且不崩溃，与 DS-Bot 网页端同源数据的呈现一致
+      'empty-team-guide:':
+        - GIVEN: 远端团队为全新空团队
+        - WHEN: 进入团队页
+        - THEN: 显示首次创建引导（创建第一个 Chief），不显示空白列表
+      'fields-missing-degrade:':
+        - GIVEN: 远端 state 的条目缺 preview/unread/pinned 字段
+        - WHEN: 团队页渲染
+        - THEN: 条目正常显示名称与状态，摘要/未读/置顶不显示，无错误或空白页
+  team-search:
+    strength: MUST
+    statement: 团队页提供搜索框：按名称与最近消息内容过滤当前列表条目，输入即时过滤、清空恢复完整列表；搜索不改变分组与排序结构，无结果时显示无匹配提示。
+    scenarios:
+      'search-filters:':
+        - GIVEN: 团队页显示完整列表
+        - WHEN: 输入某 Bot 名称片段
+        - THEN: 列表只剩名称或摘要含该片段的条目，结构仍按分组；清空输入后恢复完整列表
+  needs-you-summary:
+    strength: MUST
+    statement: 团队页顶部提供「需要你」入口并显示待处理计数：汇总所有等待用户处理的审批、ask_user 提问与交互卡片；打开汇总页逐项显示类型与摘要（有来源会话时显示会话标识），点击条目跳转到对应聊天位置；无待处理时入口不显示计数。
+    scenarios:
+      'needs-you-jump:':
+        - GIVEN: 一个 Bot 发起了 ask_user 提问
+        - WHEN: 打开需要你汇总并点击该条目
+        - THEN: 进入该 Bot 的聊天页（本变更内为对应会话的骨架跳转），返回后计数减少
+  bot-chat-render:
+    strength: MUST
+    statement: 私聊页按 DS-Bot 网页端语义渲染聊天条目：用户与 Bot 消息气泡、Markdown（标题、列表、表格、链接交给系统浏览器、代码块可复制）、工具调用以折叠卡显示、分段边界与 checkpoint 不产生可见分隔（显示为一条连续聊天）、消息中的图片引用可显示并点开查看；未知语法或字段降级为纯文本不崩溃；向上滚动加载更早记录（分页），历史不足时提示已到最早。
+    scenarios:
+      'renders-like-web:':
+        - GIVEN: 已连接团队的某 Bot 聊天含 Markdown 回复与工具调用
+        - WHEN: 从团队页进入该 Bot 私聊
+        - THEN: 气泡、Markdown、工具折叠卡与网页端同源数据呈现一致，分段边界不可见，无空白或崩溃
+      'earlier-paging:':
+        - GIVEN: 聊天条目多于一页
+        - WHEN: 滚动到列表顶部
+        - THEN: 加载更早记录并保持滚动位置，全部加载完显示已到最早
+  bot-chat-send-stream:
+    strength: MUST
+    statement: 私聊底部输入框发送文字消息（send 端点，纯文本；Enter 行为遵循团队偏好）：Bot 回复经 feed 的 stream 事件逐字追加到正在写的气泡，stream end 后由 message 事件定格为完整条目，与 DS-Bot 网页端同一会话显示的内容一致；发送失败显示可读错误且不自动重试（不重复发送）。
+    scenarios:
+      'send-streams-reply:':
+        - GIVEN: 私聊页已打开、Bot 空闲
+        - WHEN: 输入文字并发送
+        - THEN: 用户消息立即出现，Bot 回复逐字流式追加并定格，内容与网页端一致
+      'send-fail-no-retry:':
+        - GIVEN: 网络中断
+        - WHEN: 发送消息失败
+        - THEN: 显示失败提示，不自动重试、不重复发送
+  bot-chat-work-control:
+    strength: MUST
+    statement: 私聊页提供停止 Bot 当前工作的入口（stop/abandon 语义）：停止后网页端同步显示已停止；中断的 Bot 可从私聊页恢复（resume）；提供新开分段（bot-new-part）与打开旧分段（bot-open-part）入口，分段切换后聊天显示对应分段条目；聊天页可查看运行统计（run-stats）与 Bot 之间的消息记录（exchange）。消息引用的文件文本（file-text）与记录文本详情（exchange-text）在 0.3.x 未观测到实样本，移交附件里程碑（dsbot-attachments）实测后接入。
+    scenarios:
+      'stop-works:':
+        - GIVEN: Bot 正在工作中
+        - WHEN: 点击停止
+        - THEN: Bot 停止工作（网页端同步显示已停止），聊天不再追加
+      'parts-switch:':
+        - GIVEN: Bot 有多个分段
+        - WHEN: 打开旧分段
+        - THEN: 聊天切换显示该分段条目，可切回当前分段
+  attachments-send:
+    strength: MUST
+    statement: 私聊输入区提供附件入口：从系统相册、相机与文件选择器选取图片或文件，发送前以缩略图/文件条目预览并可移除；附件先经 uploadFileBinary 上传（进行中与失败态可见、失败给出可读原因且可单件重试），receipt 齐备后与输入文本一起作为带附件消息提交（纯文本消息仍走 send 不变）；发送后用户消息立即上屏，回显与 Bot 回复照常经 feed 呈现；附件字节只经与 API 相同的分流路径传输，不写入任何日志
+    scenarios:
+      attach-send-works:
+        - GIVEN: 私聊页已打开且会话就绪
+        - WHEN: 选取一张图片与一个文件、输入文字并发送
+        - THEN: 附件栏显示预览与上传状态，上传完成后消息提交，用户消息（含附件引用）上屏，Bot 回复经流式/事件呈现，与网页端同一会话一致
+      attach-upload-fails:
+        - GIVEN: 网络中断或服务端拒绝（超过大小限制等）
+        - WHEN: 附件上传失败
+        - THEN: 该附件显示失败原因，消息不发出，可重试该附件或移除后仅发文本，不自动重试
+  attachments-view:
+    strength: MUST
+    statement: 聊天中的图片与文件附件可点开查看：图片全屏查看，文件交给系统查看器打开；提供保存（图片存入系统相册、文件经系统文件保存器）；查看与保存经 readAttachment 会话接口取回字节，失败给可读提示；附件内容不写入日志
+    scenarios:
+      attach-view-open:
+        - GIVEN: 聊天含图片或文件附件条目
+        - WHEN: 点击附件
+        - THEN: 图片全屏显示或文件经系统查看器打开，字节经会话接口取回，内容不落日志
+      attach-save:
+        - GIVEN: 正在查看附件
+        - WHEN: 选择保存
+        - THEN: 图片出现在系统相册或文件经保存器落盘，成功失败均有提示
+  group-chat:
+    strength: MUST
+    statement: 群聊页按 DS-Bot 网页端语义渲染与交互：成员消息带名称与颜色标识（成员 [PASS] 事件不可见）、群公告、运行中成员与逐成员停止入口；输入 @ 弹出成员名册（来自群成员 Bot）插入提及，同一消息可 @ 多个成员；可停止群内全部（stop-room-work）或单个成员（stop-member-work）的工作；群目标提供草稿提交与控制操作入口（goal-draft/goal-control，0.3.x 阶段/任务/证据视图数据源未实测，视图按服务端应答可读降级呈现）；room-progress 显示成员工作进度；流式回复与新消息经 feed 实时更新（多成员并行时流式仅作提示、条目以 message 事件落定去重）；与私聊共用条目渲染组件，未知字段降级不崩溃。管理员/回复模式标识与「引用一个聊天」的结构化提交字段在 0.3.x 未观测到实样本：引用以消息内文本标注近似（Bot 可读但无机器可读上下文），管理员标识暂缺——两项移交后续版本实测补齐（已在 questions 登记）
+    scenarios:
+      group-messages-render:
+        - GIVEN: 群聊含多成员消息与 [PASS] 事件
+        - WHEN: 从团队页进入群聊
+        - THEN: 成员消息带名称颜色渲染，[PASS] 不可见，公告与网页端一致，无崩溃
+      mention-and-reference:
+        - GIVEN: 群聊页已打开且群有成员
+        - WHEN: 输入 @ 从成员名册选择（可多个）后发送（如需引用另一聊天，以文本标注附上）
+        - THEN: 提及随消息提交，被 @ 成员并行开工，回复经 message 事件实时呈现且不重复
+      room-work-and-goal:
+        - GIVEN: 群内有成员工作且群有目标
+        - WHEN: 停止群/单个成员工作、提交目标草稿或执行控制操作、查看进度
+        - THEN: 工作停止（网页端同步）、目标操作生效且有可读反馈，room-progress 反映成员进度或明确提示无工作
+  interactive-cards:
+    strength: MUST
+    statement: 聊天中的交互卡片按 DS-Bot 网页端语义原生渲染与作答：审批卡（approval-answer）、ask_user 提问（answer-question/dismiss-question）、show_view 卡片（文本/指标/表格/本地公式输入/进度/选择/确认/短表单，view-reply/dismiss-view——图表段落 0.3.x 未观测实样本，降级为只读呈现）、密钥请求卡（secret-set/secret-allow/secret-cancel——输入不回显、值不进日志与诊断上报）、学习问答（learning-answer）、Bot 浏览器交接卡（browser-give-back done/skip，callId 过期显示服务端 bot/stale 原因）；已关闭（closed）条目按只读已处理形态呈现不再作答；多问题条目（questions[] 复数）标注数量并引导网页端逐个处理（原生端暂不支持多问题条目作答，显式降级决策）；沙箱 HTML 卡片只在禁网络、禁止导航与无本地接口的隔离视图中显示；Bot 内容不可信：卡片做格式校验、嵌套深度与大小上限，超限或未知类型降级为只读文本不崩溃；作答成功后卡片消隐且经 feed 推状态变更，团队页「需要你」与卡片状态两端同步；手机不充当 Bot 浏览器宿主
+    scenarios:
+      cards-answer-sync:
+        - GIVEN: 聊天含待处理审批或提问卡
+        - WHEN: 在卡片上作答（同意/选选项/提交表单）
+        - THEN: 作答提交成功、本地卡片消隐、feed 推送状态变更后团队页需要你同步消失，与网页端状态一致
+      cards-degrade-sandbox:
+        - GIVEN: 聊天含畸形/超限/未知类型卡片、已关闭卡片、多问题条目或沙箱 HTML 卡
+        - WHEN: 渲染该卡片
+        - THEN: 畸形/超限/未知降级为只读文本不崩溃；已关闭条目只读呈现；多问题条目标注数量引导网页端处理；沙箱 HTML 在禁网络/禁导航/无本地接口的隔离视图显示
+  side-chat:
+    strength: MUST
+    statement: 私聊页提供 Side chat 旁路提问：从更多入口或 /side 输入打开侧问面板（底部抽屉或独立页）——side-new 新建旁路会话、side-ask 提问（可附最近消息快照，不运行工具不打断 Bot 工作）、side-cancel 取消进行中回答、side-close 关闭；Side chat 不接受附件（与网页端提示一致）；回答流式显示，切换聊天或进入后台再回来仍可见进行中回答状态；btw 卡片（插话引用）在聊天中显示并可删除（btw-delete），删除后与网页端同步消失
+    scenarios:
+      side-ask-streams:
+        - GIVEN: 私聊页已打开且 Bot 可能有工作
+        - WHEN: 打开侧问面板提问（附最近消息快照）
+        - THEN: 旁路回答流式显示不打断主聊天，切换聊天或后台返回后进行中状态保留，取消/关闭生效
+      btw-card-delete:
+        - GIVEN: 聊天含 btw 卡片
+        - WHEN: 查看并删除该卡片
+        - THEN: 卡片显示插话内容与来源，删除后本地消失且与网页端同步

@@ -1,0 +1,25 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    group-chat:
+      strength: MUST
+      statement: 群聊页按 DS-Bot 网页端语义渲染与交互：成员消息带名称与颜色标识（成员 [PASS] 事件不可见）、群公告、运行中成员与逐成员停止入口；输入 @ 弹出成员名册（来自群成员 Bot）插入提及，同一消息可 @ 多个成员；可停止群内全部（stop-room-work）或单个成员（stop-member-work）的工作；群目标提供草稿提交与控制操作入口（goal-draft/goal-control，0.3.x 阶段/任务/证据视图数据源未实测，视图按服务端应答可读降级呈现）；room-progress 显示成员工作进度；流式回复与新消息经 feed 实时更新（多成员并行时流式仅作提示、条目以 message 事件落定去重）；与私聊共用条目渲染组件，未知字段降级不崩溃。管理员/回复模式标识与「引用一个聊天」的结构化提交字段在 0.3.x 未观测到实样本：引用以消息内文本标注近似（Bot 可读但无机器可读上下文），管理员标识暂缺——两项移交后续版本实测补齐（已在 questions 登记）
+      scenarios:
+        group-messages-render:
+          - GIVEN: 群聊含多成员消息与 [PASS] 事件
+          - WHEN: 从团队页进入群聊
+          - THEN: 成员消息带名称颜色渲染，[PASS] 不可见，公告与网页端一致，无崩溃
+        mention-and-reference:
+          - GIVEN: 群聊页已打开且群有成员
+          - WHEN: 输入 @ 从成员名册选择（可多个）后发送（如需引用另一聊天，以文本标注附上）
+          - THEN: 提及随消息提交，被 @ 成员并行开工，回复经 message 事件实时呈现且不重复
+        room-work-and-goal:
+          - GIVEN: 群内有成员工作且群有目标
+          - WHEN: 停止群/单个成员工作、提交目标草稿或执行控制操作、查看进度
+          - THEN: 工作停止（网页端同步）、目标操作生效且有可读反馈，room-progress 反映成员进度或明确提示无工作
+  MODIFIED: {}
+  REMOVED: {}

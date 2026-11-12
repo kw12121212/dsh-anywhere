@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-bot-chat
+  status: proposed
+summary:
+  what:
+    - 私聊页实际内容：经 chat/earlier 端点取聊天条目并按 DS-Bot 网页端语义原生渲染——用户与 Bot 消息气泡、Markdown（标题/列表/表格/链接交系统浏览器/代码块可复制）、工具调用折叠卡、checkpoint 与分段边界不可见（只显示一条连续聊天）、消息中的图片可点开查看；底部输入框发送文字（send，Enter 遵循团队偏好）；feed 的 stream 事件逐字追加正在写的回复、message 事件追加新条目；停止 Bot 当前工作（abandon-work/stop-member-work/resume）、新开分段与打开旧分段（bot-new-part/bot-open-part）、运行统计（run-stats）、Bot 间消息记录（exchange/exchange-text）与引用文件文本（file-text）；更早记录分页加载（HISTORY_PAGE 语义）；长聊天虚拟化渲染流畅
+  why:
+    - team-home 已交付团队列表与入口，私聊是里程碑 done_criteria 的核心场景（发文字→流式回复→与网页端一致）；group-chat/side-chat 依赖本变更的聊天渲染基座
+scope:
+  in:
+    - core：chat/earlier 条目解码到渲染模型（Markdown 结构、工具调用卡、图片引用、分段边界过滤）与流式缓冲拼接的纯函数，JUnit 夹具驱动
+    - App：聊天页 Compose（消息列表虚拟化、Markdown 渲染、代码块复制、图片查看、输入框与发送、停止/恢复、分段切换、运行统计、Bot 间记录查看）；feed stream/message 事件接线
+    - android-dsbot 主规格新增私聊可观察需求（渲染语义、发送与流式、停止恢复、分段、统计、分页）
+  out:
+    - 群聊的群成员归属与进度（dsbot-group-chat 承接，复用本渲染基座）
+    - Side chat、审批/卡片作答、附件发送（side-chat/interactive-cards/attachments 承接）
+    - 斜杠命令与 @ 提及的输入联想（里程碑范围外）
+unchanged_behavior:
+  - 团队页、连接状态、会话/设置/隧道/自更新/诊断行为不变
+  - 桌面端不变
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-bot-chat

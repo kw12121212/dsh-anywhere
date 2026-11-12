@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-api-spike
+open: []
+resolved:
+  - id: spike-env-verified
+    question: spike 所需的运行环境是否就绪（真实 dsh、ds-bot 版本、JDK、网络路径）？
+    context: 影响实现路径与 live 验证可行性：WSL 内 systemd 用户服务 dsh-web、ds-bot 插件版本、dsh-url 脚本、JDK 版本与 tailnet 节点状态均需确认，缺任一项则 live 验证按 config.unavailable_behavior 阻塞。
+    answer: 已核实（2026-11-11）：WSL 内 dsh-web 服务 active；~/.dsh/profiles/web/node_modules/ds-bot 为 0.3.2；~/.local/bin/dsh-url 存在；sdkman 提供 JDK 21/25（默认 java 为 1.8，运行需显式设 JAVA_HOME）；WSL 本机即 tailnet 节点 gamepc（100.104.191.49），tailscale serve 暴露 https://gamepc.tail89569c.ts.net:13080。
+    status: resolved
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change dsbot-api-spike 的字面范围执行：纯技术验证变更（spike），产出为对真实 dsh 的实测结论、dsbot-api 技术标准与 core 脱敏测试夹具；不改 App 行为、不实现原生界面
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 桌面客户端与 Android App 现有行为完全不变；不实现原生 DS-Bot 界面与 dsh JSON-RPC 通道生产代码；不改动任何主规格（specs/ 留空）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: spike 验证项逐项有结论（token 建会话、state since/live、chat、send、feed SSE 事件、401/403 条件、版本来源、CookieManager HttpOnly 可行性、端点清单、附件路径），并落成 dsbot-api 技术标准 + core 测试资源脱敏夹具 + 里程碑 attachment-path intake 回写；milestone 其余 planned change 的依赖解锁
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 尚不存在经验证的原生调用 DS-Bot API 路径：/api/bot 是 DS-Bot 前后端内部接口、send 只收纯文本、附件与图片地址需走 dsh 会话接口且调用方式未经验证；milestone dsbot-native-chat 其余 8 个 planned change 全部被此不确定性阻塞
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: roadmap 顺序上 dsbot-native-chat 是当前待实施里程碑，dsbot-api-spike 是 54 个 planned change 中唯一合格候选（其余 27 个 dependency-incomplete 直接或间接依赖本 spike），不做它整个里程碑无法推进
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-attachments
+  status: proposed
+summary:
+  what:
+    - Android 原生 DS-Bot 私聊的附件链路：从相册、相机与文件选择器选取图片/文件，发送前预览与移除，经 uploadFileBinary 纯 HTTP 上传换取 receipt，带附件的消息经 /connect WebSocket JSON-RPC 短时会话提交（纯文本仍走 send），回复照常由 feed 呈现；聊天中的图片与附件可查看、保存到手机或交给其他 App 打开
+  why:
+    - dsbot-bot-chat 只覆盖纯文本对话；planned change dsbot-attachments 是 dsbot-native-chat 里程碑的收尾能力之一，spike 已确认无纯 HTTP 的附件提交方案（0.2.2-rc.1 实测与源码双重确认），必须补最小 WebSocket 客户端才能闭环原生聊天
+scope:
+  in:
+    - android/core（WebSocket 帧编解码与上传构造，纯 JVM）、android/app（选取入口、附件栏、查看/保存 UI）、scripts/mock-dsh-server.mjs（/connect 最小 WebSocket 服务端与 uploadFileBinary 端点）、.strict-spec-driven/specs/android-dsbot.yaml（附件 requirement）
+  out:
+    - 桌面 Electron 端、群聊页（后续 dsbot-group-chat 复用附件组件）、Bot 管理页
+unchanged_behavior:
+  - 既有纯文本 send 链路、feed 事件处理、连接状态机
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-attachments

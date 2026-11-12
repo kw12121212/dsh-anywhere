@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-attachments
+open: []
+resolved:
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按字面与 planned change details：附件链路=选取（相册/相机/文件）→预览/移除→uploadFileBinary 上传→receipt 后经 /connect WebSocket 提交带附件消息→feed 呈现；查看=readAttachment 取回字节→图片全屏/文件 Intent 打开→保存到相册或文件保存器。纯文本发送行为不变
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不变：纯文本 send 链路、feed 事件处理、连接状态机、群聊页（后续里程碑复用组件）、Bot 管理页、桌面端
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 模拟器上从相册选取图片发送后聊天出现含附件引用的用户消息与 Bot 回复（与网页端同会话一致）；点开图片能全屏查看并保存到相册；上传失败显示原因且消息不发出、可单件重试
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 当前私聊只能纯文本（send 端点只收文本），无法发送图片/文件也无法查看收到的附件；spike 实测确认无纯 HTTP 附件提交方案，必须补最小 WebSocket 客户端
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: dsbot-bot-chat 已归档（纯文本对话闭环），本 planned change 是里程碑原生聊天能力的收尾件之一；附件通道的接口结论已由 spike 实测登记在 tech/dsbot-api
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: q-prompt-blocks
+    question: 带附件消息经 /connect WebSocket JSON-RPC 提交时，prompt 的 content blocks（text + image/file receipt 引用）的确切字段形态是什么？
+    context: spike 已实测确认附件必须经 /connect WebSocket（HTTP 网关 404）且上传是纯 HTTP uploadFileBinary；但 prompt RPC 的 content blocks 逐字段形态（receipt 引用键名、image/file 块差异、base64 还是 receiptId 引用）未在真实服务器逐字段取证。影响：实现正确性（app-attach-send 任务）与 mock 保真度（mock-attach 任务）——mock 先按 FINDINGS 的 dsh-client 源码线索构造（receipt 引用形态），设备验收阶段在真实 dsh 上实测校准，若形态不符按实测修正 core 的提交构造并回填 tech/dsbot-api 登记；不影响 spec 范围（附件发送/查看的行为需求不变）。推荐：实现时先按源码线索，真实服务器实测后校准，不用等人工答复
+    answer: 0.3.5 真实服务器实测校准：content blocks 为 {type:"file",receiptId} 与 {type:"text",text} 两种（附件一律 receipt 引用，无 base64 内联；uploadFileBinary 应答文件是 file 键、图片是 image 键，两者兼容）。且无需 WebSocket——session/prompt 是 unary RPC，经 POST /api/session/prompt 的 client-request 信封（{type:"client-request",rpcId,method,payload:{args:{request:{requestId,sessionId,mode,content}}}}，server-response 应答）；spike 的 WS 结论对 0.3.5 过时，已在 tech/dsbot-api 登记更正，core 的 WsClient/DshMux 保留为已测组件（未来 stream 类 RPC 载体）
+    status: resolved
+    kind: requirement
+    answered_by: human

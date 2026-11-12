@@ -1,0 +1,53 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-api-spike
+sections:
+  Implementation:
+    build-spike-harness:
+      text: android/core 增加 spike source set 与 runSpike JavaExec 任务：SpikeMain 复用 Socks5Dialer/TailnetRouting/DialProbe 拨号原语与手写 HTTP/1.1 请求风格，DSH_SPIKE_TARGET（带 token tailscale 地址）与可选 DSH_SPIKE_SOCKS5 经环境变量传入，DSH_SPIKE_DUMP 门控原始响应 dump 到仓库外临时目录；敏感值不回显
+      status: complete
+    verify-auth-and-bot-api:
+      text: 对真实 dsh 逐项验证并在 spike 结论文档记录：带 token 地址建立 dsh-auth cookie（含 Set-Cookie 属性）、携带 cookie 与受信 Host 调 POST /api/bot state（含 since/live 增量返回 unchanged）、chat、send，订阅 GET /api/bot/feed 收 hello/revision/live/message/stream 事件（含事件字段格式），记录 401/403 的触发条件（无 cookie、错 Host、跨站标记等）
+      status: complete
+    verify-version-and-cookie-migration:
+      text: 确认远端版本读取方式：实测 update-check 响应中 DS-Bot 与 dsh 的当前版本字段并记录确切来源路径；验证 Android WebView CookieManager 读出 HttpOnly dsh-auth cookie 的可行性（AOSP CookieManager 实现源码确认或模拟器实测，任一可复核方式），结论写入 spike 结论文档
+      status: complete
+    inventory-endpoints:
+      text: 对照 ds-bot 0.3.2 的 client.js 与 channel.js（WSL 内 ~/.dsh/profiles/web/node_modules/ds-bot）逐项盘点网页端功能使用的端点：经 /api/bot 的部分列端点与用途；不经 /api/bot 的部分（带附件发送、图片地址、斜杠命令、会话状态绑定）标注在 dsh 0.2.2-rc.1 中的对应接口与鉴权方式，形成端点清单表并得出附件路径结论（优先无需长期 WebSocket 会话的 HTTP 方式）
+      status: complete
+    emit-fixtures:
+      text: 从 dump 的真实响应生成脱敏 JSON 夹具放入 android/core/src/test/resources（state 全量、state unchanged、chat 条目、feed 事件流、401/403 错误响应）：token/cookie/密钥字段替换为占位值、对话内容换合成文本、结构与字段形态原样保留；配 JUnit 加载校验测试确保每个夹具是合法 JSON 且不含敏感值形态
+      status: complete
+    write-dsbot-api-standard:
+      text: 以 delta-tech 在本变更内新建 dsbot-api 技术标准：登记端点清单（含用途与鉴权）、feed 事件格式、since/live 增量同步语义、dsh-auth cookie 与受信 Host 要求、版本来源与已测基准（DS-Bot 0.3.2、dsh 0.2.2-rc.1）、降级规则与附件路径结论；内容与 spike 实测结论一致
+      status: complete
+    record-attachment-path-answer:
+      text: 把附件路径结论回写里程碑 dsbot-native-chat 的 attachment-path intake 问题（经 strict-spec-cli roadmap-generate，不手改 YAML），与 dsbot-api 技术标准中的结论一致
+      status: complete
+  Testing:
+    run-spike-live:
+      text: 在 WSL 内对真实 dsh 运行 spike 验证（dsh-web 服务 active、ds-bot 0.3.2）：token 建会话、state/since/live、chat、send、feed SSE、401/403 各项逐条通过；环境不可用时按 config.unavailable_behavior 阻塞归档等待人工准备
+      status: complete
+      command: TARGET=$(wsl -e bash -lc '~/.local/bin/dsh-url' | tr -d '\r\n'); DSH_SPIKE_TARGET="$TARGET" DSH_SPIKE_DUMP=1 DSH_SPIKE_SEND=1 android/gradlew -p android/core runSpike
+    core-junit:
+      text: core 纯 JVM 模块 JUnit 全量通过（含新增夹具加载校验与脱敏检查测试）
+      status: complete
+      command: android/gradlew -p android/core test
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-api-spike 通过：工件结构、任务完成度与开放问题检查
+      status: complete
+      command: strict-spec-cli verify dsbot-api-spike
+    project-regression:
+      text: 完整项目回归通过（config 的 review_evidence.project_regression.command，含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪检查：delta-tech 与实测结论一致、夹具脱敏可复核、里程碑 intake 回写完成；strict-spec-cli ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-api-spike
+testing_gates:
+  validation_task: run-spike-live
+  unit_test_task: core-junit

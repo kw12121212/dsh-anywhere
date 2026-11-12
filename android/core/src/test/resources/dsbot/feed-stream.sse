@@ -1,0 +1,8 @@
+event: hello
+data: {"revision":1694}
+
+event: message
+data: {"botId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","sessionId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","item":{"kind":"user","text":"<redacted:content 2 chars>","time":1794382849847,"seq":2801}}
+
+event: stream
+data: {"botId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","sessionId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","attemptId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8:18","phase":"start"}

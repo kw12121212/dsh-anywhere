@@ -1,0 +1,13 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-side-chat
+approach:
+  - Side chat 复用聊天管线：core SideChat 构造/解码（side-new/side-ask/side-cancel/side-close 的 payload 与应答、btw 条目渲染模型），App SideChatPanel（底部抽屉，独立 ChatController 实例旁挂于 NativeShellConnection——side 会话的消息流与流式状态不污染主聊天 rows）；side 会话 id 由 side-new 应答回填；side-ask 附最近消息快照（主聊天尾部 N 条文本）；流式经 feed stream/message 事件按 side sessionId 过滤转发（新增 side 过滤通道）；btw 卡经 Cards.ReadOnly 扩展或独立 Item 渲染（btw-delete 按钮）。端点形态先经 0.3.5 探针实测（lesson spike-bd9881），mock 按实测构造
+decisions:
+  side-panel-isolated-controller:
+    decision: Side chat 面板用独立 ChatController 风格的 SideChatController（独立 rows/流式/会话 id），经 feed 事件按 side sessionId 过滤——不与主聊天共享行列表，切换/后台恢复仅依赖 controller 状态存活
+    rationale: side 是旁路会话：独立控制器天然隔离主聊天状态，抽屉关闭不丢进行中回答；复用渲染组件（MarkdownText/条目模型）保持一致性
+alternatives: []
+risks: []

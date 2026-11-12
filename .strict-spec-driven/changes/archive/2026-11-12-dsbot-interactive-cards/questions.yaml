@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-interactive-cards
+open: []
+resolved:
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: Roadmap planned-change dsbot-interactive-cards details 与已归档变更提供范围证据；答案按 roadmap 细节整理
+    answer: 按 planned change details：7 类卡片的原生渲染与作答 + core 校验降级 + 沙箱隔离 + 团队页同步；手机不做 Bot 浏览器宿主
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: Roadmap planned-change dsbot-interactive-cards details 与已归档变更提供范围证据；答案按 roadmap 细节整理
+    answer: 不变：私聊/群聊消息流与附件、feed 处理、连接状态机、桌面端；不调用 browser-wait/browser-result
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: Roadmap planned-change dsbot-interactive-cards details 与已归档变更提供范围证据；答案按 roadmap 细节整理
+    answer: 模拟器上各卡渲染并可作答（密钥不回显）、畸形卡降级不崩溃、作答后卡片与团队页需要你同步消隐；真实 dsh 一轮卡片作答与网页端一致
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: Roadmap planned-change dsbot-interactive-cards details 与已归档变更提供范围证据；答案按 roadmap 细节整理
+    answer: 原生端只能看不能答：审批/提问/视图/密钥等卡片不可交互，用户必须回网页端处理
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this, and what if we defer?
+    context: Roadmap planned-change dsbot-interactive-cards details 与已归档变更提供范围证据；答案按 roadmap 细节整理
+    answer: 私聊/群聊/附件已闭环；卡片是剩余的交互面，推迟则 Bot 工作流在原生端断链
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: q-card-endpoints
+    question: 卡片作答端点族与卡片条目字段在 0.3.5 的确切 wire 形态是什么？
+    context: 卡片端点族未实测（lesson spike-bd9881）；probe-card-endpoints 任务先在真实服务器探针收敛，mock 按实测构造；不阻塞 spec 范围
+    answer: probe-card-endpoints 任务先在真实 0.3.5 探针实测（无效 callId/参数探路由、错误递进收敛 payload），mock 按实测构造并显式拒绝；实测回填 tech/dsbot-api；不阻塞范围
+    status: resolved
+    kind: requirement
+    answered_by: assumption

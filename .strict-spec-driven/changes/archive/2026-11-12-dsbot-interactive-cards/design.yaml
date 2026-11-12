@@ -1,0 +1,13 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-interactive-cards
+approach:
+  - 卡片统一模型：core 定义 CardKind 与解析/校验/降级（深嵌套与大小上限、未知类型只读文本降级——JUnit 覆盖），App 按类型渲染交互组件并经 /api/bot 写端点作答（approval-answer/answer-question/dismiss-question/view-reply/dismiss-view/secret-set/secret-allow/secret-cancel/learning-answer/browser-give-back）；沙箱 HTML 卡用 WebView 且禁网络/禁导航/无本地接口注入（JavascriptInterface 不注册、shouldOverrideUrlLoading 拒绝、loadDataOnly base url about:blank）；密钥输入框 InputType 密码形态且值只经作答请求发出（不进日志/诊断）；作答成功后本地卡片消隐，团队页「需要你」经 state 刷新自然同步（已归档链路）。端点形态先经 0.3.5 真实服务器探针复验（lesson spike-bd9881），mock 按实测形态构造
+decisions:
+  card-validation-in-core:
+    decision: Bot 内容不可信：卡片 JSON 的结构校验（字段类型/选项数量/嵌套深度/总大小）全部在 core 纯 JVM 实现并 JUnit 覆盖，App 只渲染通过校验的模型；超限或未知类型一律降级为只读文本卡片，不崩溃
+    rationale: core 校验可测且两端（未来桌面）复用；Bot 输出不可信是 tech/dsbot-api 的既定边界，卡片是最大的不可信输入面
+alternatives: []
+risks: []

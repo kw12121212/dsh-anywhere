@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-api-client
+open: []
+resolved:
+  - id: contract-from-spike
+    question: DS-Bot API 的调用契约、cookie 行为与迁移可行性依据是什么？
+    context: 影响 core 客户端设计、App 传输与会话实现、测试夹具与规格改写范围的全部技术前提。
+    answer: '已由 dsbot-api-spike 实测并归档为 tech/dsbot-api 标准（8 条 MUST）：信封与 ok/fail 解码、state 三档增量（since/live 全命中仅 {revision,unchanged,liveKey}）、feed SSE 事件集（hello/revision/live/message/stream 与 : keepalive）、错误码族、边界（无 cookie→401 固定失效标记、错 Host 单头→403、跨站 Origin+cookie→403、无 Origin 放行）、版本字段 value.current 与 value.dsh.current、路径去尾斜杠拼接（双斜杠静默落 SPA 兜底）；cookie 为 dsh-auth-*（SameSite=Strict、HttpOnly、值内嵌 authority、30 天），WebView CookieManager.getCookie 可读 HttpOnly（Chromium include_http_only=true）。脱敏夹具在 android/core/src/test/resources/dsbot/。'
+    status: resolved
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change dsbot-api-client 字面范围：core 纯 JVM 客户端与 SSE 状态机 + App 原生传输与会话（建立/探测/401/403/迁移）本变更完成；WebView 主页面保留，界面替换在 dsbot-native-shell
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不替换 WebView 主页面与导航；不做原生团队/聊天界面；不实现附件 WebSocket 通道；桌面端与 App 其余功能（首次设置/设置/隧道/自更新/诊断）行为不变
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 原生会话建立后 WebView 主页面照常加载；强杀重启会话保留；401→本地重新认证页、403→trusted-host 提示；WebView 版本升级后无需重新粘贴地址即进入主页面；core JUnit 以 spike 夹具覆盖解码/SSE/重连/错误映射/版本比对
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 会话建立、探测与 401 识别目前由 WebView 承担，原生 API 客户端与传输不存在；后续原生界面 planned changes 缺少统一客户端，且移除 WebView 前必须先迁走会话职责
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: dsbot-api-spike 已归档（契约、夹具、dsbot-api 标准就绪），本变更是其 7 个下游 planned change 的共同前置，roadmap-recommend 当前唯一合格候选
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-native-shell
+approach:
+  - core 新增 DsbotConnection 状态机（输入：probe 结果、feed 连接/断开/事件、前后台信号；输出：连接条状态枚举与取 state 动作——复用 FeedSync，外层聚合可达性与版本比对），JUnit 覆盖状态迁移。App 侧 NativeShell 以自管返回栈（BackHandler + 页面枚举，不引导航库）承载 团队页→私聊/群聊→详情 骨架；进前台恢复 feed（HttpSocket.feed + SseParser 帧喂 FeedSync）、退后台断开；版本提示条经 NativeSession.apiRequest 调 update-check 并以 DsbotVersions 比对；不可达时本地错误页复用既有错误页形态并接 diagnostics.recordLoadError。WebView 承载整体删除：MainWebScreen、ProxyBridge、ProxyController、网页导航与外链分流、androidx.webkit 依赖；NativeSession 的拨号注入改为 TunnelManager SOCKS5 + TailnetRouting.splitDial 的 App 内 helper（桥的唯一消费者是 WebView，原生路径本就直连）。升级迁移保留：框架 android.webkit.CookieManager 读旧 cookie（非 androidx.webkit）。
+decisions:
+  native-backstack-not-navlib:
+    decision: 返回栈用页面枚举 + BackHandler 自管，不引 navigation-compose
+    rationale: 骨架只有 团队→聊天→详情 三层且全部本变更自建，导航库的依赖与抽象此时只有成本没有收益（YAGNI）；后续页面多了再评估
+  feed-lifecycle-core:
+    decision: 连接状态与前后台 feed 生命周期策略下沉 core（DsbotConnection），App 只做线程与 UI 接线
+    rationale: pure-logic-in-core：状态迁移与补齐决策是纯逻辑，必须可 JUnit；App 层只保留 Compose 与生命周期装配
+  keep-platform-cookiemanager:
+    decision: 保留 android.webkit.CookieManager（平台 API）做升级迁移与 cookie 同步，删除的是 androidx.webkit（ProxyController 等 Jetpack 依赖）
+    rationale: 迁移逻辑读 HttpOnly cookie 依赖平台 CookieManager；androidx.webkit 只服务 WebView 代理覆盖，随 WebView 主页面一起删
+  orchestrator-single-thread:
+    decision: 连接编排器（探测/建会话/gate/取 state/退避）串行跑在单线程 executor；feed 长阻塞订阅放独立线程并持代际令牌，停止靠谓词与读超时（≤30s）收尾
+    rationale: 裸 java.lang.Thread 的并发面在评审中暴露（pendingRawUrl 双消费、退避线程打断健康订阅、跨线程状态可见性）；编排动作用单线程天然串行化，feed 是唯一长阻塞点，用代际令牌使其可被作废而不打断 executor；socket 阻塞读无法被 interrupt，接受读超时兜底（30s 内收尾），避免为关闭 socket 引入传输层 API 变更
+alternatives: []
+risks:
+  - 删除 ProxyBridge 影响面大（明文门控、桥测试、规格条目）：以 git 逐文件核对引用，规格与标准同步改写并在 delta-spec/delta-tech 中登记删除后的替代约束
+  - 骨架页面无实际内容时连接状态条是唯一可验收的全局行为：验收聚焦导航、状态条、错误页、迁移与重新认证，内容功能留给后续变更

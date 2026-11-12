@@ -1,0 +1,58 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-api-client
+sections:
+  Implementation:
+    core-api-envelope:
+      text: core 新增 DsbotApi：POST 信封 {endpoint,payload} 构造、经注入的传输发往 apiBase、{ok,value|error} 解码与 bot/* 错误码到用户可读原因的映射（DsbotErrors：invalid/refused/stale/not-found/read-only/internal/browser-off 与网络类区分）
+      status: complete
+    core-sse-parser:
+      text: 'core 新增 SseParser 纯函数：event:/data:（多行拼接）/: 注释保活/空行收帧，输入字节流输出 (event, data) 帧；无状态、可增量喂入'
+      status: complete
+    core-feed-statemachine:
+      text: core 新增 feed 连接状态机：连接、断开、指数退避重连；重连收到 hello 后以 revision 与本地对比，变化时经 DsbotApi 以 since/live 取 state 增量（unchanged 零负载）；退避上限与重置条件明确；写操作失败不自动重试
+      status: complete
+    core-decode-models:
+      text: core 新增 DsbotState/DsbotChat 解码模型：revision/liveKey/bots/rooms 与 chat items 的强类型字段，未知字段与类型不匹配字段保留为 Json.Value 原始节点（降级显示，不抛错）
+      status: complete
+    core-version-compare:
+      text: core 新增 DsbotVersions：经 update-check 读取 value.current（DS-Bot）与 value.dsh.current（dsh），与基准 0.3.2/0.2.2-rc.1 比对产出一致/不一致/未知三种结果
+      status: complete
+    app-native-transport:
+      text: core 新增 HttpSocket 通用传输（纯 JVM：经注入拨号函数的 HTTP/1.1 请求与 SSE 流式订阅、chunked 按 chunk 边界返回、TLS 同套接字分层，JUnit 以本地真实服务端含 TLS 覆盖——tech/android-client 的 pure-logic-in-core）；App 侧经 ProxyBridge 分流注入拨号（tailnet 目标经内嵌节点）、请求目标限定已保存 harness 的源、携带 dsh-auth cookie 与同源 Host、路径按 dsbot-api exact-path-construction 去尾斜杠
+      status: complete
+    app-session-store:
+      text: App 的 NativeSession 内置会话存储：dsh-auth cookie 经 core SessionCookies 序列化存 filesDir/native-session-cookies，临时文件+重命名原子写入；读取缺失/损坏按无会话处理（401 流程接管），不阻断启动、不清其他配置；cookie 值不进日志与诊断上报
+      status: complete
+    app-native-session:
+      text: App 会话职责迁原生：保存带 token 地址时原生 GET 一次（跟随重定向并携带已收 cookie）建立会话并写入 NativeSessionStore，成功后同步 cookie 到 WebView CookieManager 供主页面使用；连接探测与会话失效探测改为原生请求（401+固定失效标记→本地重新认证页，403→trusted-host 配置提示）；从 WebView 版本升级后首次启动用 CookieManager.getCookie 读该源 dsh-auth cookie 一次性迁入原生存储，迁移不到显示本地重新认证页
+      status: complete
+    update-delta-specs:
+      text: 按实际实现核对并更新 android-app 主规格的 delta：session-establish 改写为原生建立、新增 WebView cookie 迁移与 403 trusted-host 提示的可观察需求，场景与实现一致
+      status: complete
+  Testing:
+    core-junit-dsbot:
+      text: core 夹具驱动 JUnit 全量通过：信封解码与错误映射（error-envelope/401 夹具）、SseParser（feed-stream.sse）、state 三档增量解码（state-full/unchanged-live/unchanged）、chat 解码、版本比对（update-check）、cookie/Set-Cookie 解析与迁移输入解析
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实双路验收通过（2026-11-11，Medium_Phone_API_36.1）：mock dsh 下原生建会话→主页面 WebView 显示 harness；强杀重启会话保留；401→自动重试一次→重新认证页（修复重试死循环）；重新认证粘贴新 token 恢复；删原生 store 重启从 CookieManager 迁移成功直接进主页面；403→trusted-host 本地提示页；真实 tailnet（tag:pac-client 内嵌节点 + dsh-url tailscale 地址）原生 establish 与 WebView https 加载真实 harness 页面。过程修复：raw URL 尾部空白致 URISyntaxException（AppGraph trim）、重试标志每轮重置致无限循环
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-api-client 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-api-client
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪检查：评审通过、delta-spec 与实现一致；strict-spec-cli ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-api-client
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-dsbot

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: dsh-api-spa-post-405-allow-get-head-b719c7
+  title: 'dsh /api 前缀路由按字面匹配：双斜杠路径静默落 SPA 兜底（POST→405 Allow: GET, HEAD）'
+category: coding
+status: active
+created_at: '2026-11-11T08:08:00.844Z'
+updated_at: '2026-11-11T08:08:00.844Z'
+context: dsbot-api-spike 对真实 dsh（0.2.2-rc.1）写原生 HTTP 客户端：dsh-url 输出的根地址带尾部斜杠（https://host:13080/），core 的 HarnessUrl.normalize 对根路径也保留尾斜杠；与子路径直接字符串拼接得到 //api/bot。
+observation: 'dsh webserver 的 /api 前缀路由按 pathname.startsWith("/api/") 字面匹配：//api/bot 不匹配，请求静默落到 SPA 静态兜底；POST 由静态资源回答 405 Method Not Allowed + Allow: GET, HEAD，无任何路由级错误提示。表象与『来源被拦/鉴权失败/方法不支持』高度相似：本次曾误判为 Windows tailnet peer 被 tailscale serve 拦截，对照实验（WSL 本机 curl 通、Windows 405）+ loopback 抓包看到 POST //api/bot 才定位为自身 URL 拼接缺陷。'
+takeaway: '对 dsh（及其插件 Fetch 路由）写任何客户端：① 基准地址必须先去尾部斜杠再拼 /api 子路径；② 收到 405 + Allow: GET, HEAD 且无 dsh 常规响应头（Cache-Control: no-store/Vary）即按『路径未命中 /api 路由』识别，优先检查请求行路径拼写而不是排查鉴权与网络来源；③ 对照实验要固定唯一变量（两侧 URL 字符串可能不同源）。'
+applies_when: 任何对 dsh web（或其插件注册的 /api Fetch 路由）发起 HTTP 请求的客户端代码与排障：Electron、Android core、spike、curl 复现脚本；尤其当 405/404 与预期路由行为不符时。
+occurrences:
+  - origin: dsbot-api-spike
+    date: '2026-11-11'
+    evidence: android/core/src/spike/FINDINGS.md 第 2 节与 tech/dsbot-api delta 的 exact-path-construction 规则（MUST）；spike 代码 apiBase=base.trimEnd("C:/Program Files/Git/") 修正后 SPIKE PASS（11 项全过、exit 0）。

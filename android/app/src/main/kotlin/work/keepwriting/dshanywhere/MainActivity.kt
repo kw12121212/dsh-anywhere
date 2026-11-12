@@ -5,6 +5,7 @@ import android.webkit.CookieManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,8 +16,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 /**
- * 入口 Activity：按配置状态路由——无有效配置进首次设置页，有效配置进 WebView 主页面。
- * 返回键优先级：主页面网页后退 > 设置页返回主页面 > 系统默认（退出）。
+ * 入口 Activity：按配置状态路由——无有效配置进首次设置页，有效配置进原生骨架（dsbot-native-shell）。
+ * 返回键优先级：骨架内导航后退 > 设置页返回骨架 > 系统默认（退出）。
  */
 class MainActivity : ComponentActivity() {
     private enum class Screen { FirstRun, Main, Settings }
@@ -49,21 +50,27 @@ class MainActivity : ComponentActivity() {
                     }
                     when (screen) {
                         Screen.FirstRun -> FirstRunScreen(graph, onComplete = { screen = Screen.Main })
-                        Screen.Main -> MainWebScreen(
-                            graph,
-                            onOpenSettings = { screen = Screen.Settings },
-                            onNeedSetup = { screen = Screen.FirstRun },
-                        )
-                        Screen.Settings -> SettingsScreen(
-                            graph,
-                            onSaved = {
-                                // 保存成功：回主页面并触发重新探测加载（save 已更新内存态，
-                                // requestReload 重读磁盘并递增 reloadTick 驱动主页面）。
-                                graph.requestReload()
-                                screen = Screen.Main
-                            },
-                            onCancelled = { screen = Screen.Main },
-                        )
+                        else -> Box(modifier = Modifier.fillMaxSize()) {
+                            // 外壳单实例、设置期间保持组合（叠加而非替换）：返回栈与连接
+                            // 状态在设置期间保留，返回即回原骨架页面（settings-entry-reachable）。
+                            NativeShell(
+                                graph,
+                                onOpenSettings = { screen = Screen.Settings },
+                                onNeedSetup = { screen = Screen.FirstRun },
+                            )
+                            if (screen == Screen.Settings) {
+                                SettingsScreen(
+                                    graph,
+                                    onSaved = {
+                                        // 保存成功：requestReload 重读磁盘并递增 reloadTick，
+                                        // 外壳的 LaunchedEffect(reloadTick) 驱动重新走连接流程。
+                                        graph.requestReload()
+                                        screen = Screen.Main
+                                    },
+                                    onCancelled = { screen = Screen.Main },
+                                )
+                            }
+                        }
                     }
                     BackHandler(enabled = screen == Screen.Settings) { screen = Screen.Main }
                 }
@@ -99,7 +106,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         // 会话 cookie 持久化双保险：进入后台即落盘，强杀后 cookie 仍在
-        // （另一处在 WebView onPageFinished 的会话建立点）。
+        // （另一处在 NativeSession 建会话成功后的原子写）。
         CookieManager.getInstance().flush()
     }
 

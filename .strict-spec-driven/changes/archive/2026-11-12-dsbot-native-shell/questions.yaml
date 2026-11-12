@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-native-shell
+open: []
+resolved:
+  - id: context-from-prior-changes
+    question: 本变更的技术前提（客户端、传输、会话、标准）依据是什么？
+    context: 影响导航外壳、feed 生命周期、错误页与规格改写的全部实现前提。
+    answer: dsbot-api-spike 与 dsbot-api-client 均已归档：core 有 DsbotApi/SseParser/FeedSync/DsbotModels/DsbotVersions/SessionCookies/HttpSocket（全部夹具驱动 JUnit 覆盖）；App 有 NativeSession（建会话/迁移/gate/CookieManager 同步，双路验收通过）；tech/dsbot-api 标准 8 条 MUST 登记（含 exact-path-construction 的 DsbotApi.url helper）；android-app 主规格已有 session-establish（原生）、webview-cookie-migration、forbidden-host-hint 三条新基线。
+    status: resolved
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change dsbot-native-shell 字面范围：导航外壳与骨架页、连接状态与版本提示、feed 生命周期、WebView 承载删除与规格/标准改写；页面实际内容由 team-home/bot-chat 等后续变更填充
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不做团队页/聊天页实际内容、附件、卡片、图片；首次设置/设置/隧道/自更新/诊断行为不变；桌面端不变；dsbot-api-client 交付的会话行为不变
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 覆盖升级无需重新认证直接进入原生团队页骨架；强杀重开恢复且状态条回在线；会话失效显示重新认证页可恢复；403/不可达有对应本地页；返回键原生后退；androidx.webkit 从依赖中消失；android-dsbot 主规格与更新的标准生效
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: WebView 主页面仍是界面主体，原生界面里程碑目标未落地；WebView 承载的代理桥、导航范围等复杂度成为原生路线的遗留负担
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: dsbot-api-client 已归档（客户端/传输/会话就绪），roadmap-recommend 当前唯一合格候选；后续 5 个界面变更依赖本骨架
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

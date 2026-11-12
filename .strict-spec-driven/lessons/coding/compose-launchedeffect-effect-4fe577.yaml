@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: compose-launchedeffect-effect-4fe577
+  title: Compose 自触发重载的 LaunchedEffect 里，状态标志不能在 effect 顶部重置
+category: coding
+status: active
+created_at: '2026-11-11T15:08:59.038Z'
+updated_at: '2026-11-11T15:08:59.038Z'
+context: dsbot-api-client 的 MainWebScreen：401 自动重试语义靠 requestReloadSoft() 递增 reloadTick 重入 LaunchedEffect 实现。
+observation: effect 顶部习惯性写 reauthRetryDone = false（旧 WebView 流程遗留），而重试路径正是靠重入同一 effect 实现：每轮重入都把「已重试」标志清零，401 时永远走「第一次重试」分支再次 requestReloadSoft——界面卡在「正在连接」无限循环，模拟器验收实测发现。
+takeaway: 凡是 effect 内通过改 key 状态自触发重入的流程，一次性标志的重置点必须放在「成功进入终态」或「最终落到失败页」处，绝不能放在 effect 顶部；写这类重试时先画出 effect 重入路径再放标志。
+applies_when: 任何 Compose LaunchedEffect(key) 内以状态变更触发自身重入、并用布尔标志限制次数的逻辑（重载/重试/重连 UI）。
+occurrences:
+  - origin: dsbot-api-client
+    date: '2026-11-11'
+    evidence: MainWebScreen.kt 修复注释（「开头重置会让重试一次退化成无限循环（实测踩坑）」）；模拟器验收：修复前刷新卡「正在连接」30s+，修复后 401→重试一次→重新认证页。

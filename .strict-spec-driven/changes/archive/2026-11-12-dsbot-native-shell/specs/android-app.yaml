@@ -1,0 +1,93 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED: {}
+  MODIFIED:
+    main-page-load:
+      strength: MUST
+      statement: App 已保存有效 harness URL 时启动进入原生骨架（android-dsbot）的连接流程：先对干净地址做可达性检查（任何 HTTP 响应视为可达；https 经 TLS 握手与主机名校验），可达且会话有效时进入团队页骨架并启动 feed 同步；DNS 失败、拒绝、超时或 TLS 错误显示本地连接错误页；两种结果都不显示首次设置页。
+      scenarios:
+        'reachable-native-shell:':
+          - GIVEN: 已保存地址可达且会话有效
+          - WHEN: 启动 App
+          - THEN: 进入团队页骨架，连接状态条从连接中转为在线，不显示任何网页
+        'unreachable-native-error:':
+          - GIVEN: 已保存地址不可达
+          - WHEN: 启动 App
+          - THEN: 显示本地连接错误页，不显示首次设置页
+    load-error-page:
+      strength: MUST
+      statement: harness 地址不可达时原生骨架显示本地错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），并提供「重试」与「修改地址」按钮；点击「重试」重新检查地址，恢复可达时回到团队页骨架；点击「修改地址」进入设置页并回显当前地址。
+      scenarios:
+        'native-error-buttons:':
+          - GIVEN: 已保存地址不可达，错误页显示
+          - WHEN: 点击修改地址
+          - THEN: 进入设置页且回显当前地址；保存新地址后回到原生骨架重新连接
+    refresh-entry:
+      strength: MUST
+      statement: 原生骨架提供刷新入口：点击后重新检查已保存的干净 harness 地址并重连——可达且会话有效时回到团队页骨架（重新取全量 state），不可达时显示本地错误页；没有有效配置时回到首次设置页。
+      scenarios:
+        'native-refresh-reconnects:':
+          - GIVEN: 团队页骨架在线显示
+          - WHEN: 点击刷新入口
+          - THEN: 重新走可达性与会话检查并回到团队页骨架（重新取全量 state），不出现网页
+    cleartext-restriction:
+      strength: MUST
+      statement: App 的原生网络请求只对已保存 harness 的源放行明文 http：对其他主机的明文请求不发出（原生请求目标本身限定已保存源）；https 请求不受限制。WebView 承载移除后不再存在网页子资源加载面。
+      scenarios:
+        'native-http-gated-to-origin:':
+          - GIVEN: 已保存 http://10.0.2.2:13080/
+          - WHEN: 原生客户端请求该源的 /api 端点
+          - THEN: 请求正常发出；对任何其他主机的明文请求不会发生（请求构造即限定已保存源）
+    session-establish:
+      strength: MUST
+      statement: 在首次设置页、设置页保存带有效 token 的地址后，App 以原生 HTTP 只请求一次带 token 地址建立会话（跟随同源重定向并携带过程中签发的 cookie），成功后把 dsh-auth cookie 持久化到 App 私有存储（强杀后仍保留）并进入原生骨架（不再加载任何网页）；带 token 地址不进入配置文件或日志。原生建立失败（网络错误、终态未取得会话）时按连接失败或会话失效的既有页面分流，不进入主界面。
+      scenarios:
+        'establish-enters-native-shell:':
+          - GIVEN: mock dsh 在 http://10.0.2.2:13080/，用户粘贴带 token 地址并保存
+          - WHEN: 首次设置页点击开始使用
+          - THEN: 原生请求一次带 token 地址取得会话 cookie，进入团队页骨架（无网页加载），配置只存干净地址
+    session-persist-restart:
+      strength: MUST
+      statement: 会话建立后强杀并重启 App：无需重新输入地址，直接进入团队页骨架（会话 cookie 已持久化）；只要会话仍有效，重启后不出现首次设置页或重新认证页。
+      scenarios:
+        'kill-restart-keeps-session:':
+          - GIVEN: 用户已建立会话并停留在团队页骨架
+          - WHEN: 强杀 App 后重新启动
+          - THEN: 直接进入团队页骨架，不出现首次设置页或重新认证页
+    session-expired-reauth:
+      strength: MUST
+      statement: 会话失效时（原生请求对干净地址收到 401，http 与 https 地址同样判定），App 先自动重试一次，仍失效则把主界面切换为本地重新认证提示页：说明需要在 DSH 主机上运行 dsh-url 获取新地址，并提供「打开设置」按钮；提示页不显示 token，也不显示 dsh 返回的 401 原文。在重新认证提示页经设置页粘贴新的带 token 地址并保存后，无需重启 App 即恢复团队页骨架。
+      scenarios:
+        'reauth-recovers-native:':
+          - GIVEN: 主界面显示重新认证提示页
+          - WHEN: 点击打开设置，粘贴新带 token 地址并保存
+          - THEN: 设置页关闭，主界面经一次原生建立后恢复团队页骨架，配置只存干净地址
+    tunnel-gated-tailnet-load:
+      strength: MUST
+      statement: 配置的 harness 地址为 tailnet 目标时，原生骨架按隧道状态联动：隧道未配置时显示需要接入 tailnet 的本地说明与「去设置」入口，不发起连接；隧道连接中、需要 key 或失败时显示隧道状态与「重试连接」「去设置」入口；隧道变为已连接后自动进入连接流程（探测、feed 同步）；全部网络请求（探测、会话、API、feed）经同一分流路径发出（tailnet 目标经内嵌节点 SOCKS5、其余直连）。
+      scenarios:
+        'auto-connect-on-tunnel-up:':
+          - GIVEN: 已配置 tailnet 地址，骨架显示隧道等待面板
+          - WHEN: 隧道变为已连接
+          - THEN: 骨架自动走可达性与会话检查并进入团队页骨架（feed 同步开始）
+    proxy-split-routing:
+      strength: MUST
+      statement: App 的全部原生网络请求（探测、会话建立、API、feed 长连接）按目标分流：tailnet 目标（100.64.0.0/10、fd7a:115c:a1e0::/48、*.ts.net、MagicDNS 短名）经内嵌 Tailscale 节点的 SOCKS5 转发，其他目标经手机网络直连；feed 的 SSE 长连接在同一分流路径上持续工作；非 tailnet 的 harness 地址在隧道任何状态下都照常直连，不受隧道影响；不存在本机监听的代理端口。
+      scenarios:
+        'native-split-dial:':
+          - GIVEN: 已配置 tailnet 上的 harness 地址，隧道已连接
+          - WHEN: App 发起探测、API 请求与 feed 订阅
+          - THEN: 请求全部经内嵌节点发出，feed 持续收到事件；非 tailnet 地址的全部请求经手机网络直连
+  REMOVED:
+    navigation-scope-android:
+      reason: 主页面不再以 WebView 加载远程网页，网页导航范围（同源留在窗口、外链交系统）与 window.open 约束随之消失；原生导航的后退行为由 android-dsbot 的 native-nav-skeleton 承接
+    remote-isolation-android:
+      reason: App 不再用 WebView 承载远程内容（androidx.webkit 依赖一并移除）；沙箱 HTML 卡片如需 WebView 由 dsbot-interactive-cards 以禁网隔离用法单独引入并受 webview-isolation 标准收窄后的约束
+    back-key-web-history:
+      reason: 网页历史后退随 WebView 主页面移除；返回键行为由 android-dsbot 的 native-nav-skeleton（原生导航后退）承接
+    proxy-isolation:
+      reason: 本地代理桥随 WebView 承载一并移除（桥的唯一消费者是 WebView）；原生请求不经任何本机监听端口，直接经 TailnetRouting.splitDial 拨号（tailnet 目标经内嵌节点 SOCKS5、其余直连），不存在 407/凭据/回环监听面

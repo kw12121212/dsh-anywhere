@@ -3,6 +3,12 @@ schema_version: 2
 artifact_type: lessons_index
 schema_file: templates/strict-spec-driven/schemas/lessons-index.yaml
 categories:
+  api:
+    spike-bd9881:
+      title: spike 期的载体结论必须按目标服务器版本实测复验后再定实现
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/spike-bd9881.yaml
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
@@ -25,6 +31,21 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/coding/post-ec9ab1.yaml
+    dsh-api-spa-post-405-allow-get-head-b719c7:
+      title: 'dsh /api 前缀路由按字面匹配：双斜杠路径静默落 SPA 兜底（POST→405 Allow: GET, HEAD）'
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/dsh-api-spa-post-405-allow-get-head-b719c7.yaml
+    compose-launchedeffect-effect-4fe577:
+      title: Compose 自触发重载的 LaunchedEffect 里，状态标志不能在 effect 顶部重置
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/compose-launchedeffect-effect-4fe577.yaml
+    utf-8-string-bytes-u-fffd-d90166:
+      title: 手写流式客户端读 UTF-8 文本必须经解码器跨读状态，逐块 String(bytes) 会把多字节字符毁成 U+FFFD
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/utf-8-string-bytes-u-fffd-d90166.yaml
   security:
     wails-seturl-token-e08b6a:
       title: Wails SetURL 会在内存中保留并可能重放带 token 的地址
@@ -188,3 +209,13 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/windows-anr-uiautomator-app-b85884.yaml
+    git-bash-strict-msys-c-program-files-git-256fa4:
+      title: Git Bash 下生成 strict 工件：前导斜杠参数被 MSYS 改写为 C:/Program Files/Git/…
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/git-bash-strict-msys-c-program-files-git-256fa4.yaml
+    adb-input-text-gboard-dump-01416f:
+      title: 模拟器验收：adb input text 会被 Gboard 自动更正污染，输入后必须 dump 验证字段内容
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/adb-input-text-gboard-dump-01416f.yaml

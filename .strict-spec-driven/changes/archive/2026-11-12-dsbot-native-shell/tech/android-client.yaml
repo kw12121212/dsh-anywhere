@@ -1,0 +1,15 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: android-client
+operations:
+  ADDED:
+    native-network-path:
+      strength: MUST
+      statement: Android 的原生网络请求（探测、会话、API、feed）一律经 core 的分流拨号原语（TailnetRouting.splitDial：tailnet 目标经内嵌节点 SOCKS5、其余直连）与 HttpSocket/DialProbe 类手写客户端发出；请求目标限定已保存 harness 的源并携带同源 Host，路径拼接经 DsbotApi.url；不得再引入面向 WebView 的本机代理桥（ProxyBridge/ProxyController）或恢复 androidx.webkit 依赖承载远程页面（沙箱卡片视图由 dsbot-interactive-cards 以禁网隔离用法单独评估）
+      rationale: WebView 承载移除后代理桥失去唯一消费者；原生路径本就直连分流，保留桥只会增加监听面与状态复杂度
+      enforcement:
+        method: review
+  MODIFIED: {}
+  REMOVED: {}

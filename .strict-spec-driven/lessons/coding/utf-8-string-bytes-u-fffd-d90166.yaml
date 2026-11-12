@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: utf-8-string-bytes-u-fffd-d90166
+  title: 手写流式客户端读 UTF-8 文本必须经解码器跨读状态，逐块 String(bytes) 会把多字节字符毁成 U+FFFD
+category: coding
+status: active
+created_at: '2026-11-11T15:23:33.277Z'
+updated_at: '2026-11-11T15:23:33.277Z'
+context: dsbot-api-client 的 HttpSocket.feed：socket/chunked 流上读 SSE 帧再拼 JSON，中文消息是主场景。
+observation: 按字节块 read(ByteArray) 后各自 new String(bytes, UTF_8)：多字节字符跨读边界时截断序列被替换为 U+FFFD，data 帧 JSON 解析失败且上层按无操作降级——消息静默丢失、无任何报错。触发面广：chunk 边界（>缓冲的 chunk 在任意字节偏移返回）与非 chunked TCP/TLS 分段都任意切。独立评审发现（MUST FIX）。
+takeaway: 流式读多字节文本一律 InputStreamReader(stream, UTF_8).read(CharArray)（解码器持有跨读状态），不要逐字节块转 String；并为「多字节字符跨 chunk 边界」写专门测试（构造 payload 把一个 CJK 字符拆在两个 chunk）。
+applies_when: 任何在 socket/TLS/chunked 流上读 UTF-8（SSE、JSON 流、协议文本）的手写客户端，core 与 :app 皆适用。
+occurrences:
+  - origin: dsbot-api-client
+    date: '2026-11-11'
+    evidence: HttpSocket.feed 修复注释与 HttpSocketTest「feed 多字节字符跨 chunk 边界不损坏」测试（修复前该形态必出 U+FFFD）。

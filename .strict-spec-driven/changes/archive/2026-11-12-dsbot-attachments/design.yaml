@@ -1,0 +1,14 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-attachments
+approach:
+  - 混合通道：纯文本继续走 /api/bot send；带附件消息按 spike 结论走 /connect WebSocket JSON-RPC 短时会话（握手要求受信 Host 与 dsh-auth cookie，Upgrade 后收发 JSON-RPC 帧）。上传先行：选取的图片/文件经 POST /api/session/uploadFileBinary（query 带 sessionId/name[/mediaType]，body 为 octet-stream 原始字节）换 receiptId，随后在 WebSocket 会话里以 content blocks（text + image/file receipt 引用）提交 prompt，发完即关连接。查看走 readAttachment RPC 取回字节：图片内存解码显示，文件落临时文件交 Intent（ACTION_VIEW 打开、ACTION_CREATE_DOCUMENT/MediaStore 保存）。附件内容不落日志
+  - 混合通道：纯文本继续走 /api/bot send；附件链路按 spike 结论设计为 /connect WebSocket JSON-RPC 短时会话（core 实现 WsClient/DshMux），设备验收阶段在真实 0.3.5 服务器实测校准——session/prompt 与 session/attachment 实为 unary RPC，经 POST /api/session/prompt 与 /api/session/attachment 的 client-request 信封调用（见 questions q-prompt-blocks 的实测记录与 tech/dsbot-api attachment-path 的 0.3.5 更正），App 最终走 HTTP；WsClient/DshMux 保留为已测组件（未来 stream 类 RPC 载体）。上传先行：选取的图片/文件经 POST /api/session/uploadFileBinary 换 receiptId，随后 content blocks（file+receiptId 与 text）提交 prompt，发完即返回。查看走 session/attachment 取 base64 字节：图片内存解码显示，文件落 cache 临时文件交 Intent（ACTION_VIEW 打开、ACTION_CREATE_DOCUMENT 保存）。附件内容不落日志
+decisions:
+  ws-minimal-client-in-core:
+    decision: WebSocket 客户端（RFC6455 握手、帧编解码、mux open/item/end 协议）实现为 core 纯 JVM 组件并用 JUnit 测试：无 android 依赖、与 HttpSocket 同层复用 NativeDial 分流；实测演进出 HTTP unary 信封后该组件保留为已测组件（stream 类 RPC 载体），App 附件链路走 HTTP client-request（AttachmentMessages.clientRequest/parseServerResponse 在 core 并有单测）
+    rationale: spike 实测 /connect 握手要求受信 Host + cookie，与既有 NativeSession 会话/分流基建同源，放 core 可测且群聊里程碑可直接复用；mock 手写最小 WebSocket 服务端（握手 SHA1 + 掩码帧解析）与 HTTP client-request 端点双轨，验收两条路径
+alternatives: []
+risks: []

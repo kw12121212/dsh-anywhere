@@ -1,0 +1,62 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+standard:
+  title: DS-Bot API 接入契约
+  category: architecture
+operations:
+  ADDED:
+    endpoint-inventory-source:
+      strength: MUST
+      statement: Android 原生访问 DS-Bot 的端点、请求/响应字段与 feed 事件格式以本标准登记的端点清单为唯一依据；清单条目必须注明 HTTP 端点、用途与鉴权要求，登记内容以 dsbot-api-spike 对 DS-Bot 0.3.2 与 dsh 0.2.2-rc.1 的实测为来源
+      rationale: DS-Bot 的 /api/bot 是前后端内部接口、无跨版本稳定承诺，登记实测清单让后续变更与升级检测有单一事实来源
+      enforcement:
+        method: review
+        detail: '已实测登记（完整清单与返回形态见 android/core/src/spike/FINDINGS.md）：POST /api/bot 信封 {endpoint, payload} → {ok, value|error}；state（全量视图+live 字段；since 增量 → unchanged+live 字段；since+live 全命中 → 仅 {revision, unchanged, liveKey}）、chat {botId, cursor?} → {sessionId, items[]}、earlier、send {sessionId, text}（纯文本）、update-check（版本来源）；GET /api/bot/feed SSE（chunked，事件 hello/revision/live/message/stream，: keepalive 注释每 20s）；POST /api/session/uploadFileBinary（附件上传）；GET /connect WebSocket（附件消息提交与 readAttachment）。错误码族：bot/invalid|refused|stale|not-found|read-only|internal、bot/browser-off；边界：无 cookie→401 固定失效标记、错 Host（单头）→403、重复 Host 头→400、跨站 Origin+有效 cookie→403、无 Origin 原生请求放行'
+    auth-cookie-and-host:
+      strength: MUST
+      statement: 携带 dsh-auth cookie 的原生请求必须使用与 harness trusted-host 一致的 Host 头且不携带跨站 Origin 等跨站标记；dsh-auth cookie 只保存在 App 私有存储，不得出现在日志、dump 或诊断上报
+      rationale: dsh 共享 /api 通道按 Host 白名单与 Origin 校验拦截请求，cookie 为 SameSite=Strict、HttpOnly 且绑定 host:port；凭据外泄违反 security-secrets 标准与项目 config 硬约束
+      enforcement:
+        method: review
+    incremental-sync:
+      strength: MUST
+      statement: feed 的 revision/live 事件之后必须以 state 的 since=当前 revision 与 live 键做增量补齐，unchanged 响应不得触发全量刷新；message/stream 事件只做当前聊天的增量更新
+      rationale: DS-Bot state 端点的 since/live 增量语义是断线重连后低开销补齐的基础，全量刷新会造成不必要负载与 UI 闪动
+      enforcement:
+        method: test
+    version-baseline-and-degrade:
+      strength: MUST
+      statement: 连接时必须以 POST /api/bot update-check 读取远端版本：DS-Bot 版本取 value.current、dsh 版本取 value.dsh.current；与已测基准（DS-Bot 0.3.2、dsh 0.2.2-rc.1）不一致时显示提示但尽力可用；未知端点与未知字段必须降级显示而不是失败
+      rationale: update-check 属 DS-Bot READS 白名单（只读宿主也可应答），spike 实测 value.current=0.3.2、value.dsh.current=0.2.2-rc.1；内部接口随上游漂移不可避免，提示加降级是唯一不锁用户升级的做法
+      enforcement:
+        method: manual
+    fixtures-sanitized:
+      strength: MUST
+      statement: core 测试夹具必须来自真实响应的脱敏副本：token、cookie、密钥字段替换为占位值，对话内容为合成文本，结构与字段形态原样保留；每个夹具必须能被夹具加载校验测试解析
+      rationale: SSE 解析、增量同步与错误码映射的 JUnit 需要真实结构而非编造样本，同时仓库不得含私人内容与凭据
+      enforcement:
+        method: test
+        detail: 脱敏实现必须命中内容键后递归进内容区：区域内所有字符串叶节点（含嵌套对象与字符串数组的每个元素）一律替换占位符——卡片类内容（如问答卡的 options/selected）不是平铺字符串，仅按固定键清单平铺替换必漏（dsbot-api-spike 评审实证：role/why/purpose/question 对象曾整体漏过）。夹具校验测试按同一语义断言内容键值为占位符形态，测试键清单与脱敏键清单保持同步。
+    secrets-env-gated:
+      strength: MUST
+      statement: spike 与验证工具的带 token 地址等敏感输入一律经环境变量传入；命令行参数、输出、dump 与仓库内容中不得出现 token、cookie 或密钥
+      rationale: dsh-url 输出本身含 token，命令行参数会出现在进程表，打印或入库即泄露
+      enforcement:
+        method: review
+    exact-path-construction:
+      strength: MUST
+      statement: '原生请求的请求行路径必须精确以 /api/ 开头构造：基准地址先去掉尾部斜杠再拼接子路径；路径错配（如 //api/bot）不会得到路由级错误，而是被 dsh 的 SPA 静态兜底接管（POST → 405 且带 Allow: GET, HEAD），客户端必须把该响应形态识别为路径构造缺陷'
+      rationale: spike 实测：HarnessUrl.normalize 产出的根路径带尾斜杠，直接拼 /api/bot 得 //api/bot，dsh 前缀路由按字面 startsWith("/api/") 匹配失败后静默落静态兜底，现象与鉴权问题高度相似，排查代价大
+      enforcement:
+        method: test
+    attachment-path:
+      strength: MUST
+      statement: 附件路径：上传用 POST /api/session/uploadFileBinary?sessionId=<sid>&name=<名>[&mediaType=<图片类型>]（Content-Type application/octet-stream，原始字节流，返回 receiptId 与 attachmentId）；带附件消息的提交与附件字节读取（会话 prompt content blocks 与 readAttachment）经 /connect WebSocket JSON-RPC（受信 Host + dsh-auth cookie 握手）；纯文本发送走 /api/bot 的 send；Bot 对附件消息的回复统一经 /api/bot/feed 的 message/stream 事件呈现。不得为附件消息引入长期 WebSocket 常连接——仅附件场景短建短用
+      rationale: spike 实测与 dsh 0.2.2-rc.1 源码双重确认：上传是纯 HTTP Fetch 路由；HTTP JSON-RPC envelope 网关（POST /api/<method>）在 web serve 未注册（404），提交带附件消息没有纯 HTTP 路径；feed 按会话归属推送，与提交方式无关
+      enforcement:
+        method: review
+  MODIFIED: {}
+  REMOVED: {}

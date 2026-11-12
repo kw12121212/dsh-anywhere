@@ -63,3 +63,9 @@ rules:
         - handler.post { if (node != null && state == CONNECTED) return@post; connectNow(key) }；界面 withContext(Dispatchers.IO) { tunnel.connectAndAwait(key) }
       bad:
         - 在主线程直接调用 tunnel.connectAndAwait(key)，或带 key 的入口不检查已连接就 close 旧节点并新建 tstunnel.Node
+  native-network-path:
+    strength: MUST
+    statement: Android 的原生网络请求（探测、会话、API、feed）一律经 core 的分流拨号原语（TailnetRouting.splitDial：tailnet 目标经内嵌节点 SOCKS5、其余直连）与 HttpSocket/DialProbe 类手写客户端发出；请求目标限定已保存 harness 的源并携带同源 Host，路径拼接经 DsbotApi.url；不得再引入面向 WebView 的本机代理桥（ProxyBridge/ProxyController）或恢复 androidx.webkit 依赖承载远程页面（沙箱卡片视图由 dsbot-interactive-cards 以禁网隔离用法单独评估）
+    rationale: WebView 承载移除后代理桥失去唯一消费者；原生路径本就直连分流，保留桥只会增加监听面与状态复杂度
+    enforcement:
+      method: review

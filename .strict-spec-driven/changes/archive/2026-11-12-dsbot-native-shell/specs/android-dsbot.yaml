@@ -1,0 +1,60 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+spec:
+  title: 原生 DS-Bot 界面
+  path: .strict-spec-driven/specs/android-dsbot.yaml
+operations:
+  ADDED:
+    native-nav-skeleton:
+      strength: MUST
+      statement: App 主界面为原生 Compose 导航骨架：团队页为根页面，从团队页可进入私聊页、群聊页与详情面板（骨架占位，内容由后续变更填充），顶部提供设置入口；系统返回键按原生导航后退（聊天页回团队页、团队页退出 App），不依赖也不加载任何远程网页。
+      scenarios:
+        'nav-back-stack:':
+          - GIVEN: App 已连接并显示团队页骨架
+          - WHEN: 进入一个私聊页后按系统返回键
+          - THEN: 回到团队页骨架；在团队页再按返回键退出 App（系统默认行为）
+        'settings-entry-reachable:':
+          - GIVEN: 任意骨架页面显示中
+          - WHEN: 点击设置入口
+          - THEN: 打开既有设置页，返回后回到原骨架页面
+    connection-status-bar:
+      strength: MUST
+      statement: 原生骨架顶部显示全局连接状态条：初次连接显示「连接中」，feed 订阅且同步完成后显示在线（或收起为不干扰内容的最小形态），断开后显示「已断开，正在重连」并按指数退避重连，回到前台或恢复后自动补齐期间的 state 变化；连接状态条不遮挡页面操作。
+      scenarios:
+        'online-after-sync:':
+          - GIVEN: App 启动且 harness 可达、会话有效
+          - WHEN: feed 订阅并完成一次 state 同步
+          - THEN: 状态条显示在线（或收起），团队页骨架可用
+        'reconnect-banner:':
+          - GIVEN: 在线状态下 harness 服务停止
+          - WHEN: feed 断开
+          - THEN: 状态条显示已断开并在后台按退避重连；服务恢复后状态条回到在线且期间的状态变化被补齐
+    version-banner:
+      strength: MUST
+      statement: 连接建立时读取远端 DS-Bot 与 dsh 版本（update-check 的 value.current 与 value.dsh.current）并与已测基准（DS-Bot 0.3.2、dsh 0.2.2-rc.1）比对：不一致时显示版本提示条说明远端版本与基准不一致、部分功能可能不可用，提供不再提示本次的关闭；一致或读不到版本（UNKNOWN）时不显示提示。
+      scenarios:
+        'mismatch-shows-banner:':
+          - GIVEN: 远端 DS-Bot 版本为 0.4.0
+          - WHEN: 连接建立完成
+          - THEN: 显示版本提示条且包含不一致说明；点击关闭后本次连接期内不再显示
+        'unknown-no-banner:':
+          - GIVEN: 远端版本字段缺失（读不到版本）
+          - WHEN: 连接建立完成
+          - THEN: 不显示版本提示条
+    native-error-page:
+      strength: MUST
+      statement: harness 不可达时原生骨架显示本地连接错误页：展示不含 token 的干净地址与按原因分类的说明（无法解析主机名、连接被拒绝、连接超时、安全连接失败），提供「重试」与「修改地址」按钮；重试恢复可达时回到团队页骨架；错误发生时按 diagnostics-reporting 规格产生错误态报告（不含 API 载荷与聊天内容）。
+      scenarios:
+        'unreachable-error-page:':
+          - GIVEN: 已保存地址的服务已停止
+          - WHEN: 启动 App 或点击重试
+          - THEN: 显示本地错误页（干净地址、原因说明、重试与修改地址按钮），不显示首次设置页
+        'retry-recovers-native:':
+          - GIVEN: 错误页显示后服务恢复
+          - WHEN: 点击重试
+          - THEN: 回到团队页骨架，状态条进入连接中并在线
+  MODIFIED: {}
+  REMOVED: {}

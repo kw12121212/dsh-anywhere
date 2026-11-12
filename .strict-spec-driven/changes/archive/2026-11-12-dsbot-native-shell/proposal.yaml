@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-native-shell
+  status: proposed
+summary:
+  what:
+    - 建立单 Activity 原生 Compose 导航外壳：团队页、私聊/群聊页、详情面板与设置入口的骨架导航（手机竖屏单栏，列表、聊天与面板分屏）；全局连接状态条（连接中、已断开、重连补齐中）与远端版本不一致提示条（经 dsbot-api update-check）；前后台切换断开与恢复 feed 并按 since/live 补齐（FeedSync 状态机接线）；harness 不可达显示本地连接错误页（重试、去设置）并按 diagnostics-reporting 继续产生按原因分类的错误态报告（不含 API 载荷与聊天内容）
+    - 移除 WebView 承载：删除 MainWebScreen、WebView 专用 ProxyBridge 与 ProxyController 代理覆盖、网页同源导航与外链分流、网页内返回键后退及 androidx.webkit 依赖（沙箱 HTML 卡片如需 WebView 在 dsbot-interactive-cards 以禁网隔离用法单独引入）；原生拨号改经 TailnetRouting.splitDial 直连内嵌节点 SOCKS5；返回键改为原生导航后退；保留框架 CookieManager 用于升级迁移（android.webkit.CookieManager 属平台 API，非 androidx.webkit）
+    - 规格与标准：android-app 主规格删去网页承载、导航范围、本地代理与网页明文相关要求并改写为原生行为；新建 android-dsbot 主规格记录原生界面导航、连接状态与版本提示的可观察行为；android-client 与 webview-isolation 技术标准经 delta-tech 更新（WebView 约定改为原生网络与 Compose 约定；webview-isolation 收窄为只约束沙箱卡片视图）
+  why:
+    - milestone dsbot-native-chat 的核心目标是 App 不再加载 harness 网页、以原生界面呈现 DS-Bot 团队；dsbot-api-client 已交付原生客户端与传输，本变更是界面切换的承重墙
+    - 后续 team-home、bot-chat、group-chat 等 5 个 planned change 依赖本变更的导航外壳与页面骨架
+scope:
+  in:
+    - core：连接状态条状态机（连接中/在线/断开/重连补齐）与前后台 feed 生命周期策略下沉 core 并以 JUnit 覆盖
+    - App：NativeShell 导航骨架与占位页面、连接状态条与版本提示条、原生错误页与诊断错误态报告、返回键原生后退、原生拨号重构（去 ProxyBridge）
+    - 删除 MainWebScreen/ProxyBridge/androidx.webkit 依赖及关联资源与测试锁定的更新
+    - android-app 主规格改写、android-dsbot 主规格新建、android-client 与 webview-isolation 标准 delta-tech
+  out:
+    - 团队页/私聊/群聊的实际内容功能（team-home、bot-chat、group-chat、side-chat 承接，本变更只交付骨架与导航）
+    - 附件、审批与卡片、图片显示（dsbot-attachments、dsbot-interactive-cards 承接）
+    - 首次设置页、设置页、隧道卡片、自更新与诊断上报的行为变化
+unchanged_behavior:
+  - 桌面客户端行为完全不变
+  - 首次设置、设置、隧道、自更新、诊断上报的既有行为不变
+  - 会话建立、cookie 持久化与迁移、401/403 分流行为不变（dsbot-api-client 交付的规格继续适用）
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-native-shell

@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    interactive-cards:
+      strength: MUST
+      statement: 聊天中的交互卡片按 DS-Bot 网页端语义原生渲染与作答：审批卡（approval-answer）、ask_user 提问（answer-question/dismiss-question）、show_view 卡片（文本/指标/表格/本地公式输入/进度/选择/确认/短表单，view-reply/dismiss-view——图表段落 0.3.x 未观测实样本，降级为只读呈现）、密钥请求卡（secret-set/secret-allow/secret-cancel——输入不回显、值不进日志与诊断上报）、学习问答（learning-answer）、Bot 浏览器交接卡（browser-give-back done/skip，callId 过期显示服务端 bot/stale 原因）；已关闭（closed）条目按只读已处理形态呈现不再作答；多问题条目（questions[] 复数）标注数量并引导网页端逐个处理（原生端暂不支持多问题条目作答，显式降级决策）；沙箱 HTML 卡片只在禁网络、禁止导航与无本地接口的隔离视图中显示；Bot 内容不可信：卡片做格式校验、嵌套深度与大小上限，超限或未知类型降级为只读文本不崩溃；作答成功后卡片消隐且经 feed 推状态变更，团队页「需要你」与卡片状态两端同步；手机不充当 Bot 浏览器宿主
+      scenarios:
+        cards-answer-sync:
+          - GIVEN: 聊天含待处理审批或提问卡
+          - WHEN: 在卡片上作答（同意/选选项/提交表单）
+          - THEN: 作答提交成功、本地卡片消隐、feed 推送状态变更后团队页需要你同步消失，与网页端状态一致
+        cards-degrade-sandbox:
+          - GIVEN: 聊天含畸形/超限/未知类型卡片、已关闭卡片、多问题条目或沙箱 HTML 卡
+          - WHEN: 渲染该卡片
+          - THEN: 畸形/超限/未知降级为只读文本不崩溃；已关闭条目只读呈现；多问题条目标注数量引导网页端处理；沙箱 HTML 在禁网络/禁导航/无本地接口的隔离视图显示
+  MODIFIED: {}
+  REMOVED: {}

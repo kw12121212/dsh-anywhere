@@ -48,7 +48,7 @@ intake_questions:
     question: 带附件的发送与图片显示走哪条接口？
     context: DS-Bot send 端点只收文本，网页端附件经 dsh 会话接口发送。
     impact: 决定 dsbot-attachments 的实现路径与是否需要接入 dsh JSON-RPC 通道。
-    recommendation: 待 dsbot-api-spike 用真实 dsh 验证后确定；优先选择不需要长期 WebSocket 会话的 HTTP 方式。
+    recommendation: 已由 dsbot-api-spike 验证（2026-11-11）：上传为纯 HTTP POST /api/session/uploadFileBinary?sessionId&name[&mediaType]（octet-stream 流式，返回 receiptId+attachmentId，实测 200）；带附件消息提交与附件字节读取（会话 prompt content blocks、readAttachment）需 /connect WebSocket JSON-RPC（受信 Host+cookie 握手），HTTP envelope 网关未开放（实测 404）；纯文本走 /api/bot send；回复统一经 /api/bot/feed 呈现。结论登记于 dsbot-api 技术标准 attachment-path 规则与 android/core/src/spike/FINDINGS.md。
 planned_changes: {}
 dependencies:
   - android-app 里程碑已完成：内嵌 Tailscale、tailnet 分流、会话认证、设置页与自更新作为基础
@@ -61,7 +61,7 @@ risks:
   - show_view 卡片含沙箱 HTML 与本地公式：Bot 内容不可信，手机端须按固定格式渲染并设深度与大小上限，HTML 卡片只能在禁网、隔离的视图中显示
   - 移除 WebView 主页面会使 android-app 主规格中网页承载、导航范围、本地代理桥 407 与明文策略相关条目失效，需在同一变更中改写规格与回归测试，避免残留
   - 从现有 WebView 版本升级时，已建立的 dsh-auth 会话 cookie 存在 WebView CookieManager 中，原生 cookie 存储为空；不迁移则所有已安装用户升级后都要重新粘贴带 token 地址
-status: proposed
+status: complete
 notes:
   - 参考上游 Fei2411/DS-Bot：ds-bot/src/host/channel.js（端点分发）、feed.js（SSE 事件 hello/revision/live/message/stream）、constants.js（ROUTE=/api/bot）、client.js（网页端渲染与交互，作为功能对等基准）、docs/plans/2026-10-24-mobile-app.md（手机端功能清单与替代做法）、app/（自绘界面的桌面应用）；本机安装位置 ~/.dsh/profiles/web/node_modules/ds-bot
   - dsh 鉴权参考 @deepseek-ai/dsh-client-connection：浏览器 cookie（dsh-auth-*）认证后获得 owner Peer，可调用插件注册的 Fetch 路由；无 Origin 的原生请求只要 Host 受信即通过

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: adb-input-text-gboard-dump-01416f
+  title: 模拟器验收：adb input text 会被 Gboard 自动更正污染，输入后必须 dump 验证字段内容
+category: tooling
+status: active
+created_at: '2026-11-11T15:08:59.570Z'
+updated_at: '2026-11-11T15:08:59.570Z'
+context: Android 模拟器验收用 adb shell input text 向 Compose TextField 输入 URL/token 等精确文本。
+observation: Gboard（AutoCorrect 开启）会给 input text 的输入追加或替换词尾：同一命令一次出现尾部空格、一次出现尾部斜杠（token=emu-token-1/ 之类），导致 token 校验失败且表象像服务端问题；另外尾部空白进 java.net.URI 直接抛 URISyntaxException。
+takeaway: 模拟器输入精确文本：① adb shell "input text '…'" 用设备侧引号包裹；② 输入后立即 uiautomator dump 验证字段文本与预期完全一致，不一致先修正再操作；③ 被测代码对用户输入做 trim 等防御（AppGraph.save 已加）。
+applies_when: 任何用 adb input text 驱动 Android 模拟器验收、且输入内容需逐字符精确的场合（URL、token、密钥）。
+occurrences:
+  - origin: dsbot-api-client
+    date: '2026-11-11'
+    evidence: 本轮验收 /tmp/mock-dsh.log 的 GET /?token=emu-token-1/（尾部斜杠）与字段 dump 的尾部空格；修复输入流程后 mock 全绿。

@@ -1,0 +1,48 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-group-chat
+sections:
+  Implementation:
+    probe-endpoints:
+      text: 真实 0.3.5 服务器最小探针实测群聊端点形态（lesson spike-bd9881：按错误信息逐层收敛）：chat 对 room 的请求/应答、群消息提交（send 到 room 的 payload）、stop-room-work、room-progress、goal-draft/goal-control、引用聊天的提交字段；产出记录到 tech/dsbot-api endpoint-inventory-source
+      status: complete
+      command: curl/python 探针 + tech-edit 登记
+    core-room-models:
+      text: core 群聊构造与解码：群消息提交/提及/引用的 payload 构造、room-progress 与 goal 阶段/任务/证据解码、群条目成员归属字段；纯 JVM 可测
+      status: complete
+      command: android/gradlew -p android/core test
+    mock-group:
+      text: mock 群聊端点：room 的 chat/send/stop-room-work/room-progress/goal-draft/goal-control 显式实现（错误显式拒绝不静默兜底）、群消息夹具（成员消息/[PASS]/公告/目标阶段）
+      status: complete
+    app-room-chat-page:
+      text: App 群聊页：成员消息流（头像/名称/[PASS] 不可见/管理员与回复模式/公告）、@ 提及弹层（过滤成员、多提及）、引用聊天选择、停止群/成员、room-progress 展示；复用私聊渲染组件与附件链路
+      status: complete
+    app-goal-control:
+      text: App 群目标：按阶段显示任务与证据、确认草稿与控制推进（goal-draft/goal-control），操作结果经 notice/feed 呈现
+      status: complete
+  Testing:
+    core-junit-group:
+      text: core JUnit：群聊构造/解码/成员归属渲染的单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实 tailnet 验收：mock 群消息流渲染（成员/PASS 不可见/公告）、@ 提及提交与多成员并行、引用聊天、停止群/成员、目标阶段/确认/推进、room-progress；真实 dsh 群一轮对话与网页端一致
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-group-chat 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-group-chat
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec 与实现一致；ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-group-chat
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-group

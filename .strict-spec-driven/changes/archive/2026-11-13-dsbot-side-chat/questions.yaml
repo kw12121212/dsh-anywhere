@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-side-chat
+open: []
+resolved:
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: Roadmap planned-change dsbot-side-chat details 与已归档变更提供范围证据
+    answer: 按 planned change details：私聊页的 Side chat 面板（side-new/ask/cancel/close，不收附件，流式+后台恢复）+ btw 卡查看删除；群聊 Side chat 不在范围
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: Roadmap planned-change dsbot-side-chat details 与已归档变更提供范围证据
+    answer: 不变：私聊/群聊消息流、附件链路、卡片交互、feed 处理、连接状态机、桌面端；Side chat 不接受附件
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: Roadmap planned-change dsbot-side-chat details 与已归档变更提供范围证据
+    answer: 模拟器上私聊打开侧问→提问→流式回答（主聊天不动）→切走再回进行中状态在→取消/关闭生效；btw 卡显示并可删除；真实 dsh 一轮侧问与网页端一致
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: Roadmap planned-change dsbot-side-chat details 与已归档变更提供范围证据
+    answer: 原生端无法旁路提问：追问必须打断 Bot 工作或等待；btw 插话卡不可见不可管理
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this, and what if we defer?
+    context: Roadmap planned-change dsbot-side-chat details 与已归档变更提供范围证据
+    answer: 里程碑最后一件：其余 8 项已归档；推迟则里程碑不完整，旁路提问能力缺失
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: q-side-endpoints
+    question: side 端点族与 side 会话事件归属在 0.3.5 的 wire 形态是什么？
+    context: side-new/ask/cancel/close/btw-delete 未实测（lesson spike-bd9881）；probe 任务先探针收敛，mock 按实测构造；不阻塞范围
+    answer: probe-side-endpoints 任务先在真实 0.3.5 探针实测（无效 sessionId/callId 探路由、错误递进收敛），mock 按实测构造并显式拒绝；实测回填 tech/dsbot-api；不阻塞范围
+    status: resolved
+    kind: requirement
+    answered_by: assumption

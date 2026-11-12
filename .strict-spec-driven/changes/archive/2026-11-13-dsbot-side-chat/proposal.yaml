@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-side-chat
+  status: proposed
+summary:
+  what:
+    - Android 原生 DS-Bot 的 Side chat 与 btw 卡片：私聊页打开 Side chat 面板（底部抽屉/独立页）——side-new 新建旁路会话、side-ask 提问（可附最近消息快照）、side-cancel 取消进行中回答、side-close 关闭；Side chat 不接受附件（与网页端一致）；回答流式显示，切换聊天/后台返回后仍见进行中状态；btw 卡片在聊天中显示并可删除（btw-delete）
+  why:
+    - planned change dsbot-side-chat 是 dsbot-native-chat 里程碑最后一件：旁路提问让用户不打断 Bot 工作即可追问，btw 卡是插话的载体；完成后里程碑 9/9 全达成
+scope:
+  in:
+    - android/core（side 端点构造与应答解码、btw 条目渲染模型）、android/app（Side chat 面板 UI 与生命周期、btw 卡渲染）、scripts/mock-dsh-server.mjs、.strict-spec-driven/specs/android-dsbot.yaml
+  out:
+    - 桌面端、群聊 Side chat、附件于 Side chat（明确不支持）
+unchanged_behavior:
+  - 私聊/群聊消息流、附件链路、卡片交互、feed 事件处理、连接状态机
+roadmap:
+  milestone: dsbot-native-chat
+  planned_change: dsbot-side-chat

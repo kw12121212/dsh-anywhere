@@ -19,6 +19,52 @@ object Json {
         data object NullValue : Value
     }
 
+    /** 值序列化回 JSON 文本（字符串转义与解析对齐；cursor 等透传值回填请求用）。 */
+    fun encode(value: Value): String = StringBuilder().also { encodeTo(value, it) }.toString()
+
+    private fun encodeTo(value: Value, out: StringBuilder) {
+        when (value) {
+            is Value.Object -> {
+                out.append('{')
+                var first = true
+                for ((k, v) in value.members) {
+                    if (!first) out.append(',')
+                    first = false
+                    encodeTo(Value.StringValue(k), out)
+                    out.append(':')
+                    encodeTo(v, out)
+                }
+                out.append('}')
+            }
+            is Value.Array -> {
+                out.append('[')
+                var first = true
+                for (v in value.items) {
+                    if (!first) out.append(',')
+                    first = false
+                    encodeTo(v, out)
+                }
+                out.append(']')
+            }
+            is Value.StringValue -> {
+                out.append('"')
+                for (c in value.value) when {
+                    c == '"' -> out.append("\\\"")
+                    c == '\\' -> out.append("\\\\")
+                    c == '\n' -> out.append("\\n")
+                    c == '\r' -> out.append("\\r")
+                    c == '\t' -> out.append("\\t")
+                    c.code < 0x20 -> out.append("\\u%04x".format(c.code))
+                    else -> out.append(c)
+                }
+                out.append('"')
+            }
+            is Value.NumberValue -> out.append(value.raw)
+            is Value.BoolValue -> out.append(value.value.toString())
+            Value.NullValue -> out.append("null")
+        }
+    }
+
     /** 解析完整 JSON 文档；任何语法错误、超深嵌套或尾随非空白内容返回 null。 */
     fun parse(text: String): Value? {
         val p = Parser(text)

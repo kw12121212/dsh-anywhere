@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-app
+operations:
+  ADDED:
+    webview-cookie-migration:
+      strength: MUST
+      statement: 从 WebView 版本（会话 cookie 只在 WebView CookieManager 中）覆盖升级到本版本后首次启动：App 用 CookieManager.getCookie 读取该保存源的 dsh-auth cookie 并迁入原生存储，成功后直接进入主页面显示 harness 页面，无需重新粘贴带 token 地址；迁移不到或读出的 cookie 无效时显示本地重新认证页，不显示空白页或报错崩溃，重新粘贴新地址后即恢复。
+      scenarios:
+        'upgrade-migrates-cookie:':
+          - GIVEN: 旧版本 App 已建立 dsh 会话（cookie 在 WebView CookieManager），覆盖安装升级到本版本
+          - WHEN: 首次启动
+          - THEN: App 迁移该源的 dsh-auth cookie 到原生存储并直接进入主页面，无需重新输入地址
+        'migration-miss-shows-reauth:':
+          - GIVEN: 旧版本从未建立会话或 cookie 已失效（CookieManager 无该源的 dsh-auth cookie）
+          - WHEN: 升级后首次启动
+          - THEN: 显示本地重新认证页（含运行 dsh-url 说明与打开设置按钮），不出现空白或崩溃，粘贴新带 token 地址保存后恢复主页面
+    forbidden-host-hint:
+      strength: MUST
+      statement: 原生请求对已保存 harness 源收到 403（Host 与 dsh trusted-host 配置不一致）时，主页面显示本地提示页说明需要在 DSH 主机把该地址加入 trusted-host（dsh web 的 --trusted-host 参数），并提供「打开设置」按钮；提示不显示 token 与 cookie。
+      scenarios:
+        'forbidden-shows-hint:':
+          - GIVEN: 已保存地址的 Host 未列入 dsh 服务的 trusted-host（原生探测返回 403）
+          - WHEN: 启动 App 或刷新
+          - THEN: 主页面显示 trusted-host 配置提示页与「打开设置」按钮，不显示 403 原文
+  MODIFIED:
+    session-establish:
+      strength: MUST
+      statement: 在首次设置页、设置页保存带有效 token 的地址后，App 以原生 HTTP 只请求一次带 token 地址建立会话（跟随重定向并携带过程中签发的 cookie），成功后把 dsh-auth cookie 持久化到 App 私有存储（强杀后仍保留）并同步写入 WebView CookieManager，随后 WebView 直接加载干净地址显示 harness 页面；带 token 地址不进入 WebView 导航历史、配置文件或日志。原生建立失败（网络错误、非 2xx/3xx 终态）时按连接失败或会话失效的既有页面分流，不进入主页面。
+      scenarios:
+        'token-url-native-establish:':
+          - GIVEN: 已保存配置为空，mock dsh 服务在 http://10.0.2.2:13080/，用户粘贴 http://10.0.2.2:13080/?token=abc123 并保存
+          - WHEN: 首次设置页点击「开始使用」
+          - THEN: App 原生请求一次带 token 地址并取得会话 cookie，WebView 直接加载 http://10.0.2.2:13080/ 显示 harness 页面，配置只存干净地址，WebView 历史与日志中没有 abc123
+  REMOVED: {}

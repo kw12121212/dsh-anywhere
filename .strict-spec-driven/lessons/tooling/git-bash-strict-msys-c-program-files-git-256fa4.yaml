@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: git-bash-strict-msys-c-program-files-git-256fa4
+  title: Git Bash 下生成 strict 工件：前导斜杠参数被 MSYS 改写为 C:/Program Files/Git/…
+category: tooling
+status: active
+created_at: '2026-11-11T08:34:04.506Z'
+updated_at: '2026-11-11T08:34:04.506Z'
+context: 在 Windows Git Bash 会话里运行 strict-spec-cli generate（或任何把参数传给外部 exe 的命令）生成 proposal/delta-tech 等 YAML 工件。
+observation: 以 /api/bot 开头的自由文本参数（--what/--why/--rationale 等）被 MSYS 路径转换当作 POSIX 绝对路径改写为 C:/Program Files/Git/api/bot 后写入工件；命令本身仍返回 valid:true，没有任何报错。dsbot-api-spike 同一会话内被改写两次（proposal 的 why 与 delta-tech 的 rationale），直到评审才发现。
+takeaway: 在 Git Bash 传含前导斜杠的文本参数给 CLI 时：改写措辞避免以 / 开头（如『DS-Bot 的 /api/bot 是…』，中段斜杠不受影响），或对单条命令前置 MSYS_NO_PATHCONV=1 与 MSYS2_ARG_CONV_EXCL=*；生成后 grep 一遍 'Program Files' 确认未被改写。
+applies_when: Windows Git Bash / MSYS 环境中，任何向 strict-spec-cli 或其他 Windows 原生 exe 传递以 / 开头的自由文本参数的调用。
+occurrences:
+  - origin: dsbot-api-spike
+    date: '2026-11-11'
+    evidence: .strict-spec-driven/changes/dsbot-api-spike/proposal.yaml 与 tech/dsbot-api.yaml 的两次修复（--remove-why/--remove-what + 重写）；修复后 grep 'Program Files' 计数为 0。

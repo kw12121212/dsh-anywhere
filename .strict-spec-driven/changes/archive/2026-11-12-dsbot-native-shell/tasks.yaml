@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-native-shell
+sections:
+  Implementation:
+    core-connection-machine:
+      text: core 新增 DsbotConnection：聚合可达性探测、FeedSync 与前后台信号，输出连接条状态（Connecting/Online/Reconnecting/Offline/Reauth/ForbiddenHost）与动作；JUnit 覆盖状态迁移（断线退避重连、回前台补齐、401/403 分流）
+      status: complete
+    app-native-shell:
+      text: App 新增 NativeShell：自管返回栈（团队页→私聊/群聊→详情，BackHandler 原生后退）、骨架占位页、全局连接状态条与版本不一致提示条（update-check + DsbotVersions 比对，UNKNOWN 不显示）
+      status: complete
+    app-feed-lifecycle:
+      text: App 接线 feed 生命周期：进前台经 HttpSocket.feed 订阅（SseParser 帧喂 FeedSync/DsbotConnection），退后台断开；重连后按 since/live 取 state 增量（DsbotApi + 夹具驱动解码已备）
+      status: complete
+    app-error-page-native:
+      text: App 原生连接错误页（重试、去设置、按原因分类文案复用现有 strings）并接 diagnostics.recordLoadError（错误态报告，不含 API 载荷与聊天内容）；401 重新认证页与 403 提示页在原生外壳下继续工作
+      status: complete
+    remove-webview-stack:
+      text: 删除 WebView 承载：MainWebScreen、ProxyBridge 与 ProxyController 代理覆盖、网页导航范围与外链分流、网页内返回键、androidx.webkit 依赖；NativeSession 拨号改为 TunnelManager SOCKS5 + TailnetRouting.splitDial 的 App helper；清理无用资源与 strings；保留平台 CookieManager（迁移与同步）
+      status: complete
+    update-specs-standards:
+      text: 规格与标准改写：android-app 主规格删去网页承载/导航范围/本地代理/网页明文条目并改写为原生行为（连接状态条、原生错误页、返回键）；新建 android-dsbot 主规格（导航骨架、连接状态、版本提示的可观察需求）；delta-tech 更新 android-client（WebView 约定改原生网络与 Compose 约定）与 webview-isolation（收窄为只约束沙箱卡片视图）
+      status: complete
+  Testing:
+    core-junit-connection:
+      text: core JUnit 全量通过（含 DsbotConnection 状态机新测试与既有夹具驱动测试）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-emulator-acceptance:
+      text: 模拟器+真实 tailnet 验收通过（2026-11-11/12）：首次运行原生建立进团队页骨架（无任何网页）；强杀冷启动直接在线进骨架（隧道自动重连+迁移+gate+feed 全链路，在线态状态条收起、版本 MATCHED 无提示）；导航进聊天/详情骨架与原生返回后退（根页返回退出）；会话失效→重新认证页→设置粘贴新 token 恢复；不可达→本地错误页（干净地址+原因+重试/修改地址）；403→trusted-host 提示页；隧道未就绪→等待面板且连上自动继续。过程中修复：feed 订阅缺 Cookie 头（401 循环）、隧道状态联动缺失、establish 环节遗漏
+      status: complete
+  Verification:
+    verify-change:
+      text: strict-spec-cli verify dsbot-native-shell 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-native-shell
+    project-regression:
+      text: 完整项目回归通过（含覆盖率门槛 80%）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+    archive-readiness:
+      text: 归档就绪：评审通过、delta-spec/delta-tech 与实现一致；strict-spec-cli ready 无阻塞
+      status: complete
+      command: strict-spec-cli ready dsbot-native-shell
+testing_gates:
+  validation_task: app-emulator-acceptance
+  unit_test_task: core-junit-connection

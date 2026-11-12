@@ -126,5 +126,4 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.13.0")
     // WebView 代理覆盖（android-proxy-routing）：把 WebView 指向进程内代理桥。
-    implementation("androidx.webkit:webkit:1.13.0")
 }

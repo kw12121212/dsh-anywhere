@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-api-client
   milestone: dsbot-native-chat
-status: planned
+status: complete
 summary: core 实现 DS-Bot API 客户端与 SSE feed、App 侧原生 HTTP 传输与会话 cookie（含从 WebView 迁移），取代 WebView 承担会话建立、探测与 401 识别
 details: core（纯 JVM、JUnit 覆盖）：{endpoint,payload} 请求封装与 ok/fail 结果解码、bot/* 错误码到用户可读原因的映射；SSE 解析器（事件、data 多行、注释保活）与 feed 连接状态机（连接、断开、指数退避重连、重连后以 hello 的 revision 与本地对比，变化时带 since/live 取 state 增量）；state 与 chat 条目的解码模型（未知字段与类型保留为可降级的原始节点）；按 dsbot-api 技术标准读取远端 DS-Bot/dsh 版本并与基准比对。App：基于现有分流路径的通用 HTTP 与长连接传输，请求只发往已保存 harness 的源，带 dsh-auth cookie 与与保存地址一致的 Host；明文 http 仍只对已保存 harness 的源放开（沿用 CleartextPolicy）。带 token 地址只请求一次建立会话，cookie 保存在 App 私有存储并跨重启保留；从 WebView 版本升级后首次启动，一次性把 WebView CookieManager 中该源的 dsh-auth cookie 迁入原生存储，迁移不到时显示本地重新认证页。token 与 cookie 不进配置、日志与诊断上报。连接探测与会话失效探测改为原生请求，401 进入本地重新认证页、403 提示 trusted-host 配置。写操作失败不自动重试。夹具驱动的测试覆盖解码、SSE、重连补齐、错误映射、版本比对与 cookie 解析；本变更保留 WebView 主页面，界面切换在 dsbot-native-shell。
 depends_on:
