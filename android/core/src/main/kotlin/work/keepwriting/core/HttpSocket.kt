@@ -134,6 +134,62 @@ class HttpSocket(
 
     // ---- 底层读写 ----
 
+    /**
+     * 流式 GET：响应体直接写入 [sink]（chunked/定长/EOF 均支持），不驻留内存——
+     * 大体积资产（更新 APK）经注入拨号下载用。返回 (状态码, 写出字节数)；
+     * Range 续传头由调用方经 [headers] 提供。
+     */
+    fun get(url: String, headers: List<Pair<String, String>> = emptyList(), sink: java.io.OutputStream): Pair<Int, Long> {
+        val u = URI(url)
+        val host = u.host ?: throw IllegalArgumentException("URL 缺主机")
+        val port = if (u.port > 0) u.port else if (u.scheme?.lowercase() == "https") 443 else 80
+        val path = buildString {
+            append(u.rawPath?.ifEmpty { null } ?: "/")
+            if (!u.rawQuery.isNullOrEmpty()) append('?').append(u.rawQuery)
+        }
+        return open(u, host, port).use { s ->
+            val hostHeader = host + if (port != 80 && port != 443) ":$port" else ""
+            val out = s.getOutputStream()
+            val sb = StringBuilder("GET $path HTTP/1.1\r\n")
+            if (headers.none { it.first.equals("Host", ignoreCase = true) }) {
+                sb.append("Host: $hostHeader\r\n")
+            }
+            for ((k, v) in headers) sb.append("$k: $v\r\n")
+            sb.append("Connection: close\r\n\r\n")
+            out.write(sb.toString().toByteArray(Charsets.ISO_8859_1))
+            out.flush()
+
+            val input = s.getInputStream()
+            val statusLine = readStatusLine(input) ?: throw HttpException("无状态行")
+            val status = statusLine.split(' ').getOrNull(1)?.toIntOrNull() ?: throw HttpException("状态码异常")
+            var contentLength = -1L
+            var chunked = false
+            while (true) {
+                val line = readLine(input) ?: break
+                if (line.isEmpty()) break
+                val idx = line.indexOf(':')
+                if (idx <= 0) continue
+                val k = line.substring(0, idx).trim()
+                val v = line.substring(idx + 1).trim()
+                when (k.lowercase()) {
+                    "content-length" -> contentLength = v.toLongOrNull() ?: -1L
+                    "transfer-encoding" -> if (v.lowercase().contains("chunked")) chunked = true
+                }
+            }
+            val source: InputStream = if (chunked) ChunkedInput(input) else input
+            val buf = ByteArray(64 * 1024)
+            var written = 0L
+            while (true) {
+                val n = source.read(buf)
+                if (n < 0) break
+                sink.write(buf, 0, n)
+                written += n
+                if (contentLength in 0..written) break
+            }
+            status to written
+        }
+    }
+
     private fun open(u: URI, host: String, port: Int): Socket {
         val raw = dial(host, port)
         try {

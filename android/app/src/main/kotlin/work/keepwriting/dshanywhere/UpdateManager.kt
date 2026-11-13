@@ -27,7 +27,12 @@ import java.net.URL
  * filesDir/updates、清单或 .sha256 恒时校验、FileProvider 调起系统安装器；每进程会话
  * 自动调起至多一次；失败静默（设置页显示原因）。
  */
-class UpdateManager(context: Context) {
+class UpdateManager(
+    context: Context,
+    /** 与主连接同一分流拨号（tailnet 目标经内嵌节点：Android HttpURLConnection 会先本地
+     *  解析目标主机，ts.net 公网不可解析，自托管源必须经拨号把解析交给代理侧）。 */
+    private val dial: (String, Int) -> java.net.Socket,
+) {
     enum class State { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY_TO_INSTALL, FAILED }
 
     var state by mutableStateOf(State.IDLE)
@@ -60,17 +65,49 @@ class UpdateManager(context: Context) {
 
     private val downloader = UpdateDownloader(
         dir = updatesDir,
+        // 按源分流：自托管源经注入拨号（Android HttpURLConnection 会先本地解析目标
+        // 主机，ts.net 公网不可解析）；GitHub 资产仍用 HttpURLConnection（其重定向
+        // 与 Range 语义由平台处理），流式拷贝不驻留内存。
+        streamFetch = { url, rangeFrom, sink ->
+            val base = sourceBase?.trimEnd('/')
+            if (base != null && url.startsWith(base)) {
+                val headers = if (rangeFrom > 0) listOf("Range" to "bytes=$rangeFrom-") else emptyList()
+                work.keepwriting.core.HttpSocket(dial).get(url, headers, sink)
+            } else {
+                urlConnectionFetch(url, rangeFrom, sink)
+            }
+        },
         assetUrl = { name ->
             sourceBase?.trimEnd('/')?.let { "$it/$name" }
                 ?: "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
         },
-        // 自托管源是 tailnet 目标时经内嵌节点（ts.net 域名在公网 DNS 不存在，绝不能直连）
-        tuneConnection = { conn ->
-            if (conn is HttpsURLConnection && SocksTls.isTailnet(conn.url.host)) {
-                SocksTls.factory(appContext)?.let { conn.sslSocketFactory = it }
-            }
-        },
     )
+
+    /** GitHub 资产的流式取回（HttpURLConnection：跟随重定向、平台 DNS 可用）。 */
+    private fun urlConnectionFetch(url: String, rangeFrom: Long, sink: java.io.OutputStream): Pair<Int, Long> {
+        val conn = java.net.URI(url).toURL().openConnection() as HttpsURLConnection
+        conn.connectTimeout = 30_000
+        conn.readTimeout = 30_000
+        if (rangeFrom > 0) conn.setRequestProperty("Range", "bytes=$rangeFrom-")
+        try {
+            val code = conn.responseCode
+            var written = 0L
+            if (code == 200 || code == 206) {
+                conn.inputStream.use { input ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        sink.write(buf, 0, n)
+                        written += n
+                    }
+                }
+            }
+            return code to written
+        } finally {
+            conn.disconnect()
+        }
+    }
 
     /** 设置页保存/清除更新源后重读（下次检查与下载即用新源）。 */
     fun reloadSource() {
@@ -143,7 +180,8 @@ class UpdateManager(context: Context) {
                     UpdateCheck.CheckOutcome.UP_TO_DATE -> state = State.UP_TO_DATE
                 }
             } catch (e: TunnelNotReady) {
-                if (!restoreReady()) fail("隧道未就绪，稍后再试（tailnet 更新源需先连上 Tailscale）")
+                tunnelRetryPending = true
+                if (!restoreReady()) fail("隧道未就绪，等 Tailscale 连上后自动重试")
             } catch (e: Exception) {
                 if (!restoreReady()) fail("检查更新失败（${e.javaClass.simpleName}）")
             }
@@ -152,6 +190,18 @@ class UpdateManager(context: Context) {
 
     /** 自托管源在 tailnet 上而内嵌节点未就绪：不可直连（ts.net 公网不可解析）。 */
     private class TunnelNotReady : IllegalStateException("tunnel not ready")
+
+    /** 隧道未就绪导致检查失败后置位；隧道连上（NativeShell 观察 tunnel 状态）自动补查。 */
+    @Volatile
+    private var tunnelRetryPending = false
+
+    /** 隧道连上时调用：有待补查则立即重查（用户点检查时隧道未就绪也能自动恢复）。 */
+    fun onTunnelConnected() {
+        if (tunnelRetryPending) {
+            tunnelRetryPending = false
+            check()
+        }
+    }
 
     /** GitHub 模式：latest Release 的 tag 与资产名 → UpdateInfo；不可达抛异常。 */
     private fun checkGitHub(): UpdateCheck.UpdateInfo? {
@@ -173,28 +223,22 @@ class UpdateManager(context: Context) {
         }
     }
 
-    /** 自托管模式：GET <base>/latest.json（tailnet 目标经内嵌节点）→ UpdateInfo；
-     *  清单缺失/无效视为无更新（null）；隧道未就绪抛 TunnelNotReady（不直连——
-     *  ts.net 域名只在 MagicDNS 可解析，直连必 UnknownHostException）。 */
+    /** 自托管模式：GET <base>/latest.json 经注入拨号（tailnet 目标由代理侧解析域名）→
+     *  UpdateInfo；清单缺失(404)/无效视为无更新（null）；tailnet 源在隧道未就绪时抛
+     *  TunnelNotReady（绝不能直连——ts.net 公网 DNS 不可解析）。 */
     private fun checkSelfHosted(base: String): UpdateCheck.UpdateInfo? {
-        val url = java.net.URI(base.trimEnd('/') + "/latest.json").toURL()
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        if (conn is HttpsURLConnection && SocksTls.isTailnet(url.host)) {
-            val factory = SocksTls.factory(appContext)
-                ?: throw TunnelNotReady()
-            conn.sslSocketFactory = factory
+        val host = runCatching { java.net.URI(base).host }.getOrNull()
+        if (host != null && SocksTls.isTailnet(host) && SocksTls.factory(appContext) == null) {
+            throw TunnelNotReady()
         }
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 15_000
-        try {
-            if (conn.responseCode == 404) return null
-            if (conn.responseCode != 200) throw IllegalStateException("HTTP ${conn.responseCode}")
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val parsed = work.keepwriting.core.Json.parse(body) ?: return null
-            return UpdateCheck.fromManifest(parsed, currentVersionCode())
-        } finally {
-            conn.disconnect()
-        }
+        val res = work.keepwriting.core.HttpSocket(dial).request(
+            "GET", base.trimEnd('/') + "/latest.json",
+            listOf("Accept" to "application/json"),
+        )
+        if (res.status == 404) return null
+        if (res.status != 200) throw IllegalStateException("HTTP ${res.status}")
+        val parsed = work.keepwriting.core.Json.parse(res.bodyText()) ?: return null
+        return UpdateCheck.fromManifest(parsed, currentVersionCode())
     }
 
     /** 下载新版本 APK（后台线程执行；支持 Range 断点续传；已在下载则忽略）。 */

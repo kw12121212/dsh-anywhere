@@ -255,14 +255,41 @@ class DiagnosticsManager private constructor(private val appContext: Context) {
 
     private enum class SendOutcome { DELIVERED, REJECTED, FAILED }
 
-    /** POST 报告批次；端点为 tailnet 目标时经内嵌节点（未连接按失败入队），其余直连。 */
+    /** 分流拨号（AppGraph 装配时注入）：tailnet 端点必须经它上报——Android
+     *  HttpURLConnection 会先本地解析目标主机，ts.net 公网不可解析（曾长期静默失败）。 */
+    @Volatile
+    private var dial: ((String, Int) -> java.net.Socket)? = null
+
+    fun attachDial(dial: (String, Int) -> java.net.Socket) {
+        this.dial = dial
+    }
+
+    /** POST 报告批次：有注入拨号时经 HttpSocket（域名由代理侧解析）；否则退回
+     *  URLConnection（非 tailnet 端点可用；tailnet 端点按失败入队待补发）。 */
     private fun postReports(configuredEndpoint: String, body: String): SendOutcome {
+        val url = configuredEndpoint.trimEnd('/') + "/api/diagnostics/reports"
+        val dialFn = dial
+        if (dialFn != null) {
+            val res = runCatching {
+                work.keepwriting.core.HttpSocket(dialFn).request(
+                    "POST", url,
+                    listOf("Content-Type" to "application/json; charset=utf-8"),
+                    body.toByteArray(Charsets.UTF_8),
+                )
+            }.getOrNull()
+            return when (res?.status) {
+                null -> SendOutcome.FAILED
+                in 200..299 -> SendOutcome.DELIVERED
+                in 400..499 -> SendOutcome.REJECTED
+                else -> SendOutcome.FAILED
+            }
+        }
         var connection: HttpsURLConnection? = null
         return try {
-            val url = URI(configuredEndpoint.trimEnd('/') + "/api/diagnostics/reports").toURL()
-            val conn = url.openConnection() as HttpsURLConnection
+            val parsed = URI(url).toURL()
+            val conn = parsed.openConnection() as HttpsURLConnection
             connection = conn
-            if (TailnetRouting.isTailnetTarget(url.host)) {
+            if (TailnetRouting.isTailnetTarget(parsed.host)) {
                 val endpoint = TunnelManager.get(appContext).socksEndpoint ?: return SendOutcome.FAILED
                 conn.sslSocketFactory = socksTlsFactory(endpoint.addr, endpoint.credential)
             }

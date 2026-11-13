@@ -18,8 +18,10 @@ import java.security.MessageDigest
  */
 class UpdateDownloader(
     private val dir: File,
-    /** 连接定制（自托管 tailnet 源经内嵌隧道：注入 SOCKS TLS 套接字工厂）。 */
-    private val tuneConnection: (java.net.HttpURLConnection) -> Unit = {},
+    /** 流式取回（自托管 tailnet 源用：Android HttpURLConnection 会先本地解析
+     *  目标主机，ts.net 公网不可解析；经注入拨号的实现把解析交给代理侧）。
+     *  GET [url]（rangeFrom>0 时带 Range），响应体写 [sink]，返回 (状态码, 字节数)。 */
+    private val streamFetch: ((url: String, rangeFrom: Long, sink: java.io.OutputStream) -> Pair<Int, Long>)? = null,
     private val assetUrl: (name: String) -> String,
 ) {
     /** 校验失败（不一致、.sha256 缺失或格式不符）：已下载文件已删除。 */
@@ -91,8 +93,12 @@ class UpdateDownloader(
 
     /** 下载资产到 [target]；[resume] 时对已有部分带 Range 续传：206 追加、200 重写、416 视为已完整。 */
     private fun fetch(name: String, target: File, resume: Boolean, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
-        val conn = URL(assetUrl(name)).openConnection() as HttpURLConnection
-        tuneConnection(conn)
+        val url = assetUrl(name)
+        if (streamFetch != null) {
+            fetchStreamed(url, target, resume, onProgress)
+            return
+        }
+        val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 30_000
         conn.readTimeout = 30_000
         try {
@@ -121,6 +127,36 @@ class UpdateDownloader(
             }
         } finally {
             conn.disconnect()
+        }
+    }
+
+    /** 经注入拨号的流式取回：200 重写 / 206 追加 / 416 视为已完整（与 URL 版同语义）。 */
+    private fun fetchStreamed(url: String, target: File, resume: Boolean, onProgress: (Long, Long) -> Unit) {
+        val fetch = streamFetch ?: return
+        val existing = if (resume && target.isFile) target.length() else 0L
+        if (existing > 0 && !target.renameTo(File(target.path + ".resume"))) throw IOException("resume rename failed")
+        val partTarget = if (existing > 0) File(target.path + ".resume") else target
+        val out = java.io.FileOutputStream(partTarget, existing > 0)
+        val (code, written) = try {
+            fetch(url, existing, out).also { (_, w) -> onProgress(existing + w, 0L) }
+        } finally {
+            out.close()
+        }
+        when {
+            existing > 0 && code == 416 -> {
+                partTarget.renameTo(target) // 已下载完整：恢复原名交校验
+                return
+            }
+            code != 200 && code != 206 -> {
+                partTarget.delete()
+                throw HttpStatus(code)
+            }
+        }
+        if (code == 200 && existing > 0) {
+            // 服务器忽略 Range：.resume 里的内容是被覆盖重写的完整新文件
+            partTarget.renameTo(target)
+        } else if (code == 206 && existing > 0) {
+            partTarget.renameTo(target)
         }
     }
 

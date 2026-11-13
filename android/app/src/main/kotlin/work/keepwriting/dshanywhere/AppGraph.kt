@@ -28,11 +28,14 @@ class AppGraph private constructor(context: Context) {
     /** 原生会话（dsbot-api-client）：建会话/cookie 持久化/WebView 迁移与 gate 判定。 */
     val nativeSession = NativeSession(context.applicationContext) { h, p -> nativeDial.dial(h, p) }
 
-    /** 自更新（android-self-update）。 */
-    val updates = UpdateManager(context)
+    /** 自更新（android-self-update；经分流拨号访问自托管更新源）。 */
+    val updates = UpdateManager(context) { h, p -> nativeDial.dial(h, p) }
 
     /** 诊断上报（diagnostics-reporting）：未配置端点时零行为。 */
-    val diagnostics = DiagnosticsManager.get(context)
+    val diagnostics = DiagnosticsManager.get(context).also {
+        // tailnet 端点经分流拨号上报（HttpSocket：域名由代理侧解析）
+        it.attachDial { h, p -> nativeDial.dial(h, p) }
+    }
 
     var configState by mutableStateOf(ConfigState.NeedsSetup)
         private set

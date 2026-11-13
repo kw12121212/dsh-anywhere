@@ -84,8 +84,12 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         } catch (_: Exception) {
             ""
         }
-        if (tunnelState == TunnelStateMachine.State.CONNECTED && TailnetRouting.isTailnetTarget(host)) {
-            connection.retry()
+        if (tunnelState == TunnelStateMachine.State.CONNECTED) {
+            // 更新检查曾因隧道未就绪而失败：连上后自动补查（tailnet 更新源）
+            graph.updates.onTunnelConnected()
+            if (TailnetRouting.isTailnetTarget(host)) {
+                connection.retry()
+            }
         }
     }
     // 设置页保存（requestReload 递增 reloadTick）后重新走连接流程
