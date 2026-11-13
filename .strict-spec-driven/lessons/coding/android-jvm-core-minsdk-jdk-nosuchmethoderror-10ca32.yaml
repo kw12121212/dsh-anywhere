@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: android-jvm-core-minsdk-jdk-nosuchmethoderror-10ca32
+  title: Android 目标代码（含纯 JVM core 模块）禁用高于 minSdk 的 JDK 新便捷方法，否则低版本真机 NoSuchMethodError 闪退
+category: coding
+status: active
+created_at: '2026-11-13T03:44:18.580Z'
+updated_at: '2026-11-13T03:44:18.580Z'
+context: 1.2.0 在华为 PLR-AL50（HarmonyOS，Android 12 / API 31 底座）首次设置页粘贴带 ?token 的 dsh 地址立即闪退；api31 模拟器复现，API 36 模拟器与全部 JVM 测试均正常。
+observation: 'HarnessUrl.isTokenPart 用 URLDecoder.decode(String, Charset)（Java 10 / API 33+）：粘贴带查询串地址触发实时校验 normalize→stripToken→decode，API 31 真机主线程 NoSuchMethodError 直接杀进程（logcat: FATAL EXCEPTION main, No static method decode(Ljava/lang/String;Ljava/nio/charset/Charset;)）。同批还有 Files.writeString（Java 11 / API 33+，HarnessConfig/DiagStore 保存路径）与 Stream.toList()（Java 16 / API 34+，DiagStore 队列扫描）。三处都在 compileSdk 36 编译通过；android/core 是纯 JVM includeBuild，无 Android lint 的 API 级别检查，JUnit 跑在宿主 JDK 17 上行为全绿——与 private-content-assistant 项目 readNBytes/URLEncoder.encode(String,Charset) 两坑同型（其 lesson: android-inputstream-readnbytes-int-api-33-minsdk）。'
+takeaway: 会进 APK 的代码（:app 与纯 JVM core 模块都算）只用 minSdk 26 已有的 JDK API：URLDecoder/URLEncoder 用 (String, String) 老重载、写文件用 kotlin.io.path.writeText（走 newOutputStream）、Stream 收集用 collect(Collectors.toList())、限长读取手写 read 循环。守卫用 ApiLevelDisciplineTest 扫描 core main 源码集的禁止形态（Charset 重载 / Files.writeString/readString / readNBytes/readAllBytes/transferTo / List.of 等 / java.util.stream 文件中的 .toList()），注释行跳过防误报；新加规则先补自检样本。验证必须含一台 API < 33 的模拟器或真机——API 36 模拟器永远复现不了这类崩溃。
+applies_when: 在 android/core（纯 JVM 模块）或 :app 里调用 java.net/java.nio.file/java.util.stream 等 JDK 类库、尤其引入新的便捷重载时；以及 Android 崩溃只在部分真机出现而新模拟器与 JVM 测试全绿时。
+occurrences:
+  - origin: fix-android-ap33-crash（1.2.1 热修复）
+    date: '2026-11-13'
+    evidence: 'api31 模拟器 logcat FATAL EXCEPTION: NoSuchMethodError at HarnessUrl.isTokenPart(HarnessUrl.kt:123)；修复后同场景保存成功进入团队页（2026-11-13 复现与复证）；core ApiLevelDisciplineTest 全绿'

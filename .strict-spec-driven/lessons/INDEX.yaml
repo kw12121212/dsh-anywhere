@@ -46,6 +46,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/coding/utf-8-string-bytes-u-fffd-d90166.yaml
+    android-jvm-core-minsdk-jdk-nosuchmethoderror-10ca32:
+      title: Android 目标代码（含纯 JVM core 模块）禁用高于 minSdk 的 JDK 新便捷方法，否则低版本真机 NoSuchMethodError 闪退
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/android-jvm-core-minsdk-jdk-nosuchmethoderror-10ca32.yaml
   security:
     wails-seturl-token-e08b6a:
       title: Wails SetURL 会在内存中保留并可能重放带 token 的地址

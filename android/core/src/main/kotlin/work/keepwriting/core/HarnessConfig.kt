@@ -7,6 +7,7 @@ import java.nio.file.StandardCopyOption
 import java.security.SecureRandom
 import kotlin.io.path.isDirectory
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 
 /**
  * harness 配置的读取与原子持久化：目录由调用方注入（:app 传 Context.filesDir 下的
@@ -50,7 +51,9 @@ class HarnessConfig(private val dir: Path) {
         Files.createDirectories(dir)
         val tmp = dir.resolve(".config.json.${Integer.toHexString(SecureRandom().nextInt()).removePrefix("-")}.tmp")
         try {
-            Files.writeString(tmp, "{\n  \"harnessURL\": \"$clean\"\n}\n")
+            // Files.writeString 是 Java 11 / Android API 33+；writeText 走
+            // newOutputStream（API 26+），core 会被打进 APK，只能用低版本路径。
+            tmp.writeText("{\n  \"harnessURL\": \"$clean\"\n}\n")
             try {
                 Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE)
             } catch (_: AtomicMoveNotSupportedException) {

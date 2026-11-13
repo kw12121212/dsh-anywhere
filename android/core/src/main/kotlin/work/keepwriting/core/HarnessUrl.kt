@@ -120,7 +120,10 @@ object HarnessUrl {
     private fun isTokenPart(part: String): Boolean {
         val key = part.substringBefore('=')
         val decoded = try {
-            URLDecoder.decode(key.replace("+", " "), Charsets.UTF_8)
+            // (String, Charset) 重载是 Java 10 / Android API 33+，低版本真机直接
+            // NoSuchMethodError（1.2.0 在 API 31 设备粘贴带 ?token 的地址即崩）；
+            // 用 (String, String) 老重载（API 1+），语义对 UTF-8 完全一致。
+            URLDecoder.decode(key.replace("+", " "), "UTF-8")
         } catch (_: Exception) {
             return false
         }

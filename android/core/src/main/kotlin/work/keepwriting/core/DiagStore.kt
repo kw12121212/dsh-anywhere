@@ -5,10 +5,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.SecureRandom
+import java.util.stream.Collectors
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 
 /**
  * 诊断上报的持久化与组包（diagnostics-reporting 规格）：端点配置（独立文件、原子写、
@@ -48,7 +50,8 @@ class DiagEndpointConfig(private val dir: Path) {
         Files.createDirectories(dir)
         val tmp = dir.resolve(".${DiagEndpointConfig.FILE_NAME}.${Integer.toHexString(SecureRandom().nextInt()).removePrefix("-")}.tmp")
         try {
-            Files.writeString(tmp, "{\n  \"diagnosticsEndpoint\": \"$endpoint\"\n}\n")
+            // Files.writeString 是 Java 11 / API 33+，writeText 走 API 26+ 路径。
+            tmp.writeText("{\n  \"diagnosticsEndpoint\": \"$endpoint\"\n}\n")
             moveAtomic(tmp, file)
         } finally {
             tmp.deleteIfExists()
@@ -77,7 +80,7 @@ class DiagQueue(private val dir: Path, private val capacity: Int = DiagLimits.DE
         val name = "%019d-%s.json".format(diagEpochMillis(), report.id)
         val tmp = dir.resolve(".${name}.${Integer.toHexString(SecureRandom().nextInt()).removePrefix("-")}.tmp")
         try {
-            Files.writeString(tmp, DiagJson.encodeReport(report))
+            tmp.writeText(DiagJson.encodeReport(report))
             moveAtomic(tmp, dir.resolve(name))
         } finally {
             tmp.deleteIfExists()
@@ -90,7 +93,8 @@ class DiagQueue(private val dir: Path, private val capacity: Int = DiagLimits.DE
         if (!Files.isDirectory(dir)) return emptyList()
         val out = mutableListOf<Named>()
         for (f in Files.list(dir).use { stream ->
-                stream.filter { it.name.endsWith(".json") }.sorted().toList()
+                // Stream.toList() 是 Java 16 / API 34+；Collectors 自 API 24 可用。
+                stream.filter { it.name.endsWith(".json") }.sorted().collect(Collectors.toList())
             }) {
             val report = try {
                 DiagJson.decodeReport(f.readText())
@@ -121,7 +125,7 @@ class DiagQueue(private val dir: Path, private val capacity: Int = DiagLimits.DE
 
     private fun enforceCapacity() {
         val names = Files.list(dir).use { stream ->
-            stream.filter { it.name.endsWith(".json") }.map { it.name }.sorted().toList()
+            stream.filter { it.name.endsWith(".json") }.map { it.name }.sorted().collect(Collectors.toList())
         }
         var excess = names.size - capacity
         var i = 0
