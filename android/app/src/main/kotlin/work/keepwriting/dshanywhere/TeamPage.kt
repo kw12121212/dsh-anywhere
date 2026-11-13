@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,40 +34,26 @@ import androidx.compose.ui.unit.dp
 import work.keepwriting.core.TeamHome
 
 /**
- * 团队页（dsbot-team-home）：分组列表（字段存在时显示、缺失降级）、搜索、「需要你」
- * 汇总与跳转、工具栏刷新入口重取全量、空团队首次创建引导。数据来自
- * NativeShellConnection 的 team 缓存（state 同步产物），本页无网络逻辑。
+ * 团队页（dsbot-team-home）：分组列表（字段存在时显示、缺失降级）、搜索、空团队首次
+ * 创建引导。待办（审批/提问/卡片）直接在对应对话行的标签位提示（原「需要你」汇总入口
+ * 已移除）。数据来自 NativeShellConnection 的 team 缓存（state 同步产物），本页无网络逻辑。
  */
 @Composable
 fun TeamPage(
     team: TeamHome.Team?,
     onOpenChat: (botId: String?) -> Unit,
-    onOpenNeedsYou: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text(stringResource(R.string.team_search_hint)) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.size(8.dp))
-            val pending = team?.pending?.size ?: 0
-            Text(
-                text = stringResource(R.string.needs_you_title) + (if (pending > 0) " ($pending)" else ""),
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable(enabled = pending > 0) { onOpenNeedsYou() }
-                    .padding(8.dp),
-            )
-        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text(stringResource(R.string.team_search_hint)) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         when {
             team == null -> CenteredHint(stringResource(R.string.team_loading))
             team.isEmpty -> EmptyTeamGuide()
@@ -135,6 +120,19 @@ private fun TeamEntryRow(e: TeamHome.Entry, onClick: () -> Unit) {
                 )
                 if (e.isMain) Tag(stringResource(R.string.team_tag_main))
                 if (e.isPrivate) Tag(stringResource(R.string.team_tag_private))
+                // 待办行内提示：该对话有等你处理的审批/提问/卡片
+                e.pendingKinds.forEach { kind ->
+                    Tag(
+                        text = stringResource(
+                            when (kind) {
+                                TeamHome.PendingItem.Kind.APPROVAL -> R.string.needs_you_approval
+                                TeamHome.PendingItem.Kind.QUESTION -> R.string.needs_you_question
+                                TeamHome.PendingItem.Kind.VIEW -> R.string.needs_you_view
+                            },
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             val summary = e.lastSummary
             if (!summary.isNullOrEmpty()) {
@@ -155,11 +153,11 @@ private fun TeamEntryRow(e: TeamHome.Entry, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Tag(text: String) {
+private fun Tag(text: String, color: Color = MaterialTheme.colorScheme.tertiary) {
     Text(
         " $text",
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.tertiary,
+        color = color,
     )
 }
 
@@ -180,58 +178,6 @@ private fun EmptyTeamGuide() {
         Text(stringResource(R.string.team_empty_title), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.team_empty_hint), style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-/** 需要你汇总页（dsbot-team-home）：待处理审批/提问/卡片，点击跳转对应 Bot 私聊。 */
-@Composable
-fun NeedsYouPage(pending: List<TeamHome.PendingItem>, onOpen: (String?) -> Unit) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            stringResource(R.string.needs_you_page_title),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        )
-        if (pending.isEmpty()) {
-            CenteredHint(stringResource(R.string.needs_you_empty))
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(pending) { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { item.botId?.let(onOpen) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            when (item.kind) {
-                                TeamHome.PendingItem.Kind.APPROVAL -> stringResource(R.string.needs_you_approval)
-                                TeamHome.PendingItem.Kind.QUESTION -> stringResource(R.string.needs_you_question)
-                                TeamHome.PendingItem.Kind.VIEW -> stringResource(R.string.needs_you_view)
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.size(12.dp))
-                        Text(
-                            item.summary ?: "",
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        item.sessionId?.let { sid ->
-                            Text(
-                                sid.takeLast(8),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

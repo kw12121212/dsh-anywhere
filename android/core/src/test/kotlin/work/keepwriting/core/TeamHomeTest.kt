@@ -112,7 +112,26 @@ class TeamHomeTest {
     }
 
     @Test
-    fun `需要你汇总审批提问与卡片`() {
+    fun `待办按 botId 与 sessionId 落到对应对话行`() {
+        val stateJson = """
+            {"revision":1,
+             "bots":[{"id":"b1","name":"A","sessionId":"s1"},
+                     {"id":"b2","name":"B","sessionId":"s2"}],
+             "rooms":[{"id":"sr","name":"群","members":["b1"],"sessionId":"sr"}],"sections":[],
+             "work":{"approvals":[{"sessionId":"s1","botId":"b1","title":"部署审批"}]},
+             "questions":{"sr":{"question":"选哪个方案"}},
+             "views":{"s2":{"title":"确认卡片"}}}
+        """.trimIndent()
+        val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
+        fun entry(id: String) = team.sections.flatMap { it.entries }.first { it.id == id }
+        // 审批带 botId → Bot 行；提问挂在房间会话 → 群聊行；提问/卡片无 botId 时靠 sessionId 命中 Bot 行
+        assertEquals(listOf(TeamHome.PendingItem.Kind.APPROVAL), entry("b1").pendingKinds)
+        assertEquals(listOf(TeamHome.PendingItem.Kind.QUESTION), entry("sr").pendingKinds)
+        assertEquals(listOf(TeamHome.PendingItem.Kind.VIEW), entry("b2").pendingKinds)
+    }
+
+    @Test
+    fun `同一行多类待办按审批提问卡片稳定排序`() {
         val stateJson = """
             {"revision":1,"bots":[{"id":"b1","name":"A","sessionId":"s1"}],"rooms":[],"sections":[],
              "work":{"approvals":[{"sessionId":"s1","botId":"b1","title":"部署审批"}]},
@@ -120,11 +139,15 @@ class TeamHomeTest {
              "views":{"s1":{"title":"确认卡片"}}}
         """.trimIndent()
         val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
-        assertEquals(3, team.pending.size)
-        assertEquals("部署审批", team.pending[0].summary)
-        assertEquals("选哪个方案", team.pending[1].summary)
-        assertEquals("确认卡片", team.pending[2].summary)
-        assertTrue(team.pending.all { it.sessionId == "s1" })
+        val kinds = team.sections.flatMap { it.entries }.single().pendingKinds
+        assertEquals(
+            listOf(
+                TeamHome.PendingItem.Kind.APPROVAL,
+                TeamHome.PendingItem.Kind.QUESTION,
+                TeamHome.PendingItem.Kind.VIEW,
+            ),
+            kinds,
+        )
     }
 
     @Test

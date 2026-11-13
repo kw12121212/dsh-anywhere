@@ -21,6 +21,9 @@ object TeamHome {
         val sessionId: String?,
         /** 最近活动时间（state 的 lastAt，epoch 毫秒；0.3.6 起提供，缺失为 null）。 */
         val lastAt: Long? = null,
+        /** 该对话待你处理的事项类型（审批/提问/卡片；按 botId 与 sessionId 双路归属），
+         *  空列表 = 无待办。行内提示替代原「需要你」汇总页。 */
+        val pendingKinds: List<PendingItem.Kind> = emptyList(),
         /** Bot 的分段 id 列表（旧分段切换入口用）；房间为空。 */
         val parts: List<String> = emptyList(),
         /** 房间成员 Bot id 列表（群聊提及/停止成员名册）；Bot 条目为空。 */
@@ -42,7 +45,6 @@ object TeamHome {
 
     data class Team(
         val sections: List<Section>,
-        val pending: List<PendingItem>,
         val isEmpty: Boolean,
     )
 
@@ -50,7 +52,7 @@ object TeamHome {
         val workingBots = workingBotIds(state)
         val botEntries = state.bots.map { bot -> botEntry(bot, state, workingBots) }
         val roomEntries = state.rooms.map { room -> roomEntry(room, workingBots) }
-        val allEntries = botEntries + roomEntries
+        val allEntries = applyPending(botEntries + roomEntries, pendingOf(state))
         val grouped = LinkedHashMap<String?, MutableList<Entry>>()
         val sectionsRaw = state.raw.members["sections"] as? Json.Value.Array
         val sectionOf = entrySectionMap(sectionsRaw, allEntries)
@@ -74,7 +76,7 @@ object TeamHome {
             }
         }
         val rest = grouped.entries.map { (id, list) -> Section(id, defaultSectionName(id), list) }
-        return Team(named + rest, pendingOf(state), allEntries.isEmpty())
+        return Team(named + rest, allEntries.isEmpty())
     }
 
     fun search(team: Team, query: String): Team {
@@ -151,6 +153,26 @@ object TeamHome {
         val work = state.raw.members["work"] as? Json.Value.Object ?: return emptySet()
         val bots = work.members["bots"] as? Json.Value.Object ?: return emptySet()
         return bots.members.keys.toSet()
+    }
+
+    /** 待办归属到对话行：botId 命中 Bot 条目，sessionId 命中持有该会话的条目
+     *  （Bot 的 sessionId 或房间——room.id 与 sessionId 同值，群会话的提问/卡片
+     *  由此落到群聊行）。同条目多类待办按 审批>提问>卡片 稳定排序。 */
+    private fun applyPending(entries: List<Entry>, pending: List<PendingItem>): List<Entry> {
+        if (pending.isEmpty()) return entries
+        val byBotId = HashMap<String, MutableSet<PendingItem.Kind>>()
+        val bySessionId = HashMap<String, MutableSet<PendingItem.Kind>>()
+        for (p in pending) {
+            p.botId?.let { byBotId.getOrPut(it) { LinkedHashSet() }.add(p.kind) }
+            p.sessionId?.let { bySessionId.getOrPut(it) { LinkedHashSet() }.add(p.kind) }
+        }
+        fun kindsOf(e: Entry): List<PendingItem.Kind> {
+            val kinds = LinkedHashSet<PendingItem.Kind>()
+            byBotId[e.id]?.let(kinds::addAll)
+            e.sessionId?.let { bySessionId[it] }?.let(kinds::addAll)
+            return if (kinds.isEmpty()) emptyList() else PendingItem.Kind.entries.filter(kinds::contains)
+        }
+        return entries.map { e -> kindsOf(e).let { if (it.isEmpty()) e else e.copy(pendingKinds = it) } }
     }
 
     private fun avatarOf(raw: Json.Value.Object): String? {

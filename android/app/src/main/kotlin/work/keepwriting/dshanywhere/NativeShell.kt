@@ -98,13 +98,12 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
     }
 }
 
-/** 返回栈页面：团队页为根；聊天页带目标 id；详情面板带目标 id。 */
-sealed interface ShellPage {
-    data object Team : ShellPage
-    data object NeedsYou : ShellPage
-    data class Chat(val targetId: String) : ShellPage
-    data class Details(val targetId: String) : ShellPage
-}
+    /** 返回栈页面：团队页为根；聊天页带目标 id；详情面板带目标 id。 */
+    sealed interface ShellPage {
+        data object Team : ShellPage
+        data class Chat(val targetId: String) : ShellPage
+        data class Details(val targetId: String) : ShellPage
+    }
 
 @Composable
 private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () -> Unit) {
@@ -210,11 +209,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     }
                 }
                 current is ShellPage.Details -> SkeletonPage("details:${current.targetId}")
-                current is ShellPage.NeedsYou -> NeedsYouPage(connection.team?.pending ?: emptyList()) { id -> connection.openChat(id ?: "unknown") }
                 else -> TeamPage(
                     team = connection.team,
                     onOpenChat = { id -> connection.openChat(id ?: "unknown") },
-                    onOpenNeedsYou = { connection.openNeedsYou() },
                 )
             }
         }
@@ -492,6 +489,9 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             rpcCall = { endpoint, requestJson, onResult ->
                 executor.execute { muxCall(endpoint, requestJson, onResult) }
             },
+            upload = { sessionId, name, mediaType, bytes, onResult ->
+                executor.execute { uploadAttachment(sessionId, name, mediaType, bytes, onResult) }
+            },
         )
     }
 
@@ -577,10 +577,6 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     fun openDetails(id: String) {
         page = ShellPage.Details(id)
-    }
-
-    fun openNeedsYou() {
-        page = ShellPage.NeedsYou
     }
 
     fun goBack() {

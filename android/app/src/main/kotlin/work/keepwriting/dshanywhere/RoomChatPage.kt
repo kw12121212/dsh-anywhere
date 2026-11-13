@@ -1,5 +1,7 @@
 package work.keepwriting.dshanywhere
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,9 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -48,8 +52,18 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
     var showGoalDialog by remember { mutableStateOf(false) }
     var goalText by remember { mutableStateOf("") }
     var showRefPicker by remember { mutableStateOf(false) }
+    var showAttachMenu by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val members = remember(memberNames) { memberNames }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // 附件选取（相册 / 文件；与私聊同通道：加入附件栏即上传，就绪后随消息提交）
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) controller.addAttachmentFromUri(context.contentResolver, uri)
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) controller.addAttachmentFromUri(context.contentResolver, uri)
+    }
 
     LaunchedEffect(roomId) { controller.open(roomId) }
     LaunchedEffect(controller.jumpSignal) {
@@ -72,12 +86,6 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.align(Alignment.CenterVertically),
                     )
-                }
-                members.forEachIndexed { i, name ->
-                    val botId = memberIds.getOrNull(i) ?: return@forEachIndexed
-                    TextButton(onClick = { controller.stopMember(botId) }) {
-                        Text("停 $name", style = MaterialTheme.typography.labelSmall)
-                    }
                 }
             }
         }
@@ -162,7 +170,6 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
             )
         }
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedButton(onClick = { controller.stopRoomWork() }) { Text("停止群") }
             TextButton(onClick = { controller.showProgress() }) { Text("进度") }
             TextButton(onClick = { showGoalDialog = true }) { Text("目标") }
             TextButton(onClick = { showRefPicker = true }, enabled = members.isNotEmpty()) { Text("＋引用") }
@@ -176,10 +183,48 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
             )
         }
+        // 附件栏：缩略/文件 chip + 上传状态 + 移除/重试（与私聊同构）
+        if (controller.attachments.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(controller.attachments, key = { it.id }) { att ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (att.isImage) "🖼 ${att.name.take(12)}" else "📄 ${att.name.take(12)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.widthIn(max = 140.dp),
+                                    maxLines = 1,
+                                )
+                                Spacer(Modifier.size(4.dp))
+                                TextButton(onClick = { controller.removeAttachment(att.id) }) { Text("✕") }
+                            }
+                            when (att.status) {
+                                "uploading" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(12.dp))
+                                    Text(" 上传中", style = MaterialTheme.typography.labelSmall)
+                                }
+                                "ready" -> Text("已就绪", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                "failed" -> TextButton(onClick = { controller.retryAttachment(att.id) }) {
+                                    Text("重试（${att.failReason ?: "失败"}）", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            TextButton(onClick = { showAttachMenu = true }) { Text("＋") }
             OutlinedTextField(
                 value = input,
                 onValueChange = { fresh ->
@@ -195,11 +240,35 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
             TextButton(
                 onClick = {
                     val text = input.trim()
-                    if (text.isNotEmpty() && controller.send(text)) input = ""
+                    if ((text.isNotEmpty() || controller.attachments.isNotEmpty()) && controller.sendOrAttach(text)) input = ""
                 },
-                enabled = input.isNotBlank() && !controller.busy,
+                enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) && !controller.busy &&
+                    controller.attachments.none { it.status == "uploading" || it.status == "failed" },
             ) { Text("发送") }
         }
+    }
+
+    if (showAttachMenu) {
+        AlertDialog(
+            onDismissRequest = { showAttachMenu = false },
+            title = { Text("添加附件") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        showAttachMenu = false
+                        pickImage.launch(androidx.activity.result.PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        ))
+                    }) { Text("从相册选择图片") }
+                    TextButton(onClick = {
+                        showAttachMenu = false
+                        pickFile.launch("*/*")
+                    }) { Text("选择文件") }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showAttachMenu = false }) { Text("取消") } },
+        )
     }
 
     // @ 提及弹层：过滤群成员

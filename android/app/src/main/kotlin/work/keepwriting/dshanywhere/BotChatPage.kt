@@ -5,7 +5,11 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -286,6 +290,46 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                     controller.attachments.none { it.status == "uploading" || it.status == "failed" },
             ) { Text("发送") }
         }
+    }
+
+    // 统计 / Bot 间记录：可读化 JSON 弹窗（缩进多行、可滚动、可选中复制）
+    controller.statsText?.let { body ->
+        AlertDialog(
+            onDismissRequest = { controller.dismissStats() },
+            title = { Text("统计") },
+            text = {
+                SelectionContainer {
+                    Text(
+                        body,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(max = 420.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text("关闭") } },
+        )
+    }
+    controller.exchangesText?.let { body ->
+        AlertDialog(
+            onDismissRequest = { controller.dismissExchanges() },
+            title = { Text("Bot 间记录") },
+            text = {
+                SelectionContainer {
+                    Text(
+                        body,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(max = 420.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { controller.dismissExchanges() }) { Text("关闭") } },
+        )
     }
 
     if (showAttachMenu) {

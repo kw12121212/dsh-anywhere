@@ -20,6 +20,11 @@ class RoomChatController(
     private val api: (endpoint: String, payloadJson: String, onResult: (DsbotApi.Result) -> Unit) -> Unit,
     private val execute: (Runnable) -> Unit,
     private val rpcCall: (endpoint: String, requestJson: String, onResult: (work.keepwriting.core.DshMux.Result) -> Unit) -> Unit,
+    /** 附件上传通道（dsbot-attachments）：uploadFileBinary，executor 内回调。 */
+    private val upload: (
+        sessionId: String, name: String, mediaType: String?, bytes: ByteArray,
+        onResult: (DsbotApi.Result) -> Unit,
+    ) -> Unit = { _, _, _, _, _ -> },
 ) {
     data class Row(val key: Long, val item: ChatRender.Item)
 
@@ -148,6 +153,147 @@ class RoomChatController(
             }
         }
         return true
+    }
+
+    // ---- 附件（dsbot-attachments；与 ChatController 同构，session 为群会话 id）----
+
+    val attachments = mutableStateListOf<ChatController.PendingAttachment>()
+    private var nextAttachmentId = 1L
+
+    /** 从 ContentResolver URI 读取附件（相册/文件选择器）：读字节在 executor 后台。 */
+    fun addAttachmentFromUri(resolver: android.content.ContentResolver, uri: android.net.Uri) {
+        execute(Runnable {
+            val ok = runCatching {
+                val name = queryDisplayName(resolver, uri)
+                val mediaType = resolver.getType(uri)
+                val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+                if (bytes.isNotEmpty()) {
+                    val att = ChatController.PendingAttachment(
+                        id = nextAttachmentId++,
+                        name = name,
+                        bytes = bytes,
+                        isImage = mediaType?.startsWith("image/") == true,
+                        mediaType = mediaType,
+                    )
+                    attachments.add(att)
+                    uploadAttachment(att)
+                    true
+                } else {
+                    false
+                }
+            }.getOrDefault(false)
+            if (!ok) notice = "无法读取所选内容"
+        })
+    }
+
+    fun removeAttachment(id: Long) {
+        execute(Runnable { attachments.removeAll { it.id == id } })
+    }
+
+    fun retryAttachment(id: Long) {
+        execute(Runnable {
+            val att = attachments.firstOrNull { it.id == id } ?: return@Runnable
+            if (att.status == "failed") uploadAttachment(att)
+        })
+    }
+
+    private fun uploadAttachment(att: ChatController.PendingAttachment) {
+        val id = roomId ?: run {
+            att.status = "failed"
+            att.failReason = "群会话未就绪"
+            return
+        }
+        att.status = "uploading"
+        att.failReason = null
+        upload(id, att.name, att.mediaType, att.bytes) { res ->
+            when (res) {
+                is DsbotApi.Result.Ok -> {
+                    val decoded = work.keepwriting.core.AttachmentMessages.decodeUpload(res.value)
+                    if (decoded != null) {
+                        att.receiptId = decoded.receiptId
+                        att.status = "ready"
+                    } else {
+                        att.status = "failed"
+                        att.failReason = "上传应答无法解析"
+                    }
+                }
+                is DsbotApi.Result.BotError -> {
+                    att.status = "failed"
+                    att.failReason = "上传被拒：${res.code}"
+                }
+                is DsbotApi.Result.Failure -> {
+                    att.status = "failed"
+                    att.failReason = "上传失败（网络）"
+                }
+            }
+        }
+    }
+
+    /** 发送：有附件时要求全部 ready，经 mux session/prompt 提交（receipts + 文本）；
+     *  成功后清附件栏并乐观上屏；纯文本仍走 send。 */
+    fun sendOrAttach(text: String): Boolean {
+        if (attachments.isEmpty()) return send(text)
+        execute(Runnable {
+            val id = roomId ?: run {
+                notice = "群会话未就绪，稍候再发"
+                return@Runnable
+            }
+            if (attachments.any { it.status == "uploading" }) {
+                notice = "附件还在上传"
+                return@Runnable
+            }
+            if (attachments.any { it.status == "failed" }) {
+                notice = "有附件上传失败，重试或移除后再发"
+                return@Runnable
+            }
+            if (attachments.any { it.status != "ready" }) return@Runnable
+            busy = true
+            val receipts = attachments.mapNotNull { it.receiptId }
+            val visible = buildString {
+                if (text.isNotEmpty()) append(text).append('\n')
+                attachments.forEach { append("[附件] ").append(it.name).append('\n') }
+            }.trimEnd()
+            val optimisticItem = ChatRender.Item.Message(fromUser = true, markdown = visible, turn = null, seq = null)
+            appendItem(optimisticItem)
+            val optimisticRowKey = rows.last().key
+            val request = work.keepwriting.core.AttachmentMessages.promptRequest(
+                requestId = java.util.UUID.randomUUID().toString(),
+                sessionId = id,
+                receiptIds = receipts,
+                text = text.trim(),
+            )
+            rpcCall("session/prompt", request) { res ->
+                when (res) {
+                    is work.keepwriting.core.DshMux.Result.Ok -> {
+                        busy = false
+                        attachments.clear()
+                        notice = null
+                    }
+                    is work.keepwriting.core.DshMux.Result.Err -> {
+                        val last = rows.lastOrNull()
+                        if (last?.key == optimisticRowKey) rows.removeAt(rows.lastIndex)
+                        liveInFlight.removeAll { it === optimisticItem }
+                        busy = false
+                        notice = "发送失败：${res.code}"
+                    }
+                }
+            }
+        })
+        return true
+    }
+
+    private fun queryDisplayName(resolver: android.content.ContentResolver, uri: android.net.Uri): String {
+        runCatching {
+            resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) {
+                        c.getString(idx)?.takeIf { it.isNotBlank() }?.let { return it }
+                    }
+                }
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
     }
 
     /** feed 事件（NativeShellConnection 转发，executor 线程）：stream 逐字、message 定格。 */
