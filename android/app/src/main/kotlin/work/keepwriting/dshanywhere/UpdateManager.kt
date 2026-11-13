@@ -58,10 +58,19 @@ class UpdateManager(context: Context) {
     @Volatile
     private var sourceBase: String? = (sourceConfig.load() as? work.keepwriting.core.UpdateSourceConfig.Load.Ok)?.endpoint
 
-    private val downloader = UpdateDownloader(updatesDir) { name ->
-        sourceBase?.trimEnd('/')?.let { "$it/$name" }
-            ?: "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
-    }
+    private val downloader = UpdateDownloader(
+        dir = updatesDir,
+        assetUrl = { name ->
+            sourceBase?.trimEnd('/')?.let { "$it/$name" }
+                ?: "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
+        },
+        // 自托管源是 tailnet 目标时经内嵌节点（ts.net 域名在公网 DNS 不存在，绝不能直连）
+        tuneConnection = { conn ->
+            if (conn is HttpsURLConnection && SocksTls.isTailnet(conn.url.host)) {
+                SocksTls.factory(appContext)?.let { conn.sslSocketFactory = it }
+            }
+        },
+    )
 
     /** 设置页保存/清除更新源后重读（下次检查与下载即用新源）。 */
     fun reloadSource() {
@@ -112,8 +121,14 @@ class UpdateManager(context: Context) {
         Thread {
             try {
                 val base = sourceBase
-                val info: UpdateCheck.UpdateInfo? = if (base != null) {
-                    checkSelfHosted(base)
+                var info: UpdateCheck.UpdateInfo? = if (base != null) {
+                    try {
+                        checkSelfHosted(base)
+                    } catch (_: TunnelNotReady) {
+                        // 启动检查常跑在隧道建连完成前：等一下重试一次，仍不就绪才报错
+                        Thread.sleep(4_000)
+                        checkSelfHosted(base)
+                    }
                 } else {
                     checkGitHub()
                 }
@@ -127,11 +142,16 @@ class UpdateManager(context: Context) {
                     }
                     UpdateCheck.CheckOutcome.UP_TO_DATE -> state = State.UP_TO_DATE
                 }
+            } catch (e: TunnelNotReady) {
+                if (!restoreReady()) fail("隧道未就绪，稍后再试（tailnet 更新源需先连上 Tailscale）")
             } catch (e: Exception) {
                 if (!restoreReady()) fail("检查更新失败（${e.javaClass.simpleName}）")
             }
         }.start()
     }
+
+    /** 自托管源在 tailnet 上而内嵌节点未就绪：不可直连（ts.net 公网不可解析）。 */
+    private class TunnelNotReady : IllegalStateException("tunnel not ready")
 
     /** GitHub 模式：latest Release 的 tag 与资产名 → UpdateInfo；不可达抛异常。 */
     private fun checkGitHub(): UpdateCheck.UpdateInfo? {
@@ -154,12 +174,15 @@ class UpdateManager(context: Context) {
     }
 
     /** 自托管模式：GET <base>/latest.json（tailnet 目标经内嵌节点）→ UpdateInfo；
-     *  清单缺失/无效视为无更新（null），网络不可达抛异常。 */
+     *  清单缺失/无效视为无更新（null）；隧道未就绪抛 TunnelNotReady（不直连——
+     *  ts.net 域名只在 MagicDNS 可解析，直连必 UnknownHostException）。 */
     private fun checkSelfHosted(base: String): UpdateCheck.UpdateInfo? {
         val url = java.net.URI(base.trimEnd('/') + "/latest.json").toURL()
         val conn = url.openConnection() as java.net.HttpURLConnection
         if (conn is HttpsURLConnection && SocksTls.isTailnet(url.host)) {
-            SocksTls.factory(appContext)?.let { conn.sslSocketFactory = it }
+            val factory = SocksTls.factory(appContext)
+                ?: throw TunnelNotReady()
+            conn.sslSocketFactory = factory
         }
         conn.connectTimeout = 15_000
         conn.readTimeout = 15_000
@@ -178,6 +201,15 @@ class UpdateManager(context: Context) {
     fun download() {
         val info = currentInfo ?: return
         if (state == State.DOWNLOADING) return
+        // tailnet 更新源必须等隧道就绪（下载经 SOCKS TLS；直连 ts.net 必失败）
+        val base = sourceBase
+        if (base != null) {
+            val host = runCatching { java.net.URI(base).host }.getOrNull()
+            if (host != null && SocksTls.isTailnet(host) && SocksTls.factory(appContext) == null) {
+                fail("隧道未就绪，稍后再试（tailnet 更新源需先连上 Tailscale）")
+                return
+            }
+        }
         state = State.DOWNLOADING
         Thread {
             try {

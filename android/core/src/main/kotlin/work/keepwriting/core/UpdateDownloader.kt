@@ -18,6 +18,8 @@ import java.security.MessageDigest
  */
 class UpdateDownloader(
     private val dir: File,
+    /** 连接定制（自托管 tailnet 源经内嵌隧道：注入 SOCKS TLS 套接字工厂）。 */
+    private val tuneConnection: (java.net.HttpURLConnection) -> Unit = {},
     private val assetUrl: (name: String) -> String,
 ) {
     /** 校验失败（不一致、.sha256 缺失或格式不符）：已下载文件已删除。 */
@@ -90,6 +92,7 @@ class UpdateDownloader(
     /** 下载资产到 [target]；[resume] 时对已有部分带 Range 续传：206 追加、200 重写、416 视为已完整。 */
     private fun fetch(name: String, target: File, resume: Boolean, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
         val conn = URL(assetUrl(name)).openConnection() as HttpURLConnection
+        tuneConnection(conn)
         conn.connectTimeout = 30_000
         conn.readTimeout = 30_000
         try {
