@@ -111,6 +111,26 @@ class UpdateDownloaderTest {
     }
 
     @Test
+    fun manifestShaSkipsShaAssetAndVerifies() {
+        // 自托管清单模式：latest.json 已带 sha256，服务器只有 APK 也能下载并校验通过。
+        val base = serve(mapOf(apkName to apkBytes))
+        val manifestInfo = info.copy(manifestSha256 = sha256Hex(apkBytes))
+        val apk = downloader(base).download(manifestInfo)
+        assertContentEquals(apkBytes, apk.readBytes())
+        assertEquals(setOf(apkName), dir.list()!!.toSet(), "清单模式不落 .sha256 文件")
+    }
+
+    @Test
+    fun manifestShaMismatchThrows() {
+        val base = serve(mapOf(apkName to apkBytes))
+        val wrong = "0".repeat(64)
+        assertFailsWith<UpdateDownloader.VerificationFailed> {
+            downloader(base).download(info.copy(manifestSha256 = wrong))
+        }
+        assertEquals(emptyList(), dir.list()!!.toList())
+    }
+
+    @Test
     fun missingSha256FailsAsVerificationAndDeletesFiles() {
         val base = serve(mapOf(apkName to apkBytes))
         File(dir, apkName + UpdateDownloader.PART_SUFFIX).writeBytes(apkBytes.copyOfRange(0, 1000))

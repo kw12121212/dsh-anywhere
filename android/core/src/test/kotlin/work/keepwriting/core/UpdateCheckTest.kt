@@ -62,4 +62,39 @@ class UpdateCheckTest {
         assertNull(UpdateCheck.isNewer("release-1.2.0", assets, 10001))
         assertTrue(true)
     }
+
+    // ---- 自托管清单（latest.json，pca /dsh-updates 契约）----
+
+    private fun manifest(json: String): Json.Value? = Json.parse(json)
+
+    @Test
+    fun fromManifestParsesValidEntry() {
+        val v = manifest(
+            """{"version_name":"1.4.2","version_code":10402,
+               "sha256":"${"a".repeat(64)}","size":12345,"created_at":"2026-11-13T00:00:00Z"}""",
+        )
+        val info = UpdateCheck.fromManifest(checkNotNull(v), currentVersionCode = 10401)
+        checkNotNull(info)
+        assertEquals("1.4.2", info.version)
+        assertEquals(10402, info.versionCode)
+        assertEquals("DSH-Anywhere-1.4.2.apk", info.apkAsset)
+        assertEquals("a".repeat(64), info.manifestSha256)
+    }
+
+    @Test
+    fun fromManifestRejectsOlderOrInvalid() {
+        val v = checkNotNull(manifest("""{"version_name":"1.4.1","version_code":10401,"sha256":"${"a".repeat(64)}"}"""))
+        assertNull(UpdateCheck.fromManifest(v, currentVersionCode = 10401), "不高于本机：无更新")
+        val badVersion = checkNotNull(manifest("""{"version_name":"1.x","version_code":99,"sha256":""}"""))
+        assertNull(UpdateCheck.fromManifest(badVersion, 10000), "版本非法")
+        assertNull(UpdateCheck.fromManifest(checkNotNull(manifest("[1]")), 10000), "非对象")
+    }
+
+    @Test
+    fun fromManifestWithoutShaFallsBackToAssetMode() {
+        val v = checkNotNull(manifest("""{"version_name":"1.4.2","version_code":10402}"""))
+        val info = UpdateCheck.fromManifest(v, 10401)
+        checkNotNull(info)
+        assertNull(info.manifestSha256, "sha256 缺失/非法：退回 .sha256 资产校验")
+    }
 }

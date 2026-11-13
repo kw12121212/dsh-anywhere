@@ -37,20 +37,26 @@ class UpdateDownloader(
             if (it.name != apkFile.name && it.name != partFile.name && it.name != shaFile.name) it.deleteRecursively()
         }
         if (apkFile.isFile) return apkFile
-        // .sha256 体积很小：每次全新获取，不续传（已完整时续传请求只会得到 416）。
-        shaFile.delete()
-        try {
-            fetch(info.sha256Asset, shaFile, resume = false)
-        } catch (e: HttpStatus) {
-            // Release 缺 .sha256：无从校验，删除已下载部分并按校验失败处理。
-            if (e.code != 404) throw e
-            partFile.delete()
+        // 期望 sha256 的两个来源：自托管清单直接给出；GitHub 模式抓 .sha256 资产
+        //（体积很小，每次全新获取，不续传——已完整时续传请求只会得到 416）。
+        val expected: String?
+        if (info.manifestSha256 != null) {
+            expected = info.manifestSha256
+        } else {
             shaFile.delete()
-            throw VerificationFailed()
+            try {
+                fetch(info.sha256Asset, shaFile, resume = false)
+            } catch (e: HttpStatus) {
+                // Release 缺 .sha256：无从校验，删除已下载部分并按校验失败处理。
+                if (e.code != 404) throw e
+                partFile.delete()
+                shaFile.delete()
+                throw VerificationFailed()
+            }
+            expected = UpdateCheck.parseSha256(shaFile.readText())
         }
         fetch(info.apkAsset, partFile, resume = true, onProgress = onProgress)
-        // 校验：.sha256 与 APK 内容恒时比对。
-        val expected = UpdateCheck.parseSha256(shaFile.readText())
+        // 校验：期望 sha256 与 APK 内容恒时比对。
         val actual = sha256Of(partFile)
         if (expected == null || actual == null ||
             !MessageDigest.isEqual(expected.toByteArray(), actual.toByteArray())

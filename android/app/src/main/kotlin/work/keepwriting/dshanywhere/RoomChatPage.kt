@@ -118,18 +118,42 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                                 speakerColorKey = item.speakerColor,
                                 onCopy = { clipboard.setText(AnnotatedString(item.markdown)) },
                                 onCopyBlock = { clipboard.setText(AnnotatedString(it)) },
-                                onOpenLink = { },
+                                onOpenLink = { url ->
+                                    // 群聊链接与私聊同语义：系统浏览器打开（原空实现导致点击无反应）
+                                    runCatching {
+                                        context.startActivity(
+                                            android.content.Intent(
+                                                android.content.Intent.ACTION_VIEW,
+                                                android.net.Uri.parse(url),
+                                            ),
+                                        )
+                                    }
+                                },
                             )
                             is ChatRender.Item.ToolCard -> Text(
                                 "工具调用：${item.name ?: "未知"}",
                                 style = MaterialTheme.typography.labelMedium,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
                             )
-                            is ChatRender.Item.FileAttachment -> Text(
-                                "📎 ${item.name ?: "附件"}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-                            )
+                            is ChatRender.Item.FileAttachment -> Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // 与私聊同语义：直接交系统应用打开；失败时给出提示
+                                        controller.readAttachment(item.refJson) { bytes ->
+                                            if (bytes != null) {
+                                                val name = item.name ?: "attachment"
+                                                if (!AttachmentOpen.openWith(context, name, bytes)) {
+                                                    controller.postNotice("没有应用能打开 $name")
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("📎 ${item.name ?: "附件"}", style = MaterialTheme.typography.bodyMedium)
+                            }
                             is ChatRender.Item.InteractiveCard -> {
                                 var dismissed by remember(row.key) { mutableStateOf(false) }
                                 if (!dismissed) {

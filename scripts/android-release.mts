@@ -15,7 +15,7 @@
 // 外部命令全部经可注入 Runner（默认 spawnSync），Vitest 以假 Runner 锁定序列。
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readPackageVersion } from './package-version.mts'
@@ -221,6 +221,24 @@ export function main(argv: string[] = process.argv.slice(2), runner: Runner = sp
   const upload = runner('gh', ['release', 'upload', tag, apk, shaFile, ...(overwrite ? ['--clobber'] : [])])
   if (upload.status !== 0) fail(`gh release upload 失败：${upload.stderr.trim().slice(0, 160)}`)
   console.log(`==> 完成：${apkName} 与 .sha256 已上传到 Release ${tag}`)
+
+  // 自托管更新目录（可选）：DSH_UPDATES_DIR 指向 pca 的 dsh_updates_dir（Windows 侧
+  // 经 \\wsl.localhost\... 路径可达）。写入 APK、.sha256 与 latest.json（version_code
+  // 按 MAJOR*10000+MINOR*100+PATCH 派生，与 App 侧 VersionSpec 同一公式）。未设置时跳过。
+  const updatesDir = env.DSH_UPDATES_DIR
+  if (updatesDir) {
+    const [major, minor, patch] = version.split('.').map(Number)
+    const manifest = {
+      version_name: version,
+      version_code: major * 10000 + minor * 100 + patch,
+      sha256,
+      size: statSync(apk).size,
+    }
+    copyFileSync(apk, join(updatesDir, apkName))
+    copyFileSync(shaFile, join(updatesDir, shaFile))
+    writeFileSync(join(updatesDir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+    console.log(`==> 自托管更新目录已更新：${updatesDir}（latest.json → ${version}）`)
+  }
 }
 
 // 仅作为 node 直运行的入口脚本时执行；被测试导入时不触发。

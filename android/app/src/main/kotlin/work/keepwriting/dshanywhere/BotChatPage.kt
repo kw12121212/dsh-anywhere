@@ -160,8 +160,15 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                                 modifier = Modifier.fillMaxWidth()
                                     .padding(horizontal = 12.dp, vertical = 4.dp)
                                     .clickable {
+                                        // 直接交系统应用打开（音频/视频出系统播放器、PDF 等
+                                        // 出查看器）；无应用可处理时退回内嵌对话框（含保存）。
                                         controller.readAttachment(item.refJson) { bytes ->
-                                            if (bytes != null) viewingFile = (item.name ?: "attachment") to bytes
+                                            if (bytes != null) {
+                                                val name = item.name ?: "attachment"
+                                                if (!AttachmentOpen.openWith(context, name, bytes)) {
+                                                    viewingFile = name to bytes
+                                                }
+                                            }
                                         }
                                     },
                                 verticalAlignment = Alignment.CenterVertically,
@@ -445,23 +452,7 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                     Text("文件：$name（${bytes.size} 字节）", style = MaterialTheme.typography.bodyMedium)
                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                         TextButton(onClick = {
-                            runCatching {
-                                val f = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
-                                    .resolve(name.replace(Regex("[^\\w.\\-（）()-]"), "_"))
-                                f.writeBytes(bytes)
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW).apply {
-                                        setDataAndType(
-                                            androidx.core.content.FileProvider.getUriForFile(
-                                                context, context.packageName + ".fileprovider", f,
-                                            ),
-                                            context.contentResolver.getType(android.net.Uri.fromFile(f))
-                                                ?: "application/octet-stream",
-                                        )
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    },
-                                )
-                            }
+                            AttachmentOpen.openWith(context, name, bytes)
                             viewingFile = null
                         }) { Text("用其他应用打开") }
                         TextButton(onClick = {

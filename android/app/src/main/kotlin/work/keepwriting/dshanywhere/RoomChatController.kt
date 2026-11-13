@@ -296,6 +296,38 @@ class RoomChatController(
         return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
     }
 
+    /** 读取群会话附件字节（session/attachment，与私聊同语义）；失败走 notice。 */
+    fun readAttachment(attachmentRefJson: String, onResult: (ByteArray?) -> Unit) {
+        execute(Runnable {
+            val sid = roomId ?: run {
+                notice = "群会话未就绪，无法查看附件"
+                onResult(null)
+                return@Runnable
+            }
+            rpcCall(
+                "session/attachment",
+                work.keepwriting.core.AttachmentMessages.attachmentRequest(sid, attachmentRefJson),
+            ) { res ->
+                when (res) {
+                    is work.keepwriting.core.DshMux.Result.Ok -> {
+                        val inner = res.value?.let { Json.parse(it) as? Json.Value.Object }
+                        val data = (inner?.members?.get("data") as? Json.Value.StringValue)?.value
+                        if (data != null) {
+                            onResult(android.util.Base64.decode(data, android.util.Base64.DEFAULT))
+                        } else {
+                            notice = "附件内容无法解析"
+                            onResult(null)
+                        }
+                    }
+                    is work.keepwriting.core.DshMux.Result.Err -> {
+                        notice = "附件读取失败：${res.code}"
+                        onResult(null)
+                    }
+                }
+            }
+        })
+    }
+
     /** feed 事件（NativeShellConnection 转发，executor 线程）：stream 逐字、message 定格。 */
     fun onFeedEvent(event: String, dataJson: String) {
         val id = roomId ?: return

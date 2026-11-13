@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import org.json.JSONObject
+import javax.net.ssl.HttpsURLConnection
 import work.keepwriting.core.UpdateCheck
 import work.keepwriting.core.UpdateDownloader
 import java.io.File
@@ -20,9 +21,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 自更新管理器（android-self-update）：GitHub API 匿名查询（直连不经隧道——github.com
- * 非 tailnet 目标）、断点续传下载到 filesDir/updates、.sha256 恒时校验、FileProvider
- * 调起系统安装器；每进程会话自动调起至多一次；失败静默（设置页显示原因）。
+ * 自更新管理器（android-self-update）：默认 GitHub API 匿名查询（直连不经隧道——
+ * github.com 非 tailnet 目标）；配置了「应用更新源」后改走自托管 latest.json 契约
+ *（tailnet 目标经内嵌节点，GitHub 网络不通的设备由自有服务器分发）。断点续传下载到
+ * filesDir/updates、清单或 .sha256 恒时校验、FileProvider 调起系统安装器；每进程会话
+ * 自动调起至多一次；失败静默（设置页显示原因）。
  */
 class UpdateManager(context: Context) {
     enum class State { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY_TO_INSTALL, FAILED }
@@ -47,8 +50,39 @@ class UpdateManager(context: Context) {
      *  避免 onCreate/onNewIntent 中发起跳转时 Activity 自身的 onResume 提前清掉标记。 */
     @Volatile private var installAwaitingReturn = false
     private val prefs = appContext.getSharedPreferences("updates", Context.MODE_PRIVATE)
+    private val sourceConfig = work.keepwriting.core.UpdateSourceConfig(
+        java.io.File(context.filesDir, "config").toPath(),
+    )
+
+    /** 当前生效的自托管更新源（null = GitHub）。设置页保存后经 reloadSource 刷新。 */
+    @Volatile
+    private var sourceBase: String? = (sourceConfig.load() as? work.keepwriting.core.UpdateSourceConfig.Load.Ok)?.endpoint
+
     private val downloader = UpdateDownloader(updatesDir) { name ->
-        "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
+        sourceBase?.trimEnd('/')?.let { "$it/$name" }
+            ?: "https://github.com/kw12121212/dsh-anywhere/releases/latest/download/$name"
+    }
+
+    /** 设置页保存/清除更新源后重读（下次检查与下载即用新源）。 */
+    fun reloadSource() {
+        sourceBase = (sourceConfig.load() as? work.keepwriting.core.UpdateSourceConfig.Load.Ok)?.endpoint
+    }
+
+    /** 当前配置的自托管更新源（设置页展示；null = GitHub）。 */
+    val updateSourceEndpoint: String?
+        get() = (sourceConfig.load() as? work.keepwriting.core.UpdateSourceConfig.Load.Ok)?.endpoint
+
+    /** 设置页保存更新源：合法保存并生效返回规范化地址，非法返回 null。 */
+    fun saveUpdateSource(raw: String): String? = try {
+        sourceConfig.save(raw).also { reloadSource() }
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+    /** 设置页清除更新源（回到 GitHub）。 */
+    fun clearUpdateSource() {
+        sourceConfig.clear()
+        reloadSource()
     }
 
     init {
@@ -77,39 +111,67 @@ class UpdateManager(context: Context) {
         state = State.CHECKING
         Thread {
             try {
-                val conn = URL(LATEST_API).openConnection() as HttpURLConnection
-                conn.connectTimeout = 15_000
-                conn.readTimeout = 15_000
-                conn.setRequestProperty("Accept", "application/vnd.github+json")
-                try {
-                    if (conn.responseCode != 200) {
-                        if (!restoreReady()) fail("检查更新失败（HTTP ${conn.responseCode}）")
-                        return@Thread
+                val base = sourceBase
+                val info: UpdateCheck.UpdateInfo? = if (base != null) {
+                    checkSelfHosted(base)
+                } else {
+                    checkGitHub()
+                }
+                if (info != null) currentInfo = info
+                val ready = downloader.readyApk(currentVersionCode())
+                when (UpdateCheck.afterCheck(info?.version, ready?.first)) {
+                    UpdateCheck.CheckOutcome.READY -> restoreReady()
+                    UpdateCheck.CheckOutcome.AVAILABLE -> {
+                        availableVersion = info!!.version
+                        state = State.AVAILABLE
                     }
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val release = JSONObject(body)
-                    val tag = release.optString("tag_name")
-                    val names = release.optJSONArray("assets")?.let { arr ->
-                        List(arr.length()) { arr.optJSONObject(it)?.optString("name") ?: "" }
-                    } ?: emptyList()
-                    val info = UpdateCheck.isNewer(tag, names, currentVersionCode())
-                    if (info != null) currentInfo = info
-                    val ready = downloader.readyApk(currentVersionCode())
-                    when (UpdateCheck.afterCheck(info?.version, ready?.first)) {
-                        UpdateCheck.CheckOutcome.READY -> restoreReady()
-                        UpdateCheck.CheckOutcome.AVAILABLE -> {
-                            availableVersion = info!!.version
-                            state = State.AVAILABLE
-                        }
-                        UpdateCheck.CheckOutcome.UP_TO_DATE -> state = State.UP_TO_DATE
-                    }
-                } finally {
-                    conn.disconnect()
+                    UpdateCheck.CheckOutcome.UP_TO_DATE -> state = State.UP_TO_DATE
                 }
             } catch (e: Exception) {
                 if (!restoreReady()) fail("检查更新失败（${e.javaClass.simpleName}）")
             }
         }.start()
+    }
+
+    /** GitHub 模式：latest Release 的 tag 与资产名 → UpdateInfo；不可达抛异常。 */
+    private fun checkGitHub(): UpdateCheck.UpdateInfo? {
+        val conn = URL(LATEST_API).openConnection() as HttpURLConnection
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 15_000
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        try {
+            if (conn.responseCode != 200) throw IllegalStateException("HTTP ${conn.responseCode}")
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val release = JSONObject(body)
+            val tag = release.optString("tag_name")
+            val names = release.optJSONArray("assets")?.let { arr ->
+                List(arr.length()) { arr.optJSONObject(it)?.optString("name") ?: "" }
+            } ?: emptyList()
+            return UpdateCheck.isNewer(tag, names, currentVersionCode())
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** 自托管模式：GET <base>/latest.json（tailnet 目标经内嵌节点）→ UpdateInfo；
+     *  清单缺失/无效视为无更新（null），网络不可达抛异常。 */
+    private fun checkSelfHosted(base: String): UpdateCheck.UpdateInfo? {
+        val url = java.net.URI(base.trimEnd('/') + "/latest.json").toURL()
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        if (conn is HttpsURLConnection && SocksTls.isTailnet(url.host)) {
+            SocksTls.factory(appContext)?.let { conn.sslSocketFactory = it }
+        }
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 15_000
+        try {
+            if (conn.responseCode == 404) return null
+            if (conn.responseCode != 200) throw IllegalStateException("HTTP ${conn.responseCode}")
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val parsed = work.keepwriting.core.Json.parse(body) ?: return null
+            return UpdateCheck.fromManifest(parsed, currentVersionCode())
+        } finally {
+            conn.disconnect()
+        }
     }
 
     /** 下载新版本 APK（后台线程执行；支持 Range 断点续传；已在下载则忽略）。 */

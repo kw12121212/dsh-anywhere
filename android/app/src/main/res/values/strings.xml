@@ -91,4 +91,7 @@
     <string name="diag_save">保存</string>
     <string name="diag_clear">清除</string>
     <string name="diag_save_failed">保存失败，请重试</string>
+    <string name="update_source_title">应用更新源</string>
+    <string name="update_source_unconfigured">未配置（可选）：默认从 GitHub 检查更新；填自托管更新源（latest.json 契约，如 pca 的 /dsh-updates 地址）后走该源，GitHub 不通的网络也能更新。</string>
+    <string name="update_source_label">自托管更新源地址（https）</string>
 </resources>

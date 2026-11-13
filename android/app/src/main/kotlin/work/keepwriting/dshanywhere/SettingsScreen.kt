@@ -174,6 +174,7 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
             TunnelCard(tunnel)
             Spacer(Modifier.height(24.dp))
             DiagnosticsCard(graph.diagnostics)
+            UpdateSourceCard(graph.updates)
             Spacer(Modifier.height(24.dp))
             UpdateCard(graph.updates)
         }
@@ -234,6 +235,71 @@ private fun UpdateCard(updates: UpdateManager) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { updates.check() }, enabled = updates.state != UpdateManager.State.CHECKING) {
                 Text(stringResource(R.string.update_check))
+            }
+        }
+    }
+}
+
+/** 应用更新源卡片（自托管 latest.json 契约）：默认 GitHub；填自托管源后
+ *  检查与下载都走该地址（tailnet 目标经内嵌隧道），GitHub 不可达的网络可用。 */
+@Composable
+private fun UpdateSourceCard(updates: UpdateManager) {
+    var endpointInput by remember { mutableStateOf("") }
+    var saveError by remember { mutableStateOf(false) }
+    val inputValid = remember(endpointInput) {
+        work.keepwriting.core.DiagEndpoint.validate(endpointInput) != null
+    }
+    Card(modifier = Modifier
+        .fillMaxWidth()
+        .widthIn(max = 480.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.update_source_title), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            val configured = updates.updateSourceEndpoint
+            if (configured == null) {
+                Text(stringResource(R.string.update_source_unconfigured), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = endpointInput,
+                    onValueChange = {
+                        endpointInput = it
+                        saveError = false
+                    },
+                    label = { Text(stringResource(R.string.update_source_label)) },
+                    isError = endpointInput.isNotBlank() && !inputValid,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                if (endpointInput.isNotBlank() && !inputValid) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.diag_endpoint_invalid),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (updates.saveUpdateSource(endpointInput) == null) saveError = true
+                        else endpointInput = ""
+                    },
+                    enabled = endpointInput.isNotBlank() && inputValid,
+                ) { Text(stringResource(R.string.diag_save)) }
+            } else {
+                Text(configured, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { updates.clearUpdateSource() }) {
+                    Text(stringResource(R.string.diag_clear))
+                }
+            }
+            if (saveError) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.diag_save_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }

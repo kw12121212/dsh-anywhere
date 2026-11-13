@@ -38,8 +38,16 @@ object UpdateCheck {
         return if (Regex("^[0-9a-fA-F]{64}$").matches(hash)) hash.lowercase() else null
     }
 
-    /** 组合判定：最新 Release 是否含比 [currentVersionCode] 更新的可安装 APK。 */
-    data class UpdateInfo(val version: String, val apkAsset: String, val sha256Asset: String, val versionCode: Int)
+    /** 组合判定：最新 Release 是否含比 [currentVersionCode] 更新的可安装 APK。
+     *  [manifestSha256] 非空表示自托管清单模式（latest.json 已带 sha256），下载器
+     *  跳过 .sha256 资产直接按它校验。 */
+    data class UpdateInfo(
+        val version: String,
+        val apkAsset: String,
+        val sha256Asset: String,
+        val versionCode: Int,
+        val manifestSha256: String? = null,
+    )
 
     /** 检查更新后的界面结论（fix-android-update-lifecycle）。 */
     enum class CheckOutcome { READY, AVAILABLE, UP_TO_DATE }
@@ -61,5 +69,27 @@ object UpdateCheck {
         if (code <= currentVersionCode) return null
         val (apk, sha) = pickApkAsset(assetNames, version) ?: return null
         return UpdateInfo(version, apk, sha, code)
+    }
+
+    /**
+     * 解析自托管更新清单（latest.json：version_name/version_code/sha256/size，
+     * pca 的 /dsh-updates/ 契约）：版本非法、不高于本机或清单形态不符返回 null。
+     * sha256 缺失或格式不符按 null 处理（下载器退回 .sha256 资产校验）。
+     */
+    fun fromManifest(value: Json.Value, currentVersionCode: Int): UpdateInfo? {
+        val obj = value as? Json.Value.Object ?: return null
+        val version = (obj.members["version_name"] as? Json.Value.StringValue)?.value ?: return null
+        if (!VersionSpec.VERSION_PATTERN.matches(version)) return null
+        val code = versionCodeOf(version) ?: return null
+        if (code <= currentVersionCode) return null
+        val sha = (obj.members["sha256"] as? Json.Value.StringValue)?.value
+            ?.takeIf { Regex("^[0-9a-fA-F]{64}$").matches(it) }?.lowercase()
+        return UpdateInfo(
+            version = version,
+            apkAsset = "DSH-Anywhere-$version.apk",
+            sha256Asset = "DSH-Anywhere-$version.apk.sha256",
+            versionCode = code,
+            manifestSha256 = sha,
+        )
     }
 }
