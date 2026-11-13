@@ -57,3 +57,9 @@ rules:
     rationale: spike（0.2.2-rc.1）时期 HTTP envelope 网关 404 的结论对 0.3.5 已过时：dsbot-attachments 设备验收在真实 0.3.5 服务器实测，session 族 unary 方法已注册 HTTP 网关（client-request 信封全通、模型真实读图回复），设计阶段按旧结论准备的 WebSocket 路径保留为已测组件不再使用
     enforcement:
       method: review
+  media-reference-file:
+    strength: MUST
+    statement: 对话内服务器本地路径的取字节端点是 GET/HEAD /api/file?path=<服务器绝对路径>（dsh-api-session-controller 的 serveFile，dsh 0.2.2-rc.1 源码核对）：请求不带当前 v 参数时先回 302，Location 只给查询串（?path=…&v=文件版本）——不是绝对地址也不是根相对路径，客户端必须按 RFC 3986 相对引用解析（core 的 HttpLocation）后重发才得 200 字节；成功响应 Content-Type 按扩展名识别，超过 attachments.imageLimits.maxImageBytes（默认 50MB）回 413，不存在回 404、非普通文件/越权回 403；跟随次数必须封顶防循环
+    rationale: 1.6.1–1.6.3 期间 App 只跟随绝对地址与根相对路径 Location，真实 dsh 的查询串 Location 被丢弃，用户侧表现为「文件获取失败（302）」；mock 曾按根相对路径实现掩盖了差异，本次已把 mock 对齐为查询串形态并以 HttpLocationTest + 模拟器 E2E（mock 两次请求 + 系统播放器打开）双重验证
+    enforcement:
+      method: test

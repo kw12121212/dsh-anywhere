@@ -361,8 +361,9 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     /**
      * 对话内链接打开（主线程调用）：http(s) 走系统浏览器；无 scheme 的服务器本地路径
-     * （Bot 常发的 /home/…/xxx.mp4 形态）经 /api/file?path= 以会话 cookie 取字节，
-     * 跟随一次同源 302 后交系统应用打开（视频出播放器等）。失败在群/私聊 notice 提示。
+     * （Bot 常发的 /home/…/xxx.mp4 形态）经 /api/file?path= 以会话 cookie 取字节——
+     * 真实 dsh 先以查询串 Location（"?path=…&v=版本"）做版本重定向再出字节，跟随后
+     * 交系统应用打开（视频出播放器等）。失败在群/私聊 notice 提示。
      */
     fun openChatLink(context: android.content.Context, url: String) {
         if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -383,27 +384,33 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 chatController.postNotice("会话信息不可用，无法打开文件")
                 return@execute
             }
-            val base = work.keepwriting.core.DsbotApi.url(clean, "/api/file") +
+            var next = work.keepwriting.core.DsbotApi.url(clean, "/api/file") +
                 "?path=" + java.net.URLEncoder.encode(url, "UTF-8")
-            var res = runCatching { graph.nativeSession.apiRequest("GET", base, null, null) }.getOrNull()
-            // /api/file 以一次 302 出真实文件地址（真实 dsh 给绝对地址、mock 给相对
-            // 路径——两种都跟随，相对路径按 harness 源解析）。
-            if (res != null && res.status in 301..308) {
+            var res: work.keepwriting.core.HttpSocket.Response? = null
+            // /api/file 先以查询串 Location（"?path=…&v=版本"）做一次版本重定向再出
+            // 字节（dsh-api-session-controller 的 serveFile）；Location 统一经
+            // HttpLocation 归并，跟随次数封顶防循环。
+            for (hop in 0..2) {
+                res = runCatching { graph.nativeSession.apiRequest("GET", next, null, null) }.getOrNull()
+                    ?: break
+                if (res.status !in 301..308) break
                 val loc = res.header("Location")
-                val next = when {
-                    loc.isNullOrEmpty() -> null
-                    loc.startsWith("http") -> loc
-                    loc.startsWith("/") -> originOf(clean) + loc
-                    else -> null
-                }
-                if (next != null) {
-                    res = runCatching { graph.nativeSession.apiRequest("GET", next, null, null) }.getOrNull()
-                }
+                    ?.let { work.keepwriting.core.HttpLocation.resolve(next, it) }
+                if (loc == null) break
+                next = loc
             }
             if (res == null || res.status != 200) {
-                val code = res?.status?.toString() ?: "网络"
-                chatController.postNotice("文件获取失败（$code）")
-                roomChatController.postNotice("文件获取失败（$code）")
+                val code = res?.status
+                val reason = when (code) {
+                    null -> "网络错误"
+                    401 -> "会话已过期，请重连后重试"
+                    403 -> "服务器拒绝访问该文件"
+                    404 -> "文件不存在或已被移动"
+                    413 -> "文件超过服务器大小限制（50MB）"
+                    else -> "文件获取失败（$code）"
+                }
+                chatController.postNotice(reason)
+                roomChatController.postNotice(reason)
                 return@execute
             }
             val name = url.substringAfterLast('/').ifEmpty { "file" }

@@ -100,3 +100,11 @@ Socks5Dialer/TailnetRouting/HarnessUrl/SessionAuth；凭据经 `DSH_SPIKE_*` 环
 （hello/revision/live/message/stream 事件形态不变）、401 固定失效标记、错 Host 403。
 客户端依赖的响应形态与 0.3.2 一致；version-baseline-and-degrade 基准随本次复验提到
 0.3.6（DsbotVersions.BASELINE_DS_BOT）。
+
+## 10. /api/file 版本重定向形态（2026-11-13，源码核对 dsh-api-session-controller）
+
+serveFile 对不带当前 `v` 参数的请求回 302，**Location 只给查询串**（`?path=…&v=文件版本`，
+非绝对地址也非根相对路径）——1.6.1 只跟随 http/根相对两种形态导致真实服务器上「文件获取
+失败（302）」。其余边界：>maxImageBytes（默认 50MB）回 413；不存在 404；非普通文件/越权
+403；成功响应 Content-Type 按扩展名识别。已登记 tech/dsbot-api 的 media-reference-file，
+客户端解析统一走 core HttpLocation（mock 也已对齐查询串形态）。

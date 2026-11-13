@@ -197,8 +197,9 @@ import { createHash } from 'node:crypto'
 const server = createServer((req, res) => {
   const url = req.url ?? '/'
   console.log(`${new Date().toISOString()} ${req.method} ${url} <- ${req.socket.remoteAddress}`)
-  // /api/file?path=<服务器绝对路径>（带会话 cookie）：模拟真实 dsh 的一次同源 302 →
-  // 按扩展名出字节（对话内文件路径链接的 App 端打开路径）。
+  // /api/file?path=<服务器绝对路径>（带会话 cookie）：模拟真实 dsh 的版本重定向——
+  // Location 只给查询串（"?path=…&v=…"），再请求一次才出字节（与 dsh-api-session-
+  // controller 的 serveFile 一致，对话内文件路径链接的 App 端打开路径）。
   const fileUrl = url.startsWith('/api/file') ? new URL(url, 'http://x') : null
   if (fileUrl) {
     if (!sessionCookie(req) || !sessions.has(sessionCookie(req))) {
@@ -213,7 +214,7 @@ const server = createServer((req, res) => {
       return
     }
     if (!fileUrl.searchParams.has('v')) {
-      res.writeHead(302, { Location: `/api/file?path=${encodeURIComponent(path)}&v=mocksig` })
+      res.writeHead(302, { Location: `?path=${encodeURIComponent(path)}&v=mocksig` })
       res.end()
       return
     }
