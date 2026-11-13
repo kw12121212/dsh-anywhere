@@ -235,7 +235,7 @@ export function main(argv: string[] = process.argv.slice(2), runner: Runner = sp
       size: statSync(apk).size,
     }
     copyFileSync(apk, join(updatesDir, apkName))
-    copyFileSync(shaFile, join(updatesDir, shaFile))
+    writeFileSync(join(updatesDir, `${apkName}.sha256`), `${sha256}  ${apkName}\n`)
     writeFileSync(join(updatesDir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
     console.log(`==> 自托管更新目录已更新：${updatesDir}（latest.json → ${version}）`)
   }
