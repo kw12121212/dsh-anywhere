@@ -287,7 +287,7 @@ class ChatController(
         }
     }
 
-    // ---- 统计与 Bot 间记录：弹窗展示（pretty JSON 可读化，替代原 notice 裸串）----
+    // ---- 统计与 Bot 间记录：弹窗展示（core 的 BotStatsText 翻译成人话）----
 
     var statsText by mutableStateOf<String?>(null)
         private set
@@ -297,7 +297,11 @@ class ChatController(
     fun showStats() {
         val id = botId ?: return
         api("run-stats", "{\"botId\":${JsonString.of(id)}}") { res ->
-            statsText = if (res is DsbotApi.Result.Ok) prettyJson(Json.encode(res.value)) else "统计不可用"
+            statsText = if (res is DsbotApi.Result.Ok) {
+                work.keepwriting.core.BotStatsText.runStats(res.value).ifEmpty { "暂无统计数据" }
+            } else {
+                "统计不可用"
+            }
         }
     }
 
@@ -307,25 +311,16 @@ class ChatController(
 
     fun showExchanges() {
         api("exchange", "{}") { res ->
-            exchangesText = if (res is DsbotApi.Result.Ok) prettyJson(Json.encode(res.value)) else "Bot 间记录不可用"
+            exchangesText = if (res is DsbotApi.Result.Ok) {
+                work.keepwriting.core.BotStatsText.exchanges(res.value).ifEmpty { "暂无 Bot 间记录" }
+            } else {
+                "Bot 间记录不可用"
+            }
         }
     }
 
     fun dismissExchanges() {
         exchangesText = null
-    }
-
-    /** org.json 的缩进序列化把裸串转成多行可读形态；非 JSON 原样截断兜底。 */
-    private fun prettyJson(raw: String): String = try {
-        org.json.JSONTokener(raw).let { tokener ->
-            when (val v = tokener.nextValue()) {
-                is org.json.JSONArray -> v.toString(2)
-                is org.json.JSONObject -> v.toString(2)
-                else -> raw.take(500)
-            }
-        }
-    } catch (_: Exception) {
-        raw.take(500)
     }
 
     // ---- 附件（dsbot-attachments）----

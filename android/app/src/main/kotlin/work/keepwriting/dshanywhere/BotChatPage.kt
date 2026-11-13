@@ -292,7 +292,7 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
         }
     }
 
-    // 统计 / Bot 间记录：可读化 JSON 弹窗（缩进多行、可滚动、可选中复制）
+    // 统计 / Bot 间记录：人话摘要弹窗（core 的 BotStatsText 翻译，可滚动可复制）
     controller.statsText?.let { body ->
         AlertDialog(
             onDismissRequest = { controller.dismissStats() },
@@ -301,8 +301,7 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                 SelectionContainer {
                     Text(
                         body,
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .verticalScroll(rememberScrollState())
                             .heightIn(max = 420.dp),
@@ -320,8 +319,7 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                 SelectionContainer {
                     Text(
                         body,
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .verticalScroll(rememberScrollState())
                             .heightIn(max = 420.dp),
