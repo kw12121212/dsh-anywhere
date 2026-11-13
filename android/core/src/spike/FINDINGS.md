@@ -91,3 +91,12 @@ Socks5Dialer/TailnetRouting/HarnessUrl/SessionAuth；凭据经 `DSH_SPIKE_*` 环
 - `dsbot-api-client`（core）：请求封装、`{ok,value|error}` 解码、错误码映射（`bot/invalid|refused|stale|not-found|read-only|internal`、`bot/browser-off`）、SSE 解析、since/live 增量状态机、版本比对。
 - `dsbot-native-shell`：升级迁移读 CookieManager.getCookie → 原生存储。
 - `dsbot-attachments`：uploadFileBinary（HTTP）+ 最小 /connect WS 客户端（prompt with content blocks + readAttachment）。
+
+## 9. 0.3.6 复验（2026-11-13，服务器升级后）
+
+服务器升级 DS-Bot 0.3.2 → **0.3.6**（dsh 仍 0.2.2-rc.1）后 `gradlew -p android/core runSpike`
+（DSH_SPIKE_SEND=1）全项 PASS、FAIL=0：auth-token-session（303+Set-Cookie）、state
+全量/since/since+live、chat 分页、update-check（value.current=0.3.6）、send+feed
+（hello/revision/live/message/stream 事件形态不变）、401 固定失效标记、错 Host 403。
+客户端依赖的响应形态与 0.3.2 一致；version-baseline-and-degrade 基准随本次复验提到
+0.3.6（DsbotVersions.BASELINE_DS_BOT）。

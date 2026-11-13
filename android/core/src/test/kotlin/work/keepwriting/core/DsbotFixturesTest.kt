@@ -98,7 +98,7 @@ class DsbotFixturesTest {
     @Test
     fun `update-check 夹具带双版本来源字段`() {
         val inner = ((parse("update-check.json") as Json.Value.Object).members["value"] as Json.Value.Object).members
-        assertEquals("0.3.2", (inner["current"] as Json.Value.StringValue).value)
+        assertEquals("0.3.6", (inner["current"] as Json.Value.StringValue).value)
         val dsh = (inner["dsh"] as Json.Value.Object).members
         assertEquals("0.2.2-rc.1", (dsh["current"] as Json.Value.StringValue).value)
     }

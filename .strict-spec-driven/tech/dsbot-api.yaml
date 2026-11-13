@@ -28,8 +28,8 @@ rules:
       method: test
   version-baseline-and-degrade:
     strength: MUST
-    statement: 连接时必须以 POST /api/bot update-check 读取远端版本：DS-Bot 版本取 value.current、dsh 版本取 value.dsh.current；与已测基准（DS-Bot 0.3.2、dsh 0.2.2-rc.1）不一致时显示提示但尽力可用；未知端点与未知字段必须降级显示而不是失败
-    rationale: update-check 属 DS-Bot READS 白名单（只读宿主也可应答），spike 实测 value.current=0.3.2、value.dsh.current=0.2.2-rc.1；内部接口随上游漂移不可避免，提示加降级是唯一不锁用户升级的做法
+    statement: 连接时必须以 POST /api/bot update-check 读取远端版本：DS-Bot 版本取 value.current、dsh 版本取 value.dsh.current；与已测基准（DS-Bot 0.3.6、dsh 0.2.2-rc.1）不一致时显示提示但尽力可用；未知端点与未知字段必须降级显示而不是失败
+    rationale: update-check 属 DS-Bot READS 白名单（只读宿主也可应答）；基准随 spike/复验更新：0.3.2（spike 首测）→ 0.3.5（里程碑真机验收）→ 0.3.6（2026-11-13 runSpike 对升级后服务器全项复验 PASS，dsh 侧仍为 0.2.2-rc.1）；内部接口随上游漂移不可避免，提示加降级是唯一不锁用户升级的做法
     enforcement:
       method: manual
   fixtures-sanitized:

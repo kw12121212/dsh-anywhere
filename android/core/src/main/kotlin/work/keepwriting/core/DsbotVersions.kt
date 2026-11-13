@@ -3,13 +3,14 @@ package work.keepwriting.core
 /**
  * 远端 DS-Bot/dsh 版本读取与基准比对（dsbot-api-client，来源字段是 spike 实测的
  * update-check value.current 与 value.dsh.current）：连接时读取远端版本，与已测
- * 基准（DS-Bot 0.3.2、dsh 0.2.2-rc.1）不一致时提示但尽力可用，读不到按未知降级。
+ * 基准（DS-Bot 0.3.6、dsh 0.2.2-rc.1）不一致时提示但尽力可用，读不到按未知降级。
  * 语义化比较支持预发布段（0.2.2-rc.1 < 0.2.2），规则与 ds-bot update.js 的
  * newer() 对齐。
  */
 object DsbotVersions {
-    /** 已测基准（tech/dsbot-api 的 version-baseline-and-degrade 登记）。 */
-    val BASELINE_DS_BOT = "0.3.2"
+    /** 已测基准（tech/dsbot-api 的 version-baseline-and-degrade 登记；0.3.6 复验见
+     *  android/core/src/spike/FINDINGS.md）。 */
+    val BASELINE_DS_BOT = "0.3.6"
     val BASELINE_DSH = "0.2.2-rc.1"
 
     data class Remote(val dsBot: String?, val dsh: String?)

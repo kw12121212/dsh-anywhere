@@ -165,7 +165,7 @@ class DsbotClientTest {
     @Test
     fun `update-check 夹具解码双版本并与基准比对`() {
         val remote = DsbotVersions.fromUpdateCheck(fixtureValue("update-check.json"))
-        assertEquals("0.3.2", remote.dsBot)
+        assertEquals("0.3.6", remote.dsBot)
         assertEquals("0.2.2-rc.1", remote.dsh)
         assertEquals(DsbotVersions.Verdict.MATCHED, DsbotVersions.againstBaseline(remote))
         assertEquals(
