@@ -189,7 +189,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             entry = entry,
                             memberNames = roster.map { it.second },
                             memberIds = roster.map { it.first },
-                            onOpenLink = { url -> connection.openChatLink(linkContext, url) },
+                            onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
                         )
                     } else {
                         LaunchedEffect(entry?.working) { connection.chatController.syncWorking(entry?.working ?: false) }
@@ -197,7 +197,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             controller = connection.chatController,
                             botId = current.targetId,
                             parts = entry?.parts ?: emptyList(),
-                            onOpenLink = { url -> connection.openChatLink(linkContext, url) },
+                            onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
                             onOpenSide = {
                                 val sid = entry?.sessionId
                                 if (sid != null) {
@@ -363,16 +363,19 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
      * 对话内链接打开（主线程调用）：http(s) 走系统浏览器；无 scheme 的服务器本地路径
      * （Bot 常发的 /home/…/xxx.mp4 形态）经 /api/file?path= 以会话 cookie 取字节——
      * 真实 dsh 先以查询串 Location（"?path=…&v=版本"）做版本重定向再出字节，跟随后
-     * 交系统应用打开（视频出播放器等）。失败在群/私聊 notice 提示。
+     * 交系统应用打开（视频出播放器等）。长按链接 [chooser]=true 时经「选择打开方式」
+     * 选择器由用户挑应用。失败在群/私聊 notice 提示。
      */
-    fun openChatLink(context: android.content.Context, url: String) {
+    fun openChatLink(context: android.content.Context, url: String, chooser: Boolean = false) {
         if (url.startsWith("http://") || url.startsWith("https://")) {
             runCatching {
+                val view = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(url),
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(
-                    android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(url),
-                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    if (chooser) android.content.Intent.createChooser(view, "选择打开方式")
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) else view,
                 )
             }
             return
@@ -414,7 +417,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 return@execute
             }
             val name = url.substringAfterLast('/').ifEmpty { "file" }
-            val opened = AttachmentOpen.openWith(context, name, res.body)
+            val opened = AttachmentOpen.openWith(context, name, res.body, chooser)
             if (!opened) chatController.postNotice("没有应用能打开 $name")
         }
     }

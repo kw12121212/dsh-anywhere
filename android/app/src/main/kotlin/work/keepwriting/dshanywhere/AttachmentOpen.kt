@@ -11,7 +11,8 @@ import java.io.File
  * MIME 必须按扩展名映射。无应用可处理时返回 false（调用方退回内嵌查看对话框）。
  */
 object AttachmentOpen {
-    fun openWith(context: Context, name: String, bytes: ByteArray): Boolean {
+    /** [chooser] 为 true 时经系统「选择打开方式」选择器交用户挑应用，否则按系统默认。 */
+    fun openWith(context: Context, name: String, bytes: ByteArray, chooser: Boolean = false): Boolean {
         val dir = File(context.cacheDir, "attachments").apply { mkdirs() }
         // 单槽复用：上一次的临时文件先清，缓存目录不随查看次数增长。
         dir.listFiles()?.forEach { it.delete() }
@@ -22,12 +23,14 @@ object AttachmentOpen {
             val uri = androidx.core.content.FileProvider.getUriForFile(
                 context, context.packageName + ".fileprovider", f,
             )
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, mimeOf(safe))
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                },
-            )
+            val view = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeOf(safe))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            // 选择器包一层：URI 授权留在内层 intent， chooser intent 只补 NEW_TASK
+            val launch = if (chooser) Intent.createChooser(view, "选择打开方式")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) else view
+            context.startActivity(launch)
             true
         } catch (_: Exception) {
             false

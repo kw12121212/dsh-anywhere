@@ -60,7 +60,7 @@ fun RoomChatPage(
     entry: TeamHome.Entry?,
     memberNames: List<String> = emptyList(),
     memberIds: List<String> = emptyList(),
-    onOpenLink: (String) -> Unit = {},
+    onOpenLink: (String, Boolean) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
@@ -402,7 +402,7 @@ private fun MessageBubble(
     speakerColorKey: String?,
     onCopy: () -> Unit,
     onCopyBlock: (String) -> Unit,
-    onOpenLink: (String) -> Unit,
+    onOpenLink: (String, Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),

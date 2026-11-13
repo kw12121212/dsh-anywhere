@@ -73,7 +73,7 @@ fun BotChatPage(
     botId: String,
     parts: List<String>,
     onOpenSide: () -> Unit = {},
-    onOpenLink: (String) -> Unit = {},
+    onOpenLink: (String, Boolean) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
@@ -502,7 +502,7 @@ private fun MessageBubble(
     markdown: String,
     onCopy: () -> Unit,
     onCopyBlock: (String) -> Unit,
-    onOpenLink: (String) -> Unit,
+    onOpenLink: (String, Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
