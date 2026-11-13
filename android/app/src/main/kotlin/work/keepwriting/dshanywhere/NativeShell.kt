@@ -1,6 +1,7 @@
 package work.keepwriting.dshanywhere
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,9 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -26,7 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import work.keepwriting.core.DsbotApi
 import work.keepwriting.core.SetupCheck
@@ -107,12 +112,13 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
+            StatusDot(connection.status)
             TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.main_open_settings)) }
             TextButton(onClick = { connection.retry() }) { Text(stringResource(R.string.main_refresh)) }
         }
-        StatusBar(connection.status)
         val banner = connection.versionBanner
         if (banner != null && !connection.versionBannerDismissed) {
             Row(
@@ -219,24 +225,21 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
 }
 
 @Composable
-private fun StatusBar(status: DsbotConnection.Status) {
-    when (status) {
-        DsbotConnection.Status.CONNECTING -> Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.height(16.dp).padding(end = 8.dp))
-            Text(stringResource(R.string.main_connecting), style = MaterialTheme.typography.bodySmall)
-        }
-        DsbotConnection.Status.ONLINE -> {}
-        DsbotConnection.Status.RECONNECTING -> Text(
-            stringResource(R.string.connection_reconnecting),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        )
-        else -> {}
+private fun StatusDot(status: DsbotConnection.Status) {
+    // 顶栏连接状态圆点：绿=在线、琥珀=连接中/重连、红=离线（含会话失效/被拒）。
+    val (color, desc) = when (status) {
+        DsbotConnection.Status.ONLINE -> Color(0xFF4CAF50) to stringResource(R.string.status_online)
+        DsbotConnection.Status.CONNECTING, DsbotConnection.Status.RECONNECTING ->
+            Color(0xFFFFA000) to stringResource(R.string.main_connecting)
+        else -> MaterialTheme.colorScheme.error to stringResource(R.string.status_offline)
     }
+    Box(
+        modifier = Modifier
+            .padding(end = 4.dp)
+            .size(12.dp)
+            .background(color, CircleShape)
+            .semantics { contentDescription = desc },
+    )
 }
 
 @Composable

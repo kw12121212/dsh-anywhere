@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -23,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,10 +72,21 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // 设置页内容（地址 + Tailscale + 诊断 + 更新）在小屏/弹键盘时超过一屏，
+                // 必须可滚动，否则底部内容（应用更新等）永远看不到。
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // 页级返回：与系统返回键同语义（onCancelled），设置页覆盖整个外壳时
+            // 手势导航之外也要有可见的退出口。
+            Row(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onCancelled) { Text(stringResource(R.string.back)) }
+            }
             Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(

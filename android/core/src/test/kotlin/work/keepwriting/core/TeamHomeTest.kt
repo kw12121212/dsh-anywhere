@@ -45,6 +45,23 @@ class TeamHomeTest {
     }
 
     @Test
+    fun `最近活动优先：lastAt 降序，缺失排最后，置顶仍最前`() {
+        val stateJson = """
+            {"revision":1,"bots":[
+              {"id":"b1","name":"旧Bot","sessionId":"s1","lastAt":100},
+              {"id":"b2","name":"新Bot","sessionId":"s2","lastAt":300},
+              {"id":"b3","name":"无时间Bot","sessionId":"s3"},
+              {"id":"b4","name":"置顶Bot","sessionId":"s4","pinned":true,"lastAt":50}],
+             "rooms":[{"id":"r1","name":"新群","members":["b1"],"sessionId":"s5","lastAt":200}],
+             "sections":[]}
+        """.trimIndent()
+        val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
+        val names = team.sections.flatMap { it.entries }.map { it.name }
+        // 置顶最前 → lastAt 降序（300/200/100）→ 缺失 lastAt 的按名称兜底排最后
+        assertEquals(listOf("置顶Bot", "新Bot", "新群", "旧Bot", "无时间Bot"), names)
+    }
+
+    @Test
     fun `分组归属按 sections 的 itemIds`() {
         val stateJson = """
             {"revision":1,"bots":[

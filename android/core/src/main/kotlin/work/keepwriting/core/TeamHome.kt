@@ -19,6 +19,8 @@ object TeamHome {
         val unread: Int?,
         val pinned: Boolean,
         val sessionId: String?,
+        /** 最近活动时间（state 的 lastAt，epoch 毫秒；0.3.6 起提供，缺失为 null）。 */
+        val lastAt: Long? = null,
         /** Bot 的分段 id 列表（旧分段切换入口用）；房间为空。 */
         val parts: List<String> = emptyList(),
         /** 房间成员 Bot id 列表（群聊提及/停止成员名册）；Bot 条目为空。 */
@@ -52,7 +54,13 @@ object TeamHome {
         val grouped = LinkedHashMap<String?, MutableList<Entry>>()
         val sectionsRaw = state.raw.members["sections"] as? Json.Value.Array
         val sectionOf = entrySectionMap(sectionsRaw, allEntries)
-        val sorted = allEntries.sortedWith(compareBy({ e -> !e.pinned }, { e -> e.name }))
+        // 置顶优先 → 最近活动（lastAt）降序（最近有对话的排前面，缺失 lastAt 的排最后）
+        // → 名称稳定兜底。
+        val sorted = allEntries.sortedWith(
+            compareBy<Entry> { !it.pinned }
+                .thenByDescending { it.lastAt ?: Long.MIN_VALUE }
+                .thenBy { it.name },
+        )
         for (e in sorted) {
             grouped.getOrPut(sectionOf[e.id]) { mutableListOf() }.add(e)
         }
@@ -99,6 +107,7 @@ object TeamHome {
             unread = int(bot.raw, "unread"),
             pinned = bool(bot.raw, "pinned"),
             sessionId = bot.sessionId,
+            lastAt = long(bot.raw, "lastAt"),
             parts = bot.parts,
         )
     }
@@ -118,6 +127,7 @@ object TeamHome {
         unread = int(room.raw, "unread"),
         pinned = bool(room.raw, "pinned"),
         sessionId = room.sessionId,
+        lastAt = long(room.raw, "lastAt"),
     )
 
     private fun entrySectionMap(sections: Json.Value.Array?, entries: List<Entry>): Map<String, String?> {
@@ -195,6 +205,9 @@ object TeamHome {
 
     private fun int(obj: Json.Value.Object, key: String): Int? =
         (obj.members[key] as? Json.Value.NumberValue)?.raw?.toIntOrNull()
+
+    private fun long(obj: Json.Value.Object, key: String): Long? =
+        (obj.members[key] as? Json.Value.NumberValue)?.raw?.toLongOrNull()
 
     private fun bool(obj: Json.Value.Object, key: String): Boolean =
         (obj.members[key] as? Json.Value.BoolValue)?.value ?: false
