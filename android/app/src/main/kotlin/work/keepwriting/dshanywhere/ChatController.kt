@@ -287,11 +287,9 @@ class ChatController(
         }
     }
 
-    // ---- 统计与 Bot 间记录：弹窗展示（core 的 BotStatsText 翻译成人话）----
+    // ---- 统计：弹窗展示（core 的 BotStatsText 翻译成人话）----
 
     var statsText by mutableStateOf<String?>(null)
-        private set
-    var exchangesText by mutableStateOf<String?>(null)
         private set
 
     fun showStats() {
@@ -307,20 +305,6 @@ class ChatController(
 
     fun dismissStats() {
         statsText = null
-    }
-
-    fun showExchanges() {
-        api("exchange", "{}") { res ->
-            exchangesText = if (res is DsbotApi.Result.Ok) {
-                work.keepwriting.core.BotStatsText.exchanges(res.value).ifEmpty { "暂无 Bot 间记录" }
-            } else {
-                "Bot 间记录不可用"
-            }
-        }
-    }
-
-    fun dismissExchanges() {
-        exchangesText = null
     }
 
     // ---- 附件（dsbot-attachments）----

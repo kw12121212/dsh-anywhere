@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -17,8 +18,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -185,16 +194,12 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                 }
             }
         }
-        if (controller.streamingText != null) {
-            Text(
-                "正在输入…",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+        if (controller.streamingText != null || controller.busy) {
+            ThinkingPill(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = { controller.showProgress() }) { Text("进度") }
+            TextButton(onClick = { controller.showStats(memberIds, members) }, enabled = members.isNotEmpty()) { Text("统计") }
             TextButton(onClick = { showGoalDialog = true }) { Text("目标") }
             TextButton(onClick = { showRefPicker = true }, enabled = members.isNotEmpty()) { Text("＋引用") }
         }
@@ -231,7 +236,7 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                             }
                             when (att.status) {
                                 "uploading" -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(12.dp))
+                                    ThinkingPill()
                                     Text(" 上传中", style = MaterialTheme.typography.labelSmall)
                                 }
                                 "ready" -> Text("已就绪", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -248,7 +253,9 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = { showAttachMenu = true }) { Text("＋") }
+            IconButton(onClick = { showAttachMenu = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "添加附件")
+            }
             OutlinedTextField(
                 value = input,
                 onValueChange = { fresh ->
@@ -256,20 +263,47 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                     // 输入以 @ 结尾触发成员提及弹层
                     showMentions = fresh.isNotEmpty() && fresh.last() == '@'
                 },
-                placeholder = { Text("发送群消息（@ 提及成员）") },
-                maxLines = 4,
+                placeholder = { Text("发消息（@ 提及成员）") },
+                // 单行（用户反馈：群聊输入框两行太高，一行足够）；@ 弹层不受影响
+                singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.size(8.dp))
-            TextButton(
-                onClick = {
-                    val text = input.trim()
-                    if ((text.isNotEmpty() || controller.attachments.isNotEmpty()) && controller.sendOrAttach(text)) input = ""
-                },
-                enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) && !controller.busy &&
-                    controller.attachments.none { it.status == "uploading" || it.status == "failed" },
-            ) { Text("发送") }
+            if (controller.busy) {
+                ThinkingPill()
+            } else {
+                FilledIconButton(
+                    onClick = {
+                        val text = input.trim()
+                        if ((text.isNotEmpty() || controller.attachments.isNotEmpty()) && controller.sendOrAttach(text)) input = ""
+                    },
+                    enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) &&
+                        controller.attachments.none { it.status == "uploading" || it.status == "failed" },
+                ) {
+                    Icon(Icons.Filled.Send, contentDescription = "发送")
+                }
+            }
         }
+    }
+
+    // 群统计弹窗：逐成员汇总（core 的 BotStatsText 翻译）
+    controller.statsText?.let { body ->
+        AlertDialog(
+            onDismissRequest = { controller.dismissStats() },
+            title = { Text("群统计") },
+            text = {
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(
+                        body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(max = 420.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text("关闭") } },
+        )
     }
 
     if (showAttachMenu) {

@@ -443,6 +443,38 @@ class RoomChatController(
         execute(Runnable { notice = text })
     }
 
+    // ---- 群统计：逐成员 run-stats 汇总成一份可读弹窗 ----
+
+    var statsText by mutableStateOf<String?>(null)
+        private set
+
+    /** 汇总 [ids]（与 [names] 一一对应）各成员的 run-stats；全部应答后拼接展示。 */
+    fun showStats(ids: List<String>, names: List<String>) {
+        if (ids.isEmpty()) {
+            statsText = "群内没有成员"
+            return
+        }
+        val parts = arrayOfNulls<String>(ids.size)
+        val pending = java.util.concurrent.atomic.AtomicInteger(ids.size)
+        ids.forEachIndexed { i, id ->
+            api("run-stats", "{\"botId\":${work.keepwriting.core.JsonString.of(id)}}") { res ->
+                parts[i] = if (res is DsbotApi.Result.Ok) {
+                    val body = work.keepwriting.core.BotStatsText.runStats(res.value).ifEmpty { "暂无统计数据" }
+                    "【${names.getOrElse(i) { id }}】\n$body"
+                } else {
+                    "【${names.getOrElse(i) { id }}】统计不可用"
+                }
+                if (pending.decrementAndGet() == 0) {
+                    statsText = parts.filterNotNull().joinToString("\n\n")
+                }
+            }
+        }
+    }
+
+    fun dismissStats() {
+        statsText = null
+    }
+
     private fun appendItem(item: ChatRender.Item) {
         rows.add(Row(nextRowKey++, item))
         if (openPending) liveInFlight.add(item)

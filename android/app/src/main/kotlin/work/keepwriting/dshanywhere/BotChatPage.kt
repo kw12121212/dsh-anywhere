@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +24,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -259,7 +267,7 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                             }
                             when (att.status) {
                                 "uploading" -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(12.dp))
+                                    ThinkingPill()
                                     Text(" 上传中", style = MaterialTheme.typography.labelSmall)
                                 }
                                 "ready" -> Text("已就绪", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -272,11 +280,18 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                 }
             }
         }
+        // 发送/停止/恢复合一的图标按钮（现代聊天输入区形态）：Bot 工作中=停止、
+        // 会话被中断=恢复、其余=发送；发送中（busy）以思考条占位。
+        if (controller.working || controller.busy || controller.streamingText != null) {
+            ThinkingPill(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = { showAttachMenu = true }) { Text("＋") }
+            IconButton(onClick = { showAttachMenu = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "添加附件")
+            }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
@@ -285,17 +300,34 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.size(8.dp))
-            TextButton(
-                onClick = {
-                    val text = input.trim()
-                    if (text.isNotEmpty() || controller.attachments.isNotEmpty()) {
-                        if (controller.sendOrAttach(text)) input = ""
-                    }
-                },
-                enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) && !controller.busy &&
+            val attachmentsReady = controller.attachments.all { it.status == "ready" }
+            when {
+                controller.working -> FilledIconButton(onClick = { controller.stop() }) {
+                    // 方形停止符（icons-core 无 Stop，自绘 18dp 圆角方块）
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(MaterialTheme.colorScheme.onPrimaryContainer, RoundedCornerShape(4.dp)),
+                    )
+                }
+                controller.interrupted -> FilledIconButton(onClick = { controller.resume() }) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = "恢复会话")
+                }
+                controller.busy -> ThinkingPill()
+                else -> FilledIconButton(
+                    onClick = {
+                        val text = input.trim()
+                        if (text.isNotEmpty() || controller.attachments.isNotEmpty()) {
+                            if (controller.sendOrAttach(text)) input = ""
+                        }
+                    },
                     // 附件 uploading/failed 时禁发（状态读取仅作禁用提示，判定仍收敛 executor）
-                    controller.attachments.none { it.status == "uploading" || it.status == "failed" },
-            ) { Text("发送") }
+                    enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) &&
+                        attachmentsReady,
+                ) {
+                    Icon(Icons.Filled.Send, contentDescription = "发送")
+                }
+            }
         }
     }
 
@@ -318,25 +350,6 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
             confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text("关闭") } },
         )
     }
-    controller.exchangesText?.let { body ->
-        AlertDialog(
-            onDismissRequest = { controller.dismissExchanges() },
-            title = { Text("Bot 间记录") },
-            text = {
-                SelectionContainer {
-                    Text(
-                        body,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier
-                            .verticalScroll(rememberScrollState())
-                            .heightIn(max = 420.dp),
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = { controller.dismissExchanges() }) { Text("关闭") } },
-        )
-    }
-
     if (showAttachMenu) {
         AlertDialog(
             onDismissRequest = { showAttachMenu = false },
@@ -553,21 +566,16 @@ private fun ImageRow(item: ChatRender.Item.Image, onOpen: () -> Unit) {
 
 @Composable
 private fun ChatActionRow(controller: ChatController, parts: List<String>, onPickPart: () -> Unit, onOpenSide: () -> Unit = {}) {
+    // 停止/恢复已并入输入区图标按钮；此处只保留会话操作。
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (controller.working) {
-            OutlinedButton(onClick = { controller.stop() }) { Text("停止") }
-        } else {
-            OutlinedButton(onClick = { controller.resume() }, enabled = controller.interrupted) { Text("恢复") }
-        }
         TextButton(onClick = { controller.newPart() }) { Text("新分段") }
         if (parts.size > 1) {
             TextButton(onClick = onPickPart) { Text("旧分段") }
         }
         TextButton(onClick = onOpenSide) { Text("侧问") }
         TextButton(onClick = { controller.showStats() }) { Text("统计") }
-        TextButton(onClick = { controller.showExchanges() }) { Text("Bot 间记录") }
     }
 }
