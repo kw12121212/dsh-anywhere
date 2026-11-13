@@ -197,6 +197,32 @@ import { createHash } from 'node:crypto'
 const server = createServer((req, res) => {
   const url = req.url ?? '/'
   console.log(`${new Date().toISOString()} ${req.method} ${url} <- ${req.socket.remoteAddress}`)
+  // /api/file?path=<服务器绝对路径>（带会话 cookie）：模拟真实 dsh 的一次同源 302 →
+  // 按扩展名出字节（对话内文件路径链接的 App 端打开路径）。
+  const fileUrl = url.startsWith('/api/file') ? new URL(url, 'http://x') : null
+  if (fileUrl) {
+    if (!sessionCookie(req) || !sessions.has(sessionCookie(req))) {
+      res.writeHead(401, { 'Content-Type': 'text/plain' })
+      res.end(EXPIRED_MARKER)
+      return
+    }
+    const path = fileUrl.searchParams.get('path') ?? ''
+    if (!path.startsWith('/home/')) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' })
+      res.end('not found')
+      return
+    }
+    if (!fileUrl.searchParams.has('v')) {
+      res.writeHead(302, { Location: `/api/file?path=${encodeURIComponent(path)}&v=mocksig` })
+      res.end()
+      return
+    }
+    const name = path.split('/').pop() ?? 'file'
+    const type = name.endsWith('.mp4') ? 'video/mp4' : name.endsWith('.png') ? 'image/png' : 'application/octet-stream'
+    res.writeHead(200, { 'Content-Type': type })
+    res.end(Buffer.from(`mock file bytes for ${name}`))
+    return
+  }
   if (url === '/' || url.startsWith('/?')) {
     const qs = new URL(url, 'http://x').searchParams
     const presentedToken = qs.get('token')
@@ -317,6 +343,8 @@ const server = createServer((req, res) => {
               { kind: 'user', text: '群消息探针', turn: 1, seq: 1 },
               { kind: 'bot', botId: 'bot-1', name: '研究主管', color: 'blue', text: '收到，安排分工', turn: 1, seq: 2 },
               { kind: 'bot', botId: 'bot-2', name: '运维值班', color: 'green', text: '巡检进行中', turn: 1, seq: 3 },
+              { kind: 'bot', botId: 'bot-1', name: '研究主管', color: 'blue', text: '成片好了：[clean 版](/home/wx766/.dsh/bot/workspace/deliverables/demo.mp4)（对比度 9.5:1）', turn: 1, seq: 4 },
+              { kind: 'bot', botId: 'bot-2', name: '运维值班', color: 'green', text: '[demo 视频文件](/home/wx766/.dsh/bot/workspace/deliverables/demo.mp4)', turn: 1, seq: 5 },
               { kind: 'pass', botId: 'bot-1' },
               { kind: 'checkpoint', turn: 1 },
             ],

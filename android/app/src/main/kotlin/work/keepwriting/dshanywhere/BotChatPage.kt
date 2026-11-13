@@ -68,7 +68,13 @@ import work.keepwriting.core.ChatRender
  * 数据经注入的 ChatController，本页无网络逻辑。
  */
 @Composable
-fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, onOpenSide: () -> Unit = {}) {
+fun BotChatPage(
+    controller: ChatController,
+    botId: String,
+    parts: List<String>,
+    onOpenSide: () -> Unit = {},
+    onOpenLink: (String) -> Unit = {},
+) {
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
     var showPartsDialog by remember { mutableStateOf(false) }
@@ -149,9 +155,7 @@ fun BotChatPage(controller: ChatController, botId: String, parts: List<String>, 
                                 markdown = item.markdown,
                                 onCopy = { clipboard.setText(AnnotatedString(item.markdown)) },
                                 onCopyBlock = { clipboard.setText(AnnotatedString(it)) },
-                                onOpenLink = { url ->
-                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
-                                },
+                                onOpenLink = onOpenLink,
                             )
                             is ChatRender.Item.ToolCard -> ToolCardRow(item)
                             is ChatRender.Item.Image -> ImageRow(item, onOpen = {

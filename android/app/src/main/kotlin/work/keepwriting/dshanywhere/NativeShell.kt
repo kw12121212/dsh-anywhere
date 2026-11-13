@@ -107,6 +107,7 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
 
 @Composable
 private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () -> Unit) {
+    val linkContext = androidx.compose.ui.platform.LocalContext.current
     var showSidePanel by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         Row(
@@ -184,6 +185,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             entry = entry,
                             memberNames = roster.map { it.second },
                             memberIds = roster.map { it.first },
+                            onOpenLink = { url -> connection.openChatLink(linkContext, url) },
                         )
                     } else {
                         LaunchedEffect(entry?.working) { connection.chatController.syncWorking(entry?.working ?: false) }
@@ -191,6 +193,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             controller = connection.chatController,
                             botId = current.targetId,
                             parts = entry?.parts ?: emptyList(),
+                            onOpenLink = { url -> connection.openChatLink(linkContext, url) },
                             onOpenSide = {
                                 val sid = entry?.sessionId
                                 if (sid != null) {
@@ -351,6 +354,59 @@ private fun TunnelGatePanel(
  * 靠 stop 谓词与读超时（≤30s）自然收尾。
  */
 class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Listener, FeedSync.Listener {
+
+    /**
+     * 对话内链接打开（主线程调用）：http(s) 走系统浏览器；无 scheme 的服务器本地路径
+     * （Bot 常发的 /home/…/xxx.mp4 形态）经 /api/file?path= 以会话 cookie 取字节，
+     * 跟随一次同源 302 后交系统应用打开（视频出播放器等）。失败在群/私聊 notice 提示。
+     */
+    fun openChatLink(context: android.content.Context, url: String) {
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(url),
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+            return
+        }
+        if (!url.startsWith("/")) return
+        executor.execute {
+            val clean = graph.cleanUrl
+            if (clean == null) {
+                chatController.postNotice("会话信息不可用，无法打开文件")
+                return@execute
+            }
+            val base = work.keepwriting.core.DsbotApi.url(clean, "/api/file") +
+                "?path=" + java.net.URLEncoder.encode(url, "UTF-8")
+            var res = runCatching { graph.nativeSession.apiRequest("GET", base, null, null) }.getOrNull()
+            // /api/file 以一次 302 出真实文件地址（真实 dsh 给绝对地址、mock 给相对
+            // 路径——两种都跟随，相对路径按 harness 源解析）。
+            if (res != null && res.status in 301..308) {
+                val loc = res.header("Location")
+                val next = when {
+                    loc.isNullOrEmpty() -> null
+                    loc.startsWith("http") -> loc
+                    loc.startsWith("/") -> originOf(clean) + loc
+                    else -> null
+                }
+                if (next != null) {
+                    res = runCatching { graph.nativeSession.apiRequest("GET", next, null, null) }.getOrNull()
+                }
+            }
+            if (res == null || res.status != 200) {
+                val code = res?.status?.toString() ?: "网络"
+                chatController.postNotice("文件获取失败（$code）")
+                roomChatController.postNotice("文件获取失败（$code）")
+                return@execute
+            }
+            val name = url.substringAfterLast('/').ifEmpty { "file" }
+            val opened = AttachmentOpen.openWith(context, name, res.body)
+            if (!opened) chatController.postNotice("没有应用能打开 $name")
+        }
+    }
     var status by mutableStateOf(DsbotConnection.Status.CONNECTING)
         private set
     var versionBanner by mutableStateOf<Pair<String, String>?>(null)

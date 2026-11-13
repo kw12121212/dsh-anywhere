@@ -54,7 +54,14 @@ import work.keepwriting.core.TeamHome
  * 群目标 goal-draft/goal-control。渲染组件与私聊共用（MarkdownText 等）。
  */
 @Composable
-fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome.Entry?, memberNames: List<String> = emptyList(), memberIds: List<String> = emptyList()) {
+fun RoomChatPage(
+    controller: RoomChatController,
+    roomId: String,
+    entry: TeamHome.Entry?,
+    memberNames: List<String> = emptyList(),
+    memberIds: List<String> = emptyList(),
+    onOpenLink: (String) -> Unit = {},
+) {
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
     var showMentions by remember { mutableStateOf(false) }
@@ -127,17 +134,7 @@ fun RoomChatPage(controller: RoomChatController, roomId: String, entry: TeamHome
                                 speakerColorKey = item.speakerColor,
                                 onCopy = { clipboard.setText(AnnotatedString(item.markdown)) },
                                 onCopyBlock = { clipboard.setText(AnnotatedString(it)) },
-                                onOpenLink = { url ->
-                                    // 群聊链接与私聊同语义：系统浏览器打开（原空实现导致点击无反应）
-                                    runCatching {
-                                        context.startActivity(
-                                            android.content.Intent(
-                                                android.content.Intent.ACTION_VIEW,
-                                                android.net.Uri.parse(url),
-                                            ),
-                                        )
-                                    }
-                                },
+                                onOpenLink = onOpenLink,
                             )
                             is ChatRender.Item.ToolCard -> Text(
                                 "工具调用：${item.name ?: "未知"}",
