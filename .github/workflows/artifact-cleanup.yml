@@ -1,0 +1,47 @@
+name: Artifact cleanup
+
+# 每天删除创建超过 72 小时的 workflow artifacts：package.yml 每次 push main 都产出
+# 三平台安装包（约 180MB/次），不清理会堆满账号级 Artifact 存储配额，连累同账号
+# 其他仓库（如 private-content-assistant 的 macOS DMG 中转）无法上传。
+on:
+  schedule:
+    - cron: '17 19 * * *' # 每天 UTC 19:17（北京 03:17），错开整点高峰
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  purge:
+    name: Delete artifacts older than 72h
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete artifacts older than 72 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '72 hours ago' +%s)
+          deleted=0
+          page=1
+          while :; do
+            # 只列未过期的；已过期的由 GitHub 自动回收，不必重复删除。
+            json=$(gh api "actions/artifacts?per_page=100&page=${page}")
+            ids=$(printf '%s' "$json" | jq -r --argjson cutoff "$cutoff" \
+              '.artifacts[] | select(.expired == false) | select((.created_at | fromdateiso8601) < $cutoff) | .id')
+            if [ -z "$ids" ]; then
+              if [ "$page" -ge "$(printf '%s' "$json" | jq -r '.total_count / 100 | ceil')" ]; then
+                break
+              fi
+              page=$((page + 1))
+              continue
+            fi
+            for id in $ids; do
+              gh api -X DELETE "actions/artifacts/${id}" && deleted=$((deleted + 1)) || true
+            done
+            # 删除后列表缩短，回到第一页重新扫描。
+            page=1
+          done
+          echo "deleted ${deleted} artifacts older than 72h"

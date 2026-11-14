@@ -48,6 +48,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dsh-anywhere-${{ runner.os }}
+          # 产物只作为发布中转：72 小时足够 release.yml 下载，堆积会撑爆账号级
+          # Artifact 存储配额（artifact-cleanup.yml 每日兜底清理）。
+          retention-days: 3
           path: |
             dist/*.dmg
             dist/*.AppImage
