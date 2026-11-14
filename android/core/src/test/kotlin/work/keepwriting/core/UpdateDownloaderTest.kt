@@ -150,6 +150,49 @@ class UpdateDownloaderTest {
     }
 
     @Test
+    fun streamFetchProgressCarriesTotalAndAccumulates() {
+        // 流式实现的进度契约：逐块回调 (累计字节, 总量)，total 来自 content-length——
+        // 下载百分比始终为 0 的回归（1.7.0 前只收尾回调一次且 total 恒 0）。
+        val base = serve(mapOf(apkName to apkBytes))
+        val manifestInfo = info.copy(manifestSha256 = sha256Hex(apkBytes))
+        val seen = mutableListOf<Pair<Long, Long>>()
+        val d = UpdateDownloader(
+            dir,
+            streamFetch = { url, rangeFrom, sink, onProgress ->
+                val conn = java.net.URI(url).toURL().openConnection() as java.net.HttpURLConnection
+                if (rangeFrom > 0) conn.setRequestProperty("Range", "bytes=$rangeFrom-")
+                try {
+                    val code = conn.responseCode
+                    var written = 0L
+                    if (code == 200 || code == 206) {
+                        val total = (conn.contentLengthLong.takeIf { it > 0 } ?: 0L) + rangeFrom
+                        conn.inputStream.use { input ->
+                            val buf = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                sink.write(buf, 0, n)
+                                written += n
+                                onProgress(rangeFrom + written, total)
+                            }
+                        }
+                    }
+                    code to written
+                } finally {
+                    conn.disconnect()
+                }
+            },
+        ) { name -> "$base/$name" }
+        val apk = d.download(manifestInfo) { done, total -> seen.add(done to total) }
+        assertContentEquals(apkBytes, apk.readBytes())
+        assertTrue(seen.isNotEmpty(), "流式实现应逐块回调进度")
+        assertEquals(apkBytes.size.toLong(), seen.last().first, "收尾回调应覆盖全部字节")
+        assertEquals(apkBytes.size.toLong(), seen.last().second, "total 应等于资产总大小")
+        assertTrue(seen.zipWithNext().all { (a, b) -> b.first >= a.first }, "进度单调不减")
+        assertTrue(seen.all { it.second == apkBytes.size.toLong() }, "每次回调都带正确 total")
+    }
+
+    @Test
     fun readyApkRestoresNewerVerifiedPackageAndDropsInstalledOnes() {
         val d = UpdateDownloader(dir) { error("不应发请求") }
         File(dir, apkName).writeBytes(apkBytes)

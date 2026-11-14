@@ -137,9 +137,15 @@ class HttpSocket(
     /**
      * 流式 GET：响应体直接写入 [sink]（chunked/定长/EOF 均支持），不驻留内存——
      * 大体积资产（更新 APK）经注入拨号下载用。返回 (状态码, 写出字节数)；
-     * Range 续传头由调用方经 [headers] 提供。
+     * Range 续传头由调用方经 [headers] 提供。[onProgress] 每写出一段回调
+     * (本次响应已写字节数, 响应体总长——content-length 缺失为 0)，供下载进度用。
      */
-    fun get(url: String, headers: List<Pair<String, String>> = emptyList(), sink: java.io.OutputStream): Pair<Int, Long> {
+    fun get(
+        url: String,
+        headers: List<Pair<String, String>> = emptyList(),
+        sink: java.io.OutputStream,
+        onProgress: ((written: Long, total: Long) -> Unit)? = null,
+    ): Pair<Int, Long> {
         val u = URI(url)
         val host = u.host ?: throw IllegalArgumentException("URL 缺主机")
         val port = if (u.port > 0) u.port else if (u.scheme?.lowercase() == "https") 443 else 80
@@ -184,6 +190,7 @@ class HttpSocket(
                 if (n < 0) break
                 sink.write(buf, 0, n)
                 written += n
+                onProgress?.invoke(written, if (contentLength >= 0) contentLength else 0L)
                 if (contentLength in 0..written) break
             }
             status to written

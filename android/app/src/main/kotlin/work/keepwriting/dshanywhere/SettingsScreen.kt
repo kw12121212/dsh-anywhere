@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -218,10 +219,17 @@ private fun UpdateCard(updates: UpdateManager) {
                         updates.download()
                     }) { Text(stringResource(R.string.update_download)) }
                 }
-                UpdateManager.State.DOWNLOADING -> Text(
-                    stringResource(R.string.update_downloading, (updates.downloadProgress * 100).toInt()),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                UpdateManager.State.DOWNLOADING -> {
+                    Text(
+                        stringResource(R.string.update_downloading, (updates.downloadProgress * 100).toInt()),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { updates.downloadProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 UpdateManager.State.READY_TO_INSTALL -> Button(onClick = { updates.promptInstall() }) {
                     Text(stringResource(R.string.update_install))
                 }

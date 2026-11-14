@@ -67,14 +67,17 @@ class UpdateManager(
         dir = updatesDir,
         // 按源分流：自托管源经注入拨号（Android HttpURLConnection 会先本地解析目标
         // 主机，ts.net 公网不可解析）；GitHub 资产仍用 HttpURLConnection（其重定向
-        // 与 Range 语义由平台处理），流式拷贝不驻留内存。
-        streamFetch = { url, rangeFrom, sink ->
+        // 与 Range 语义由平台处理），流式拷贝不驻留内存；进度逐块回调（含 total，
+        // 供百分比显示——206 续传时把已下载部分计入 done/total）。
+        streamFetch = { url, rangeFrom, sink, onProgress ->
             val base = sourceBase?.trimEnd('/')
             if (base != null && url.startsWith(base)) {
                 val headers = if (rangeFrom > 0) listOf("Range" to "bytes=$rangeFrom-") else emptyList()
-                work.keepwriting.core.HttpSocket(dial).get(url, headers, sink)
+                work.keepwriting.core.HttpSocket(dial).get(url, headers, sink) { written, total ->
+                    onProgress(rangeFrom + written, if (total > 0) rangeFrom + total else 0L)
+                }
             } else {
-                urlConnectionFetch(url, rangeFrom, sink)
+                urlConnectionFetch(url, rangeFrom, sink, onProgress)
             }
         },
         assetUrl = { name ->
@@ -84,7 +87,12 @@ class UpdateManager(
     )
 
     /** GitHub 资产的流式取回（HttpURLConnection：跟随重定向、平台 DNS 可用）。 */
-    private fun urlConnectionFetch(url: String, rangeFrom: Long, sink: java.io.OutputStream): Pair<Int, Long> {
+    private fun urlConnectionFetch(
+        url: String,
+        rangeFrom: Long,
+        sink: java.io.OutputStream,
+        onProgress: (done: Long, total: Long) -> Unit,
+    ): Pair<Int, Long> {
         val conn = java.net.URI(url).toURL().openConnection() as HttpsURLConnection
         conn.connectTimeout = 30_000
         conn.readTimeout = 30_000
@@ -93,6 +101,7 @@ class UpdateManager(
             val code = conn.responseCode
             var written = 0L
             if (code == 200 || code == 206) {
+                val total = (conn.contentLengthLong.takeIf { it > 0 } ?: 0L) + rangeFrom
                 conn.inputStream.use { input ->
                     val buf = ByteArray(64 * 1024)
                     while (true) {
@@ -100,6 +109,7 @@ class UpdateManager(
                         if (n < 0) break
                         sink.write(buf, 0, n)
                         written += n
+                        onProgress(rangeFrom + written, total)
                     }
                 }
             }
@@ -151,7 +161,8 @@ class UpdateManager(
         check()
     }
 
-    /** 检查更新（后台线程调用；下载中不重复检查，防状态覆盖与并发写文件）。 */
+    /** 检查更新（后台线程调用；下载中不重复检查，防状态覆盖与并发写文件）；
+     *  发现新版本自动转入下载，无需用户再点。 */
     fun check() {
         if (state == State.DOWNLOADING) return
         state = State.CHECKING
@@ -176,6 +187,9 @@ class UpdateManager(
                     UpdateCheck.CheckOutcome.AVAILABLE -> {
                         availableVersion = info!!.version
                         state = State.AVAILABLE
+                        // 发现新版本即自动下载（含启动自动检查与隧道恢复补查），
+                        // 下载完成后仍由用户确认安装。
+                        download()
                     }
                     UpdateCheck.CheckOutcome.UP_TO_DATE -> state = State.UP_TO_DATE
                 }

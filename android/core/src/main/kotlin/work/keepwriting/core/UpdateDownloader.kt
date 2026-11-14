@@ -20,8 +20,12 @@ class UpdateDownloader(
     private val dir: File,
     /** 流式取回（自托管 tailnet 源用：Android HttpURLConnection 会先本地解析
      *  目标主机，ts.net 公网不可解析；经注入拨号的实现把解析交给代理侧）。
-     *  GET [url]（rangeFrom>0 时带 Range），响应体写 [sink]，返回 (状态码, 字节数)。 */
-    private val streamFetch: ((url: String, rangeFrom: Long, sink: java.io.OutputStream) -> Pair<Int, Long>)? = null,
+     *  GET [url]（rangeFrom>0 时带 Range），响应体写 [sink]，按 (累计字节, 总量)
+     *  调 [onProgress]（total 未知传 0），返回 (状态码, 字节数)。 */
+    private val streamFetch: ((
+        url: String, rangeFrom: Long, sink: java.io.OutputStream,
+        onProgress: (done: Long, total: Long) -> Unit,
+    ) -> Pair<Int, Long>)? = null,
     private val assetUrl: (name: String) -> String,
 ) {
     /** 校验失败（不一致、.sha256 缺失或格式不符）：已下载文件已删除。 */
@@ -130,18 +134,24 @@ class UpdateDownloader(
         }
     }
 
-    /** 经注入拨号的流式取回：200 重写 / 206 追加 / 416 视为已完整（与 URL 版同语义）。 */
+    /** 经注入拨号的流式取回：200 重写 / 206 追加 / 416 视为已完整（与 URL 版同语义）；
+     *  进度逐块透传，收尾再校正一次（实现未回调或 total 未知时兜底）。 */
     private fun fetchStreamed(url: String, target: File, resume: Boolean, onProgress: (Long, Long) -> Unit) {
         val fetch = streamFetch ?: return
         val existing = if (resume && target.isFile) target.length() else 0L
         if (existing > 0 && !target.renameTo(File(target.path + ".resume"))) throw IOException("resume rename failed")
         val partTarget = if (existing > 0) File(target.path + ".resume") else target
+        var lastTotal = 0L
         val out = java.io.FileOutputStream(partTarget, existing > 0)
         val (code, written) = try {
-            fetch(url, existing, out).also { (_, w) -> onProgress(existing + w, 0L) }
+            fetch(url, existing, out) { done, total ->
+                lastTotal = total
+                onProgress(done, total)
+            }
         } finally {
             out.close()
         }
+        onProgress(existing + written, lastTotal)
         when {
             existing > 0 && code == 416 -> {
                 partTarget.renameTo(target) // 已下载完整：恢复原名交校验
