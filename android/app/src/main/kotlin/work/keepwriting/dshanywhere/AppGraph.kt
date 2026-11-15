@@ -35,6 +35,8 @@ class AppGraph private constructor(context: Context) {
     val diagnostics = DiagnosticsManager.get(context).also {
         // tailnet 端点经分流拨号上报（HttpSocket：域名由代理侧解析）
         it.attachDial { h, p -> nativeDial.dial(h, p) }
+        // 检查更新失败也进错误态上报（自托管源/GitHub 查询失败可观测）
+        updates.attachFailureReporter(it::recordUpdateFailure)
     }
 
     var configState by mutableStateOf(ConfigState.NeedsSetup)

@@ -151,6 +151,18 @@ class UpdateManager(
     @Volatile
     var appInForeground: Boolean = false
 
+    /** 检查更新失败的诊断回调（AppGraph 注入 DiagnosticsManager.recordUpdateFailure）。 */
+    @Volatile
+    private var failureReporter: ((String) -> Unit)? = null
+
+    fun attachFailureReporter(report: (String) -> Unit) {
+        failureReporter = report
+    }
+
+    private fun reportFailure(reason: String) {
+        failureReporter?.invoke(reason)
+    }
+
     /** 已校验、版本高于本机的更新包（读磁盘：冷启动的通知点击同样可用）。 */
     fun downloadedApk(): File? = downloader.readyApk(currentVersionCode())?.second
 
@@ -195,9 +207,16 @@ class UpdateManager(
                 }
             } catch (e: TunnelNotReady) {
                 tunnelRetryPending = true
-                if (!restoreReady()) fail("隧道未就绪，等 Tailscale 连上后自动重试")
+                val text = "检查更新失败：隧道未就绪（tailnet 更新源需先连上 Tailscale，连上后自动重试）"
+                if (!restoreReady()) fail(text)
+                reportFailure(text)
             } catch (e: Exception) {
-                if (!restoreReady()) fail("检查更新失败（${e.javaClass.simpleName}）")
+                // IllegalStateException("HTTP <状态码>") 等的 message 才是可定位的原因，
+                // 只显示异常类名会丢掉它（1.8.0 的「IllegalStateException」即此坑）。
+                val cause = e.message?.trim()?.takeIf { it.isNotEmpty() } ?: e.javaClass.simpleName
+                val text = "检查更新失败：$cause"
+                if (!restoreReady()) fail(text)
+                reportFailure(text)
             }
         }.start()
     }

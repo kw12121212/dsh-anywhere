@@ -123,6 +123,14 @@ class DiagnosticsManager private constructor(private val appContext: Context) {
         handler.post { enqueue(DiagKinds.ERROR, message, stackTrace = "", threadName = threadName) }
     }
 
+    /** 检查更新失败时的错误态报告（同会话一次；reason 为已含原因的失败文案）。 */
+    fun recordUpdateFailure(reason: String) {
+        if (endpoint == null) return
+        if (dedup.seen("update-check")) return
+        val threadName = Thread.currentThread().name
+        handler.post { enqueue(DiagKinds.ERROR, reason, stackTrace = "", threadName = threadName) }
+    }
+
     // ---- 内部：构造、入队与发送 ----
 
     private fun enqueue(kind: String, message: String, stackTrace: String, threadName: String = Thread.currentThread().name) {
