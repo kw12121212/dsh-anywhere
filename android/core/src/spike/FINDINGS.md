@@ -108,3 +108,13 @@ serveFile 对不带当前 `v` 参数的请求回 302，**Location 只给查询�
 失败（302）」。其余边界：>maxImageBytes（默认 50MB）回 413；不存在 404；非普通文件/越权
 403；成功响应 Content-Type 按扩展名识别。已登记 tech/dsbot-api 的 media-reference-file，
 客户端解析统一走 core HttpLocation（mock 也已对齐查询串形态）。
+
+## 11. 0.2.2-rc.3 复验（2026-11-15，dsh 升级后）
+
+WSL 服务器升级 dsh 0.2.2-rc.1 → **0.2.2-rc.3**（DS-Bot 仍 0.3.6）后 `gradlew -p android/core runSpike`
+（DSH_SPIKE_SEND=1）全项 PASS、FAIL=0：auth-token-session（303+Set-Cookie）、state
+全量/since/since+live、chat 分页、update-check（value.current=0.3.6、value.dsh.current=0.2.2-rc.3）、
+send+feed（hello/live/message/stream 事件形态不变）、401 固定失效标记、错 Host 403。state 顶层键为
+纯增量新增（`phone`、`browserHolds` 等，revision/bots/rooms 等客户端依赖键齐全），其余响应形态
+与基准一致；version-baseline-and-degrade 基准随本次复验提到 dsh 0.2.2-rc.3
+（DsbotVersions.BASELINE_DSH）。

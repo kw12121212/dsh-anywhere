@@ -100,7 +100,7 @@ class DsbotFixturesTest {
         val inner = ((parse("update-check.json") as Json.Value.Object).members["value"] as Json.Value.Object).members
         assertEquals("0.3.6", (inner["current"] as Json.Value.StringValue).value)
         val dsh = (inner["dsh"] as Json.Value.Object).members
-        assertEquals("0.2.2-rc.1", (dsh["current"] as Json.Value.StringValue).value)
+        assertEquals("0.2.2-rc.3", (dsh["current"] as Json.Value.StringValue).value)
     }
 
     @Test
