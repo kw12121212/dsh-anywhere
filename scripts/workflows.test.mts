@@ -29,11 +29,23 @@ function regressionCommand(): string {
 
 describe('.github/workflows', () => {
   it('CI 只保留打包与发布工作流，回归不上 GitHub Actions', () => {
-    // 回归测试只在本地执行（config.yaml 的完整回归命令），CI 上只放打包。
+    // 回归测试只在本地执行（config.yaml 的完整回归命令），CI 上只放打包；
+    // artifact-cleanup.yml 是每日定时清理 workflow artifacts 的维护任务（1ab30da），
+    // 不跑任何构建与测试，属 ci-regression 的 ci-packaging-only 登记例外。
     expect(readdirSync(join(repoRoot, '.github', 'workflows')).sort()).toEqual([
+      'artifact-cleanup.yml',
       'package.yml',
       'release.yml'
     ])
+  })
+
+  it('清理工作流只做 artifact 删除：定时触发、仅 actions:write、不检出代码', () => {
+    const workflow = repoFile('.github', 'workflows', 'artifact-cleanup.yml')
+    expect(workflow).toContain('schedule:')
+    // 只需要删 artifact 的最小权限，不得升级到 contents 读或写。
+    expect(workflow).toContain('permissions:\n  actions: write\n')
+    // 清理任务不需要仓库代码；出现 checkout 即职责越界（也排除夹带构建/测试）。
+    expect(workflow).not.toContain('actions/checkout')
   })
 
   it('打包工作流只由 main 分支 push 触发（手动与 tag 复用入口保留）', () => {

@@ -22,7 +22,7 @@ rules:
       method: lint
   ci-packaging-only:
     strength: MUST
-    statement: GitHub Actions 只保留打包与发布工作流：package.yml 仅由 main 分支 push 触发（workflow_dispatch 手动与 workflow_call 复用入口除外），release.yml 仅由 v* tag 触发；不得新增回归或其他测试类工作流
+    statement: GitHub Actions 只保留打包与发布工作流：package.yml 仅由 main 分支 push 触发（workflow_dispatch 手动与 workflow_call 复用入口除外），release.yml 仅由 v* tag 触发；不得新增回归或其他测试类工作流。唯一例外 artifact-cleanup.yml：每日定时（schedule，另含 workflow_dispatch 手动入口）删除超过保留期的 workflow artifacts（防账号级 Artifact 存储配额堆积），仅 actions:write 最小权限、不检出仓库代码、不承担任何构建或测试；其结构由 workflows.test.mts 断言锁定
     rationale: 回归本地执行后 CI 只承担打包产出；触发收敛到 main 避免开发分支推送反复占用三平台打包矩阵
     enforcement:
       method: test
