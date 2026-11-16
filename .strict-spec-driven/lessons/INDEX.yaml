@@ -229,3 +229,8 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/adb-input-text-gboard-dump-01416f.yaml
+    delta-tech-modified-enforcement-3057b5:
+      title: delta-tech MODIFIED 按整规则替换合并：不带完整规则体（含 enforcement）会丢内容
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/delta-tech-modified-enforcement-3057b5.yaml

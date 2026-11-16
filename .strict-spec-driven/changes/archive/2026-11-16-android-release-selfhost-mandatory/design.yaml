@@ -1,0 +1,21 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: android-release-selfhost-mandatory
+approach:
+  - 三层。(1) preflight 增加 DSH_UPDATES_DIR 校验：未设置或目录不存在即失败，错误文案给出 Windows 到 WSL 的 UNC 路径示例（\wsl.localhost\<distro>\home\<user>\.local\share\private-content-assistant\dsh-updates），沿用『前置校验不满足即失败且不上传』的既有模式。(2) 同步抽为 publishSelfhost（dir, apk, apkName, sha256, version）与 versionCodeOf(version) 纯函数：先写 APK 与 .sha256，latest.json 以 <name>.<rand>.tmp 写入后 renameSync 原子落盘（对齐 state-persistence 的原子写约定）；在 main 中提前到 gh release upload 之前执行——本地盘写失败先于网络上传暴露，且失败重跑收敛（幂等重写）。(3) 测试：fake Runner 注入 + 临时目录真文件，新增 preflight 两个失败类（未设置/目录缺失）、成功路径断言自托管三件套内容与『自托管先于 gh upload』的调用顺序、versionCodeOf 派生向量。AGENTS.md 发布句补环境变量；tech 标准 android-local-release 以 delta-tech MODIFIED 登记强制同步与契约。无 --no-selfhost 开关：一律即强制，与 keystore 缺失即失败的先例一致。
+decisions:
+  selfhost-before-github:
+    decision: 自托管同步排在 GitHub 上传之前：本地写盘几乎不会失败且可幂等重跑，网络上传更易失败；先本地后网络让手机端（唯一强依赖自托管的消费方）不受 gh 抖动阻塞。
+    rationale: 失败重跑收敛性：gh 失败后重跑时 preflight 仍全过（Release 存在、资产未传），本地幂等重写，最终一致；反向顺序则 gh 成功而自托管失败会留下手机不可更新的半发布。
+  no-scene:
+    decision: 本变更为纯技术变更（构建脚本与工程规则），无用户可观察的 actor 流程，不创建 delta-scene；spec-state 的 specs/ 留空，工程规则经 delta-tech（android-local-release MODIFIED）承载。
+    rationale: strict-spec-propose 的 scene-first 规则：纯技术变更记录不适用理由而非造流程
+  no-delta-spec:
+    decision: 纯技术变更（构建脚本与工程规则），无主规格需求变化：specs/ 留空，行为由 tech/packaging 的 android-local-release（delta-tech MODIFIED）约束，场景不适用另见 no-scene 决策
+    rationale: strict-spec-propose 规定 technical-only 变更不造 delta-spec，规则走 delta-tech
+alternatives:
+  - option: 维持可选但在输出里显式警告跳过
+    reason: 警告会被漏看，1.8.3 事故正是静默跳过形态；用户定则是一律强制
+risks: []

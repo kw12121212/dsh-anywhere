@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: delta-tech-modified-enforcement-3057b5
+  title: delta-tech MODIFIED 按整规则替换合并：不带完整规则体（含 enforcement）会丢内容
+category: tooling
+status: active
+created_at: '2026-11-16T15:19:33.261Z'
+updated_at: '2026-11-16T15:19:33.261Z'
+context: strict-spec 的 delta-tech MODIFIED 在归档时是对目标规则的整规则替换（对照 android-scaffold 归档先例：MODIFIED 携带 detail 与 examples 且与现行 tech 文件逐字一致），不是字段级合并。
+observation: android-release-selfhost-mandatory 评审发现：MODIFIED android-local-release 只写了 statement/rationale/method，未带 enforcement.detail——按整规则替换合并会把现行 detail（『四类前置失败』的测试执行说明）整条丢掉；即便按字段级理解也残留过时计数。该 trap 在生成时无任何诊断拦截。
+takeaway: 写 delta-tech MODIFIED 时必须把目标规则的完整现行正文（statement、rationale、method、enforcement.detail、example-good/bad、exception）全部复刻进工件再改动需要变更的部分，逐字段与 tech/packaging.yaml 等现行文件对照；评审时把『MODIFIED 是否携带完整规则体』列为固定检查项。
+applies_when: 为任何已有 enforcement 或 examples 的技术标准规则生成 delta-tech MODIFIED 工件时；以及评审 delta-tech 工件时。
+occurrences:
+  - origin: android-release-selfhost-mandatory
+    date: '2026-11-16'
+    evidence: 评审报告 P1：changes/android-release-selfhost-mandatory/tech/packaging.yaml 缺 enforcement.detail，现行 tech/packaging.yaml:96 有 detail（2026-11-16）；补 detail 后重跑完整回归 exit 0 并归档。

@@ -1,12 +1,13 @@
-// android-release 的判定与序列测试：假 Runner 注入，覆盖四类前置失败、
-// 资产冲突、覆盖语义与成功路径命令序列（不真跑 git/gradle/gh）。
+// android-release 的判定与序列测试：假 Runner 注入，覆盖五类前置失败（含
+// DSH_UPDATES_DIR 未设置/目录缺失）、资产冲突、覆盖语义与成功路径命令序列
+// （自托管三件套先于 gh upload；不真跑 git/gradle/gh）。
 import { describe, expect, it } from 'vitest'
-import { assetExists, certificatesMatch, apkArtifactName, main, preflight } from './android-release.mts'
+import { assetExists, certificatesMatch, apkArtifactName, main, preflight, versionCodeOf } from './android-release.mts'
 import type { Runner } from './android-release.mts'
 import { readPackageVersion } from './package-version.mts'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { apksignerPath, compareVersionDirs, gradleInvocation, keytoolInvocation, quoteForCmd, shellCommandLine } from './android-release.mts'
 
@@ -76,7 +77,19 @@ describe('preflight', () => {
 
   it('全部满足则通过', () => {
     const r = fakeRunner([...goodGit, { match: (c) => c === 'gh', result: OK }])
-    expect(preflight(r, '1.0.1', env, () => true)).toBeNull()
+    expect(preflight(r, '1.0.1', { ...env, DSH_UPDATES_DIR: 'C:/updates' }, () => true)).toBeNull()
+  })
+
+  it('DSH_UPDATES_DIR 未设置即拒绝（自托管同步强制，含 UNC 示例）', () => {
+    const r = fakeRunner([...goodGit, { match: (c) => c === 'gh', result: OK }])
+    expect(preflight(r, '1.0.1', env, () => true)).toMatch(/DSH_UPDATES_DIR/)
+    expect(preflight(r, '1.0.1', env, () => true)).toMatch(/wsl\.localhost/)
+  })
+
+  it('DSH_UPDATES_DIR 目录不存在即拒绝', () => {
+    const r = fakeRunner([...goodGit, { match: (c) => c === 'gh', result: OK }])
+    const e = { ...env, DSH_UPDATES_DIR: 'C:/no/such/updates-dir' }
+    expect(preflight(r, '1.0.1', e, (p) => !p.includes('no/such/updates-dir'))).toMatch(/DSH_UPDATES_DIR/)
   })
 })
 
@@ -97,6 +110,12 @@ describe('assetExists / certificatesMatch / 命名', () => {
 
   it('APK 命名带版本', () => {
     expect(apkArtifactName('1.2.3')).toBe('DSH-Anywhere-1.2.3.apk')
+  })
+
+  it('versionCodeOf：MAJOR*10000+MINOR*100+PATCH（与 App 侧 VersionSpec 同式）', () => {
+    expect(versionCodeOf('1.0.0')).toBe(10000)
+    expect(versionCodeOf('1.8.3')).toBe(10803)
+    expect(versionCodeOf('2.10.99')).toBe(21099)
   })
 })
 
@@ -192,10 +211,10 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
     // 资产名按当前版本派生，避免升版后与 package.json 脱节误走后续构建。
     const r = fakeRunner([
       ...goodGit,
-      { match: (c) => c === 'gh' && c !== undefined, result: { status: 0, stdout: `{"assets":[{"name":"${apkArtifactName(readPackageVersion(join(repoRoot, 'package.json')))}"}]}`, stderr: '' } },
+      { match: (c, a) => c === 'gh' && c !== undefined, result: { status: 0, stdout: `{"assets":[{"name":"${apkArtifactName(readPackageVersion(join(repoRoot, 'package.json')))}"}]}`, stderr: '' } },
     ])
     const { exits } = withExitStubbed(() => {
-      expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties' }, () => true)).toThrow(/exit/)
+      expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties', DSH_UPDATES_DIR: 'C:/fake/updates' }, () => true)).toThrow(/exit/)
     })
     expect(exits).toEqual([1])
     const uploaded = r.calls.filter(([c, a]) => c === 'gh' && a[0] === 'release' && a[1] === 'upload')
@@ -205,8 +224,8 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
   it('构建产物缺失即失败（到达 gradle 之后、upload 之前）', () => {
     const r = fakeRunner([...goodGit, { match: (c) => c === 'gh', result: OK }])
     const { exits, messages } = withExitStubbed(() => {
-      // fileExists：keystore true、构建产物 false → 走「未找到构建产物」fail。
-      expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties' }, (p) => p.includes('keystore.properties'))).toThrow(/exit/)
+      // fileExists：keystore 与更新目录 true、构建产物 false → 走「未找到构建产物」fail。
+      expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties', DSH_UPDATES_DIR: 'C:/fake/updates' }, (p) => p.includes('keystore.properties') || p.includes('updates'))).toThrow(/exit/)
     })
     expect(exits).toEqual([1])
     expect(messages.join('\n')).toMatch(/未找到构建产物/)
@@ -220,7 +239,7 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
   it('win32 上 gradle 调用为 gradlew.bat 且经 shell（修复前记录的是无扩展名 android/gradlew）', () => {
     const r = fakeRunner([...goodGit, { match: (c) => c === 'gh', result: OK }])
     withExitStubbed(() => {
-      expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties' }, (p) => p.includes('keystore.properties'))).toThrow(/exit/)
+      expect(() => main([], r, { DSH_KEYSTORE_PROPS: 'C:/fake/keystore.properties', DSH_UPDATES_DIR: 'C:/fake/updates' }, (p) => p.includes('keystore.properties') || p.includes('updates'))).toThrow(/exit/)
     })
     const idx = r.calls.findIndex(([, a]) => a.includes('assembleRelease'))
     expect(idx).toBeGreaterThanOrEqual(0)
@@ -234,16 +253,19 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
     }
   })
 
-  it('成功路径：apksigner 按平台入口与 shell、keytool 透传 env 且带 -v/-storepass:env，密码不进命令行与输出，upload 携带双资产', () => {
+  it('成功路径：apksigner 按平台入口与 shell、keytool 透传 env 且带 -v/-storepass:env，密码不进命令行与输出，upload 携带双资产，自托管三件套先于 upload 落盘', () => {
     const version = readPackageVersion(join(repoRoot, 'package.json'))
     const apkName = apkArtifactName(version)
     const storePass = 'unit-test-store-pass'
-    // 真实文件三件：keystore.properties、假 androidHome（含 build-tools/99.0.0）、构建产物 app-release.apk（缺则造哑文件，测后清理）。
+    // 真实文件四件：keystore.properties、假 androidHome（含 build-tools/99.0.0）、构建产物 app-release.apk（缺则造哑文件，测后清理）、自托管更新目录。
     const tmpProps = mkdtempSync(join(tmpdir(), 'dsh-props-'))
     const tmpHome = mkdtempSync(join(tmpdir(), 'dsh-android-home-'))
+    const updDir = mkdtempSync(join(tmpdir(), 'dsh-updates-'))
     const outDir = join(repoRoot, 'android', 'app', 'build', 'outputs', 'apk', 'release')
     const built = join(outDir, 'app-release.apk')
     const madeDummy = !existsSync(built)
+    // upload 命中时记录自托管是否已落盘（顺序断言：同步先于上传）。
+    let selfhostDoneBeforeUpload = false
     try {
       writeFileSync(join(tmpProps, 'keystore.properties'), `storeFile=C:/fake/release.keystore\nstorePassword=${storePass}\nkeyAlias=dsh\n`)
       mkdirSync(join(tmpHome, 'build-tools', '99.0.0'), { recursive: true })
@@ -258,8 +280,19 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
         { match: (c, a) => c === 'gh' && a[0] === 'release' && a[1] === 'view', result: { status: 0, stdout: '{"assets":[]}', stderr: '' } },
         { match: (c, a) => (c.endsWith('apksigner') || c.endsWith('apksigner.bat')) && a.includes('verify'), result: { status: 0, stdout: `Signer #1 certificate DN: ${dn}`, stderr: '' } },
         { match: (c) => c === 'keytool', result: { status: 0, stdout: `Owner: ${dn}`, stderr: '' } },
+        {
+          // match 在命令命中时才执行：此刻记录自托管是否已落盘（顺序断言）。
+          match: (c, a) => {
+            if (c === 'gh' && a[0] === 'release' && a[1] === 'upload') {
+              selfhostDoneBeforeUpload = existsSync(join(updDir, 'latest.json')) && existsSync(join(updDir, apkName))
+              return true
+            }
+            return false
+          },
+          result: { status: 0, stdout: '', stderr: '' },
+        },
       ])
-      main([], r, { DSH_KEYSTORE_PROPS: join(tmpProps, 'keystore.properties'), ANDROID_HOME: tmpHome }, (p) => p.includes('keystore.properties') || p.endsWith('app-release.apk'))
+      main([], r, { DSH_KEYSTORE_PROPS: join(tmpProps, 'keystore.properties'), ANDROID_HOME: tmpHome, DSH_UPDATES_DIR: updDir }, (p) => p.includes('keystore.properties') || p.endsWith('app-release.apk') || p.replace(/\\/g, '/').endsWith(updDir.replace(/\\/g, '/')))
       // apksigner：平台入口 + win32 shell。
       const vi = r.calls.findIndex(([c, a]) => (c.endsWith('apksigner') || c.endsWith('apksigner.bat')) && a.includes('verify'))
       expect(vi).toBeGreaterThanOrEqual(0)
@@ -278,9 +311,68 @@ describe('main 序列（假 Runner，process.exit 打桩）', () => {
       expect(upload).toHaveLength(1)
       expect(upload[0][1].join(' ')).toContain(apkName)
       expect(upload[0][1].join(' ')).toContain(`${apkName}.sha256`)
+      // 自托管三件套：先于 upload 落盘；latest.json 字段与 .sha256 内容自洽。
+      expect(selfhostDoneBeforeUpload).toBe(true)
+      const manifest = JSON.parse(readFileSync(join(updDir, 'latest.json'), 'utf8')) as {
+        version_name: string; version_code: number; sha256: string; size: number
+      }
+      expect(manifest.version_name).toBe(version)
+      expect(manifest.version_code).toBe(versionCodeOf(version))
+      expect(manifest.sha256).toMatch(/^[0-9a-f]{64}$/)
+      expect(manifest.size).toBe(statSync(join(updDir, apkName)).size)
+      expect(readFileSync(join(updDir, `${apkName}.sha256`), 'utf8')).toBe(`${manifest.sha256}  ${apkName}\n`)
+      // 原子写：目录里不留 latest.json.*.tmp 残片。
+      expect(readdirSync(updDir).filter((f) => /^latest\.json\..*\.tmp$/.test(f))).toEqual([])
     } finally {
       rmSync(tmpProps, { recursive: true, force: true })
       rmSync(tmpHome, { recursive: true, force: true })
+      rmSync(updDir, { recursive: true, force: true })
+      if (madeDummy) rmSync(built, { force: true })
+      rmSync(join(outDir, apkName), { force: true })
+      rmSync(join(outDir, `${apkName}.sha256`), { force: true })
+    }
+  })
+
+  it('gh 上传失败时自托管已先落盘（同步先于上传，失败可收敛重跑）', () => {
+    const version = readPackageVersion(join(repoRoot, 'package.json'))
+    const apkName = apkArtifactName(version)
+    const storePass = 'unit-test-store-pass'
+    const tmpProps = mkdtempSync(join(tmpdir(), 'dsh-props-'))
+    const tmpHome = mkdtempSync(join(tmpdir(), 'dsh-android-home-'))
+    const updDir = mkdtempSync(join(tmpdir(), 'dsh-updates-'))
+    const outDir = join(repoRoot, 'android', 'app', 'build', 'outputs', 'apk', 'release')
+    const built = join(outDir, 'app-release.apk')
+    const madeDummy = !existsSync(built)
+    try {
+      writeFileSync(join(tmpProps, 'keystore.properties'), `storeFile=C:/fake/release.keystore\nstorePassword=${storePass}\nkeyAlias=dsh\n`)
+      mkdirSync(join(tmpHome, 'build-tools', '99.0.0'), { recursive: true })
+      writeFileSync(join(tmpHome, 'build-tools', '99.0.0', process.platform === 'win32' ? 'apksigner.bat' : 'apksigner'), '')
+      if (madeDummy) {
+        mkdirSync(outDir, { recursive: true })
+        writeFileSync(built, 'dummy-apk')
+      }
+      const dn = 'CN=DSH Anywhere, O=Keepwriting'
+      const r = fakeRunner([
+        ...goodGit,
+        { match: (c, a) => c === 'gh' && a[0] === 'release' && a[1] === 'view', result: { status: 0, stdout: '{"assets":[]}', stderr: '' } },
+        { match: (c, a) => (c.endsWith('apksigner') || c.endsWith('apksigner.bat')) && a.includes('verify'), result: { status: 0, stdout: `Signer #1 certificate DN: ${dn}`, stderr: '' } },
+        { match: (c) => c === 'keytool', result: { status: 0, stdout: `Owner: ${dn}`, stderr: '' } },
+        { match: (c, a) => c === 'gh' && a[0] === 'release' && a[1] === 'upload', result: { status: 1, stdout: '', stderr: 'upload boom' } },
+      ])
+      const fileExists = (p: string) =>
+        p.includes('keystore.properties') || p.endsWith('app-release.apk') || p.replace(/\\/g, '/').endsWith(updDir.replace(/\\/g, '/'))
+      const { exits } = withExitStubbed(() => {
+        expect(() => main([], r, { DSH_KEYSTORE_PROPS: join(tmpProps, 'keystore.properties'), ANDROID_HOME: tmpHome, DSH_UPDATES_DIR: updDir }, fileExists)).toThrow(/exit/)
+      })
+      expect(exits).toEqual([1])
+      // 自托管同步发生在 gh 上传尝试之前：上传失败也已有三件套（重跑收敛）。
+      expect(existsSync(join(updDir, 'latest.json'))).toBe(true)
+      expect(existsSync(join(updDir, apkName))).toBe(true)
+      expect(existsSync(join(updDir, `${apkName}.sha256`))).toBe(true)
+    } finally {
+      rmSync(tmpProps, { recursive: true, force: true })
+      rmSync(tmpHome, { recursive: true, force: true })
+      rmSync(updDir, { recursive: true, force: true })
       if (madeDummy) rmSync(built, { force: true })
       rmSync(join(outDir, apkName), { force: true })
       rmSync(join(outDir, `${apkName}.sha256`), { force: true })

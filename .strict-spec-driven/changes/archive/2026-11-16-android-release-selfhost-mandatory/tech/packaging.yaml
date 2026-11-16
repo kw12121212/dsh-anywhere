@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: packaging
+operations:
+  ADDED: {}
+  MODIFIED:
+    android-local-release:
+      strength: MUST
+      statement: 签名 APK 只能由 scripts/android-release.mts 在本地构建并发布：脚本依次校验工作区干净、HEAD 位于 v<package.json version> tag 提交、对应 GitHub Release 已存在、keystore 可用、DSH_UPDATES_DIR 已设置且目录存在（任一不满足即失败且不上传），产物命名 DSH-Anywhere-<version>.apk 并附同名 .sha256 文件，上传前以 apksigner 校验签名证书与本地 keystore 一致；发布顺序为自托管更新源在前、GitHub Release 上传在后——自托管同步（pca 的 dsh-updates 目录）写 APK、.sha256 与 latest.json（字段 version_name/version_code/sha256/size，version_code 按 MAJOR*10000+MINOR*100+PATCH 派生，latest.json 以临时文件加改名原子写入，旧版本文件保留），缺失即前置失败，不提供跳过开关；GitHub 侧同名资产默认拒绝覆盖（显式 --overwrite 才 --clobber）；CI 不构建 Android、不需要签名 Secrets，Release 工作流的桌面 SHA256SUMS 不含 APK（APK 以自身 .sha256 为准）；脚本不输出 keystore 密码等密钥材料
+      rationale: 自托管源是 Android 更新的唯一可用通道（仓库私有，手机无法匿名访问 GitHub API），可选+静默跳过已在 1.8.3 造成半发布；强制前置校验与本地先行的顺序使失败可收敛重跑
+      enforcement:
+        method: test
+        detail: scripts/android-release.test.mts 以注入 Runner 断言五类前置失败（工作区脏、tag/HEAD 不符、Release 缺失、keystore 缺失、DSH_UPDATES_DIR 未设置或目录不存在）、资产冲突与命令序列；成功路径断言自托管三件套内容（latest.json 字段与 version_code 派生、.sha256 内容、无 .tmp 残片）与「同步先于 gh release upload」顺序（upload 命中时记录落盘状态），并覆盖 gh 上传失败时自托管已先落盘的收敛路径；完整发布由真实 v* tag 环境验收（tag 提交、Release 已建、DSH_UPDATES_DIR 指向 pca 目录）
+  REMOVED: {}

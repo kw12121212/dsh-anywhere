@@ -3,19 +3,23 @@
 //
 // 步骤序列（任一前置不满足即失败退出且不上传）：
 //   1. 前置校验：工作区干净、HEAD 正好位于 v<package.json version> tag 提交、
-//      对应 GitHub Release 已存在（由现有 Release 工作流创建）、keystore 可用；
+//      对应 GitHub Release 已存在（由现有 Release 工作流创建）、keystore 可用、
+//      DSH_UPDATES_DIR 已设置且目录存在（自托管同步强制）；
 //   2. 构建：node scripts/build-android-tstunnel.mts（stamp 幂等）+ assembleRelease；
 //   3. 产物：复制为 DSH-Anywhere-<version>.apk 并生成同名 .sha256
 //      （版本唯一来源 package.json；APK 的 sha256 是独立文件，不进桌面 SHA256SUMS）；
 //   4. 签名核验：apksigner verify --print-certs 与 keystore 侧证书 DN 比对；
-//   5. 上传：gh release upload v<version> <apk> <sha256>；同名资产默认拒绝，
+//   5. 自托管同步（先于 GitHub 上传，本地写盘幂等可重跑）：APK、.sha256 与
+//      latest.json（version_code 按 MAJOR*10000+MINOR*100+PATCH 派生）写入 pca 的
+//      dsh-updates 目录，latest.json 以临时文件加改名原子落盘，旧版本文件保留；
+//   6. 上传：gh release upload v<version> <apk> <sha256>；同名资产默认拒绝，
 //      显式 --overwrite 才 --clobber。
 //
 // 密钥纪律：不回显 keystore.properties 内容，错误信息不含任何口令。
 // 外部命令全部经可注入 Runner（默认 spawnSync），Vitest 以假 Runner 锁定序列。
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { copyFileSync, existsSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readPackageVersion } from './package-version.mts'
@@ -64,6 +68,32 @@ export function apkArtifactName(version: string): string {
   return `DSH-Anywhere-${version}.apk`
 }
 
+/** version_code 派生（MAJOR*10000+MINOR*100+PATCH，与 App 侧 VersionSpec 同一公式）。 */
+export function versionCodeOf(version: string): number {
+  const [major, minor, patch] = version.split('.').map(Number)
+  return major * 10000 + minor * 100 + patch
+}
+
+/**
+ * 自托管更新源同步（android-release-selfhost-mandatory）：向 pca 的 dsh-updates 目录
+ * 写 APK、.sha256 与 latest.json。顺序：APK 与 .sha256 先落盘，latest.json 最后以
+ * 临时文件加改名原子写入（App 拉到半截清单的窗口最小化）。旧版本文件不清理。
+ */
+export function publishSelfhost(updatesDir: string, apk: string, apkName: string, sha256: string, version: string): void {
+  const manifest = {
+    version_name: version,
+    version_code: versionCodeOf(version),
+    sha256,
+    size: statSync(apk).size,
+  }
+  copyFileSync(apk, join(updatesDir, apkName))
+  writeFileSync(join(updatesDir, `${apkName}.sha256`), `${sha256}  ${apkName}\n`)
+  const target = join(updatesDir, 'latest.json')
+  const tmp = join(updatesDir, `latest.json.${randomBytes(4).toString('hex')}.tmp`)
+  writeFileSync(tmp, `${JSON.stringify(manifest, null, 2)}\n`)
+  renameSync(tmp, target)
+}
+
 /** 前置校验（纯判定，外部命令经 Runner，文件存在性可注入）。全部通过返回 null。 */
 export function preflight(
   runner: Runner,
@@ -93,6 +123,17 @@ export function preflight(
   // 4. keystore 可用。
   if (!fileExists(keystorePropsPath(env))) {
     return `签名 keystore 配置缺失：先运行 node scripts/android-keystore.mts 或设置 DSH_KEYSTORE_PROPS`
+  }
+
+  // 5. 自托管更新源目录可用（一律强制：自托管是 Android 更新的唯一通道，仓库私有、
+  //    手机无法匿名访问 GitHub API；缺配即静默跳过曾在 1.8.3 造成半发布）。
+  const updatesDir = env.DSH_UPDATES_DIR
+  if (!updatesDir) {
+    return `DSH_UPDATES_DIR 未设置：自托管更新源（pca 的 dsh-updates 目录）为强制发布目标，` +
+      `Windows 侧示例 \\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\private-content-assistant\\dsh-updates`
+  }
+  if (!fileExists(updatesDir)) {
+    return `DSH_UPDATES_DIR 目录不存在：${updatesDir}（检查 WSL/pca 是否在运行与路径拼写）`
   }
   return null
 }
@@ -217,28 +258,16 @@ export function main(argv: string[] = process.argv.slice(2), runner: Runner = sp
     fail('APK 签名证书与本地 keystore 不一致：拒绝上传（android-uniform-signing）')
   }
 
+  // 自托管同步（先于 GitHub 上传：本地写盘幂等可重跑，网络上传更易失败——失败重跑时
+  // preflight 仍全过，两侧最终一致；自托管是手机更新的唯一通道，见 preflight 第 5 步）。
+  const updatesDir = env.DSH_UPDATES_DIR ?? fail('DSH_UPDATES_DIR 未设置（preflight 已校验，此处兜底）')
+  publishSelfhost(updatesDir, apk, apkName, sha256, version)
+  console.log(`==> 自托管更新目录已更新：${updatesDir}（latest.json → ${version}）`)
+
   // 上传。
   const upload = runner('gh', ['release', 'upload', tag, apk, shaFile, ...(overwrite ? ['--clobber'] : [])])
   if (upload.status !== 0) fail(`gh release upload 失败：${upload.stderr.trim().slice(0, 160)}`)
   console.log(`==> 完成：${apkName} 与 .sha256 已上传到 Release ${tag}`)
-
-  // 自托管更新目录（可选）：DSH_UPDATES_DIR 指向 pca 的 dsh_updates_dir（Windows 侧
-  // 经 \\wsl.localhost\... 路径可达）。写入 APK、.sha256 与 latest.json（version_code
-  // 按 MAJOR*10000+MINOR*100+PATCH 派生，与 App 侧 VersionSpec 同一公式）。未设置时跳过。
-  const updatesDir = env.DSH_UPDATES_DIR
-  if (updatesDir) {
-    const [major, minor, patch] = version.split('.').map(Number)
-    const manifest = {
-      version_name: version,
-      version_code: major * 10000 + minor * 100 + patch,
-      sha256,
-      size: statSync(apk).size,
-    }
-    copyFileSync(apk, join(updatesDir, apkName))
-    writeFileSync(join(updatesDir, `${apkName}.sha256`), `${sha256}  ${apkName}\n`)
-    writeFileSync(join(updatesDir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-    console.log(`==> 自托管更新目录已更新：${updatesDir}（latest.json → ${version}）`)
-  }
 }
 
 // 仅作为 node 直运行的入口脚本时执行；被测试导入时不触发。

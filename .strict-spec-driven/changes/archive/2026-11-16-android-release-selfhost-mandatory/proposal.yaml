@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: android-release-selfhost-mandatory
+  status: proposed
+summary:
+  what:
+    - scripts/android-release.mts 已有可选的自托管更新源同步（DSH_UPDATES_DIR 环境变量，未设置时静默跳过）：发布 1.8.3 时因未设置该变量被跳过，自托管源停留在 1.8.2，手机端检查更新误报『已是最新版本』。改为强制步骤：DSH_UPDATES_DIR 必须设置且目录存在（preflight 前置校验，缺失即在构建/上传前失败并给出 UNC 路径示例），本地同步（APK/.sha256/latest.json，清单带 version_name/version_code/sha256/size，version_code 按 MAJOR*10000+MINOR*100+PATCH 派生）提前到 GitHub 上传之前执行，latest.json 以临时文件加改名原子写入；同步逻辑抽为可测函数并补测试（此前零覆盖）。
+  why:
+    - 用户定则『一律用自托管源』（仓库私有，GitHub 源在手机不可用，自托管是 App 更新的唯一通道）；现状可选+静默跳过+无前置校验，漏配即静默半发布，1.8.3 已实际发生一次。缺目录时现实现还会在 GitHub 上传完成后才崩（writeFileSync ENOENT），留下半发布状态。
+scope:
+  in:
+    - scripts/android-release.mts（preflight 增项、自托管同步前置并抽函数、原子写清单）；scripts/android-release.test.mts（preflight 新失败类、成功路径含自托管写入与顺序断言、version_code 派生、清单内容）；.strict-spec-driven/tech 的 android-local-release 规则（delta-tech MODIFIED）；AGENTS.md 的 Android APK 发布一句补 DSH_UPDATES_DIR
+  out:
+    - GitHub Release 上传逻辑与命名/签名校验不变；keystore 前置校验不变；App 侧更新检查与清单契约（latest.json 字段）不变；桌面端发布流程不变；不引入 --no-selfhost 之类的逃生开关（一律即强制，pca 不可用就修环境再发版）
+unchanged_behavior:
+  - 出包前置（干净工作区、HEAD 在 tag、Release 已存在、keystore）；APK 命名/签名核验/双资产上传；versionCode 派生公式；latest.json 字段契约与 pca 静态目录布局（旧版本文件保留）；App 侧检查更新行为
