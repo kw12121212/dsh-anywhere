@@ -421,7 +421,11 @@ private fun MessageBubble(
                         color = speakerColorKey?.let { speakerColor(it) } ?: MaterialTheme.colorScheme.primary,
                     )
                 }
-                MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
+                // 长按可选择复制部分文字（fix-android-chat-links-and-copy）；
+                // 点按气泡复制整条与链接点击/长按选择器不受影响
+                SelectionContainer {
+                    MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
+                }
             }
         }
     }

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-android-chat-links-and-copy
+  status: proposed
+summary:
+  what:
+    - Android 群聊/私聊消息里 Markdown 列表行（- 开头）内嵌的文件链接（bot 汇报常见的 - [PDF 5 页](/home/…/xxx.pdf) 形态，指向服务器本地路径）被渲染成纯文本：点击无反应、长按也无「选择打开方式」，用户无法打开或下载汇报里的交付文件；同时消息气泡文字无法长按选择、无法复制部分内容（仅点按整条复制）。修复后：列表行与段落行中的链接同样可点击打开（http(s) 交系统浏览器，服务器本地文件路径经既有 /api/file 通道取回后交系统应用打开，长按链接可经选择器另选应用），消息文字可长按选择并复制部分内容，点按整条复制行为保留。
+  why:
+    - 2026-11-16 血汗工厂群聊 Chief 收工汇报（含 带图粘贴页/PDF/成片/日报 四个文件链接，全在 - 列表行内）在手机上全部打不开，用户也无法复制消息文字。经真实服务器实测：消息原文是 markdown 链接指向 /home/… 服务器路径，/api/file?path= 端点可用（302→200 字节），Android 端 openChatLink 传输链已实现；缺陷仅在渲染层——MarkdownText 的 parseBlocks 只对段落（Paragraph）行解析行内链接，Bullet/Ordered/Heading 渲染为纯 Text，链接成死文本；且两页 MessageBubble 无 SelectionContainer，无法选择部分文字。违反 android-dsbot/bot-chat-render（renders-like-web：网页端把这些链接渲染为可点文件提及按钮）。
+scope:
+  in:
+    - android/app/src/main/kotlin/work/keepwriting/dshanywhere/MarkdownText.kt（解析与渲染：Bullet/Ordered 走行内解析）；android/app/src/main/kotlin/work/keepwriting/dshanywhere/RoomChatPage.kt 与 BotChatPage.kt（MessageBubble 加 SelectionContainer）；按 pure-logic-in-core 把纯 Markdown 块/行内解析逻辑下沉 android/core（新 MarkdownParse.kt + JUnit 测试，进完整回归）
+  out:
+    - 附件条目（attachmentId）查看与保存机制；/api/file 传输链与 openChatLink（已实现且实测可用）；网页端与桌面端；工具卡/图片/交互卡渲染；点按气泡复制整条消息的既有行为；链接长按选择打开方式的既有行为
+unchanged_behavior:
+  - 点按气泡=复制整条消息；段落行链接点击/长按行为；附件（📎）条目点击查看与保存；工具卡折叠、图片查看、交互卡；群聊条目归属与颜色；分页加载更早

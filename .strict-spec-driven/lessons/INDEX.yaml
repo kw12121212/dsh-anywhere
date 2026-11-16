@@ -128,6 +128,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/denied-not-found-91f049.yaml
+    app-d432a7:
+      title: 留在 :app 的纯解析逻辑会让渲染行为缺陷零回归拦截
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/app-d432a7.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

@@ -1,0 +1,14 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-android-chat-links-and-copy
+approach:
+  - 两层最小修复。(1) 链接不可点：按 android-client/pure-logic-in-core（SHOULD）把 MarkdownText.kt 中的纯解析逻辑（MdBlock/InlinePart/parseBlocks/parseInline，先原样搬迁保持行为等价）下沉到 android/core 新文件 MarkdownParse.kt，:app 改为委托调用；随后把『文本块是否可点出链接』变成 core 可测契约——parseBlocks 产出的文本块（Heading/Bullet/Ordered/Paragraph）直接携带解析好的 List<InlinePart>，:app 渲染层对 Bullet/Ordered（保留 •/1. 前缀）与 Paragraph 一律用同一 InlineText 渲染，链接（含 /home/ 服务器路径形态）即可点击与长按。判定与网页端对齐：markdown 链接 URL 形如文件系统路径（/、./、盘符开头）即文件提及，点击走既有 openChatLink（http(s) 交浏览器、服务器路径走 /api/file 取字节交系统应用打开），不新增端点。(2) 文字不可选择：RoomChatPage/BotChatPage 的 MessageBubble 内 MarkdownText 包 SelectionContainer，长按即可选择复制部分文字；点按复制整条与链接长按选择器保留。测试以 core JUnit 为主（真实消息脱敏样本作夹具，按 fixtures-sanitized；含负向向量，遵 lesson-0d4784）。
+decisions:
+  markdown-parser-in-core:
+    decision: 把 Markdown 块/行内解析逻辑从 :app 下沉到 core 并让文本块携带行内片段，:app 仅做 Compose 装配：依据 pure-logic-in-core（纯判定逻辑应在 core 以 JUnit 覆盖）与 android-build-outside-gate（:app 不进完整回归，core 测试进）；解析器接受集以网页端渲染行为为契约并配负向测试（lesson-0d4784）。
+    rationale: 渲染层缺陷若只改 :app，完整回归命令无法覆盖，缺陷会复发；下沉后『列表行链接必须可点出』成为 core 断言，直接进入回归。
+alternatives: []
+risks:
+  - 链接长按选择器与 SelectionContainer 长按选择的共存：链接长按提前至 350ms（早于系统 longPressTimeout 400ms）触发并在触发后消费全部后续指针事件以取消选择模式的启动；个别 OEM 更短长按时限的设备上仍可能同时进入选择模式（选择器为系统弹层、视觉优先，选择模式可由用户取消），装机冒烟因需要 Tailscale auth key 由用户选择跳过，真机验证随下一版 APK 由用户承担（questions/device-smoke-scope）

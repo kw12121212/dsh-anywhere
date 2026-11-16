@@ -1,0 +1,41 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-android-chat-links-and-copy
+sections:
+  Implementation:
+    impl-relocate-parser:
+      text: 把 MarkdownText.kt 的纯解析逻辑（MdBlock/InlinePart/parseBlocks/parseInline 与快照缓存）原样下沉到 android/core 新文件 MarkdownParse.kt（work.keepwriting.core 包，不带 android.* 依赖），:app 的 MarkdownText 改为委托 core 解析；行为等价（此步不改任何解析行为），并配行为表征测试（段落链接、列表行原文、代码块/表格/标题原样）
+      status: complete
+    impl-inline-links:
+      text: core 行为修复：MarkdownParse 的文本块（Heading/Bullet/Ordered/Paragraph）携带解析好的 List<InlinePart>（负向：不匹配任何行内语法的文本只出 PLAIN；链接 URL 以 /、./、盘符开头按原文透传，不做 http 限定）；:app MarkdownText 对 Bullet/Ordered 用同一 InlineText 渲染（保留 •/序号 前缀），列表行链接与段落行一致：点击经 onOpenLink 打开（服务器本地路径走既有 openChatLink），长按走选择打开方式
+      status: complete
+    impl-selection-copy:
+      text: RoomChatPage 与 BotChatPage 的 MessageBubble 内 MarkdownText 包 SelectionContainer：长按可选择并复制部分文字；保留点按气泡复制整条与链接长按选择打开方式；注意链接长按（Initial pass 450ms 触发选择器）与 SelectionContainer 长按的共存，必要时在触发选择器后消费后续指针事件避免同时进入选择模式
+      status: complete
+  Testing:
+    test-bullet-link-red:
+      text: '失败回归证据（先于行为修复）：以全合成同构样本断言 Bullet/Ordered 文本块暴露行内 LINK 片段（url=/home/… 形态）——修复前文本块不携带 parts 契约，运行 android/gradlew -p android/core test --tests work.keepwriting.core.MarkdownParseTest 以编译失败形态复现（e: Unresolved reference ''parts''，MarkdownParseTest.kt:93:28 起，2026-11-16 本地运行记录），行为修复后同一命令转绿。证据形态说明：该缺陷为『缺失契约』型（列表行链接无法作为片段暴露），编译期缺失即其可观测形态，非运行期断言失败'
+      status: complete
+      command: android/gradlew -p android/core test --tests work.keepwriting.core.MarkdownParseTest
+    test-core-green:
+      text: core 全量 JUnit 绿：RED 测试转绿（列表行链接可暴露），表征测试不回归（段落/代码块/表格/标题解析不变），负向向量（lesson-0d4784：对端拒绝形态）覆盖
+      status: complete
+      command: android/gradlew -p android/core test
+    test-app-build:
+      text: ':app assembleDebug 构建通过（本地 keystore，按 android-build-outside-gate 不进完整回归不上 CI）；如有环境（Android SDK+模拟器）则装机冒烟：群聊打开该汇报消息，点列表行文件链接出系统应用、长按出选择打开方式、长按正文可选字复制'
+      status: complete
+      command: android/gradlew -p android assembleDebug
+  Verification:
+    verify-strict:
+      text: strict ready 与 verify 通过（含 delta-spec/delta-scene 覆盖检查）
+      status: complete
+      command: strict-spec-cli ready fix-android-chat-links-and-copy && strict-spec-cli verify fix-android-chat-links-and-copy
+    verify-regression:
+      text: 完整项目回归逐字执行（config.yaml review_evidence.project_regression.command）并留存输出证据
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+testing_gates:
+  validation_task: test-core-green
+  unit_test_task: test-core-green

@@ -1,0 +1,25 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED: {}
+  MODIFIED:
+    bot-chat-render:
+      strength: MUST
+      statement: 私聊页按 DS-Bot 网页端语义渲染聊天条目（群聊消息经共用渲染组件同样适用）：用户与 Bot 消息气泡、Markdown（标题、列表、表格、代码块可复制）、链接在段落、列表与标题行中均可点击——http(s) 链接交给系统浏览器，服务器本地文件路径链接由应用取回文件内容后交系统应用打开，长按链接可经「选择打开方式」选择器另选应用，打开失败给出可读原因；消息文字可长按选择并复制部分内容（点按气泡仍复制整条消息）；工具调用以折叠卡显示、分段边界与 checkpoint 不产生可见分隔（显示为一条连续聊天）、消息中的图片引用可显示并点开查看；未知语法或字段降级为纯文本不崩溃；向上滚动加载更早记录（分页），历史不足时提示已到最早。
+      scenarios:
+        file-link-in-list-opens:
+          - GIVEN: 群聊/私聊消息的 Markdown 列表行含指向服务器本地路径的文件链接（Bot 汇报常见形态）
+          - WHEN: 点击该链接
+          - THEN: 应用经服务器取回文件内容并交系统应用打开（PDF 出查看器、视频出播放器），失败时显示可读原因，不崩溃
+        link-chooser-open:
+          - GIVEN: 消息内存在可点击链接（段落或列表行）
+          - WHEN: 长按链接
+          - THEN: 弹出「选择打开方式」选择器，选定应用后打开
+        text-select-copy:
+          - GIVEN: 任一消息气泡显示中
+          - WHEN: 长按正文并拖选部分文字
+          - THEN: 可复制所选文字；点按气泡仍复制整条消息
+  REMOVED: {}
