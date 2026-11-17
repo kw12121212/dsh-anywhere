@@ -131,6 +131,19 @@ class DiagnosticsManager private constructor(private val appContext: Context) {
         handler.post { enqueue(DiagKinds.ERROR, reason, stackTrace = "", threadName = threadName) }
     }
 
+    /**
+     * 聊天页加载失败（chat-load-error-diagnostics）的错误态报告（同会话同目标同原因一次）：
+     * target 为 "bot"（私聊）或 "room"（群聊）；code 为 bot 错误码或 "network"。
+     * 消息只含目标类型与原因代码——不含地址、API 载荷与聊天内容（报告内容与脱敏纪律）。
+     */
+    fun recordChatLoadError(target: String, code: String) {
+        if (endpoint == null) return
+        if (dedup.seen("chat-load:$target:$code")) return
+        val threadName = Thread.currentThread().name
+        val message = "聊天页加载失败（${if (target == "room") "群聊" else "私聊"}，$code）"
+        handler.post { enqueue(DiagKinds.ERROR, message, stackTrace = "", threadName = threadName) }
+    }
+
     // ---- 内部：构造、入队与发送 ----
 
     private fun enqueue(kind: String, message: String, stackTrace: String, threadName: String = Thread.currentThread().name) {

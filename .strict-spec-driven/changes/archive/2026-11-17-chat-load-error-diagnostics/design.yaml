@@ -1,0 +1,16 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: chat-load-error-diagnostics
+approach:
+  - DiagnosticsManager 新增 recordChatLoadError(target, code)：endpoint 未配置直接返回（零行为），dedup key chat-load:<target>:<code> 同会话同类一次，message 只含目标类型（私聊/群聊）与原因代码（bot 错误码或 network），经 handler 在 worker 线程 enqueue（复用 DiagText 脱敏与有界队列）；ChatController/RoomChatController 构造注入可选 onLoadFailure 回调，仅在 open（打开/重取）的 BotError 与 Failure 分支触发；NativeShellConnection 装配时接到 graph.diagnostics。布局与既有 recordLoadError/recordTunnelFailure 完全同构
+decisions:
+  capture-at-controller-open:
+    decision: 捕获点放在聊天控制器的 open 失败分支（注入回调），而非 api 闭包统一包裹
+    rationale: api 闭包承载全部端点（send/earlier/stats…），统一包裹会把发送失败、分页失败也当成加载失败误报；open 分支精确对应「聊天页加载失败」的规格语义，改动最小
+alternatives:
+  - option: 在 NativeShellConnection 的 api 闭包里按 endpoint 过滤上报
+    reason: 端点名不区分打开与分页/发送，误报面大
+risks:
+  - executor 线程回调诊断 handler 不阻塞主流程（handler.post 异步）；报告不含地址与内容，脱敏纪律沿用 enqueue 内的 DiagText.sanitize

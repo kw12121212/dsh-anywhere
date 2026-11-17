@@ -1,0 +1,27 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: chat-load-error-diagnostics
+sections:
+  Implementation:
+    implement-chat-load-capture:
+      text: DiagnosticsManager.recordChatLoadError(target, code)（零行为守卫、dedup、脱敏 enqueue）；ChatController/RoomChatController 注入 onLoadFailure 回调并在 open 的 BotError/Failure 分支触发；NativeShellConnection 装配到 graph.diagnostics
+      status: complete
+  Testing:
+    run-core-tests:
+      text: core 全量 JUnit 回归（DiagnosticsManager 在 :app，装配层由设备验收覆盖）
+      status: complete
+      command: android/gradlew -p android/core test
+  Verification:
+    verify-emulator-chat-diag:
+      text: 设备验收（android-build-outside-gate：不进完整回归命令）：模拟器配置诊断端点→断开 adb reverse 制造 chat 网络失败→打开私聊出现失败 notice→run-as 读 files/diagnostics-queue 验证存在 kind=error 的聊天页加载失败报告且不含 URL/token/聊天内容；恢复链路后同会话同类不重复入队
+      status: complete
+      command: adb 设备验收记录
+    verify-ready:
+      text: strict ready/verify 通过
+      status: complete
+      command: npx strict-spec-cli ready chat-load-error-diagnostics
+testing_gates:
+  validation_task: run-core-tests
+  unit_test_task: run-core-tests

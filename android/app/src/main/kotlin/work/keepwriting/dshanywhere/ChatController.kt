@@ -34,6 +34,9 @@ class ChatController(
     ) -> Unit = { _, _, _, _, _ -> },
     /** mux RPC 通道（/api/remote.mux WebSocket 短时会话）：executor 内回调。 */
     private val muxCall: (endpoint: String, requestJson: String, onResult: (work.keepwriting.core.DshMux.Result) -> Unit) -> Unit = { _, _, _ -> },
+    /** 打开/重取失败回调（chat-load-error-diagnostics 诊断上报）：executor 内触发，
+     *  参数为原因代码（bot 错误码或 "network"）；不改变 notice 行为。 */
+    private val onLoadFailure: ((code: String) -> Unit)? = null,
 ) {
     /** 渲染行（稳定 key 供 LazyColumn 锚定：earlier 前插保持滚动位置）。 */
     data class Row(val key: Long, val item: ChatRender.Item)
@@ -129,10 +132,12 @@ class ChatController(
                 is DsbotApi.Result.BotError -> {
                     liveInFlight.clear() // 重取失败：丢弃在途缓冲，避免下次回放过期条目
                     notice = "加载聊天失败：${res.code}"
+                    onLoadFailure?.invoke(res.code)
                 }
                 is DsbotApi.Result.Failure -> {
                     liveInFlight.clear()
                     notice = "加载聊天失败（网络）"
+                    onLoadFailure?.invoke("network")
                 }
             }
             done?.invoke() // 分段切换等后续提示在重取完成后生效（不被 notice=null 覆盖）

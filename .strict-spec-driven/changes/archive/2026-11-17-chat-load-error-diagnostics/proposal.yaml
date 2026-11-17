@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: chat-load-error-diagnostics
+  status: proposed
+summary:
+  what:
+    - 新增错误态诊断捕获点：安卓私聊（chat）与群聊（room-chat）页加载失败（打开/重取失败，含网络失败与 bot 错误码）时产生一份含目标类型与原因代码的错误态报告（kind=error），走既有去重/脱敏/队列/发送管道；未配置诊断端点时零行为
+  why:
+    - diagnostics-reporting 规格 error-state-capture 需求目前只捕获主页面加载失败、隧道失败与检查更新失败；1.8.4 排查真机私聊打不开期间诊断端点收不到任何线索，暴露聊天页加载失败这一盲区，用户确认补上
+scope:
+  in:
+    - android/app 的 DiagnosticsManager（新捕获方法）、ChatController 与 RoomChatController（失败回调注入）、NativeShellConnection（装配）；diagnostics-reporting 规格 error-state-capture 需求与 report-client-errors 场景
+  out:
+    - 不捕获更早分页（earlier）失败与发送失败（notice 既有行为不变）；不改动发送/队列/脱敏管道；桌面端不加（桌面无原生聊天页）；不报告 URL、API 载荷或聊天内容
+unchanged_behavior:
+  - 未配置端点时零行为；既有错误态捕获点与去重语义；聊天页 notice 提示与重试行为完全不变

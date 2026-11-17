@@ -475,6 +475,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             muxCall = { endpoint, requestJson, onResult ->
                 executor.execute { muxCall(endpoint, requestJson, onResult) }
             },
+            onLoadFailure = { code -> graph.diagnostics.recordChatLoadError("bot", code) },
         )
     }
 
@@ -562,6 +563,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             upload = { sessionId, name, mediaType, bytes, onResult ->
                 executor.execute { uploadAttachment(sessionId, name, mediaType, bytes, onResult) }
             },
+            onLoadFailure = { code -> graph.diagnostics.recordChatLoadError("room", code) },
         )
     }
 

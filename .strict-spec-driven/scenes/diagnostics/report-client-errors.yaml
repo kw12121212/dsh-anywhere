@@ -75,3 +75,11 @@ exception_flows:
             requirement_id: endpoint-config-android
           - spec_id: diagnostics-reporting
             requirement_id: endpoint-config-desktop
+  chat-load-failure:
+    trigger: 已配置端点，私聊或群聊页打开/重取失败（网络失败或 bot 错误码）
+    steps:
+      report-chat-error:
+        action: 聊天页显示既有失败 notice 的同时产生一份含目标类型与原因代码的错误态报告，同会话同类至多一份，经发送路径尝试上报
+        covered_by:
+          - spec_id: diagnostics-reporting
+            requirement_id: error-state-capture

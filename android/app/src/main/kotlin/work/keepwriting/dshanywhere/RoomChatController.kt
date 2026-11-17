@@ -25,6 +25,9 @@ class RoomChatController(
         sessionId: String, name: String, mediaType: String?, bytes: ByteArray,
         onResult: (DsbotApi.Result) -> Unit,
     ) -> Unit = { _, _, _, _, _ -> },
+    /** 打开/重取失败回调（chat-load-error-diagnostics 诊断上报）：executor 内触发，
+     *  参数为原因代码（bot 错误码或 "network"）；不改变 notice 行为。 */
+    private val onLoadFailure: ((code: String) -> Unit)? = null,
 ) {
     data class Row(val key: Long, val item: ChatRender.Item)
 
@@ -91,10 +94,12 @@ class RoomChatController(
                 is DsbotApi.Result.BotError -> {
                     liveInFlight.clear()
                     notice = "加载群聊失败：${res.code}"
+                    onLoadFailure?.invoke(res.code)
                 }
                 is DsbotApi.Result.Failure -> {
                     liveInFlight.clear()
                     notice = "加载群聊失败（网络）"
+                    onLoadFailure?.invoke("network")
                 }
             }
         }

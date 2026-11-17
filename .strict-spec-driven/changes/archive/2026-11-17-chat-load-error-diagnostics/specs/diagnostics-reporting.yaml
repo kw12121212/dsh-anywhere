@@ -1,0 +1,17 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: diagnostics-reporting
+operations:
+  ADDED: {}
+  MODIFIED:
+    error-state-capture:
+      strength: MUST
+      statement: 诊断上报开启时:主窗口或主页面显示本地错误页的同时产生一份按原因分类的错误态报告;安卓隧道卡片进入失败状态时同样产生一份;安卓检查更新失败(自托管源或 GitHub 查询失败,含隧道未就绪)时同样产生一份含失败原因(如 HTTP 状态码)的报告;安卓私聊或群聊聊天页加载失败(打开/重取聊天内容失败,网络失败或 bot 错误码)时同样产生一份含目标类型与原因代码的报告;同一会话内同类错误态至多上报一次;没有任何错误态时不产生任何报告。诊断上报未配置时,错误页与隧道卡片的既有行为不变,不产生报告。
+      scenarios:
+        chat-load-error-one-report:
+          - GIVEN: 已配置端点,聊天页打开或重取失败(网络断开或服务端返回 bot 错误码)
+          - WHEN: 聊天页显示失败 notice
+          - THEN: 产生一份含目标类型(私聊/群聊)与原因代码的错误态报告,同会话同类至多一份;报告不含地址、token、API 载荷与聊天内容
+  REMOVED: {}
