@@ -51,6 +51,12 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/coding/android-jvm-core-minsdk-jdk-nosuchmethoderror-10ca32.yaml
+  performance:
+    http-chunked-27be03:
+      title: 手写 HTTP 客户端的 chunked 正文必须批量搬运
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/performance/http-chunked-27be03.yaml
   security:
     wails-seturl-token-e08b6a:
       title: Wails SetURL 会在内存中保留并可能重放带 token 的地址

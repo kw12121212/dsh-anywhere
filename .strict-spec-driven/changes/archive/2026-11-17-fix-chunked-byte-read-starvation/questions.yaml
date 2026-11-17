@@ -1,0 +1,52 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: fix-chunked-byte-read-starvation
+open: []
+resolved:
+  - id: repro-emulator
+    question: 缺陷是否已在本地复现并取得证据？
+    context: 用户 1.8.3 真机报管家私聊不显示；模拟器 adb reverse 接真实 WSL dsh 复现：chat 页持续空，DSHDBG 计时显示 state 应答读取 14844ms/258KB 且耗时随体积线性，chat 请求在单线程 executor 排队未发出（代理仅见 state POST）
+    answer: 已复现且根因明确；修复以 core 回归测试（单字节读计数）+ 模拟器重验收双重取证
+    status: resolved
+  - id: scope-executor
+    question: 是否同时调整 NativeShellConnection 单线程 executor 的队列优先级/分流？
+    context: chat 请求与 state 重取同队列，理论上仍可能被慢请求延迟
+    answer: 不并入本变更：批量读修复后单请求耗时从十秒级降到毫秒级，饿死条件消除；队列编排重构属架构调整，另行立项
+    status: resolved
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 用户 1.8.3 真机报告的已观测缺陷（管家私聊打不开/表格乱排），详见 proposal.what
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 proposal.what/why 的字面缺陷修复理解：恢复规格既有要求的可用性，不引入新行为
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 见各变更 verification 任务：core 回归测试红转绿 + 模拟器连真实 dsh 的端到端取证
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: proposal.out 登记的排除项（executor 编排重构/横向滚动表格/新块级语法等均不动）
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 用户 2026-11-17 手机实测报障并提供截图
+    status: resolved
+    kind: requirement
+    answered_by: human

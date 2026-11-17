@@ -11,13 +11,15 @@ package work.keepwriting.core
 object MarkdownParse {
 
     /** 块级条目：文本块（标题/列表/段落）携带解析好的行内片段——链接在段落与列表行
-     *  同样暴露（fix-android-chat-links-and-copy），代码块与表格保留原文。 */
+     *  同样暴露（fix-android-chat-links-and-copy），代码块保留原文；表格单元格同样
+     *  解析为行内片段（fix-bot-chat-table-render：粗体/行内代码/链接在单元格内生效，
+     *  空单元格为空片段列表）。 */
     sealed interface MdBlock {
         data class Heading(val level: Int, val parts: List<InlinePart>) : MdBlock
         data class Bullet(val parts: List<InlinePart>) : MdBlock
         data class Ordered(val index: String, val parts: List<InlinePart>) : MdBlock
         data class Code(val code: String) : MdBlock
-        data class Table(val header: List<String>, val rows: List<List<String>>) : MdBlock
+        data class Table(val header: List<List<InlinePart>>, val rows: List<List<List<InlinePart>>>) : MdBlock
         data class Paragraph(val parts: List<InlinePart>) : MdBlock
     }
 
@@ -61,11 +63,11 @@ object MarkdownParse {
                     MdBlock.Ordered(line.substringBefore(". "), parseInline(line.substringAfter(". "))),
                 )
                 line.startsWith("|") && i + 1 < lines.size && lines[i + 1].startsWith("|") -> {
-                    val header = splitTableRow(line)
+                    val header = splitTableRow(line).map(::parseInline)
                     i += 2 // 表头 + 分隔行
-                    val rows = mutableListOf<List<String>>()
+                    val rows = mutableListOf<List<List<InlinePart>>>()
                     while (i < lines.size && lines[i].startsWith("|")) {
-                        rows.add(splitTableRow(lines[i]))
+                        rows.add(splitTableRow(lines[i]).map(::parseInline))
                         i++
                     }
                     out.add(MdBlock.Table(header, rows))

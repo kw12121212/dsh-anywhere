@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-bot-chat-table-render
+  status: proposed
+summary:
+  what:
+    - 私聊/群聊 Markdown 表格渲染不可读：MdTable 以无宽度约束的 Row+Text 逐格排布，聊天气泡宽度不足时未加权重的子项被压到极窄、长单元格被挤成一字一行的竖排；单元格内容不经行内解析，**粗体** 星号原样显示、链接不可点（用户 1.8.3 真机管家消息中行程对照表截图取证）
+  why:
+    - android-dsbot 规格要求私聊页 Markdown 表格按 DS-Bot 网页端语义渲染；当前实现只对最窄表格勉强可读，真实 Bot 消息里 2-3 列含中文/韩文/粗体的表格（管家济州行程对照表实测样本）完全不可读，属已知缺陷且有截图复现证据
+scope:
+  in:
+    - android/core 的 MarkdownParse（表格单元格行内解析）与 android/app 的 MarkdownText.MdTable（列宽与样式布局）；core 测试锁定解析行为
+  out:
+    - 不新增块级语法（合并单元格、对齐冒号语义等）；不做横向滚动表格；不改动段落/列表/代码块等其余渲染
+unchanged_behavior:
+  - 表头/数据行内容文本与既有块级解析行为（表头两行结构识别、分隔行跳过）不变；群聊与私聊共用渲染组件的行为一致

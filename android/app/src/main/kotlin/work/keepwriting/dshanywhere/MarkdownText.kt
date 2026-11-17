@@ -5,7 +5,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,7 +83,7 @@ fun MarkdownText(
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.let { m -> if (onCopyBlock != null) m.clickable(onClick = { onCopyBlock(block.code) }) else m },
                 )
-                is MdBlock.Table -> MdTable(block)
+                is MdBlock.Table -> MdTable(block, onOpenLink)
                 is MdBlock.Paragraph -> InlineText(block.parts, onOpenLink)
             }
         }
@@ -89,27 +91,66 @@ fun MarkdownText(
 }
 
 @Composable
-private fun MdTable(table: MdBlock.Table) {
-    Column(modifier = Modifier.padding(vertical = 2.dp)) {
-        Row {
-            table.header.forEach { cell ->
-                Text(
+private fun MdTable(table: MdBlock.Table, onOpenLink: ((String, Boolean) -> Unit)?) {
+    // 列宽按各列最宽单元格的显示宽度配权（CJK 双宽计数、上限截断）：无权重的 Row 子项在
+    // 气泡宽度不足时会被压到极窄、长文本挤成一字一行竖排（fix-bot-chat-table-render）。
+    val weights = remember(table) { columnWeights(table) }
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            table.header.forEachIndexed { i, cell ->
+                InlineText(
                     cell,
+                    onOpenLink,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(end = 12.dp),
+                    outer = SpanStyle(fontWeight = FontWeight.Bold),
+                    modifier = Modifier
+                        .weight(weights.getOrElse(i) { 1f })
+                        .padding(end = 8.dp, bottom = 2.dp),
                 )
             }
         }
-        table.rows.forEach { row ->
-            Row {
-                row.forEach { cell ->
-                    Text(cell, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        table.rows.forEachIndexed { r, row ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                row.forEachIndexed { i, cell ->
+                    InlineText(
+                        cell,
+                        onOpenLink,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .weight(weights.getOrElse(i) { 1f })
+                            .padding(end = 8.dp, top = 3.dp, bottom = 3.dp),
+                    )
                 }
+            }
+            if (r != table.rows.lastIndex) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             }
         }
     }
 }
+
+/** 各列配权：列内最宽单元格的显示宽度（CJK 等全宽字符按 2 计），夹在 2..48——
+ *  短列不塌缩、长列不独占，单元格内文本自然换行。 */
+private fun columnWeights(table: MdBlock.Table): List<Float> {
+    val columns = maxOf(table.header.size, table.rows.maxOfOrNull { it.size } ?: 0)
+    return (0 until columns).map { i ->
+        val widths = sequenceOf(table.header.getOrNull(i)) + table.rows.asSequence().map { it.getOrNull(i) }
+        val widest = widths.filterNotNull().maxOfOrNull { parts ->
+            parts.sumOf { p -> p.text.sumOf { ch -> if (isWideChar(ch)) 2L else 1L } }
+        } ?: 1L
+        widest.coerceIn(2L, 48L).toFloat()
+    }
+}
+
+private fun isWideChar(c: Char): Boolean = Character.UnicodeScript.of(c.code) in WIDE_SCRIPTS
+
+private val WIDE_SCRIPTS = setOf(
+    Character.UnicodeScript.HAN,
+    Character.UnicodeScript.HANGUL,
+    Character.UnicodeScript.HIRAGANA,
+    Character.UnicodeScript.KATAKANA,
+)
 
 /** 链接文字色（无主题资源依赖，保持既有视觉）。 */
 private val LinkColor = Color(0xFF1E88E5)
@@ -128,12 +169,13 @@ private fun InlineText(
     onOpenLink: ((String, Boolean) -> Unit)?,
     style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyMedium,
     outer: SpanStyle? = null,
+    modifier: Modifier = Modifier,
 ) {
     // 行内格式：粗体/斜体/行内代码整体呈现（分段拼接，简化为样式化片段）；outer 为
     // 块级附加样式（如标题加粗），与片段样式叠加
     val styled = parts
     if (onOpenLink == null) {
-        Text(buildAnnotatedString(styled, null, outer), style = style)
+        Text(buildAnnotatedString(styled, null, outer), style = style, modifier = modifier)
         return
     }
     val haptic = LocalHapticFeedback.current
@@ -145,15 +187,17 @@ private fun InlineText(
         onTextLayout = { layout -> linkRects = linkRanges(styled).mapNotNull { (s, e, url) ->
             rangeRect(layout, s, e)?.let { it to url }
         } },
-        modifier = if (styled.any { it.kind == InlineKind.LINK }) Modifier.linkLongPress(
-            onLongPress = { pos ->
-                val url = linkRects.firstOrNull { it.first.inflate(LINK_HIT_SLACK).contains(pos) }?.second
-                if (url != null) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onOpenLink(url, true)
-                }
-            },
-        ) else Modifier,
+        modifier = (
+            if (styled.any { it.kind == InlineKind.LINK }) Modifier.linkLongPress(
+                onLongPress = { pos ->
+                    val url = linkRects.firstOrNull { it.first.inflate(LINK_HIT_SLACK).contains(pos) }?.second
+                    if (url != null) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenLink(url, true)
+                    }
+                },
+            ) else Modifier
+            ) then modifier,
     )
 }
 

@@ -313,15 +313,32 @@ class HttpSocket(
         }
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
+            // 正文按 chunk 剩余量批量搬运：逐字节 read() 在手机隧道链路上每字节一次
+            // 系统调用，state 全量 260KB 读 15s，单线程 executor 被 state 重取占满后
+            // chat 请求饿死（1.8.3 私聊打不开的根因）。当前 chunk 读尽即返回：流式
+            // 调用按块推进，不因填缓冲而阻塞，也避免中途异常丢弃已读字节。
             var i = 0
-            while (i < len) {
-                val c = read()
-                if (c < 0) break
-                b[off + i] = c.toByte()
-                i++
-                // 当前 chunk 读尽即返回：流式调用按块推进，不因填缓冲而阻塞，
-                // 也避免中途异常丢弃已读字节（feed 订阅实测踩坑）。
-                if (remaining == 0) break
+            while (i < len && !done) {
+                if (remaining == 0) {
+                    if (readBody) readRawLine() // 上一块尾 CRLF
+                    val sizeLine = readRawLine() ?: throw HttpException("chunked 尺寸行中断")
+                    val size = sizeLine.substringBefore(';').trim().toIntOrNull(16) ?: throw HttpException("chunked 尺寸行异常")
+                    if (size == 0) {
+                        done = true
+                        while (true) {
+                            val t = readRawLine() ?: break
+                            if (t.isEmpty()) break
+                        }
+                        break
+                    }
+                    remaining = size
+                    readBody = true
+                }
+                val n = raw.read(b, off + i, minOf(len - i, remaining))
+                if (n <= 0) throw HttpException("chunked 流中断")
+                i += n
+                remaining -= n
+                if (remaining == 0) break // 当前 chunk 读尽即返回：SSE 帧到达即上浮，不等待填满缓冲
             }
             return if (i == 0 && len > 0) -1 else i
         }

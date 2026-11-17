@@ -1,0 +1,31 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-bot-chat-table-render
+sections:
+  Implementation:
+    repro-table-parse:
+      text: 先写失败回归测试：MarkdownParseTest 增加表格单元格行内解析断言（**粗体**、、[链接](url)、空表头单元格、韩文/中文混排；修复前 Table 单元格是裸字符串，断言 InlinePart 形态必然失败）
+      status: complete
+      command: android/gradlew -p android/core test --tests work.keepwriting.core.MarkdownParseTest
+    implement-table-parse-and-layout:
+      text: core：Table 模型单元格改 List<InlinePart>（splitTableRow 保留、逐格 parseInline）；app：MdTable 列宽 weight 布局（CJK 双宽估算+上限+最小份额）、表头分隔线、单元格 InlineText 渲染
+      status: complete
+  Testing:
+    run-core-tests:
+      text: core 全量 JUnit：新用例红转绿，既有 MarkdownParse/ChatRender/RoomChat 用例不回归（Table 模型变更同步修引用）
+      status: complete
+      command: android/gradlew -p android/core test
+  Verification:
+    verify-emulator-table:
+      text: 模拟器端到端验收（android-build-outside-gate：不进完整回归命令）：重装 debug 包，打开管家私聊翻到含表格消息（旧分段/更早记录），确认表格以带表头分隔的行列呈现、无竖排挤压、粗体生效
+      status: complete
+      command: adb install + 截图验收
+    verify-ready:
+      text: strict-spec-cli ready 与 verify 通过
+      status: complete
+      command: npx strict-spec-cli ready fix-bot-chat-table-render
+testing_gates:
+  validation_task: run-core-tests
+  unit_test_task: run-core-tests

@@ -42,13 +42,40 @@ class MarkdownParseTest {
     }
 
     @Test
-    fun `代码块与表格保留原文`() {
+    fun `代码块保留原文表格单元格解析为行内片段`() {
         val blocks = MarkdownParse.parseBlocks("```kotlin\nval a = 1\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |")
         val code = assertIs<MarkdownParse.MdBlock.Code>(blocks[0])
         assertEquals("val a = 1", code.code)
         val table = assertIs<MarkdownParse.MdBlock.Table>(blocks[1])
-        assertEquals(listOf("a", "b"), table.header)
-        assertEquals(listOf(listOf("1", "2")), table.rows)
+        assertEquals(listOf("a", "b"), table.header.map(::cellText))
+        assertEquals(listOf(listOf("1", "2")), table.rows.map { row -> row.map(::cellText) })
+    }
+
+    // ---- 回归（fix-bot-chat-table-render）：单元格行内解析——真实 bot 表格形态
+    //      （空表头首格、CJK/韩文混排、粗体/行内代码/链接），修复前单元格是裸字符串。----
+
+    private fun cellText(cell: List<MarkdownParse.InlinePart>): String = cell.joinToString("") { it.text }
+
+    @Test
+    fun `表格单元格解析粗体代码链接与空表头`() {
+        val md = """
+            | | 之前那版 | 现在 |
+            |---|---|---|
+            | **21 号陆地** | 多云 20% | **上午阴有雨** |
+            | `어리목입구` | [说明](https://example.com/a) | 普通 |
+        """.trimIndent()
+        val table = assertIs<MarkdownParse.MdBlock.Table>(MarkdownParse.parseBlocks(md).single())
+        assertEquals(3, table.header.size)
+        assertEquals("", cellText(table.header[0])) // 空表头首格：真实样本存在
+        assertEquals("之前那版", cellText(table.header[1]))
+        val row0 = table.rows[0]
+        assertEquals(MarkdownParse.InlineKind.BOLD, row0[0].single().kind)
+        assertEquals("21 号陆地", row0[0].single().text)
+        assertEquals("多云 20%", cellText(row0[1]))
+        val row1 = table.rows[1]
+        assertEquals(MarkdownParse.InlineKind.CODE, row1[0].single().kind)
+        assertEquals("어리목입구", row1[0].single().text)
+        assertEquals("https://example.com/a", row1[1].first { it.kind == MarkdownParse.InlineKind.LINK }.url)
     }
 
     @Test

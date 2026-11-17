@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-bot-chat-table-render
+approach:
+  - core：MdBlock.Table 的单元格由裸字符串改为 List<InlinePart>（splitTableRow 后逐格 parseInline），表头保持粗体样式由渲染层施加；空单元格（真实样本存在空表头首格）解析为空列表。app：MdTable 以 fillMaxWidth 的 Row 渲染，每列 weight 按该列最宽单元格的显示宽度估算（CJK 双宽计数、上限截断），表头行加粗并带上下分隔线，单元格用既有 InlineText 渲染（粗体/行内代码/链接可点），文本自然换行不再竖排
+decisions:
+  cell-inline-in-core:
+    decision: 单元格行内解析下沉 core（MarkdownParse），与段落/列表行的既有决策一致
+    rationale: pure-logic-in-core 技术标准要求不依赖 android.* 的解析逻辑进 core 并配 JUnit；渲染层只做布局
+  no-delta-spec:
+    decision: 纯技术缺陷修复：android-dsbot bot-chat-render 需求已明确要求 Markdown 表格渲染，本变更只让实现真正满足它
+    rationale: 规格语句（标题/列表/表格/代码块）不变，无主规格需求变化
+alternatives:
+  - option: 渲染层对每个 cell 字符串再跑 parseBlocks
+    reason: 重复解析且绕开 core 的快照缓存，行为分裂风险
+risks:
+  - 列宽估算对极端长单词列仍偏窄：权重上限与最小宽度兜底（每列至少占 1/列数的三分之一权重份额），配合文本换行不溢出

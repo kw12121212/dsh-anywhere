@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: http-chunked-27be03
+  title: 手写 HTTP 客户端的 chunked 正文必须批量搬运
+category: performance
+status: active
+created_at: '2026-11-17T06:47:53.385Z'
+updated_at: '2026-11-17T06:47:53.385Z'
+context: HttpSocket.ChunkedInput 逐字节调用底层流 read()（每字节一次系统调用）。真实 dsh 的 /api/bot state 全量约 260KB 且 chunked+keep-alive；模拟器 adb reverse 链路实测 260KB 读取 14844ms（≈26 万次单字节读），手机 tsnet SOCKS5+TLS 链路更差（30s 读超时直接失败）。NativeShellConnection 单线程 executor 上 feed 驱动的 state 重取长期占线，chat/room-chat 请求排队饿死——1.8.3 真机表现为私聊打不开、刷新无效
+observation: 本地 ServerSocket 单测（loopback、桌面 JVM）逐字节读延迟不可见，测试全绿；缺陷只在真机/模拟器隧道链路下以数量级放大暴露。单元测试无法守住这种性能退化
+takeaway: 手写 HTTP/chunked/SSE 解析时，正文搬运必须用数组形态批量 read（一次搬一整段 chunk），行读取（尺寸行/trailer/头）才允许逐字节；SSE 场景保持 chunk 读尽即返回的语义（帧到达即上浮，不为填缓冲阻塞）
+applies_when: 任何手写协议客户端的传输层（HttpSocket/WsClient/Socks5Dialer 等）新增或修改读取路径时；以及诊断移动端请求卡死/超时类缺陷时先怀疑单字节读放大
+occurrences:
+  - origin: fix-chunked-byte-read-starvation
+    date: '2026-11-17'
+    evidence: core 回归测试 HttpSocketTest.chunked 正文批量读取不逐字节打底层流：修复前单字节读计数 26 万级（断言失败），修复后 <4096（每 chunk 一次数组读）；模拟器端到端：state 应答 14844ms→7ms，管家私聊由持续空白到秒开

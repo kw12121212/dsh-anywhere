@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: fix-chunked-byte-read-starvation
+approach:
+  - ChunkedInput.read(b,off,len) 改为按 chunk 剩余量批量读：remaining>0 时直接 raw.read(b, off+i, min(len-i, remaining))，一次调用搬一段（块边界即返回、流式语义不变）；块尺寸行/尾部 CRLF/终止块与 trailer 消费仍按行读（行短，单字节读可忽略）。单字节 read() 保持逐字节语义不变。回归测试以计数 InputStream 断言 256KB chunked 正文读取时底层单字节 read() 调用数 < 阈值（修复前 ≥ 正文字节数，必然失败；修复后为个位数每 chunk）
+decisions:
+  chunk-body-bulk-read:
+    decision: chunk 正文批量搬运；行读取（尺寸行/trailer/响应头）保持逐字节
+    rationale: 正文是体积所在（state 全量 260KB）；行读取总量数百字节且复用 readLine 语义，改动最小且不引入缓冲越界风险（不越过 chunk 边界读，保持 SSE 分块返回语义）
+  no-delta-spec:
+    decision: 纯技术缺陷修复：android-dsbot 既有需求（私聊渲染/团队页刷新）不变，仅消除实现层的传输性能缺陷
+    rationale: 规格对聊天加载的可用性要求已存在，缺陷在 HttpSocket 实现层，无主规格需求变化
+alternatives:
+  - option: 在 open() 处统一包一层 BufferedInputStream
+    reason: 缓冲会预读越过 chunk 边界与帧边界，改变 feed 流式返回节奏与读超时关窗行为，风险大于收益
+risks:
+  - 批量读返回 0 字节的病态流导致空转：以 n<=0 视为流中断抛 HttpException（与现状 EOF 处理一致）；SSE 帧边界语义由既有跨 chunk 多字节测试锁定

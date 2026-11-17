@@ -1,0 +1,31 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: fix-chunked-byte-read-starvation
+sections:
+  Implementation:
+    repro-chunked-byte-read:
+      text: 先写失败回归测试：HttpSocketTest 增加计数用例——本地 ServerSocket 回 256KB chunked 正文，注入拨号返回计数 Socket（统计底层单字节 read() 调用数），断言单字节调用数 < 4096（修复前 ≈26 万，必然失败）；跑 android/gradlew -p android/core test --tests HttpSocketTest 取失败证据
+      status: complete
+      command: android/gradlew -p android/core test --tests work.keepwriting.core.HttpSocketTest
+    implement-bulk-read:
+      text: ChunkedInput.read(b,off,len) 批量读实现（remaining 内一次 raw.read 搬运；n<=0 视为流中断；行读取与单字节 read() 语义不变）；同步移除 HttpSocket/NativeShell/ChatController 的临时 DSHDBG 调试日志
+      status: complete
+  Testing:
+    run-core-tests:
+      text: core 全量 JUnit：新增计数用例由红转绿，既有 chunked/SSE/跨块多字节用例不回归
+      status: complete
+      command: android/gradlew -p android/core test
+  Verification:
+    verify-emulator-butler-chat:
+      text: 模拟器端到端验收（不进完整回归命令，按 android-build-outside-gate）：重装 debug 包连真实 WSL dsh，打开管家私聊在数秒内显示 4 条消息（修复前持续空），chat 请求经日志代理观察到即时发出与应答
+      status: complete
+      command: adb install + 手动验收记录
+    verify-ready:
+      text: strict-spec-cli ready 与 verify 通过
+      status: complete
+      command: npx strict-spec-cli ready fix-chunked-byte-read-starvation
+testing_gates:
+  validation_task: run-core-tests
+  unit_test_task: run-core-tests

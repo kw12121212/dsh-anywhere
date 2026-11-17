@@ -2,6 +2,7 @@ package work.keepwriting.core
 
 import org.junit.jupiter.api.Test
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -64,6 +65,39 @@ class HttpSocketTest {
         val cookies = res.headers.filter { it.first.equals("Set-Cookie", true) }
         assertEquals(2, cookies.size)
         assertEquals("dsh-auth-x=v1.y; HttpOnly", cookies[1].second)
+    }
+
+    @Test
+    fun `chunked 正文批量读取不逐字节打底层流`() {
+        // 真实 dsh 的 /api/bot state 全量是 chunked + keep-alive（不发 EOF），正文 260KB 量级：
+        // 逐字节 read() 在手机隧道链路上每字节一次系统调用（模拟器实测 260KB 读 15s），
+        // 单线程 executor 被 state 重取占满后 chat 请求饿死（1.8.3 管家私聊打不开的根因）。
+        // 断言底层单字节 read() 调用数与正文字节数解耦：头部/尺寸行的行读是百级，
+        // 逐字节正文实现会到 26 万级。
+        val body = ByteArray(256 * 1024) { (it % 251).toByte() }
+        val counter = AtomicInteger(0)
+        val port = serve { client ->
+            readHead(client)
+            val out = client.getOutputStream()
+            out.write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n".toByteArray())
+            var off = 0
+            while (off < body.size) {
+                val len = minOf(64 * 1024, body.size - off)
+                out.write(("%x\r\n".format(len)).toByteArray())
+                out.write(body, off, len)
+                out.write("\r\n".toByteArray())
+                off += len
+            }
+            out.write("0\r\n\r\n".toByteArray())
+            out.flush()
+            Thread.sleep(1_000) // keep-alive：不主动关流，靠终止块结束
+        }
+        val res = HttpSocket({ _, p -> CountingSocket(p, counter) }).request(
+            "POST", "http://dsh.test:$port/api/bot",
+            listOf("Content-Type" to "application/json"), "{}".toByteArray(),
+        )
+        assertEquals(body.size, res.body.size)
+        assertTrue(counter.get() < 4096, "底层单字节 read() 次数=${counter.get()}（应与正文字节数解耦）")
     }
 
     @Test
@@ -186,6 +220,25 @@ class HttpSocketTest {
     // ---- 本地服务端脚手架 ----
 
     private fun dialLocal(host: String, port: Int): Socket = Socket("127.0.0.1", port)
+
+    /** 统计底层单字节 read() 调用数的 Socket 包装（数组形态 read 不计）。 */
+    private class CountingSocket(port: Int, private val counter: AtomicInteger) : Socket("127.0.0.1", port) {
+        private var wrapped: InputStream? = null
+
+        override fun getInputStream(): InputStream {
+            val existing = wrapped
+            if (existing != null) return existing
+            val src = super.getInputStream()
+            val counting = object : java.io.FilterInputStream(src) {
+                override fun read(): Int {
+                    counter.incrementAndGet()
+                    return super.read()
+                }
+            }
+            wrapped = counting
+            return counting
+        }
+    }
 
     private fun dialTlsLocal(port: Int): Socket = Socket("127.0.0.1", port)
 

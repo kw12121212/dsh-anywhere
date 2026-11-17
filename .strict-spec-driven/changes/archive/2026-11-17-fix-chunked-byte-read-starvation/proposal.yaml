@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: fix-chunked-byte-read-starvation
+  status: proposed
+summary:
+  what:
+    - 'HttpSocket 的 ChunkedInput 对 chunked 响应正文逐字节调用底层流 read()（每字节一次系统调用）：真实 dsh 的 /api/bot state 全量应答约 260KB 且为 Transfer-Encoding: chunked + Connection: keep-alive（不发 EOF），App 端读取耗时与体积线性放大（模拟器实测 260KB 约 15s，≈26 万次单字节读）；NativeShellConnection 的单线程 executor 上 feed 事件反复触发的 state 重取每次占线十余秒，用户打开私聊/群聊的 chat/room-chat 请求长期排队无法执行——表现为私聊打开始终为空（还没有消息），手动刷新同样排队无效'
+  why:
+    - android-dsbot 规格要求私聊页渲染聊天条目、feed 驱动团队页自动刷新；当前实现下这些要求在真实服务器（大 state、chunked、keep-alive）与手机隧道链路（tsnet SOCKS5+TLS，单字节成本更高，30s 读超时直接失败）的实测条件下不可用：1.8.3 真机复现管家私聊无法显示。属已知缺陷：模拟器已复现（DSHDBG 计时日志：state 应答 read=14844ms/258725B；update-check read=644ms/463B，读取耗时随体积线性），根因为 ChunkedInput.read(b,off,len) 逐字节转发单字节 read()
+scope:
+  in:
+    - android/core 的 HttpSocket.ChunkedInput（chunk 正文与 SSE 帧的读取路径）；回归测试落在 android/core/src/test（HttpSocketTest 的本地 ServerSocket 脚手架）
+  out:
+    - 不动请求写路径、content-length/EOF 两种正文形态、SSE 帧解析语义与退避重连逻辑；不改 NativeShellConnection 的 executor 编排（本变更只消解占线时长的根因，队列优先级问题另行立项）；诊断上报范围的调整不在本变更内
+unchanged_behavior:
+  - chunked 解码的对外语义（分块返回、帧边界、异常形态）与既有全部 HttpSocket 测试行为
