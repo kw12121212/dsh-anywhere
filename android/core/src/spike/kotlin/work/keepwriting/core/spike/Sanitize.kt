@@ -18,13 +18,15 @@ object Sanitize {
     )
 
     /** 会话内容类键：Bot 指令与角色、聊天文本、记忆笔记、提问回答、私有端点地址等用户私有内容。
-     *  answers/selected：问答卡的作答数组与其元素（评审修复：单复数变体必漏）。 */
+     *  answers/selected：问答卡的作答数组与其元素（评审修复：单复数变体必漏）。
+     *  data/dataurl：0.3.10 image/file-download/markdown-image 回传的 base64 文件字节。 */
     private val CONTENT_KEYS = setOf(
         "text", "preview", "instructions", "brief", "notice", "question", "answer", "answers",
         "selected",
         "note", "content", "summary", "description", "goal", "draft", "kickoff",
         "label", "caption", "transcript", "role", "why", "after", "old", "purpose", "detail",
         "url", "endpoint", "baseurl", "name", "title",
+        "data", "dataurl",
     )
 
     private const val PLACEHOLDER = "<redacted"

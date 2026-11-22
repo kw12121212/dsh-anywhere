@@ -1,0 +1,55 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-baseline-0310
+sections:
+  Implementation:
+    spike-probes-0310:
+      text: 扩展 android/core/src/spike 的 runSpike：新增 0.3.10 探针组（hello、feed hello/notice/room、notices、state avatars:'ref' 与 avatar/image、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images），写端点只用无效 id 或空集取错误形态；带 token 地址只经环境变量传入
+      status: complete
+    run-probes-real:
+      text: 对真实 dsh（DS-Bot 0.3.10，地址取自本机 dsh-url 且不打印不入库）运行探针，记录每项请求/响应形状、错误码与经 HTTP/SSE 是否可用，并读取 update-check 的 dsh 版本作为基准
+      status: complete
+    fixtures-0310:
+      text: 把 hello、notices、含 notice/room 事件的 feed SSE 片段、file-download 分块、markdown-image、file-text 等真实响应经递归脱敏写入 android/core/src/test/resources/dsbot/，并纳入夹具加载校验测试的键清单
+      status: complete
+    findings-and-tech:
+      text: 在 android/core/src/spike/FINDINGS.md 增补 0.3.10 实测章节，并确认 delta-tech 的端点清单、版本基准与 hello 能力位规则与实测一致（不一致即先修正 delta-tech）
+      status: complete
+    core-hello:
+      text: core 新增 DsbotHello/Capabilities：解码 api、capabilities、boot、seq，has(name) 对未声明能力返回 false，hello 缺失为 LEGACY；api 高于客户端支持版本判为不兼容；FeedSync 的 hello 事件解出 api/boot/seq 且 revision 语义不变
+      status: complete
+    core-baseline:
+      text: DsbotVersions 的 BASELINE_DS_BOT 改为 0.3.10、BASELINE_DSH 改为实测 dsh 版本，并同步更新 KDoc 中的基准说明
+      status: complete
+    app-capabilities:
+      text: NativeShell 连接流程在 update-check 后调用 hello 并保存能力集合到连接状态，失败标记 LEGACY；feed 首帧 hello 经 Capabilities.shouldReread 判定远端重启/回退时整体重跑 update-check 与 hello；提示条由 DsbotVersions.banner 判定；既有入口不受门控
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：hello 解码（含未知字段、缺 api 与畸形输入）、能力位查询、LEGACY 降级、api 兼容判定、重读判定（boot 变化/回退/同 boot 重连）、提示条判定（基准/旧版/读不到版本/api 不兼容）、feed hello 事件解码、版本基准比对、新夹具加载、新错误码归类与脱敏占位断言
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（Windows 宿主 GAMEPC 模拟器或真机）：连接 0.3.10 真实服务不显示版本提示条、能力集合被读取；私聊、群聊、卡片与附件照常可用
+      status: complete
+    legacy-path-check:
+      text: 确认 0.3.6/无 hello 路径：以 core JUnit 的 LEGACY 场景与 MISMATCHED 判定为证据，提示条出现且既有入口不受门控
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify，确认任务、delta-spec 与 delta-tech 一致
+      status: complete
+      command: strict-spec-cli verify dsbot-baseline-0310
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

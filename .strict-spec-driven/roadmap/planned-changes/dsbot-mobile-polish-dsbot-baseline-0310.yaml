@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-baseline-0310
+  milestone: dsbot-mobile-polish
+status: complete
+summary: 已测基准从 DS-Bot 0.3.6 升到 0.3.10：用真实 dsh 盘点上游手机端用到的新端点与 feed 事件，更新 dsbot-api 技术标准、脱敏夹具与版本基准，并接入 hello 能力位按能力显隐功能
+details: 前提：用户把 dsh 的 ds-bot 插件升到 0.3.10。对照上游 mobile/ 与 docs/plans/2026-10-24-mobile-api.md，经本项目现有 HTTP/SSE 路径逐个实测并登记：hello（api、capabilities、boot、seq）、feed 的 notice 与 room 事件、notices {boot, since} 补齐与 reset、state 的 avatars:'ref' 与 avatar/image（preview）、markdown-image、file-text、file-download（512 KiB 分块，offset/version/nextOffset）、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images；每项记录请求/响应形状、错误码与是否在 dsh Web 宿主可用。core：DsbotVersions 基准改为 0.3.10 与同期 dsh 版本，新增 hello 解码与能力位查询（未声明能力即视为不可用），新增端点的请求构造与响应解码；夹具取自真实响应并脱敏。App：按能力位隐藏不可用入口（例如无 send-images 时不显示图片入口）。验收：远端 0.3.10 不显示版本提示条，远端 0.3.6 显示提示条且现有聊天可用；core JUnit 覆盖 hello 解码、能力位、版本比对与新端点解码；完整回归命令通过。
+depends_on:
+  - dsbot-api-client

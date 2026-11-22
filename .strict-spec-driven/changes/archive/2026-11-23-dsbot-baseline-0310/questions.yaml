@@ -1,0 +1,63 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-baseline-0310
+open: []
+resolved:
+  - id: need-scope
+    question: 这次变更要解决的需求与验收标准是什么？
+    context: 影响范围：proposal 范围、spec delta、测试与验收。需求来自路线图计划变更 dsbot-baseline-0310 与所属里程碑 dsbot-mobile-polish 的完成标准第一条。
+    answer: 按计划变更 summary/details：把已测基准从 DS-Bot 0.3.6 升到 0.3.10，用真实 dsh 盘点新端点与 feed 事件，更新 dsbot-api 技术标准、脱敏夹具与版本基准，接入 hello 能力位按能力显隐。验收以里程碑完成标准为准：远端 0.3.10 不显示版本提示条；远端 0.3.6 显示提示条且原有聊天可用；hello 未声明的能力入口隐藏而不报错；完整回归命令通过，core 新增逻辑都有 JUnit 覆盖。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: prereq-upgraded
+    question: 前提「用户 dsh 的 ds-bot 插件已升到 0.3.10」是否已满足？
+    context: 影响范围：实施任务 run-probes-real 与设备验收。里程碑 dependencies 把插件升级列为前提；没升级就无法实测 0.3.10。
+    answer: 已满足：本机 ~/.dsh/profiles/web/node_modules/ds-bot/package.json 为 0.3.10，dsh --version 为 0.2.2-rc.3；源码 src/host/mobile.js 已有 hello（API_VERSION 1 + CAPABILITIES）与 notices 等端点。dsh 基准以实测时 update-check 读数最终确认。
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: decoder-scope
+    question: 计划变更写的「新增端点的请求构造与响应解码」，是否要在本变更把全部约 20 个新端点都实现？
+    context: 影响范围：实施文件（android/core）、测试与后续计划变更之间的分工。全部预先实现会产生没有调用方的代码；只做 hello 会把其余端点的解码推迟到消费它们的变更里。
+    answer: 只在本变更实现 hello（含 feed hello 事件）的解码与能力位，其余新端点在本变更登记实测形态和脱敏夹具，解码随首个消费它的计划变更落地。依据：里程碑 details 已把 notice 游标、分块下载拼接、发送箱等 core 逻辑分配给各自的功能变更，项目 config 的 code 规则也要求 YAGNI。见 design 中的 decoders-on-demand 决策。
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 路线图计划变更 dsbot-baseline-0310 与里程碑 dsbot-mobile-polish：用户已经把 dsh 的 ds-bot 插件升到 0.3.10，但 App 的已测基准仍是 0.3.6，所以在手机上连接后一直显示「版本不一致」提示条。上游手机端用到的 0.3.10 新端点与 feed 事件（hello 能力位、notice、notices、file-download 等）在本项目没有任何实测登记，里程碑后续 9 个体验增强变更（提醒横幅、已读、缓存、发送箱等）都没有可依据的契约，用户在手机上处理 Bot 团队的流畅度落后于上游手机端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 里程碑完成标准第一条：远端为 DS-Bot 0.3.10 时连接后不显示版本提示条；远端为 0.3.6 时显示提示条且原有聊天功能仍可用；hello 未声明的能力对应入口隐藏而不是报错；完整回归命令通过，core 新增逻辑都有 JUnit 覆盖。计划变更 details 补充：每个新端点都登记请求/响应形状、错误码与在 dsh Web 宿主是否可用，夹具取自真实响应并脱敏。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 里程碑 dependencies 与 notes：用户 dsh 中的 ds-bot 插件已升级到 0.3.10（本机已核对），里程碑 dsbot-mobile-polish 已于 2026-11-22 经用户确认新建并排在 dsbot-native-manage 之前；里程碑 details 规定「基准升级作为首个变更先行，其余变更依赖它」。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 里程碑 scope.out 与 2026-11-22 用户确认：连接层不变（继续用用户配置的 harness URL、内嵌 Tailscale 与 dsh 会话 cookie，不做二维码配对与加密中转）；不移植上游 React Native/网页代码；导航保留团队页为根；不做生物识别；不做管理与设置页。由完成标准「远端 0.3.6 时原有聊天功能仍可用」推出：既有私聊、群聊、卡片、附件与 Side chat 不能被能力位门控。项目硬约束：harness URL 与凭据不硬编码、不入库、不进日志。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按计划变更 details 解读：本变更是「基准与契约」变更，不实现提醒横幅、已读、缓存等功能本身（那些是同一里程碑里依赖本变更的独立计划变更）。「接入 hello 能力位」指 App 连接时读取并保存能力集合，并用它隐藏未声明能力的入口；本变更不新增功能入口，能力集合供后续变更判定。「新增端点的请求构造与响应解码」按里程碑 details 的分工只在本变更落地 hello，其余端点登记实测与夹具（见 decoder-scope）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -38,6 +38,8 @@ import work.keepwriting.core.SetupCheck
 import work.keepwriting.core.TeamHome
 import work.keepwriting.core.DsbotConnection
 import work.keepwriting.core.DsbotModels
+import work.keepwriting.core.Capabilities
+import work.keepwriting.core.DsbotHello
 import work.keepwriting.core.DsbotVersions
 import work.keepwriting.core.DialProbe
 import work.keepwriting.core.FeedSync
@@ -426,6 +428,15 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     var versionBanner by mutableStateOf<Pair<String, String>?>(null)
         private set
     var versionBannerDismissed by mutableStateOf(false)
+        private set
+
+    /**
+     * 远端能力集合（dsbot-baseline-0310 的 capability-handshake）：连接时读 hello，feed
+     * 首帧 hello 的 boot 变化（服务重启）时重读。本里程碑新增功能的入口一律以
+     * capabilities.has(…) 判定；LEGACY（0.3.6 无 hello 或读取失败）只隐藏新能力，
+     * 既有私聊/群聊/卡片/附件/Side chat 入口不经此门控。
+     */
+    var capabilities by mutableStateOf(Capabilities.LEGACY)
         private set
     var page by mutableStateOf<ShellPage>(ShellPage.Team)
         private set
@@ -850,23 +861,42 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     }
 
     private fun checkVersion(clean: String) {
-        try {
+        // update-check 读不到 → remote 为 null（UNKNOWN：不按版本提示）
+        val remote = try {
             val res = graph.nativeSession.apiRequest(
                 "POST", DsbotApi.url(clean, "/api/bot"),
                 "application/json", DsbotApi.buildRequest("update-check").toByteArray(),
             )
-            val parsed = DsbotApi.parseResponse(res.status, res.bodyText())
-            if (parsed is DsbotApi.Result.Ok) {
-                val remote = DsbotVersions.fromUpdateCheck(parsed.value)
-                versionBanner = if (DsbotVersions.againstBaseline(remote) == DsbotVersions.Verdict.MISMATCHED) {
-                    (remote.dsBot ?: "?") to (remote.dsh ?: "?")
-                } else {
-                    null
-                }
-            }
+            (DsbotApi.parseResponse(res.status, res.bodyText()) as? DsbotApi.Result.Ok)
+                ?.let { DsbotVersions.fromUpdateCheck(it.value) }
         } catch (_: Exception) {
-            versionBanner = null // UNKNOWN：不提示
+            null
         }
+        lastRemoteVersion = remote
+        readCapabilities(clean)
+    }
+
+    /** 最近一次 update-check 读到的远端版本（能力重读后重算提示条用）。 */
+    private var lastRemoteVersion: DsbotVersions.Remote? = null
+
+    /** 读 hello 能力集合并重算版本提示条（executor 线程）。 */
+    private fun readCapabilities(clean: String) {
+        capabilities = try {
+            val res = graph.nativeSession.apiRequest(
+                "POST", DsbotApi.url(clean, "/api/bot"),
+                "application/json", DsbotApi.buildRequest("hello", DsbotHello.REQUEST_PAYLOAD).toByteArray(),
+            )
+            Capabilities.from(DsbotApi.parseResponse(res.status, res.bodyText()))
+        } catch (_: Exception) {
+            Capabilities.LEGACY
+        }
+        versionBanner = DsbotVersions.banner(lastRemoteVersion, capabilities)
+    }
+
+    /** feed 首帧 hello：远端重启/换插件（boot 变化或不再带 boot）时整体重读版本与能力集合。 */
+    override fun onFeedHello(hello: DsbotHello.FeedHello) {
+        if (!capabilities.shouldReread(hello)) return
+        graph.cleanUrl?.let(::checkVersion)
     }
 
     private fun reasonText(reason: ProbeFailure.Reason): String = when (reason) {

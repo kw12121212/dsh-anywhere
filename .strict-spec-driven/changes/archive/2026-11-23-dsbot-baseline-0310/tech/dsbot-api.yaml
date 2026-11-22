@@ -1,0 +1,45 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+    endpoint-inventory-0310:
+      strength: MUST
+      statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
+      rationale: 这些是上游为手机端新增的内部接口，可能继续漂移；经 dsh 的 HTTP/SSE 路径与上游手机加密链路不同，只有真实实测能确定哪些可用；本次服务器缺少部分样本（无文件附件、窗口内无群活动），必须把实测债务显式交给消费方
+      enforcement:
+        method: review
+        detail: 实测（DS-Bot 0.3.10 / dsh 0.2.2-rc.3）：hello、notices、feed hello 与 notice、image（preview）、avatar、usage-summary、room-chat 取到成功应答；各写端点与 file-download/file-text/markdown-image 取到错误应答（新增错误码 bot/forbidden、bot/unavailable，经 reasonOf 缺省归 REFUSED）；未知端点回 bot/not-found；聊天条目图片引用为 imageRefs[]={attachmentId,mime,name}。仅源码核对、待首个消费变更实测补夹具：feed room 事件形态、file-download 成功分块（512 KiB、offset/version/nextOffset）、file-text 与 markdown-image 成功应答、state avatars:ref 下的 imageRef（本服务器头像均为 shape）。评审核对新端点的解码实现引用了 0.3.10 夹具与 FINDINGS 登记、源码核对项已先补实测；未实测可用的能力必须经 hello-capabilities 门控
+    spike-write-probes-non-mutating:
+      strength: MUST
+      statement: 对真实 dsh 做取证或复验时，写类端点（停止、作答、取消、记忆增改、日程暂停、上传暂存、发送等）只能用不存在的 id 或无效参数取错误形态，不得改动真实团队、会话、记忆或日程；需要写端点的成功形态时，由消费它的变更在可撤销的合成对象上取证并记录清理方式
+      rationale: 取证对象是用户在用的真实 Bot 团队，误写会造成不可逆的业务影响；错误形态已足以确定路由、信封与错误码，成功形态留给有明确撤销手段的消费方
+      enforcement:
+        method: review
+        detail: 评审检查 android/core/src/spike 探针的写端点 payload 只含不存在的 id 或无效参数，新增成功形态取证附带合成对象与清理步骤
+      exceptions:
+        - runSpike 的 DSH_SPIKE_SEND=1（默认关闭）向第一个主 Bot 发一条 hi 以取得 message/stream/notice 事件，这是既有的显式开关，不受本规则约束
+  MODIFIED:
+    version-baseline-and-degrade:
+      strength: MUST
+      statement: 连接时必须以 POST /api/bot update-check 读取远端版本：DS-Bot 版本取 value.current、dsh 版本取 value.dsh.current；与已测基准（DS-Bot 0.3.10、dsh 0.2.2-rc.3）不一致时显示提示但尽力可用；未知端点与未知字段必须降级显示而不是失败
+      rationale: update-check 属 DS-Bot READS 白名单（只读宿主也可应答）；基准随 spike/复验更新：0.3.2（spike 首测）→ 0.3.5（里程碑真机验收）→ 0.3.6（2026-11-13 runSpike 复验）→ dsh 0.2.2-rc.3（2026-11-15 复验）→ DS-Bot 0.3.10（dsbot-baseline-0310 对真实服务 runSpike 实测，dsh 版本以同次 update-check 读数为准）；内部接口随上游漂移不可避免，提示加降级是唯一不锁用户升级的做法
+      enforcement:
+        method: manual
+    endpoint-inventory-source:
+      strength: MUST
+      statement: Android 原生访问 DS-Bot 的端点、请求/响应字段与 feed 事件格式以本标准登记的端点清单为唯一依据；清单条目必须注明 HTTP 端点、用途与鉴权要求。登记来源：dsbot-api-spike 对 DS-Bot 0.3.2 与 dsh 0.2.2-rc.1 的实测，此后 0.3.5/0.3.6/dsh 0.2.2-rc.3 的复验，以及 dsbot-baseline-0310 对 DS-Bot 0.3.10 的实测（0.3.10 新增端点与事件的登记与待补实测项见 endpoint-inventory-0310，二者共同构成清单）
+      rationale: DS-Bot 的 /api/bot 是前后端内部接口、无跨版本稳定承诺，登记实测清单让后续变更与升级检测有单一事实来源
+      enforcement:
+        method: review
+        detail: '已实测登记（完整清单与返回形态见 android/core/src/spike/FINDINGS.md）：POST /api/bot 信封 {endpoint, payload} → {ok, value|error}；state（全量视图+live 字段；since 增量 → unchanged+live 字段；since+live 全命中 → 仅 {revision, unchanged, liveKey}；payload 必须整体是合法 JSON，空参数传 {}）、chat {botId, cursor?} → {sessionId, items[], cursor?（对象 {part, beforeSeq} 透传）}、room-chat {roomId} → {roomId, items[], cursor?, running[], speaking[]}（0.3.5 实测：群历史端点；bot 条目带 botId/name/color 成员归属，cursor 分页同私聊）、earlier {sessionId, cursor}、send {sessionId, text}（纯文本）、update-check；写端点族（bot-chat 登记）：stop-member-work、resume、bot-new-part、bot-open-part、run-stats、exchange、exchange-text、file-text（后两者移交后续实测）；群端点族（group-chat 0.3.5 实测）：群消息提交复用 session/prompt（sessionId 用 room 的会话 id——room.id 与 sessionId 同值，实测 accepted；提及为消息文本中的 @成员名）、stop-room-work {roomId}（无效 id 回 value:false）、room-progress {roomId} → 数组（无效/无工作回空数组）、goal-draft {roomId, text≤2000}（缺 text 回 bot/invalid 提示语；生成群目标草稿）、goal-control {roomId, action}（无效群回 bot/refused Unknown group chat）；goal 的阶段/任务/证据视图数据源未实测（真实群无 goal 实例），goal-draft/goal-control 的应答形态待有 goal 的群取证回填；附件链路（0.3.5 实测）：上传 POST /api/session/uploadFileBinary?sessionId&name[&mediaType]（octet-stream）→ {receiptId, file|image 引用}；带附件消息与附件读取是 dsh unary RPC：POST /api/<channel>/<method>（session/prompt、session/attachment）client-request 信封 {type:client-request,rpcId,method,payload:{args:{request}}} → server-response；session/prompt request={requestId,sessionId,mode,content:[text|file|image blocks]}（room 的 sessionId 同样适用）；session/attachment request={sessionId,attachment:{attachmentId,mediaType(enum),bytes,width,height}} → value={attachment,data:base64}；/connect 是 launch-token 首认证入口（302 remote.mux），remote.mux stream open 对 unary 回 gateway/signature-invalid，WsClient/DshMux 留作 stream 载体。GET /api/bot/feed SSE（chunked，事件 hello/revision/live/message/stream，: keepalive 每 20s；Host 白名单：受信 Host 放行、127.0.0.1 与站点域名实测通过）；错误码族：bot/invalid|refused|stale|not-found|read-only|internal、bot/browser-off、gateway/input-invalid|signature-invalid|bad-request、session/not-found|attachment-invalid；边界：无 cookie→401 固定失效标记、错 Host（单头）→403、重复 Host 头→400、跨站 Origin+有效 cookie→403、无 Origin 原生请求放行；side-ask 应答带新 chatId {chatId, entryId}（每次提问新建会话——App 据此归属后续事件与轮询）；state.sideChats 的条目形态 entries[] = {id, question, answer, status: done|working, createdAt, finishedAt}——回答不走 feed 事件，落 state 由客户端轮询/刷新取回（side-chat 0.3.5 探针实证）。'
+  REMOVED: {}

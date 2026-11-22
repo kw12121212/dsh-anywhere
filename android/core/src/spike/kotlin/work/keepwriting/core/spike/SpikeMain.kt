@@ -131,6 +131,8 @@ fun main() {
     var liveKey: String? = null
     var firstBotId: String? = null
     var firstBotSession: String? = null
+    var firstRoomId: String? = null
+    var allBotIds: List<String> = emptyList()
     val stateRes = post("state", "{\"locale\":\"zh-CN\"}")
     dumpJson("02-state-full", stateRes)
     val stateVal = parseOk("api-state-full", stateRes)
@@ -143,6 +145,8 @@ fun main() {
         val rooms = obj?.members?.get("rooms") as? Json.Value.Array
         firstBotId = bots?.items?.firstOrNull()?.let { (it as? Json.Value.Object)?.members?.get("id") as? Json.Value.StringValue }?.value
         firstBotSession = bots?.items?.firstOrNull()?.let { (it as? Json.Value.Object)?.members?.get("sessionId") as? Json.Value.StringValue }?.value
+        allBotIds = bots?.items?.mapNotNull { ((it as? Json.Value.Object)?.members?.get("id") as? Json.Value.StringValue)?.value }.orEmpty()
+        firstRoomId = rooms?.items?.firstOrNull()?.let { (it as? Json.Value.Object)?.members?.get("id") as? Json.Value.StringValue }?.value
         val topKeys = obj?.members?.keys?.joinToString(",") ?: ""
         if (revision != null && bots != null && rooms != null) {
             pass("api-state-full", "revision=$revision；bots=${bots.items.size}、rooms=${rooms.items.size}；顶层键: $topKeys")
@@ -212,6 +216,9 @@ fun main() {
         fail("version-update-check", "版本字段缺失：current=$dsbotVer dsh.current=$dshVer")
     }
 
+    // ---- 5b. DS-Bot 0.3.10 新端点盘点（dsbot-baseline-0310）----
+    Probes0310 { endpoint, payload -> post(endpoint, payload) }.run(firstBotId, firstBotSession, firstRoomId, allBotIds)
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。
@@ -228,7 +235,9 @@ fun main() {
                     System.currentTimeMillis() >= deadline ||
                         (sendEnabled && feedEvents.contains("hello") &&
                             feedEvents.contains("stream") &&
-                            (feedEvents.contains("message") || feedEvents.contains("live")))
+                            (feedEvents.contains("message") || feedEvents.contains("live")) &&
+                            // 0.3.10：Bot 回复落定后才发 notice（kind=message），收到再收窗
+                            feedEvents.contains("notice"))
                 },
             ) { event, data ->
                 feedEvents.add(event)
@@ -258,6 +267,12 @@ fun main() {
     feedThread.join(feedMs + 15_000)
     feedFrames.forEachIndexed { i, f -> dump("07-feed-frame-$i", f) }
     val names = feedEvents.distinct()
+    // 0.3.10：feed 的 hello 事件携带 api 与 notices 游标（boot/seq），notice/room 是新事件
+    feedFrames.firstOrNull { it.startsWith("event: hello\n") }?.let { frame ->
+        val hello = Json.parse(frame.substringAfter("data: ")) as? Json.Value.Object
+        info("feed-hello-fields", "hello 键=${hello?.members?.keys?.joinToString(",")}")
+    }
+    info("feed-new-events", "notice=${feedEvents.count { it == "notice" }} room=${feedEvents.count { it == "room" }}（窗口内有活动才会出现）")
     if (names.contains("hello")) {
         pass("feed-events", "事件=${names.joinToString(",")}（窗口 ${System.currentTimeMillis() - feedStart}ms）")
     } else {
@@ -304,7 +319,7 @@ private fun resolve(base: String, location: String): String {
     else base.trimEnd('/') + if (loc.startsWith("/")) loc else "/$loc"
 }
 
-private fun parseOk(check: String, res: SpikeHttp.Response): Json.Value? {
+internal fun parseOk(check: String, res: SpikeHttp.Response): Json.Value? {
     if (res.status != 200) {
         fail(check, "HTTP ${res.status}（期望 200）")
         return null
@@ -329,16 +344,16 @@ private fun check4xx(check: String, res: SpikeHttp.Response, what: String) {
     else fail(check, "$what 期望 4xx，实际 ${res.status}")
 }
 
-private fun pass(check: String, detail: String) = println("PASS $check — $detail")
+internal fun pass(check: String, detail: String) = println("PASS $check — $detail")
 
-private fun fail(check: String, detail: String) {
+internal fun fail(check: String, detail: String) {
     failures++
     println("FAIL $check — $detail")
 }
 
-private fun info(check: String, detail: String) = println("INFO $check — $detail")
+internal fun info(check: String, detail: String) = println("INFO $check — $detail")
 
-private fun dumpJson(name: String, res: SpikeHttp.Response) {
+internal fun dumpJson(name: String, res: SpikeHttp.Response) {
     val dir = dumpDir ?: return
     val body = if (res.header("Content-Type")?.contains("json") == true) Sanitize.json(res.bodyText()) else Sanitize.plain(res.bodyText())
     Files.writeString(dir.resolve(name.sanitizeFile()), "HTTP ${res.status}\n$body\n")
@@ -354,7 +369,7 @@ private fun dumpText(name: String, res: SpikeHttp.Response) {
     )
 }
 
-private fun dump(name: String, content: String) {
+internal fun dump(name: String, content: String) {
     val dir = dumpDir ?: return
     Files.writeString(dir.resolve(name.sanitizeFile()), content + "\n")
 }

@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-baseline-0310
+approach:
+  - 取证先行：扩展 android/core 的 spike source set（runSpike，DSH_SPIKE_TARGET 等环境变量传入目标），新增 0.3.10 探针组，对真实 dsh 逐项以 POST /api/bot 信封与 GET /api/bot/feed SSE 调用登记端点；探针只用合成内容与只读/可撤销写入（写端点用无效 id 或空集取错误形态），输出经 Sanitize 递归脱敏后落为 core 测试夹具，结论写进 FINDINGS.md 新章节与 tech/dsbot-api 的端点清单。
+  - core 新增纯 JVM 的 DsbotHello：decode(value) 解出 api（整数）、capabilities（字符串集合）、boot（字符串）、seq（整数），未知字段忽略；Capabilities 提供 has(name)，hello 缺失或解码失败时为 LEGACY 状态——has() 对所有新能力返回 false，但不影响既有功能入口。api 兼容判定：客户端支持 api=1，远端 api 大于客户端支持版本时视为不兼容并走提示条降级。FeedSync 的 hello 事件同步解出 api/boot/seq（revision 语义不变），供后续 notices 变更使用。DsbotVersions 的 BASELINE_DS_BOT 改为 0.3.10、BASELINE_DSH 改为实测值。
+  - App 侧 NativeShell 的连接流程在 update-check 之后调用 hello：成功保存 capabilities，失败（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 按同一分支推断——或网络失败）标记 LEGACY。feed 首帧 hello 经 FeedSync 转交，Capabilities.shouldReread 判定 boot 变化或不再携带 boot（远端重启、换插件或回退）时整体重跑 update-check 与 hello；同一次服务运行内的普通重连不重读。提示条内容由 core 的 DsbotVersions.banner(remote, capabilities) 判定。本变更不新增 UI 入口，仅暴露 connection.capabilities；后续变更的入口以 capabilities.has(...) 判定。
+decisions:
+  decoders-on-demand:
+    decision: 新端点只在本变更登记实测形态与脱敏夹具，不预先为无消费方的端点写请求构造与解码器；hello（含 feed hello）是唯一在本变更落地解码的新端点。
+    rationale: 项目 config 的 code 规则要求只实现当前任务需要的代码（YAGNI）；notices、file-download、markdown-image 等的解码形态由后续计划变更首次消费时以本变更的夹具为准实现，避免写出无测试消费方、日后随上游漂移需要重写的死代码。
+  legacy-keeps-existing:
+    decision: 能力位只门控本里程碑新增的功能入口；hello 不可用（0.3.6 及更早）时既有私聊、群聊、卡片、附件、Side chat 入口全部保持可用，仅新能力隐藏并显示版本提示条。
+    rationale: 里程碑完成标准要求远端 0.3.6 时原有聊天功能仍可用；0.3.6 没有 hello 端点，若既有入口也按能力位门控，旧版远端会整体失能。
+  baseline-from-real-service:
+    decision: dsh 基准版本以实测时真实服务 update-check 的 value.dsh.current 为准（本机当前安装 0.2.2-rc.3），DS-Bot 基准为 0.3.10。
+    rationale: 计划变更要求同期 dsh 版本由真实服务确认；版本基准登记在 tech/dsbot-api 的 version-baseline-and-degrade，必须与真实取证一致。
+  pure-decisions-in-core:
+    decision: 版本提示条是否显示（DsbotVersions.banner）与收到 feed hello 后是否重读（Capabilities.shouldReread）这两个组合判定放在 core 并以 JUnit 覆盖，NativeShell 只做网络调用与状态赋值。
+    rationale: android-client 的 pure-logic-in-core 要求不依赖 android.* 的判定下沉 core；:app 不在回归命令内，留在 :app 的判定没有可执行证据（独立评审 M1）。
+  entry-scenario-deferred:
+    decision: capability-handshake 的场景在本变更只验证到能力判定层（未声明即不可用、LEGACY 不门控既有入口）；「入口隐藏」的界面级验证由首个提供能力门控入口的计划变更承担。
+    rationale: 本变更按 decoders-on-demand 不新增任何功能入口，入口级场景在本变更没有可验证的实现面（独立评审 M3）；把判定层写成可验证场景，界面层随入口落地验证，避免主规格留下无实现对应的 MUST 场景。
+alternatives:
+  - option: 按计划变更原文为全部新端点在 core 预先实现请求构造与响应解码
+    reason: 约 20 个端点中多数在本变更无调用方，会产生无行为覆盖的死代码，且上游内部接口可能在后续变更落地前继续漂移导致返工。
+  - option: 以 update-check 版本号判断功能可用性（>=0.3.10 即全部开启）
+    reason: 上游明确以 hello 的 capabilities 声明新增能力、客户端应跳过未知能力；版本号判断无法表达 dsh 宿主经 HTTP/SSE 下部分能力不可用的情况。
+risks:
+  - 部分端点与事件（notice、room、notices 补齐）在上游是给手机加密链路设计的，经 dsh HTTP/SSE 可能不下发或形态不同；实测确认不了的能力由 hello 能力位门控隐藏，并在 FINDINGS 与 tech 中如实登记。
+  - 写类端点（bot-stop-task、computer-stop、memory-add 等）的实测可能改动真实团队状态；探针只用无效 id/空集取错误形态或只读调用，不对真实 Bot 执行破坏性写入。
+  - 真实响应可能含私人对话或凭据；夹具必须经递归脱敏并由夹具校验测试断言占位符形态。
+  - 0.3.6 对 hello 的应答未实测（服务器已升级）：客户端对任何非 ok 应答都按 LEGACY 处理，错误码不同不影响行为。

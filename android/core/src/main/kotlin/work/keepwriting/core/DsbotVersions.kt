@@ -3,14 +3,14 @@ package work.keepwriting.core
 /**
  * 远端 DS-Bot/dsh 版本读取与基准比对（dsbot-api-client，来源字段是 spike 实测的
  * update-check value.current 与 value.dsh.current）：连接时读取远端版本，与已测
- * 基准（DS-Bot 0.3.6、dsh 0.2.2-rc.3）不一致时提示但尽力可用，读不到按未知降级。
+ * 基准（DS-Bot 0.3.10、dsh 0.2.2-rc.3）不一致时提示但尽力可用，读不到按未知降级。
  * 语义化比较支持预发布段（0.2.2-rc.1 < 0.2.2），规则与 ds-bot update.js 的
  * newer() 对齐。
  */
 object DsbotVersions {
-    /** 已测基准（tech/dsbot-api 的 version-baseline-and-degrade 登记；0.3.6 与
-     *  0.2.2-rc.3 复验见 android/core/src/spike/FINDINGS.md）。 */
-    val BASELINE_DS_BOT = "0.3.6"
+    /** 已测基准（tech/dsbot-api 的 version-baseline-and-degrade 登记；0.3.10 与
+     *  0.2.2-rc.3 实测见 android/core/src/spike/FINDINGS.md 第 12 节）。 */
+    val BASELINE_DS_BOT = "0.3.10"
     val BASELINE_DSH = "0.2.2-rc.3"
 
     data class Remote(val dsBot: String?, val dsh: String?)
@@ -33,6 +33,17 @@ object DsbotVersions {
     fun againstBaseline(remote: Remote, dsBotBaseline: String = BASELINE_DS_BOT, dshBaseline: String = BASELINE_DSH): Verdict {
         if (remote.dsBot == null || remote.dsh == null) return Verdict.UNKNOWN
         return if (remote.dsBot == dsBotBaseline && remote.dsh == dshBaseline) Verdict.MATCHED else Verdict.MISMATCHED
+    }
+
+    /**
+     * 版本提示条内容（null = 不显示）：update-check 读到的版本与基准不一致，或 hello
+     * 协商不出共同 api 版本（capability-handshake：即使读不到版本也提示）。返回
+     * (DS-Bot 版本, dsh 版本)，读不到的一侧为 "?"；读不到版本且能力握手正常时不提示。
+     */
+    fun banner(remote: Remote?, capabilities: Capabilities): Pair<String, String>? {
+        val mismatch = remote != null && againstBaseline(remote) == Verdict.MISMATCHED
+        if (!mismatch && !capabilities.versionMismatch) return null
+        return (remote?.dsBot ?: "?") to (remote?.dsh ?: "?")
     }
 
     /** 语义化比较：a > b 返回正数、相等 0、小于负数；解析失败按字符串序（稳定不抛错）。 */

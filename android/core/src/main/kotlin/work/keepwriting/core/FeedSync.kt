@@ -2,7 +2,8 @@ package work.keepwriting.core
 
 /**
  * feed 订阅与断线补齐的纯状态机（dsbot-api-client，契约来自 ds-bot feed.js 与
- * spike 实测）：订阅即收 hello{revision}；revision（团队保存）与 live（工作状态）
+ * spike 实测）：订阅即收 hello{revision}（0.3.10 起另带 api/boot/seq，经
+ * [Listener.onFeedHello] 转交）；revision（团队保存）与 live（工作状态）
  * 事件都要求重新取 state——revision/live 与本地一致时以 since+live 增量询问，
  * 服务端 unchanged 则零负载；message/stream 事件只是当前聊天的增量，不触发取
  * state。断线由调用方告知，重连节奏用指数退避（上限 60s，成功即归零）。
@@ -18,6 +19,10 @@ class FeedSync(
     interface Listener {
         /** 需要重新取 state：localRevision 为 null 表示全量；否则 since+live 增量。 */
         fun fetchState(localRevision: String?, liveKey: String?)
+
+        /** feed 首帧 hello 的解码结果（0.3.10 起带 api 与 notices 游标 boot/seq；
+         *  0.3.6 只有 revision）。App 据 boot 变化重读能力集合；缺省不处理。 */
+        fun onFeedHello(hello: DsbotHello.FeedHello) {}
     }
 
     /** 本地已同步到的 revision 与最近一次应答的 liveKey（null 表示尚无）。 */
@@ -56,6 +61,7 @@ class FeedSync(
     fun onEvent(event: String, dataJson: String) {
         when (event) {
             "hello" -> {
+                DsbotHello.decodeFeedHello(dataJson)?.let(listener::onFeedHello)
                 // 首次订阅：与本地 revision 不同（或本地没有）即需要取 state
                 val remote = revisionOf(dataJson)
                 if (remote != localRevision) listener.fetchState(localRevision, liveKey)

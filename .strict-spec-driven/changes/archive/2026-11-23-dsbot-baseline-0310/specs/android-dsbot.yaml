@@ -1,0 +1,49 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    capability-handshake:
+      strength: MUST
+      statement: 连接建立时读取远端 DS-Bot 的能力声明（hello 的 api 版本与 capabilities 名单）；断线重连后若远端已重启或更换插件（feed 首帧 hello 的 boot 与读取时不同，或不再携带 boot），重新读取版本与能力声明，同一次服务运行内的重连沿用已读结果：远端未声明的能力判为不可用，依赖它的新功能入口隐藏而不是出错；远端不支持能力声明（0.3.6 及更早）时，所有依赖能力声明的新功能判为不可用，既有私聊、群聊、交互卡片、附件与 Side chat 入口不受影响；远端 api 版本高于 App 支持的版本或协商不出共同版本时按版本不一致处理（即使读不到版本号也显示版本提示条，并尽力可用）。
+      scenarios:
+        legacy-remote-keeps-existing:
+          - GIVEN: 远端为 DS-Bot 0.3.6（不支持 hello）
+          - WHEN: 连接建立完成
+          - THEN: 新功能入口全部隐藏，既有私聊、群聊、卡片、附件与 Side chat 入口照常显示与使用
+        undeclared-capability-unavailable:
+          - GIVEN: 远端 hello 的 capabilities 不含某项新功能的能力名
+          - WHEN: 连接建立完成后 App 判定该能力
+          - THEN: 该能力判为不可用（依赖它的入口由提供该入口的功能变更负责隐藏），不出现错误提示；名单中声明的能力判为可用
+        restart-rereads:
+          - GIVEN: 已连接并读取过能力声明
+          - WHEN: 服务重启（boot 变化）或回退到不支持能力声明的版本后 App 重连
+          - THEN: 重新读取版本与能力声明，能力判定与版本提示条按新结果更新；未重启的普通断线重连不重复读取
+        incompatible-api-banner:
+          - GIVEN: 远端 hello 协商不出 App 支持的 api 版本
+          - WHEN: 连接建立完成
+          - THEN: 显示版本提示条，所有依赖能力声明的新功能判为不可用，既有聊天功能照常可用
+  MODIFIED:
+    version-banner:
+      strength: MUST
+      statement: 连接建立时读取远端 DS-Bot 与 dsh 版本（update-check 的 value.current 与 value.dsh.current）并与已测基准（DS-Bot 0.3.10 与同期实测的 dsh 版本）比对：不一致时显示版本提示条说明远端版本与基准不一致、部分功能可能不可用，提供不再提示本次的关闭；一致或读不到版本（UNKNOWN）时不按版本提示（能力握手协商不出共同 api 版本时另按 capability-handshake 提示）；版本不一致时既有聊天功能仍尽力可用。
+      scenarios:
+        mismatch-shows-banner:
+          - GIVEN: 远端 DS-Bot 版本为 0.4.0
+          - WHEN: 连接建立完成
+          - THEN: 显示版本提示条且包含不一致说明；点击关闭后本次连接期内不再显示
+        unknown-no-banner:
+          - GIVEN: 远端版本字段缺失（读不到版本）
+          - WHEN: 连接建立完成
+          - THEN: 不显示版本提示条
+        baseline-no-banner:
+          - GIVEN: 远端 DS-Bot 为 0.3.10 且 dsh 为已测同期版本
+          - WHEN: 连接建立完成
+          - THEN: 不显示版本提示条
+        older-banner-still-usable:
+          - GIVEN: 远端 DS-Bot 为 0.3.6
+          - WHEN: 连接建立完成后进入私聊并发送消息
+          - THEN: 显示版本提示条，私聊、群聊、交互卡片与附件仍照常可用
+  REMOVED: {}

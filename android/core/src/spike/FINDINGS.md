@@ -118,3 +118,65 @@ send+feed（hello/live/message/stream 事件形态不变）、401 固定失效�
 纯增量新增（`phone`、`browserHolds` 等，revision/bots/rooms 等客户端依赖键齐全），其余响应形态
 与基准一致；version-baseline-and-degrade 基准随本次复验提到 dsh 0.2.2-rc.3
 （DsbotVersions.BASELINE_DSH）。
+
+## 12. DS-Bot 0.3.10 实测（2026-11-22，dsbot-baseline-0310）
+
+服务器升级 DS-Bot 0.3.6 → **0.3.10**（dsh 仍 **0.2.2-rc.3**，update-check 的 value.current /
+value.dsh.current 实测）后 `gradlew -p android/core runSpike`（新增 `Probes0310` 探针组，
+DSH_SPIKE_SEND=1）全项 PASS、FAIL=0；既有检查（会话、state 全量/since/since+live、chat、
+feed、401、错 Host 403）形态不变。新端点全部经本项目 HTTP 路径（POST /api/bot 信封与
+GET /api/bot/feed SSE）可用——上游手机端的加密链路不是必需的。写端点只用不存在的 id
+取错误形态，未改动真实团队。
+
+运行备注：WSL 的 resolv.conf 不走 MagicDNS，tailnet 主机名需经
+`JAVA_TOOL_OPTIONS=-Djdk.net.hosts.file=<临时 hosts>`（IP 取 `tailscale ip -4 gamepc`）。
+
+**握手与提醒**（夹具 hello.json、hello-api-unsupported.json、notices.json、notices-reset.json、feed-stream-0310.sse）：
+
+| 端点/事件 | 请求 | 应答（实测） |
+|---|---|---|
+| `hello` | `{api:[1]}` | `{api:1, apiMin:1, apiMax:1, plugin:{name,version:"0.3.10"}, capabilities[], boot, seq, revision, readOnly, memory, feed:"api/bot/feed", rpc:{call,feed}}` |
+| `hello`（无共同版本） | `{api:[99]}` | 同上但 `api:null` → 客户端判不兼容 |
+| capabilities 名单 | — | state, state-avatar-refs, avatar, chat, room-chat, agents, send, send-images, feed, feed-room, notices, questions, views, approvals, stop-member-work, memory, memory-edit, usage-summary, stop-chat, stop-agent, row-meta, chat-steps, link-feed, images, image-preview, file-download, markdown-image, file-download-chunks, write-state, rpc |
+| `notices` | `{boot, since}` | `{boot, seq, reset:false, notices:[{seq,time,botId,name,kind,sessionId?,roomId?,title?,text}]}`；陌生 boot → `reset:true`（须重取整体状态）；kind ∈ message/group/done/question/view/approval，提醒只存内存（200 条环，重启换 boot） |
+| feed `hello` | — | `{revision, api, boot, seq}`（0.3.6 只有 revision） |
+| feed `notice` | — | 与 notices 条目同形（Bot 回复落定后推送，晚于 stream 结束） |
+| feed `room` | — | `{roomId}`（群聊有活动时 150ms 合并推送；本次窗口内无群活动，形态为源码核对） |
+
+**未知端点**：`{ok:false, error:{code:"bot/not-found", message:"Unknown endpoint …"}}`（夹具
+error-unknown-endpoint.json）。0.3.6 对 `hello` 的应答**未实测**（服务器已升级），按 channel.js
+未知端点分支推断为同一形态；客户端对任何非 ok 应答都判 LEGACY，错误码不同不影响行为。
+
+**媒体与文件**（夹具 image-preview.json、avatar.json、markdown-image-forbidden.json、file-text-unavailable.json、file-download-invalid-offset.json）：
+
+| 端点 | 请求 | 应答（实测） |
+|---|---|---|
+| `state` | `{avatars:"ref"}` | bots[].avatar 的 image 换成 `imageRef`（本服务器 Bot 头像均为 shape，未出现 imageRef） |
+| `avatar` | `{botId}` | `{botId, ref, image}`（无照片头像时 ref/image 为 null） |
+| 聊天条目图片引用 | — | 用户条目 `images:<数量>, imageRefs:[{attachmentId:"sha256:…", mime, name}]`（不是旧的 image 对象） |
+| `image` | `{sessionId, attachmentId, preview:true}` | `{mime, data:base64}`（预览缩到 PREVIEW_EDGE 内；无此附件 → bot/not-found） |
+| `file-download` | `{sessionId, attachmentId \| seq+index, offset}` | offset 非法 → bot/invalid；图片附件 id → bot/not-found（只认文件块与 deliverables/presented）。**成功分块样本未取得**：本服务器 13 个聊天首页无文件附件；分块形态（512 KiB、offset/version/nextOffset）为源码核对，由 dsbot-reader-files 实测后补夹具 |
+| `file-text` | `{file:{attachmentId}}` | 读不了 → **bot/unavailable**（新错误码） |
+| `markdown-image` | `{sessionId, path}` | 工作区外路径 → **bot/forbidden**（新错误码）；非 file 协议 → bot/invalid |
+
+**写端点（错误形态）**：bot-stop-task → bot/not-found；computer-app-answer → `value:false`；
+computer-stop `{botId}` → `value:true`（无此 Bot 时空操作）；learning-answer → bot/stale；
+connector-request-cancel → bot/refused；agent-chat → bot/not-found；stop-agent → `value:false`；
+memory-add / memory-edit（无此 Bot）→ bot/refused；schedule-pause → bot/invalid；
+stage-image（非图片类型）→ bot/invalid；send `{images}`（无此会话）→ bot/stale；
+usage-summary `{botId}` → `{botId, day, week, month, models, scanning}`；room-chat 形态不变。
+
+新错误码 bot/forbidden、bot/unavailable 经 `DsbotApi.reasonOf` 的缺省分支归 REFUSED（拒绝类），
+无需新增映射。
+
+**401 形态备注**：无 cookie 的 `POST /api/bot` 回 401、正文 `unauthorized`、无 Content-Type
+（dsh-client-connection 的 /api 准入分支）；固定失效标记（夹具 error-401-body.txt）只出现在
+页面入口 GET / 的 401 上——DialProbe 判定走的正是页面入口，`DsbotApi.parseResponse` 对任何 401
+都按会话失效处理，两条路径各自正确，不是回归。
+
+**待首个消费变更实测补夹具（本次只做了源码核对）**：feed `room` 事件、file-download 成功分块、
+file-text 与 markdown-image 成功应答、`state {avatars:"ref"}` 下的 `imageRef`。
+
+**客户端落地**：core `DsbotHello`/`Capabilities`（未声明即不可用；无 hello → LEGACY；无共同
+api → INCOMPATIBLE 并提示版本不一致；feed hello 的 boot 变化或不再带 boot → 重读），`DsbotVersions` 基准 0.3.10 / 0.2.2-rc.3；其余端点的
+解码随首个消费它的计划变更以本节与夹具为准实现。

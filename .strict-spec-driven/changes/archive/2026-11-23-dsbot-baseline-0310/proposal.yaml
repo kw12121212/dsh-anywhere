@@ -1,0 +1,37 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-baseline-0310
+  status: proposed
+summary:
+  what:
+    - 把原生 DS-Bot 的已测基准从 DS-Bot 0.3.6 升到 0.3.10（dsh 同期版本以真实服务 update-check 读数为准，本机当前 0.2.2-rc.3），用本项目现有 HTTP/SSE 路径对真实 dsh 逐项实测上游手机端用到的新端点与 feed 事件，并把实测结果登记进 tech/dsbot-api、FINDINGS.md 与脱敏夹具
+    - core 新增 hello 握手解码（api、capabilities、boot、seq，来源为 POST /api/bot hello 与 feed 的 hello 事件）与能力位查询：未声明的能力一律视为不可用；DsbotVersions 基准改为 0.3.10 与同期 dsh 版本
+    - App 连接时读取 hello 并把能力集合挂到连接状态上，供本里程碑后续变更按能力显隐入口；远端不支持 hello（0.3.6 及更早）时按旧版处理：显示版本提示条、既有聊天功能照常可用、新能力入口全部隐藏
+  why:
+    - dsbot-mobile-polish 里程碑的其余 9 个计划变更（提醒横幅、已读、缓存、发送箱、停靠区、富渲染、阅读器与文件等）全部依赖 0.3.10 的新端点与事件，必须先有以真实响应为准的端点清单、夹具与能力位判定作为唯一事实来源
+    - 用户 dsh 的 ds-bot 插件已升到 0.3.10，而 App 的基准仍是 0.3.6，连接后会一直误显示版本不一致提示条；主规格 version-banner 中的基准文字（0.3.2）也已过时
+    - 上游的内部接口无跨版本稳定承诺（0.3.10 起以 hello 的 api 版本 + capabilities 名单声明新增能力），客户端只有按能力位降级才能同时兼容 0.3.6 与 0.3.10
+scope:
+  in:
+    - 实测盘点（经 runSpike 取证工具，带 token 地址只走环境变量）：hello、feed 的 hello 携带字段与 notice/room 事件、notices {boot, since} 补齐与 reset、state 的 avatars:'ref' 与 avatar/image（preview）、markdown-image、file-text、file-download（512 KiB 分块，offset/version/nextOffset）、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send 的 images；每项记录请求/响应形状、错误码以及在 dsh Web 宿主经 HTTP/SSE 是否可用
+    - tech/dsbot-api 更新（delta-tech）：版本基准改为 0.3.10 与实测 dsh 版本、端点清单增补 0.3.10 实测条目、新增 hello 能力位规则；android/core/src/spike/FINDINGS.md 增补 0.3.10 实测章节
+    - 脱敏夹具：hello、notices、feed 含 notice/room 事件的 SSE 片段、file-download 分块、markdown-image、file-text 等真实响应的脱敏副本，进入夹具加载校验测试
+    - core：DsbotVersions 基准常量更新；新增 hello 解码与能力集合（含 boot/seq 游标字段与 api 版本兼容判定），FeedSync 的 hello 事件携带的 api/boot/seq 一并解码；JUnit 覆盖 hello 解码、能力位查询、旧版（无 hello）降级与版本比对
+    - android-dsbot 规格（delta-spec）：修改 version-banner 的基准描述为 0.3.10 与同期 dsh；新增能力握手与按能力显隐的可观察要求
+    - App：连接时调用 hello 并保存能力集合到连接状态；远端重启、换插件或回退（feed 首帧 hello 的 boot 变化或不再携带 boot）时重读版本与能力集合；hello 不可用时按旧版标记；能力集合对外暴露供后续变更的入口判定
+  out:
+    - notices 补齐、应用内横幅、已读、聊天缓存、发送箱、停靠区、图表、阅读器与文件下载等功能本身（由本里程碑后续计划变更承接，本变更只提供端点清单、夹具与能力判定）
+    - 为暂无消费方的新端点预先编写请求构造与解码器：只登记实测形态与夹具，具体解码随首个消费它的计划变更落地
+    - 配对、加密中转、二维码、dsbot://pair 深链等上游连接层；连接层仍是用户配置的 harness URL、内嵌 Tailscale 与 dsh 会话 cookie
+    - 管理与设置类页面（dsbot-native-manage、dsbot-native-integrations 承接）
+unchanged_behavior:
+  - 现有私聊、群聊、交互卡片、附件与 Side chat 在 0.3.10 与 0.3.6 远端上行为不变：既有入口不受能力位门控
+  - 附件上传与带附件消息继续走 dsh 的 session/uploadFileBinary 与 session/prompt，不改用 DS-Bot 的 stage-image/send images
+  - dsh-auth cookie、带 token 地址与密钥不进日志、诊断上报、夹具与仓库；Host 与 Origin 约束、精确路径拼接不变
+  - 版本读取仍来自 update-check 的 value.current 与 value.dsh.current，读不到版本时不显示提示条
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-baseline-0310

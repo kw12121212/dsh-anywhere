@@ -1,0 +1,18 @@
+event: hello
+data: {"revision":4092,"api":1,"boot":"237ee0c9-8b6b-4495-b63d-95bd2c05da59","seq":4}
+
+event: message
+data: {"botId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","sessionId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","item":{"kind":"user","text":"<redacted:content 2 chars>","time":1795361761603,"seq":2997}}
+
+event: stream
+data: {"botId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","sessionId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","attemptId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8:2","phase":"start"}
+
+event: live
+data: {}
+
+event: stream
+data: {"botId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","sessionId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","attemptId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8:2","text":"<redacted:content 3 chars>"}
+
+event: notice
+data: {"seq":5,"time":1795361765341,"botId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","name":"<redacted:content 5 chars>","kind":"message","sessionId":"session-2f6d9790-919f-4a53-b13c-e016a3acf4e8","text":"<redacted:content 536 chars>"}
+
