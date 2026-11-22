@@ -1,0 +1,43 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  macos-native-chat:
+    title: macOS 原生：团队与对话
+order: 1000
+goal: 在 macOS 原生应用的三栏外壳中实现与 Android 原生 DS-Bot 界面对等的团队与对话体验：团队侧栏（分组、置顶、未读、搜索、需要你、应用内提醒）、私聊（渲染、流式、分页、停止与分段、发送箱）、群聊、交互卡片与停靠区、图表与富渲染、附件与文件、Side chat，交互按桌面习惯（键盘、拖放、粘贴、Quick Look、右键菜单）调整，可观察行为与 android-dsbot 规格一致。
+scope:
+  in:
+    - 团队侧栏：Bot 与群分组列表、Main Bot 在前、置顶、工作状态、本机已读状态计算的未读、预览优先级、搜索、需要你汇总、notice 横幅（非当前聊天，点按切换）
+    - 私聊与群聊：Markdown 与代码块复制、链接与服务器文件链接打开、更早记录分页、流式回复、发送与发送箱（未发送点按重试）、停止/恢复/新分段/旧分段、运行统计与 Bot 间消息记录、聊天缓存与滚动位置、回到最新；群成员归属、@ 成员补全、停止群或成员工作、群目标与进度、后台任务条、电脑操作请求、模型失败修复卡
+    - 卡片与渲染：审批、提问、show_view（含 Swift Charts 图表与控件）、密钥卡、学习审批差异、连接器请求、浏览器交接、btw 卡、沙箱 HTML 卡（禁网络隔离的 WKWebView）、待处理停靠区；附件发送（打开面板、拖放、粘贴图片）与查看（Quick Look、保存面板）、文件分块下载、长消息阅读；Side chat 在检查器中
+  out:
+    - Bot、群、记忆、模型、密钥、连接器、能力、日程、用量、IM、本地 Agent、Bot 浏览器、关于与更新等管理与设置页（macos-native-manage 承接）
+    - 系统通知中心推送、Dock 角标、菜单栏常驻图标、后台常驻；高权限操作前的 Touch ID 验证（与 Android 一致不做）
+    - Release 切换（macos-native-release 承接）；Windows/Linux 客户端变化
+done_criteria:
+  - 在用户 Mac 上连接后侧栏显示与网页端一致的 Bot、群、分组与置顶；打开聊天后未读点消失并跨重启保持；停在 A 聊天时 B 提问出现横幅，点按切到 B；需要你汇总计数与网页端一致
+  - 私聊发送文字后回复流式出现并与网页端一致；上滚加载更早记录；停止、恢复与分段切换在两端一致；断网发送显示未发送，恢复后点按重试只发一次且网页端无重复
+  - 群聊中 @ 成员（输入 @ 出现补全）发消息，被 @ 成员开工并回复；停止群工作生效；后台任务可逐个停止
+  - 审批、提问、show_view 卡片与密钥卡可在 Mac 上作答且网页端同步，停靠区一次只展开一张；含图表的卡片按数据绘制，畸形数据降级为只读文本；沙箱 HTML 卡无法访问网络
+  - 拖放或粘贴图片与文件随消息发送 Bot 能读取；聊天中的附件可用 Quick Look 预览并经保存面板保存；Side chat 在检查器中可新建、提问与关闭；DshCore 新增逻辑有 swift test 覆盖且完整回归通过
+intake_questions:
+  - id: macos-chat-parity
+    question: macOS 对话功能的对等基准是什么？
+    context: Android 原生 DS-Bot 界面会在本里程碑前完成打磨、管理与集成三个里程碑。
+    impact: 决定每个变更实现到什么程度。
+    recommendation: 以执行时 android-dsbot 规格的最新状态为准，平台交互按里程碑 details 的映射调整；系统通知与 Touch ID 不做。
+planned_changes: {}
+dependencies:
+  - macos-native-foundation 里程碑完成：DshCore 协议层、URLSession 传输与会话、三栏外壳
+  - Android 的 dsbot-mobile-polish、dsbot-native-manage、dsbot-native-integrations 已完成：android-dsbot 规格与 tech/dsbot-api 为对等基准，执行时以其最新状态为准
+risks:
+  - Android 侧行为在本里程碑执行前可能已多次演进：须在每个变更提案时重新对照 android-dsbot 规格与 android/core 的最新实现，而不是本路线图写下时的状态
+  - SwiftUI 的长列表（聊天记录、流式追加、反向分页）性能与滚动定位不如 Compose 成熟：大聊天须验证 LazyVStack/List 在流式追加时不跳动，必要时局部用 AppKit NSTableView 包装
+  - 沙箱 HTML 卡在 WKWebView 中须禁网络、禁导航、无脚本桥接，配置不当会让不可信 Bot 内容访问网络或本地文件
+status: proposed
+notes:
+  - 2026-11-22 用户确认：SwiftUI 原生、宽屏分栏、排在 Android 三个 DS-Bot 里程碑之后；macOS 端不内置 Tailscale
+  - 规格归属：在本里程碑的首个变更中把 android-dsbot 规格里平台无关的界面行为改写为同时适用 Android 与 macOS（或新建 dsbot-client 共享规格并让两端引用），平台差异（返回键/菜单、底部抽屉/检查器、相册/打开面板）分别标注
+details: 交互映射：Android 的团队页 → 侧栏；聊天页 → 内容区；详情面板与 Side chat 底部抽屉 → 右侧检查器；长按菜单 → 右键菜单与 ⌘C；相册/相机/文件选择器 → 打开面板、拖放与粘贴；系统分享面板 → 保存面板与共享菜单；触感反馈 → 不做。键盘：Enter 发送与换行遵循团队偏好，⌘K 搜索聊天，⌘↑/⌘↓ 切换聊天，Esc 关闭检查器。纯逻辑（已读合并、notice 游标、发送箱、停靠区排序、图表校验、分块下载、预览优先级）在 DshCore 实现并与 Kotlin 版共享夹具测试；界面验收在用户 Mac 上对照网页端与 Android 逐项核对。

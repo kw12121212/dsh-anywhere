@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-self-update
+  milestone: windows-native-release
+status: planned
+summary: 原生 Windows 自更新：设置中配置自托管更新源，检查 latest.json 的 Windows 条目、下载安装程序、校验 sha256、退出并静默安装后自动重启；本地发布流程把 Release 中的 Windows 资产同步到 DSH_UPDATES_DIR
+details: Dsh.Core：latest.json Windows 条目解析、版本比较、sha256 判定（与 Android、macOS 契约一致且向后兼容），dotnet test 覆盖。App：设置页「更新」条目（更新源仅 https、检查、下载进度、安装），下载到 %TEMP% 并校验，不符即删除并提示；校验通过后启动安装程序（静默参数并在完成后重新启动应用）再退出自身；安装失败时打开安装程序交给用户手动完成。发布：扩展 macos-self-update 建立的同步脚本，用 gh 下载对应 tag 的 Windows 安装程序与 .sha256 同步到 DSH_UPDATES_DIR 并合并写入 latest.json，沿用强制前置校验与注入 Runner 的脚本测试；tech/packaging 登记 Windows 自更新与同步规则。验收：按里程碑完成标准第 2 条。
+depends_on:
+  - windows-release-switch

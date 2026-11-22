@@ -6,7 +6,7 @@ planned_change:
   id: dsbot-bot-browser
   milestone: dsbot-native-integrations
 status: planned
-summary: Bot 浏览器控制：显示各 Bot 浏览器的持有状态，接管、交还与停止；dsh Web 宿主上显示不可用
-details: 在 Bot 详情页与 Settings → Browser 显示浏览器持有状态（Bot 使用中、等待用户交接、用户已接管、已停止）；browser-takeover 接管、browser-give-back 交还（面板交还不带 outcome）、browser-stop 停止 Bot 工作并转为用户持有。服务端返回 bot/browser-off 时显示「此宿主未启用 Bot 浏览器」而非报错。手机不调用 browser-wait/browser-result、不显示画面（见里程碑 bot-browser-mobile 问题）。
+summary: Bot 浏览器：在 Bot 详情的浏览器页查看 Bot 浏览器画面快照（前台约 2 秒刷新），显示持有状态并接管、交还与停止；按宿主能力降级，dsh Web 宿主启用浏览器插件即可看画面
+details: 参考上游 mobile/src/screens/manage.tsx 的 BotDetails Browser 页（只学行为，Compose 原生实现）。画面：browser-frame {botId} 取当前画面快照，页面可见且 App 在前台时约每 2 秒刷新，离开页面或进入后台立即停止；单飞请求、丢弃过期结果；快照只在内存显示，不写日志、诊断上报与磁盘缓存；可双指缩放查看。状态与控制：显示持有状态（Bot 使用中、等待用户交接、用户已接管、已停止）；browser-takeover 接管、browser-give-back 交还（面板交还不带 outcome）、browser-stop 停止 Bot 工作并转为用户持有。降级（按 DS-Bot 0.3.10 实测与 dsbot-baseline-0310 登记）：browser-frame 返回 bot/browser-off 显示「此宿主未启用 Bot 浏览器」并说明需在服务端团队配置启用浏览器插件；返回 bot/not-found 显示「这个 Bot 还没有打开浏览器」；dsh Web 宿主上 takeover/give-back 返回 bot/browser-off 时按钮置灰并提示「需在桌面应用中接管或交还」，停止仍可用；聊天中的浏览器交接卡（dsbot-pending-dock）的「接管」直达本页。手机不调用 browser-wait/browser-result，不提供点击输入，不当浏览器宿主。core：错误码到降级状态的映射、轮询调度（前台/可见/单飞/过期丢弃）以 JUnit 覆盖。验收：用户 dsh 启用 browserPlugin 后让 Bot 打开网页，App 显示画面并随 Bot 操作刷新，停止生效且网页端一致；关闭插件后显示未启用提示。
 depends_on:
   - dsbot-interactive-cards

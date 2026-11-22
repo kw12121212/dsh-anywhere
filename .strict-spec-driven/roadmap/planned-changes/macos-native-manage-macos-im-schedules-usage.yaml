@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-im-schedules-usage
+  milestone: macos-native-manage
+status: planned
+summary: IM、日程与用量：IM 通道新增、修改、删除、配对与解除、指定聊天、重试与登录流程（二维码或可复制链接）；日程查看、新建、暂停与恢复、删除；用量按时间范围、按 Bot、按模型的 Swift Charts 图表与详情
+details: 对应 Android dsbot-im-bridges、dsbot-schedules 与 dsbot-usage。IM：im-add/update/remove/pair/unpair/chat/retry、im-login-start/im-login-wait（二维码在窗口中显示供手机扫描，或复制链接），凭据不回显。日程：schedules、schedule-create（at/every/daily/weekly/cron，时区按服务端约定显示）、schedule-pause、schedule-delete（二次确认）。用量：usage（带 timeZone）与 usage-summary，时间范围 24 小时至 12 个月与日历选日，聚合换算复用 DshCore。验收：按里程碑完成标准第 3 条第三、四项。
+depends_on:
+  - macos-bot-group-manage

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-system-about
+  milestone: macos-native-manage
+status: planned
+summary: 关于 DS Bot、更新与诊断日志：显示远端 DS-Bot 与 dsh 版本及基准、检查与安装 DS-Bot/dsh 更新（提示服务可能重启与会话失效）、查看与清理 DS-Bot 诊断日志
+details: 对应 Android dsbot-system-about。Settings 分页「关于 DS Bot」：update-check、update-install 与 dsh-update-install（执行前说明后果并二次确认，重连后刷新版本提示）、repo-stars 等链接；diagnostics、diagnostics-log（可复制）、diagnostics-clear（二次确认）。与本应用自身的「关于 DSH Anywhere」、诊断上报与自更新区分显示。验收：按里程碑完成标准第 4 条后半。
+depends_on:
+  - macos-shell-window

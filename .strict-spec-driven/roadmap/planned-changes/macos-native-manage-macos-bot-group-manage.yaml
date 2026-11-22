@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-bot-group-manage
+  milestone: macos-native-manage
+status: planned
+summary: Bot 与群管理：Bot 详情与设置（新建、编辑、复制、删除、Main Bot、私有与标记、模型与思考强度快速切换、权限预设、外观）与群设置（新建、编辑、删除、成员、管理员、回复模式、公告、统一权限预设），乐观写入
+details: 对应 Android dsbot-bot-manage 与 dsbot-group-manage。Bot 详情在检查器中显示，编辑用 sheet 分节表单；聊天头部提供模型快速切换弹出菜单（按服务商分组、思考强度，efforts 按模型缓存）。乐观写入（update-bot、set-main、bot-capability、update-room 在途补丁叠加到新 state、失败重取）逻辑复用 DshCore。删除二次确认。新建 Bot 重名检查，列出后直接打开新聊天。群成员选择为可搜索列表；需审批的变更显示等待审批。验收：按里程碑完成标准第 1 条前两项。
+depends_on:
+  - macos-cards-dock
+  - macos-group-chat

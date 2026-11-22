@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-memory
+  milestone: windows-native-manage
+status: planned
+summary: 记忆：按 Bot、群与团队查看记忆，提问、新增、编辑、置顶、在层级间移动、遗忘、查看历史与恢复、撤销整理
+details: 对应 macos-memory。memory-view、memory-layer、memory-ask（进行中可见）、memory-add、memory-edit、memory-pin、memory-move、memory-forget（二次确认）、memory-history、memory-restore、memory-tidy-undo；长条目可展开与复制；只显示服务端返回内容。验收：按里程碑完成标准第 2 条第三项。
+depends_on:
+  - windows-bot-group-manage

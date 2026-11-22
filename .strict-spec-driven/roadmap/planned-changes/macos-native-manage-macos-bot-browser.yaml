@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-bot-browser
+  milestone: macos-native-manage
+status: planned
+summary: Bot 浏览器：在 Bot 详情检查器或独立窗口中查看画面快照（前台约 2 秒刷新）、持有状态、接管、交还与停止，按宿主能力降级
+details: 对应 Android dsbot-bot-browser（以其归档规格为准）。browser-frame 只在窗口可见且应用活跃时轮询，单飞并丢弃过期结果，快照只在内存显示，可缩放；bot/browser-off 显示此宿主未启用及启用方法说明，bot/not-found 显示 Bot 尚未打开浏览器；dsh Web 宿主上接管与交还置灰提示在桌面应用中操作，停止可用；聊天交接卡的接管直达本页。轮询调度与错误映射复用 DshCore。验收：按里程碑完成标准第 4 条前半。
+depends_on:
+  - macos-bot-group-manage

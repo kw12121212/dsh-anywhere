@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-avatars-folders
+  milestone: macos-native-manage
+status: planned
+summary: 头像库与工作文件夹：浏览、导入（打开面板或从 Finder 拖入，方形裁剪压缩）、删除头像并设给 Bot；逐级浏览电脑文件夹为 Bot 与群选择工作文件夹（含群的各 Bot 用自己的文件夹），查看与设置团队工作区
+details: 对应 Android dsbot-avatars 与 dsbot-folders。头像：avatar-library、avatar-import（data URL，按服务端限制压缩）、avatar-delete（二次确认）。文件夹：先调 folders，picker 为 browse 时用 folder-list 面包屑逐级浏览，否则手输路径或选最近；注意本 App 与 dsh 可能不在同一台电脑，不使用本机 NSOpenPanel 选服务器路径；保存单飞、成功才关闭，过期列表丢弃（DshCore）；被拒位置显示服务端原因，需审批的提示等待审批卡。验收：按里程碑完成标准第 2 条前两项。
+depends_on:
+  - macos-bot-group-manage

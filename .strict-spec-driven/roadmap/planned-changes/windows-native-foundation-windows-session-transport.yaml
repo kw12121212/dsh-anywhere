@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-session-transport
+  milestone: windows-native-foundation
+status: planned
+summary: App 层 HttpClient 传输与 dsh 会话：携带 dsh-auth cookie 与受信 Host 调用 /api/bot 与 feed、带 token 地址只用一次建立会话、cookie 经 DPAPI 加密持久化、401 本地重新认证页、按原因分类的本地错误页、版本提示条，不内置 Tailscale
+details: 与 macos-session-transport 行为一致：实现 Dsh.Core 传输接口的 HttpClient 版本（SocketsHttpHandler，UseCookies=false 自管 cookie，不发 Origin，Host 与 harness 一致），SSE 用 ResponseHeadersRead 流式读取；只保存 dsh-auth-* 会话 cookie，按 host:port 绑定，存 %LOCALAPPDATA%\DSH Anywhere Native\ 下 DPAPI（CurrentUser）加密文件，不写日志。会话建立、401 重新认证、错误分类（DNS、拒绝、超时、TLS）与 tailnet 提示、feed 退避重连与补齐、窗口最小化不断开但系统睡眠或会话锁定恢复后补齐、版本提示条。新建 windows-app 主规格（或扩展 macos-app 为 desktop-native 共享规格并标注平台差异）登记连接、会话、错误页与版本提示的可观察行为。验收：按里程碑完成标准第 3、4 条在 GAMEPC 上逐项核对。
+depends_on:
+  - windows-core-protocol

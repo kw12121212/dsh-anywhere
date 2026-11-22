@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-bot-browser
+  milestone: windows-native-manage
+status: planned
+summary: Bot 浏览器：在 Bot 详情面板或独立窗口中查看画面快照（前台约 2 秒刷新）、持有状态、接管、交还与停止，按宿主能力降级
+details: 对应 macos-bot-browser 与 Android dsbot-bot-browser。browser-frame 只在窗口可见且应用处于前台时轮询，单飞并丢弃过期结果，快照只在内存显示，可缩放；bot/browser-off 显示此宿主未启用及启用方法，bot/not-found 显示未打开浏览器；dsh Web 宿主上接管与交还置灰提示在桌面应用中操作，停止可用；交接卡接管直达本页。轮询调度与错误映射复用 Dsh.Core。验收：按里程碑完成标准第 4 条前半。
+depends_on:
+  - windows-bot-group-manage

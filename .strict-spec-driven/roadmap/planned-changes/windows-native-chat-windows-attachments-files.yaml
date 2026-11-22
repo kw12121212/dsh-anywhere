@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-attachments-files
+  milestone: windows-native-chat
+status: planned
+summary: 附件与文件：经文件对话框、拖放与粘贴选取图片和文件随消息发送（上传状态、失败单件重试、图片压缩），聊天中图片应用内查看、文件用默认应用打开并可另存为，服务器文件分块下载，长消息阅读
+details: 与 macos-attachments-files 对应。uploadFileBinary 流式上传（进度与失败原因），receipt 齐备后经 dsh mux/JSON-RPC 提交（复用 Dsh.Core 帧编解码）；图片按共享规则压缩。拖放到聊天区与 Ctrl+V 粘贴图片加入附件栏。readAttachment 与 image（preview 后原图）取回；图片应用内查看器左右切换，文件写入临时目录后用默认应用打开，另存为用 FileSavePicker；file-download 分块拼接复用 Dsh.Core，完成后可在资源管理器中显示。长消息右键「阅读全文」（file-text）在可选择文字的对话框或窗口显示。附件与下载内容不写日志与诊断。验收：按里程碑完成标准第 5 条前半。
+depends_on:
+  - windows-bot-chat

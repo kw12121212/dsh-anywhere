@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-bot-chat
+  milestone: windows-native-chat
+status: planned
+summary: 私聊：聊天条目渲染（Markdown、代码复制、链接与服务器文件链接、工具步骤折叠）、分页、流式回复、发送箱重试、停止/恢复/分段、运行统计与 Bot 间消息、聊天缓存与滚动位置、回到最新
+details: 与 macos-bot-chat 对应。Markdown 用 Dsh.Core 解析结果以 RichTextBlock 等原生控件自绘（代码块等宽带复制、表格横向滚动、文字可选择）；http(s) 链接用默认浏览器（Launcher），服务器文件链接取回后用默认应用打开。流式、发送箱（Dsh.Core 状态机）、Enter 行为遵循团队偏好、停止/恢复/分段/run-stats/exchange 入口在聊天命令栏；缓存与滚动位置恢复、回到最新/N 条新消息。验收：按里程碑完成标准第 2 条，并验证长聊天流式追加时滚动不跳动。
+depends_on:
+  - windows-team-sidebar

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-shell-window
+  milestone: windows-native-foundation
+status: planned
+summary: 原生主窗口外壳：NavigationView 团队侧栏、聊天内容区与右侧可开合详情面板占位、窄窗口折叠、全局连接状态条、命令（重新加载 F5/Ctrl+R、设置、关于）、窗口位置尺寸与侧栏状态记忆、单实例激活
+details: 与 macos-shell-window 对应：Mica 背景的主窗口，左侧 NavigationView（团队列表占位）、内容区（聊天占位）、右侧详情面板（SplitView 或可开合列，占位），窗口变窄时侧栏折叠为紧凑模式；顶部状态条与版本提示条不遮挡内容。命令：标题栏或命令栏提供重新加载（F5/Ctrl+R）、设置、关于 DSH Anywhere（显示版本）；关闭主窗口即退出应用（Windows 惯例）。窗口状态：记忆位置、尺寸、最大化与侧栏/详情开合，恢复时保证在当前可见显示器内（与 window-state 主规格一致）。单实例：Windows App SDK AppInstance.FindOrRegisterForKey，重复启动重定向激活到已有实例并把窗口带到前台，新进程退出（与 single-instance 主规格一致）。验收：快捷键可用；退出重开窗口状态恢复；断开外接屏后启动窗口出现在主屏；重复启动激活已有窗口。
+depends_on:
+  - windows-setup-settings

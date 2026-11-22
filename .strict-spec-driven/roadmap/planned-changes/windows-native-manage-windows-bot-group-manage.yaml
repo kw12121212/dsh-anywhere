@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-bot-group-manage
+  milestone: windows-native-manage
+status: planned
+summary: Bot 与群管理：Bot 详情与设置（新建、编辑、复制、删除、Main Bot、私有与标记、模型与思考强度快速切换、权限预设、外观）与群设置（新建、编辑、删除、成员、管理员、回复模式、公告、统一权限预设），乐观写入
+details: 对应 macos-bot-group-manage（Android dsbot-bot-manage、dsbot-group-manage）。Bot 详情在右侧面板，编辑用 ContentDialog 或页面分节表单；聊天命令栏提供模型快速切换下拉菜单（按服务商分组、思考强度，efforts 按模型缓存）。乐观写入复用 Dsh.Core；删除二次确认；新建 Bot 重名检查并直接打开新聊天；群成员可搜索选择，需审批变更显示等待审批。验收：按里程碑完成标准第 1 条前两项。
+depends_on:
+  - windows-cards-dock
+  - windows-group-chat

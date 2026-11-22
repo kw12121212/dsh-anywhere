@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-agents
+  milestone: windows-native-manage
+status: planned
+summary: Agent：成员 Agent 添加、查看会话、接管、归档、重命名与移除，DSH Agent 添加与聊天（agent-chat、stop-agent），本地 Agent 列表、刷新、模型查看与增删改
+details: 对应 macos-agents。成员 Agent 列表在 Bot 详情面板；agent-session 只读复用聊天渲染；DSH Agent 聊天复用 windows-bot-chat 与发送箱，无会话时先取得（按 Agent 去重），不参与已读。本地 Agent 在设置分页：local-agents、refresh、models、add/update/remove（删除二次确认）。验收：成员 Agent 与本地 Agent 操作与网页端一致。
+depends_on:
+  - windows-bot-group-manage

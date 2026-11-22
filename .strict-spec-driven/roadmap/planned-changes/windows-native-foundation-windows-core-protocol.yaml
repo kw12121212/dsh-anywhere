@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-core-protocol
+  milestone: windows-native-foundation
+status: planned
+summary: 在 Dsh.Core 中用 C# 实现协议层：harness URL 校验与 token 剥离、DS-Bot API 请求与错误码、SSE 解析、feed 同步与 revision 补齐、版本比对与 hello 能力位、dsh mux/JSON-RPC 帧、团队状态与聊天条目及卡片解码，读取与 Kotlin、Swift 相同的共享测试向量与夹具
+details: 以 tech/dsbot-api 为协议标准，以 macos/Core 与 android/core 的对应实现为参照（执行时以三者最新状态为准）。只用 BCL（System.Text.Json、Span/Memory、Regex），不含网络 IO；传输抽象为接口（IHttpTransport、ISseStream）供 App 注入。测试读取 macos-core-protocol 建立的共享向量与夹具目录，断言语义与 Kotlin、Swift 版一致；新增共享夹具时三端测试同步读取。验收：dotnet test 在 Linux 通过并覆盖 URL 向量、SSE 分块与多行、feed 断线补齐、错误码映射、版本比对（含 UNKNOWN）、mux 帧往返、卡片深度与大小上限；Kotlin 与 Swift 回归仍通过。
+depends_on:
+  - windows-scaffold

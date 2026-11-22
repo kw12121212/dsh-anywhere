@@ -1,0 +1,39 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  windows-native-release:
+    title: Windows 原生：发布切换与自更新
+order: 1600
+goal: 功能追平后把 Windows 的对外发布从 Electron 切换为原生 WinUI 3 应用：Release 工作流构建并发布原生未签名安装程序（文件名约定不变），原生应用经自托管更新源检查、下载、校验 sha256 并静默运行新安装程序完成升级，Electron 版用户可平滑迁移，Electron 仅保留 Linux 打包。
+scope:
+  in:
+    - Release 与 Package 工作流：Windows 产物改为原生安装程序 dsh-anywhere_<版本>_windows_amd64_installer.exe 与 .sha256；electron-builder 移除 win/nsis 目标，Electron 只产出 Linux 包；README SmartScreen 说明更新；actionlint 与 workflows 结构断言更新
+    - 安装程序：按用户安装到 %LOCALAPPDATA%\Programs 下（无需管理员），开始菜单快捷方式，卸载项，检测并提示卸载 Electron 版；支持静默安装参数供自更新使用
+    - 自更新：自托管 latest.json 增加 Windows 条目，本地发布流程把 Release 中的 Windows 资产同步到 DSH_UPDATES_DIR；应用设置中配置更新源，检查、下载、校验 sha256、退出并静默运行新安装程序后重新启动；桌面主规格与 packaging/build-identity 技术标准的平台标注更新
+  out:
+    - 代码签名证书与 SmartScreen 信誉、MSIX、Microsoft Store、winget 发布；ARM64 安装包
+    - Linux 客户端的技术栈变化（继续 Electron）
+done_criteria:
+  - 推送 v* tag 后 Release 工作流发布原生 Windows 安装程序与 .sha256，文件名符合 packaging 约定，Electron 只产出 Linux 包；tag 与 package.json 版本一致性校验保持
+  - 运行本地发布流程后自托管源 latest.json 含 Windows 条目且安装程序与 sha256 可下载；已装旧版原生应用检查更新后下载、校验、静默安装并自动重启，关于页显示新版本；sha256 不符时拒绝安装并给出可读原因
+  - 已装 Electron 版的 Windows 运行原生安装程序时提示卸载旧版，首次启动带入 harness URL 并提示重新认证；非管理员账户可完成安装与自更新；完整回归命令与 scripts/workflows.test.mts 通过
+intake_questions:
+  - id: windows-switch-timing
+    question: 何时把 Windows 发布从 Electron 切换为原生？
+    context: Electron 版经网页提供 DS-Bot 全部功能。
+    impact: 决定 Windows 用户何时拿到原生版。
+    recommendation: 默认在 windows-native-manage 完成、功能追平后切换，此前原生版只以 Package 工作流产物供试用；如需提前切换须在本里程碑提案前告知。
+planned_changes: {}
+dependencies:
+  - windows-native-manage 里程碑完成（功能追平后才切换）；macos-native-release 的自更新契约（latest.json 扩展、发布脚本同步流程）已稳定并复用
+  - 自托管更新源 DSH_UPDATES_DIR 与本地发布流程；本机 gh 已登录可下载私有仓库 Release 资产
+risks:
+  - 未签名安装程序与自更新下载的文件会触发 SmartScreen 或 Mark-of-the-Web：须验证 HttpClient 下载文件无 Zone.Identifier 时静默安装不被拦截，并在 README 写明首次安装的绕过步骤
+  - 安装程序工具选型（Inno Setup、WiX 或 NSIS 包装自包含产物）影响静默安装、按用户安装与卸载 Electron 版的实现，须在 windows-release-switch 提案中确定并登记 tech/packaging
+  - 发布流程分 CI 构建与本地同步两段：沿用强制前置校验与先同步后上传的顺序，避免半发布
+status: proposed
+notes:
+  - 2026-11-22 用户确认：Windows 桌面端采用与 macOS 相同的设计——原生代码（C# + WinUI 3 / Windows App SDK）、不内置 Tailscale（tailnet 依赖系统 Tailscale 客户端）、宽屏分栏、CI 构建未签名安装包并加自更新，排在 macOS 四个里程碑之后；Linux 继续使用 Electron，不在本次规划
+details: 构建：release.yml 的 Windows job 改为 dotnet publish 自包含原生应用并用选定的安装程序工具打包为按用户安装的安装程序，生成 .sha256；版本由 package.json 注入并在打包前校验 tag。自更新：latest.json Windows 条目（版本、安装程序文件名、sha256），解析与比较放 Dsh.Core 测试；App 下载到临时目录、校验后退出并以静默参数启动安装程序，安装程序完成后重新启动应用。发布脚本：复用 macos-release 时建立的同步流程（或同一脚本扩展）用 gh 下载 Windows 资产同步到 DSH_UPDATES_DIR，沿用强制前置校验。

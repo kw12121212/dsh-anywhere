@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-side-chat
+  milestone: windows-native-chat
+status: planned
+summary: Side chat 与 btw 卡：在右侧详情面板中新建旁路会话、附最近消息快照提问（不运行工具不打断工作）、流式回答、取消与关闭，切换聊天后进行中状态保留；btw 卡查看与删除
+details: 与 macos-side-chat 对应，纯逻辑复用 Dsh.Core。入口：聊天命令栏按钮与输入 /side；side-new、side-ask（recent:true）、side-cancel、side-close；回答流式并标注未运行任何工具；不接受附件。btw-delete 与网页端同步。验收：按里程碑完成标准第 5 条后半。 实现要点：旁路会话列表与回答显示在右侧详情面板，切换聊天或最小化后进行中的回答状态保留，回到该 Bot 时继续显示；回答进行中可取消；关闭会话后从列表移除。验收：在 Windows 上对一个正在工作的 Bot 打开 Side chat 提问，回答流式显示且主聊天不中断，切到别的聊天再回来仍在进行或已完成，取消与关闭生效；btw 卡删除后网页端同步。
+depends_on:
+  - windows-bot-chat

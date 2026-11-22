@@ -22,6 +22,7 @@ done_criteria:
   - 为 Bot 与群从文件夹列表选择工作文件夹并保存，被拒绝的位置（dsh 数据目录等）显示服务端给出的原因；需要审批的设置走聊天中的审批卡
   - 从手机相册导入头像并设给 Bot；查看、提问、置顶、遗忘与恢复某个 Bot 的记忆，结果与网页端一致
   - 修改主题、强调色、消息布局与头像动画等级后，App 与网页端均按新偏好显示；完整回归命令通过
+  - 在 App 中为 Bot 添加成员 Agent、查看其会话、重命名、归档与移除，以及添加 DSH Agent 并在其聊天中发送消息与停止，结果与网页端一致
 intake_questions:
   - id: folder-picker
     question: 手机上如何替代电脑本机的系统选文件夹对话框？
@@ -32,12 +33,13 @@ planned_changes: {}
 dependencies:
   - dsbot-native-chat 里程碑完成：API 客户端、原生外壳、团队页与聊天页可用
   - 用户 dsh 服务启用 ds-bot 插件；验收用本机 dsh-url 输出的 tailscale 地址
+  - dsbot-mobile-polish 里程碑先行：dsbot-baseline-0310 提供 0.3.10 端点清单与夹具（memory-add/memory-edit、agent-chat/stop-agent 等）；dsbot-phone-prefs 提供本机外观，团队主题在其上叠加；dsbot-outbox-retry 的发送箱供 Agent 聊天复用
 risks:
-  - 设置项与端点参数随 DS-Bot 版本变化较快；以 DS-Bot 0.3.2 网页端为准，未知字段降级为只读显示
   - 删除 Bot、删除群、遗忘记忆等不可逆操作须在手机上二次确认，误触成本高
   - 部分设置（文件夹移出团队工作区、把 Bot 加入在外部文件夹工作的群）会触发 Bot 侧审批而非立即生效，界面需正确表达待审批状态
+  - 设置项与端点参数随 DS-Bot 版本变化较快；以 dsbot-mobile-polish 中 dsbot-baseline-0310 登记的 DS-Bot 0.3.10 端点清单与网页端为准，未知字段降级为只读显示
 status: proposed
 notes:
-  - 功能对等基准：ds-bot 0.3.2 client.js 中的 Bot 设置、群设置、详情面板与 Settings 的 General/Bots/Group chats 页；手机端布局参考上游 docs/plans/2026-10-24-mobile-app.md 的页面清单
   - 端点参数与校验以 dsbot-api 技术标准（由 dsbot-api-spike 建立）与 channel.js 为准
+  - 功能对等基准：DS-Bot 0.3.10（由 dsbot-baseline-0310 确立）client.js 中的 Bot 设置、群设置、详情面板与 Settings 的 General/Bots/Group chats 页；手机端交互参考上游 mobile/src/screens/manage.tsx（BotDetails、BotEdit、NewBot、GroupDetails/GroupSettings、NewGroup、Memory）、model-menu.tsx 与 team/optimistic.ts、team/group-folder.test.ts，只学行为，用 Compose 与 core 原生实现
 details: 界面形态：Bot 与群的详情与设置在手机上为全屏页或底部抽屉，分节表单；列表选择器（模型、思考强度、权限预设、文件夹）用全屏选择页；破坏性操作统一二次确认。所有写操作经 dsbot-api-client 发出，不自动重试，失败时显示服务端原因；成功后依赖 feed 的 revision 事件刷新状态而非本地乐观修改。参数构造与校验等纯逻辑放 core 以 JUnit 覆盖；设备验收对照网页端截图逐项核对。

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-im-schedules-usage
+  milestone: windows-native-manage
+status: planned
+summary: IM、日程与用量：IM 通道增改删、配对与解除、指定聊天、重试与登录流程（二维码或可复制链接）；日程查看、新建、暂停与恢复、删除；用量按时间范围、按 Bot、按模型的原生图表与详情
+details: 对应 macos-im-schedules-usage。IM：im-add/update/remove/pair/unpair/chat/retry、im-login-start/im-login-wait（二维码在窗口显示或复制链接），凭据不回显。日程：schedules、schedule-create（at/every/daily/weekly/cron）、schedule-pause、schedule-delete（二次确认）。用量：usage（带 timeZone）与 usage-summary，图表沿用 windows-cards-dock 选定的原生绘制方案，聚合复用 Dsh.Core。验收：按里程碑完成标准第 3 条第三、四项。
+depends_on:
+  - windows-bot-group-manage

@@ -1,0 +1,58 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  macos-native-foundation:
+    title: macOS 原生：骨架、连接与会话
+order: 900
+goal: 在 macos/ 下建立 Swift + SwiftUI 原生 macOS 应用的工程骨架与基础能力：纯 Foundation 的 DshCore 包（可在 Linux 上 swift test 并进入完整回归）、SwiftUI 应用外壳、harness URL 配置与首次设置、设置窗口、经系统网络（不内置 Tailscale）调用 DS-Bot API 与 feed、dsh 会话建立与失效重认证、连接错误页、版本提示、窗口状态、诊断上报，使后续里程碑可直接在其上实现 DS-Bot 界面；本里程碑期间 Release 仍发布 Electron 的 macOS 包。
+scope:
+  in:
+    - 工程：macos/Core（Swift Package，仅依赖 Foundation，不引用 AppKit/SwiftUI/Combine 等 Apple 专有框架，Linux 上 swift test 可运行）与 macos/App（SwiftUI 应用，macOS 上构建 .app）；应用身份沿用 DSH Anywhere 与 work.keepwriting.dsh-anywhere，版本号构建期读取仓库根 package.json；完整回归命令追加 Core 的 swift test
+    - 协议层（Core）：harness URL 校验与 token 剥离（与桌面、Android 共用测试向量）、DS-Bot API 请求封装与错误码映射、SSE 解析、feed 同步与断线按 revision 补齐、远端版本比对、hello 能力位、dsh mux/WebSocket JSON-RPC 帧编解码（附件路径用）、卡片与聊天条目解码模型；行为以 android/core 与 tech/dsbot-api 为准，用 Swift 重写并移植其 JUnit 用例为 XCTest/swift-testing 用例
+    - 应用层（App）：URLSession 传输携带 dsh-auth 会话 cookie 与受信 Host、带 token 地址只用一次建立会话、401 显示本地重新认证页、连接探测与按原因分类的本地错误页（tailnet 主机解析失败时提示确认系统 Tailscale 已连接）、版本提示条、首次设置页与设置窗口（⌘,）、NavigationSplitView 外壳与应用菜单、窗口位置尺寸记忆、诊断上报（按 diagnostics-reporting 桌面要求）、从 Electron 版迁移已保存的 harness URL 与诊断端点配置
+  out:
+    - 内置 Tailscale、tsnet、SOCKS5 分流与任何 VPN/Network Extension；tailnet 可达性完全交给系统 Tailscale 客户端
+    - DS-Bot 团队、聊天、管理与设置页面内容（macos-native-chat 与 macos-native-manage 承接）；Release 切换与自更新（macos-native-release 承接）
+    - Kotlin/Compose Multiplatform、Electron、WebView 承载 harness 网页；Windows 与 Linux 客户端的任何变化；iOS 与 iPadOS
+done_criteria:
+  - 完整回归命令包含 macos/Core 的 swift test 并在本机 Linux 通过；Core 覆盖 URL 校验（共用测试向量全部通过）、SSE 解析、feed 补齐状态机、错误码映射、版本比对与 mux 帧编解码
+  - GitHub Actions 的 Package 工作流在 macOS runner 上构建出原生 .app 并作为工作流产物上传（不进 Release）；在用户 Mac 上打开该产物（按 README 绕过 Gatekeeper）显示首次设置页
+  - 在系统 Tailscale 已连接的 Mac 上粘贴本机 dsh-url 输出的带 token 地址（不打印、不入库）后进入主窗口，状态条显示在线；退出重开无需重新输入且仍处于登录状态；会话失效时显示本地重新认证页，粘贴新地址后无需重启即恢复
+  - 关闭 dsh 或断开 Tailscale 时显示按原因分类的本地错误页与重试、修改地址按钮，tailnet 主机解析失败的说明提示检查 Tailscale；恢复后重试回到主窗口；远端版本与基准不一致时显示版本提示条
+  - 从已装 Electron 版的 Mac 首次启动原生版时自动带入已保存的 harness URL 与诊断端点；会话 cookie 无法迁移时显示本地重新认证页而非空白；窗口位置尺寸跨重启恢复且保证在可见屏幕内；诊断上报开启时错误页产生按原因分类的报告且不含 token 与 API 载荷
+intake_questions:
+  - id: macos-stack
+    question: macOS 原生版用什么技术？
+    context: core 与界面在 Android 上为 Kotlin/Compose，可选 Compose Multiplatform 复用或 SwiftUI 重写。
+    impact: 决定代码复用方式、工程结构与回归命令。
+    recommendation: 已确认（2026-11-22）：Swift + SwiftUI 原生，协议逻辑用 Swift 重写，与 Kotlin 版共享测试向量。
+  - id: macos-tailscale
+    question: macOS 端是否内置 Tailscale？
+    context: Android 内嵌 tsnet 节点；macOS 有官方系统客户端。
+    impact: 决定网络层是否需要 SOCKS5 分流与隧道管理。
+    recommendation: 已确认（2026-11-22）：不内置，依赖系统 Tailscale 客户端。
+  - id: macos-min-version
+    question: 最低支持的 macOS 版本？
+    context: Electron 版最低 macOS 12；SwiftUI 的 Observation、inspector 等需要 macOS 14。
+    impact: 决定可用的 SwiftUI API 与受影响的老系统用户。
+    recommendation: 默认 macOS 14（Sonoma）；若需覆盖 12/13 用户须在 macos-scaffold 提案前告知，届时改用 ObservableObject 并放弃 inspector。
+planned_changes: {}
+dependencies:
+  - dsbot-native-integrations 里程碑完成（Android 三个 DS-Bot 里程碑在前，用户 2026-11-22 确认排序）；android/core 与 tech/dsbot-api 为协议行为的参照实现
+  - 本机 Linux 已装 Swift 工具链（~/.local/share/swiftly/bin/swift）用于回归；macOS 构建依赖 GitHub Actions macOS runner 与用户的 Mac 验收（WSL 中无 xcodebuild）
+  - 用户 Mac 上安装并登录系统 Tailscale 客户端，dsh 服务经 tailscale serve 暴露且 trusted-host 包含 tailnet 地址
+risks:
+  - SwiftUI 部分无法在 WSL 中构建与运行：每次界面改动都要经 CI 产物或用户 Mac 验证，反馈回路慢；须把可测逻辑尽量下沉 Core 并在 Linux 上覆盖
+  - Linux 版 Foundation 与 macOS 版存在差异（FoundationNetworking、日期与正则 API）：Core 不得使用网络、文件监控等平台差异大的 API，网络与存储留在 App 层
+  - 协议逻辑在 Kotlin 与 Swift 各维护一份：行为漂移风险高；须共享测试向量与脱敏夹具（同一份 JSON 文件被两端测试读取），以 tech/dsbot-api 为唯一协议标准
+  - dsh 共享 /api 通道按 Host 白名单与 Origin 校验：URLSession 不能带 Origin 与跨站标记，cookie 绑定 host:port 且为 SameSite=Strict、HttpOnly，需自管 cookie 存储而非依赖 HTTPCookieStorage 的默认策略
+  - 原生版与 Electron 版共用 bundle id：两者同时存在于 /Applications 时 LaunchServices 可能混淆；原生版在切换前以 CI 产物形式分发，安装位置与名称须在验收说明中写清
+status: proposed
+notes:
+  - 2026-11-22 用户确认：macOS 端改为 Swift + SwiftUI 原生应用（不复用 Kotlin/Compose），不内置 Tailscale（tailnet 地址依赖系统已运行的 Tailscale 客户端），排在 Android 三个 DS-Bot 里程碑之后，窗口为宽屏分栏，CI 构建未签名 dmg 并加自更新；Windows 与 Linux 继续使用 Electron 不变
+  - 参照实现：android/core（HarnessUrl、DsbotApi、SseParser、FeedSync、DsbotVersions、DshMux、WsClient、Cards、ChatRender、MarkdownParse、TeamHome、RoomChat、SideChat、DiagStore、DiagReport）、specs/android-dsbot、specs/session-auth、specs/diagnostics-reporting 的桌面要求；Electron 版配置位于 ~/Library/Application Support/DSH Anywhere/
+  - 规格归属建议：新建 macos-app 主规格描述原生 macOS 外壳、连接、会话、设置与更新；DS-Bot 界面行为复用 android-dsbot 规格中平台无关的条目，在后续变更中把这些条目改写为平台无关并标注 Android/macOS 差异
+  - 后续（2026-11-22）：Windows 将按同一设计改为 C# + WinUI 3 原生（windows-native-* 里程碑，排在 macOS 之后），本里程碑写的「Windows 继续 Electron」只在 macOS 阶段成立；共享测试向量与脱敏夹具目录须设计为 Kotlin、Swift、C# 三端都能读取（纯 JSON 文件、与语言无关的路径与命名）
+details: 技术形态：Swift 6、SwiftUI，最低 macOS 14（Observation 与 NavigationSplitView/inspector 可用），通用二进制（arm64 + x86_64）。目录：macos/Core（Swift Package，库 DshCore 与测试）与 macos/App（SwiftUI 应用，依赖 DshCore；工程生成方式在 macos-scaffold 中确定，优先可在 CI 无交互构建、不提交 Xcode 用户数据）。分层：纯逻辑与解码放 Core 并在 Linux 上测试；URLSession、Keychain/文件存储、NSOpenPanel 等 Apple API 只在 App。网络：直接使用系统网络栈，tailnet 地址由系统 Tailscale 提供解析与路由，不做 SOCKS5、不做分流。会话 cookie 存于 App 私有目录（Application Support 下，文件权限 0600）或 Keychain，不写日志。共享测试向量：harness URL 向量与 DS-Bot 脱敏夹具放在两端均可读取的仓库位置，Kotlin 与 Swift 测试读同一份文件。:app 式的设备验收（Mac 上运行）不进回归命令，由各变更验收任务覆盖。

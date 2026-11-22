@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-read-state
+  milestone: dsbot-mobile-polish
+status: planned
+summary: 本机已读状态：按 harness 主机与 Bot/群保存最后已读时间，团队页未读点据此计算并跨重启保留；团队页预览按「等你回答 / 等你审批 / 工作短语 / 摘要」优先级显示，交接与提问卡的包装文字转为可读文本
+details: 参考上游 team/seen.ts、TeamList.tsx 与 settled.ts 的 cleanPreview。core：ReadState 以 Map<主机标识, Map<bot/room id, 已读毫秒>> 表示，合并只前移、忽略 0 与非法值；isUnread = 非当前打开 且 lastAt 有效 且 lastAt > 已读时间；序列化为 JSON；预览优先级函数（待回答提问或卡片 → 待审批 → 工作短语 → 群工作 → 清洗后的摘要 → 角色）与摘要清洗；JUnit 覆盖合并、边界与优先级。App：已读状态存 App 私有存储，写入串行化，失败下次标记时重试；聊天页在前台可见时以 max(条目 lastAt, 聊天内最新条目时间) 标记已读，收到当前聊天的实时 message 时同步标记；团队页未读点改由本机计算，远端未读字段不再作为依据（规格写明网页端已读不同步到手机）；Main Bot 置顶在前，其余按置顶优先、lastAt 新到旧排序的规则若与现有规格不同，在本变更中明确并改写 team-page-list 规格。验收：打开聊天后未读点消失、强杀重开仍保持；待回答条目预览显示「等你回答」。
+depends_on:
+  - dsbot-baseline-0310

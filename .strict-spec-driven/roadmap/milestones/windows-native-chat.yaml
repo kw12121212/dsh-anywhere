@@ -1,0 +1,40 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  windows-native-chat:
+    title: Windows 原生：团队与对话
+order: 1400
+goal: 在 Windows 原生应用的分栏外壳中实现与 Android 及 macOS 原生 DS-Bot 界面对等的团队与对话体验：团队侧栏（分组、置顶、未读、搜索、需要你、应用内提醒）、私聊、群聊、交互卡片与停靠区、图表与富渲染、附件与文件、Side chat，交互按 Windows 习惯（键盘、拖放、粘贴、右键菜单、文件对话框）调整，结构与 macos-native-chat 一一对应。
+scope:
+  in:
+    - 团队侧栏：分组列表、Main Bot 在前、置顶、工作状态、本机已读未读、预览优先级、搜索（Ctrl+K）、需要你汇总、notice 横幅（InfoBar，点按切换聊天）
+    - 私聊与群聊：Markdown 与代码复制、链接与服务器文件链接、分页、流式、发送箱重试、停止/恢复/分段、运行统计与 Bot 间消息、聊天缓存与滚动位置；群成员归属、@ 补全、停止群或成员工作、群目标与进度、后台任务条、电脑操作请求、模型失败修复卡
+    - 卡片与渲染：审批、提问、show_view（含原生图表与控件）、密钥卡、学习审批差异、连接器请求、浏览器交接、btw 卡、沙箱 HTML 卡（禁网络隔离的 WebView2）、停靠区；附件发送（文件对话框、拖放、粘贴）与查看（应用内图片查看、默认应用打开、另存为）、分块下载、长消息阅读；Side chat 在详情面板
+  out:
+    - 管理与设置页（windows-native-manage 承接）；Windows 系统通知（Toast）、任务栏角标与托盘常驻；Windows Hello 验证（与 Android、macOS 一致不做）
+    - Release 切换（windows-native-release 承接）；Linux 客户端变化
+done_criteria:
+  - 在 Windows 上连接后侧栏显示与网页端一致的 Bot、群、分组与置顶；打开聊天后未读点消失并跨重启保持；停在 A 聊天时 B 提问出现横幅并可切换；需要你计数与网页端一致
+  - 私聊发送文字后回复流式出现并与网页端一致；上滚加载更早记录；停止、恢复与分段切换两端一致；断网发送显示未发送，恢复后点按重试只发一次且网页端无重复
+  - 群聊中 @ 成员（输入 @ 出现补全）发消息，被 @ 成员开工并回复；停止群工作生效；后台任务可逐个停止
+  - 审批、提问、show_view 卡片与密钥卡可作答且网页端同步，停靠区一次只展开一张；图表按数据绘制，畸形数据降级为只读文本；沙箱 HTML 卡无法访问网络
+  - 拖放或粘贴图片与文件随消息发送 Bot 能读取；附件可查看并另存为；Side chat 在详情面板可新建、提问与关闭；Dsh.Core 新增逻辑有 dotnet test 覆盖且完整回归通过
+intake_questions:
+  - id: windows-chat-parity
+    question: Windows 对话功能的对等基准？
+    context: Android 与 macOS 的对话里程碑均在前完成。
+    impact: 决定每个变更实现到什么程度。
+    recommendation: 以执行时 android-dsbot（或共享 DS-Bot 界面规格）最新状态为准，桌面交互参照 macOS 实现并换成 Windows 习惯；系统通知与 Windows Hello 不做。
+planned_changes: {}
+dependencies:
+  - windows-native-foundation 里程碑完成；macos-native-chat 已完成并作为桌面交互参照，android-dsbot 规格为行为基准（执行时以最新状态为准）
+risks:
+  - WinUI 3 ItemsRepeater/ListView 在流式追加与反向分页时的滚动定位须专门验证，避免长聊天跳动
+  - 沙箱 HTML 卡用 WebView2：须独立用户数据目录、禁用宿主对象与 Web 消息桥、拦截全部网络请求（WebResourceRequested 阻断）与导航，确保不可信 Bot 内容无法联网或访问本地文件；WebView2 运行时随 Windows 10/11 预装与否须在验收中确认
+status: proposed
+notes:
+  - 2026-11-22 用户确认：Windows 桌面端采用与 macOS 相同的设计——原生代码（C# + WinUI 3 / Windows App SDK）、不内置 Tailscale（tailnet 依赖系统 Tailscale 客户端）、宽屏分栏、CI 构建未签名安装包并加自更新，排在 macOS 四个里程碑之后；Linux 继续使用 Electron，不在本次规划
+  - 规格归属：复用 macos-native-chat 改写后的平台无关 DS-Bot 界面规格（或 dsbot-client 共享规格），补标 Windows 平台差异（右键菜单、文件对话框、InfoBar、快捷键 Ctrl 代替 ⌘）
+details: 交互映射沿用 macOS 并换成 Windows 习惯：⌘ 快捷键换为 Ctrl（Ctrl+K 搜索、Ctrl+↑/↓ 切换聊天、Esc 关闭详情面板），右键 MenuFlyout 代替长按，FileOpenPicker/拖放/粘贴代替相册，另存为对话框代替分享面板。纯逻辑全部在 Dsh.Core 并与 Kotlin、Swift 共享夹具测试；图表用 WinUI 可用的原生绘制（Win2D 或原生图表控件，选型在 windows-cards-dock 提案中确定，不得引入网页渲染）；界面验收在 GAMEPC 上对照网页端、Android 与 macOS 逐项核对。

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-session-transport
+  milestone: macos-native-foundation
+status: planned
+summary: App 层 URLSession 传输与 dsh 会话：携带 dsh-auth cookie 与受信 Host 调用 /api/bot 与 feed、带 token 地址只用一次建立会话、cookie 私有持久化跨重启、401 显示本地重新认证页、连接探测与按原因分类的本地错误页、版本提示条，不内置 Tailscale
+details: 实现 DshCore 传输协议的 URLSession 版本：普通请求与 SSE 长连接（URLSession bytes 流），不发送 Origin 与跨站标记，Host 与 harness 一致；自管 cookie 存储（只保存 dsh-auth-* 会话 cookie，按 host:port 绑定，存 Application Support 下 0600 文件或 Keychain，不写日志）。会话：首次设置保存带 token 地址时以该地址建立一次会话后只保存剥离 token 的干净地址；401 或会话 cookie 缺失时显示本地重新认证页（说明粘贴新的带 token 地址），保存后无需重启即恢复。连接探测：DNS 失败、拒绝、超时、TLS 失败分类显示本地错误页（干净地址、原因、重试、修改地址），主机为 *.ts.net 或 100.64.0.0/10 地址且解析或连接失败时附加「请确认系统 Tailscale 已连接」提示；不实现任何隧道或代理。feed：前台订阅、断线指数退避重连并补齐，状态条显示连接中/在线/已断开；应用失活（窗口全部隐藏或系统睡眠）时断开、恢复时补齐。版本提示条按 Core 的比对结果显示，可关闭本次。新建 macos-app 主规格登记连接、会话、错误页与版本提示的可观察行为。验收：按里程碑完成标准第 3、4 条在用户 Mac 上逐项核对。
+depends_on:
+  - macos-core-protocol

@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-cards-dock
+  milestone: windows-native-chat
+status: planned
+summary: 交互卡片与停靠区：审批、提问、show_view（文本、指标、表格、公式、进度、选择、确认、表单、滑块、数字、开关、来源与原生图表）、密钥卡、学习审批差异、连接器请求、浏览器交接、btw 卡、沙箱 HTML 卡，输入框上方停靠区一次展开一张
+details: 与 macos-cards-dock 对应，解码、上限、作答参数、停靠区排序复用 Dsh.Core。图表选型（Win2D 自绘或原生图表控件）在本变更提案中确定并登记 tech/windows-client，禁止网页渲染图表。密钥卡用 PasswordBox，不回显不进日志。沙箱 HTML 卡用独立 WebView2：独立临时用户数据目录、AreHostObjectsAllowed=false、IsWebMessageEnabled=false、WebResourceRequested 阻断全部网络与文件请求、NavigationStarting 取消一切导航；WebView2 运行时缺失时降级为只读文本。验收：按里程碑完成标准第 4 条，另以含外链图片与 fetch 的 HTML 卡验证无网络请求。
+depends_on:
+  - windows-bot-chat

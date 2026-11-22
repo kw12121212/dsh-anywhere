@@ -1,0 +1,63 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  dsbot-mobile-polish:
+    title: 原生 DS-Bot：对照上游手机端打磨聊天体验
+order: 650
+goal: 以上游 Fei2411/DS-Bot 手机端（mobile/，0.3.10）为行为参考，用本项目自有的 Kotlin + Compose 原生代码与 core 纯 JVM 逻辑补强已上线的原生 DS-Bot 聊天体验：已测基准升到 DS-Bot 0.3.10 并接入新端点，补上应用内提醒横幅、本机已读状态、聊天缓存与快速切换、发送失败可手动重试、待处理卡片停靠区、图表与富渲染、长消息与文件查看、手机端外观与语言，使日常在手机上处理 Bot 团队的流畅度与上游手机端相当。
+scope:
+  in:
+    - 已测基准升级：DS-Bot 0.3.6 → 0.3.10（dsh 同期版本由真实服务确认），更新 tech/dsbot-api 端点清单、脱敏夹具与 DsbotVersions 基准；接入 hello 能力位（capabilities/boot/seq）并据此显隐功能
+    - 提醒与已读：feed notice 事件与 (boot, seq) 游标、断线重连后经 notices 补齐、非当前聊天的应用内横幅（可在设置关闭）；本机按设备保存的已读时间戳计算未读点，团队页预览按「等你回答 / 等你审批 / 工作短语 / 摘要」优先级显示
+    - 聊天流畅度：内存 LRU 聊天缓存与滚动位置恢复、单飞读取与过期结果丢弃、前台 15 秒兜底轮询与回前台探测；「回到最新 / N 条新消息」按钮；发送箱（发送中 / 未发送点按重试 / 删除，切换聊天不丢）与图片发送前压缩
+    - 卡片与渲染：输入框上方的待处理卡片停靠区（手风琴、一次展开一张、按需要处理的优先级）、学习审批的逐行差异、连接器请求卡；show_view 原生图表（折线、面积、柱、横柱、环形）与滑块、数字、开关、提示框、来源段；Markdown 表格横向滚动、复制为 TSV、展开查看，任务列表与服务器本地图片（markdown-image）
+    - 0.3.10 新增聊天条：后台任务条与逐任务停止（bot-stop-task）、电脑操作请求（computer-app-answer 拒绝/本次/总是）与停止（computer-stop）、模型失败修复卡（缺凭据/鉴权/额度等给出可读指引）、群目标阶段进度条、按工具显示的工作短语
+    - 查看与手机端偏好：长按消息菜单（复制、选择文字进入全屏可选阅读器）、阅读全文（file-text）、分块下载文件（file-download，512 KiB）后交系统分享面板、可左右滑动的图片查看器（先预览后原图）；手机本机外观（跟随系统/浅色/深色）与语言（跟随系统/简体中文/English）、关键操作触感反馈、减少动态效果
+  out:
+    - 配对与连接：二维码配对、加密中转（上游 link/）、电脑列表与设备身份校验、dsbot://pair 深链；本项目连接继续由用户配置的 harness URL、内嵌 Tailscale 与 dsh 会话 cookie 承担，连接层不变
+    - 移植上游 React Native / Expo / react-native-web 代码或引入网页 UI：上游只作行为与交互参考，全部用 Compose 与 core 原生实现
+    - 导航骨架改为「聊天页为根 + 抽屉」：保留团队页为根（2026-11-22 确认），只吸收上游的缓存与快速切换做法
+    - 高权限操作前的生物识别或锁屏验证（2026-11-22 复核维持不做）；系统推送通知、FCM、桌面角标、常驻后台服务
+    - Bot、群、记忆、模型服务商、密钥、连接器、能力、日程、用量等管理与设置页（仍由 dsbot-native-manage 与 dsbot-native-integrations 承接）
+done_criteria:
+  - 远端为 DS-Bot 0.3.10 时连接后不显示版本提示条；远端为 0.3.6 时显示提示条且原有聊天功能仍可用；hello 未声明的能力对应入口隐藏而不是报错；完整回归命令通过，core 新增逻辑均有 JUnit 覆盖
+  - 停在 A Bot 聊天时 B Bot 发起提问或回复，顶部出现约 8 秒的横幅，点按进入 B 的聊天；dsh 重启（boot 变化）后重连自动重取整体状态，不重复弹出已显示过的横幅；设置中关闭横幅后不再出现
+  - 团队页未读点只在条目最后活动时间晚于本机已读时间时出现；打开聊天后未读点消失，强杀重开后仍保持已读；等待回答或审批的条目预览显示对应提示而非最后一条消息
+  - 在两个聊天间来回切换时立即显示上次内容与滚动位置并在后台刷新；离底部较远时有新消息显示「N 条新消息」按钮；断网发送的消息显示「未发送，点按重试」，切到别的聊天再回来仍在，点按重试只发一次，恢复后网页端不出现重复消息
+  - 聊天中同时存在审批、提问与卡片时，停靠区只展开第一张需要处理的卡片且高度不超过屏幕约一半，作答后自动展开下一张；含折线/柱状/环形图的 show_view 卡片按数据绘制，畸形或超限数据降级为只读文本不崩溃；宽表格可横向滚动并复制为 TSV
+  - Bot 有后台任务时显示任务条并可逐个停止；电脑操作请求可选拒绝/本次/总是并与网页端同步；模型因缺 key 失败时显示修复卡；长消息可进入全屏阅读器选择复制，服务器文件可下载后经系统分享面板发出；切换手机外观与语言后界面即时生效并跨重启保留
+intake_questions:
+  - id: nav-shape
+    question: 是否把导航改为上游的「聊天页为根 + 左侧抽屉」？
+    context: 上游手机端启动回到上次聊天，右滑或返回键打开团队抽屉；本项目为团队页为根的两级结构。
+    impact: 决定是否改写 android-dsbot 的 native-nav-skeleton 规格与 NativeShell。
+    recommendation: 已确认（2026-11-22）：保留团队页为根，只吸收恢复上次聊天、缓存与快速切换的做法。
+  - id: biometric-gate
+    question: 是否跟进上游对高权限操作的生物识别或锁屏验证？
+    context: 上游对服务商 key、密钥、连接器、能力、学习审批、安装更新每次先要求设备验证；本项目 2026-11-11 定过不做。
+    impact: 决定是否引入 BiometricPrompt 依赖与门槛层。
+    recommendation: 已确认（2026-11-22）：维持不做。
+  - id: milestone-order
+    question: 这批强化项排在路线图哪里？
+    context: 管理与集成两个里程碑尚未开始。
+    impact: 决定 roadmap-recommend 的下一步推荐。
+    recommendation: 已确认（2026-11-22）：新建里程碑，排在 dsbot-native-manage 之前。
+planned_changes: {}
+dependencies:
+  - dsbot-native-chat 里程碑已完成：API 客户端、原生外壳、团队页、私聊、群聊、交互卡片、附件与 Side chat 作为基础
+  - 用户 dsh 服务中的 ds-bot 插件升级到 0.3.10（本机当前安装 0.3.6，位置 ~/.dsh/profiles/web/node_modules/ds-bot）；验收用本机 dsh-url 输出的 tailscale 地址（不打印、不入库）
+  - 上游参考快照：Fei2411/DS-Bot 提交 d104d9c（release 0.3.10）的 mobile/ 与 docs/plans/2026-10-24-mobile-api.md；Windows 宿主 GAMEPC 上的 Android 模拟器与用户真机用于验收
+risks:
+  - 上游手机端用的部分端点与事件（notice、notices、hello 能力位、markdown-image、file-text、file-download 分块、avatars:'ref'）是 0.3.5 之后新增的内部接口，可能继续变化；须以基准升级变更里的真实响应夹具为准，未知字段降级
+  - 上游手机端经自有加密链路调用 /api/bot，本项目经 dsh 会话与 HTTP/SSE 调用：feed 是否下发 notice/room 事件、notices 补齐是否走同一路由，需在基准升级变更中实测确认，确认不了的能力按 hello 能力位隐藏
+  - 发送箱的去重依据（新出现的用户行与本地行文本和附件数一致）在用户快速连发相同内容时可能误判；须限定匹配窗口并在 core 中以 JUnit 覆盖边界，宁可保留本地行也不重复发送
+  - 图表与富渲染吃的是 Bot 产生的不可信数据：须沿用 Cards 的深度、条目数与大小上限，原生绘制不执行脚本、不访问网络，超限降级为只读文本
+  - 本机已读状态与远端未读字段可能不一致（网页端已读不会同步到手机）：以本机为准并在规格中写明，避免用户误以为是同步故障
+status: proposed
+notes:
+  - 参考来源：上游 mobile/src/team/seen.ts（本机已读）、notices.ts（游标与补齐）、chat-cache.ts（LRU 缓存）、optimistic.ts 与 Chat.tsx 发送箱、nav/pending.ts（需要你统一模型）、screens/chat/dock.tsx（停靠区）、view.tsx（图表卡片）、markdown.tsx（表格与图片）、ui/i18n.ts 与 tokens.ts（语言与外观）；只学行为与边界，不搬代码
+  - 2026-11-22 用户确认：本项目 Android 是 Kotlin/Compose 原生代码而非网页包装，本里程碑是学习增强；导航保留团队页为根；高权限操作维持不做生物识别；本里程碑排在 dsbot-native-manage 之前
+  - 上游已实现、但归入后续里程碑的做法：乐观的团队写入（update-bot/set-main/bot-capability/update-room 在途写覆盖到新状态之上，失败重取）、聊天页顶部的模型快速切换底部抽屉、DSH Agent 聊天（agent-chat/stop-agent）、schedule-pause、memory-add/memory-edit、usage-summary——在 dsbot-native-manage 与 dsbot-native-integrations 的对应计划变更中参考
+details: 实现形态：全部为本项目 android/app（Compose Material3）与 android/core（纯 JVM Kotlin）代码。纯逻辑下沉 core 并以 JUnit 覆盖：已读时间戳合并与持久化序列化、notice 游标与 boot 变化判定、聊天缓存 LRU 与条目身份保持、发送箱状态机与去重、停靠区排序与展开选择、图表数据校验与上限、Markdown 表格 TSV 导出、分块下载拼接、工作短语映射与预览优先级。App 侧负责界面、DataStore/私有存储持久化（已读、外观、语言、横幅开关）、系统分享面板与触感反馈。基准升级作为首个变更先行，产出 0.3.10 的端点与事件清单及脱敏夹具，其余变更依赖它；:app 构建与设备验收不进回归命令，由各变更的验收任务覆盖，对照上游手机端截图与网页端逐项核对。

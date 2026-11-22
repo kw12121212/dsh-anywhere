@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-models-capabilities
+  milestone: windows-native-manage
+status: planned
+summary: 模型与能力：设置分页中查看模型、思考强度与 thinking 选项，新增与删除服务商、填写 key（不回显）、拉取并选择模型；能力（MCP stdio/HTTP、技能、能力包）列表、保存、批准、删除与按 Bot 开关
+details: 对应 macos-models-capabilities。provider-key 用 PasswordBox，value:null 移除；provider-add 已知与自定义；provider-models 查找模型；provider-remove 二次确认。capability-save（多行编辑）、capability-approve、capability-delete（二次确认）、bot-capability；状态按严重程度合成（Dsh.Core）。上线后模型失败修复卡直达本页。验收：按里程碑完成标准第 3 条第一项与能力操作两端一致。
+depends_on:
+  - windows-bot-group-manage

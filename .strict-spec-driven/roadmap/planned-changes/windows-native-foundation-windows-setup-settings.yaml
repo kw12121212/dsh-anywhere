@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-setup-settings
+  milestone: windows-native-foundation
+status: planned
+summary: 首次设置页与设置页：粘贴 harness 地址实时校验并保存、设置页查看与修改地址并显示连接状态、从 Electron 版迁移已保存的 harness URL 与诊断端点配置
+details: 与 macos-setup-settings 行为一致。首次设置页实时校验（复用 Core 与共享向量文案），保存时去 token、建立会话并进入主窗口。设置为应用内设置页（NavigationView 底部设置项）：harness URL、连接状态、关于入口；诊断上报与更新条目由各自变更加入。配置存 %LOCALAPPDATA%\DSH Anywhere Native\ 的 JSON，原子写入（临时文件 + File.Replace）。迁移：无自身配置而存在 Electron 版配置（%APPDATA%\DSH Anywhere\ 下，格式以 src/main/config.ts 与 diagnostics-store.ts 为准）时只读带入 harness URL 与诊断端点并提示重新认证。验收：全新 Windows 首次设置可完成；已装 Electron 版的 Windows 自动带入地址并显示重新认证页。
+depends_on:
+  - windows-session-transport

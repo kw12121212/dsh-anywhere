@@ -1,0 +1,55 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  windows-native-foundation:
+    title: Windows 原生：骨架、连接与会话
+order: 1300
+goal: 在 windows/ 下建立 C# + WinUI 3 原生 Windows 应用的工程骨架与基础能力：纯 .NET 的 Dsh.Core 类库（可在本机 Linux 上 dotnet test 并进入完整回归）、WinUI 3 应用外壳、harness URL 配置与首次设置、设置页、经系统网络（不内置 Tailscale）调用 DS-Bot API 与 feed、dsh 会话建立与失效重认证、连接错误页、版本提示、窗口状态与单实例、诊断上报，设计与 macos-native-foundation 一一对应；本里程碑期间 Release 仍发布 Electron 的 Windows 安装包。
+scope:
+  in:
+    - 工程：windows/Core（.NET 10 类库 Dsh.Core，只用 BCL，不引用 WinRT/WinUI/Windows 专有 API，Linux 上 dotnet test 可运行）与 windows/App（WinUI 3 桌面应用，非打包 unpackaged 模式，自包含 Windows App SDK）；应用身份沿用 DSH Anywhere，版本号构建期读取仓库根 package.json；完整回归命令追加 Core 的 dotnet test
+    - 协议层（Core）：以 tech/dsbot-api 为标准、android/core 与 macos/Core 为参照，用 C# 实现 harness URL 校验与 token 剥离、DS-Bot API 请求与错误码、SSE 解析、feed 同步与 revision 补齐、版本比对与 hello 能力位、dsh mux/JSON-RPC 帧、团队状态与聊天条目及卡片解码，读取与 Kotlin、Swift 相同的共享测试向量与脱敏夹具
+    - 应用层（App）：HttpClient 传输携带 dsh-auth 会话 cookie 与受信 Host、带 token 地址只用一次建立会话、401 本地重新认证页、按原因分类的本地错误页（tailnet 主机失败提示确认系统 Tailscale 已连接）、版本提示条、首次设置页与设置页、NavigationView/分栏外壳与菜单命令、窗口位置尺寸记忆、单实例（重复启动激活已有窗口）、诊断上报、从 Electron 版迁移已保存的 harness URL 与诊断端点配置
+  out:
+    - 内置 Tailscale、tsnet、SOCKS5 分流、WireGuard 或任何 VPN 驱动；tailnet 可达性交给系统 Tailscale 客户端
+    - DS-Bot 团队、聊天、管理与设置页面内容（windows-native-chat 与 windows-native-manage 承接）；Release 切换与自更新（windows-native-release 承接）
+    - MSIX 打包与代码签名、Microsoft Store；ARM64 构建；Linux 客户端的任何变化（继续 Electron）；WPF/WinForms/Electron/WebView2 承载 harness 网页
+done_criteria:
+  - 完整回归命令包含 windows/Core 的 dotnet test 并在本机 Linux 通过；Core 覆盖 URL 校验（共享向量全部通过）、SSE 解析、feed 补齐状态机、错误码映射、版本比对与 mux 帧编解码，且与 Kotlin、Swift 读同一份夹具
+  - GitHub Actions 的 Package 工作流在 Windows runner 上构建出原生应用（自包含、可直接运行的目录或 zip）作为工作流产物上传（不进 Release）；在 Windows 宿主上运行显示首次设置页
+  - 在系统 Tailscale 已连接的 Windows 上粘贴本机 dsh-url 输出的带 token 地址（不打印、不入库）后进入主窗口，状态条显示在线；退出重开无需重新输入且仍处于登录状态；会话失效时显示本地重新认证页，粘贴新地址后无需重启即恢复
+  - 关闭 dsh 或断开 Tailscale 时显示按原因分类的本地错误页，tailnet 主机失败提示检查 Tailscale；恢复后重试回到主窗口；远端版本与基准不一致时显示版本提示条；重复启动应用时激活已有窗口且新进程退出
+  - 从已装 Electron 版的 Windows 首次启动原生版时带入已保存的 harness URL 与诊断端点，cookie 无法迁移时显示重新认证页；窗口位置尺寸跨重启恢复且保证在可见屏幕内；诊断上报开启时错误页产生按原因分类且不含 token 与 API 载荷的报告
+intake_questions:
+  - id: windows-stack
+    question: Windows 原生版用什么技术？
+    context: 可选 C# + WinUI 3、Swift + WinUI 复用 DshCore、Compose Desktop 复用安卓。
+    impact: 决定代码复用、工程结构与回归命令。
+    recommendation: 已确认（2026-11-22）：C# + WinUI 3，协议层用 C# 重写并与 Kotlin、Swift 共享测试向量。
+  - id: windows-order-linux
+    question: Windows 原生排在哪，Linux 怎么处理？
+    context: macOS 原生四个里程碑已规划；Electron 同时承载 Windows 与 Linux。
+    impact: 决定推荐顺序与 Electron 工程的去留。
+    recommendation: 已确认（2026-11-22）：排在 macOS 之后；Linux 保留 Electron，不在本次规划。
+  - id: windows-min-version
+    question: 最低支持的 Windows 版本与架构？
+    context: WinUI 3 支持 Windows 10 1809 及以上；现有 Electron 安装包为 x64。
+    impact: 决定 Windows App SDK 目标与受影响用户。
+    recommendation: 默认 Windows 10 1809+、仅 x64；如需 ARM64 或更高最低版本须在 windows-scaffold 提案前告知。
+planned_changes: {}
+dependencies:
+  - macos-native-release 里程碑完成（用户 2026-11-22 确认 Windows 排在 macOS 之后）；共享测试向量与夹具目录、桌面交互映射与自更新契约已在 macOS 上稳定
+  - 本机 WSL 安装 .NET 10 SDK 用于回归（当前未安装）；WinUI 应用构建与验收在 Windows 宿主 GAMEPC（经 cmd.exe interop 调用 Windows 侧 dotnet/MSBuild）与 GitHub Actions Windows runner 上进行
+  - 用户 Windows 上安装并登录系统 Tailscale 客户端，dsh 服务经 tailscale serve 暴露且 trusted-host 包含 tailnet 地址
+risks:
+  - 协议逻辑变为 Kotlin、Swift、C# 三份：漂移风险进一步升高；三端测试必须读取同一份共享向量与夹具，tech/dsbot-api 变更须同步登记三端影响
+  - WinUI 3 只能在 Windows 上构建：界面改动依赖 GAMEPC interop 或 CI 产物验证；可测逻辑须尽量下沉 Dsh.Core 在 Linux 覆盖
+  - dsh 共享 /api 通道按 Host 白名单与 Origin 校验：HttpClient 不能带 Origin，cookie 绑定 host:port 且为 SameSite=Strict、HttpOnly，需自管 cookie（不用 CookieContainer 默认策略），存储用 DPAPI 加密的用户私有文件
+  - Electron 版 NSIS 安装与原生版安装可能共用卸载注册表项或开始菜单快捷方式名称：须在 windows-setup-settings 与 windows-release-switch 中明确安装位置、快捷方式与旧版卸载策略
+status: proposed
+notes:
+  - 2026-11-22 用户确认：Windows 桌面端采用与 macOS 相同的设计——原生代码（C# + WinUI 3 / Windows App SDK）、不内置 Tailscale（tailnet 依赖系统 Tailscale 客户端）、宽屏分栏、CI 构建未签名安装包并加自更新，排在 macOS 四个里程碑之后；Linux 继续使用 Electron，不在本次规划
+  - 参照实现：macos-native-foundation 各计划变更（结构一一对应）、android/core、specs/android-dsbot、specs/session-auth、specs/single-instance、specs/window-state、specs/diagnostics-reporting 的桌面要求；Electron 版配置位于 %APPDATA%\DSH Anywhere\（以 src/main/config.ts 为准）
+details: 技术形态：C# 13 / .NET 10、Windows App SDK（WinUI 3）非打包自包含部署，最低 Windows 10 1809（17763），x64。目录：windows/Core（Dsh.Core 类库与 Dsh.Core.Tests，xUnit）与 windows/App（WinUI 3 应用，引用 Dsh.Core），解决方案文件可在 CI 与 GAMEPC 上无交互 dotnet build/publish。分层：纯逻辑与解码放 Core 并在 Linux 上测试；HttpClient、DPAPI、文件对话框、窗口与单实例（AppInstance 重定向激活）只在 App。网络直接使用系统网络栈，不做代理与分流。会话 cookie 存 %LOCALAPPDATA% 下 DPAPI 加密文件，不写日志。交互映射沿用 macOS：侧栏 NavigationView 团队列表、内容区聊天、右侧可开合详情面板；设置为独立页面或窗口。设备验收（Windows 上运行）不进回归命令。

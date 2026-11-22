@@ -1,0 +1,40 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  macos-native-release:
+    title: macOS 原生：发布切换与自更新
+order: 1200
+goal: 功能追平后把 macOS 的对外发布从 Electron 切换为原生 SwiftUI 应用：Release 工作流构建并发布原生未签名 universal dmg（文件名约定不变），原生应用经自托管更新源检查、下载、校验 sha256 并替换自身完成升级，Electron 版用户可平滑迁移，Electron 的 macOS 打包与 macOS 相关代码路径移除，Windows 与 Linux 继续由 Electron 发布。
+scope:
+  in:
+    - Release 与 Package 工作流：macOS 产物改为原生 dmg（dsh-anywhere_<版本>_macos_universal.dmg）与供自更新用的 zip 及 .sha256；electron-builder 移除 mac 目标；README Gatekeeper 说明更新；actionlint 与 workflows 结构断言更新
+    - 自更新：自托管 latest.json 增加 macOS 条目，本地发布脚本在 GitHub Release 就绪后下载 macOS 产物并同步到 DSH_UPDATES_DIR；原生应用设置中配置更新源，检查新版本、下载 zip、校验 sha256、替换 /Applications 中的自身并重启
+    - 迁移与规格：Electron 版 macOS 用户升级路径说明；桌面主规格（main-window、navigation-scope、load-failure、settings-window、session-auth、single-instance、window-state、app-identity）标注适用 Windows/Linux 的 Electron 与 macOS 原生的对应关系；技术标准 packaging 与 build-identity 更新
+  out:
+    - Apple Developer ID 签名与公证（用户 2026-11-22 选择未签名 dmg + 自更新）；Mac App Store；Sparkle 等第三方更新框架
+    - Windows 与 Linux 客户端的技术栈变化；iOS
+done_criteria:
+  - 推送 v* tag 后 Release 工作流发布原生 macOS dmg、zip 与 .sha256，文件名符合 packaging 约定，Electron 只产出 Windows 与 Linux 包；release.yml 的 tag 与 package.json 版本一致性校验保持
+  - 运行本地发布流程后自托管源的 latest.json 含 macOS 条目且 zip 与 sha256 可下载；已安装旧版原生应用在设置中检查更新后下载、校验并替换自身，重启后关于页显示新版本；sha256 不符时拒绝安装并给出可读原因
+  - 已装 Electron 版的 Mac 安装原生 dmg 后首次启动带入 harness URL 并提示重新认证，按 README 说明可移除旧版；完整回归命令与 scripts/workflows.test.mts 通过
+intake_questions:
+  - id: macos-switch-timing
+    question: 何时把 macOS 发布从 Electron 切换为原生？
+    context: Electron 版经网页提供 DS-Bot 全部功能，原生版逐里程碑追平。
+    impact: 决定 macOS 用户何时拿到原生版，以及是否会暂时失去功能。
+    recommendation: 默认在 macos-native-manage 完成、功能追平后切换；此前原生版只以 Package 工作流产物分发供试用。若希望在对话里程碑完成后提前切换（如 Android 当时的做法），需在本里程碑提案前告知。
+planned_changes: {}
+dependencies:
+  - macos-native-manage 里程碑完成（功能追平后才切换，避免 macOS 用户失去 Electron 版经网页提供的管理功能）
+  - 自托管更新源 pca 的 dsh-updates 目录（DSH_UPDATES_DIR）与现有 scripts/android-release.mts 发布流程；本机 gh 已登录可下载私有仓库 Release 资产
+risks:
+  - 未签名应用自替换：从网络下载的 zip 若被打上 quarantine 属性，替换后的应用会再次触发 Gatekeeper；须在 URLSession 下载路径上验证无 quarantine 或在替换前处理，并在 README 写明首次安装的绕过步骤
+  - 替换正在运行的 .app 需借助独立的辅助进程或脚本在退出后完成，并处理 /Applications 无写权限（非管理员账户）的情况：失败时回退为打开下载好的 dmg 让用户手动拖拽
+  - 发布流程分为 CI（构建 macOS 包）与本地（同步自托管源）两段：与 Android 发布一样须强制前置校验与先同步后上传的顺序，避免半发布
+status: proposed
+notes:
+  - 2026-11-22 用户确认：CI 构建未签名 dmg 并加自更新；仓库私有，客户端无法匿名访问 GitHub API，自托管源是唯一更新通道（与 tech/packaging 中 Android 规则一致）
+  - 后续（2026-11-22）：windows-native-release 将复用本里程碑建立的 latest.json 扩展与发布同步流程，脚本与契约设计须便于追加 Windows 条目，避免届时重构
+details: 构建：release.yml 的 macOS job 改为构建原生应用（xcodebuild 或 macos-scaffold 确定的方式，通用二进制），打 dmg（hdiutil）与 zip（ditto -c -k --keepParent），生成 .sha256；版本仍由 package.json 注入并在打包前校验 tag。自更新：latest.json 契约扩展 macOS 条目（版本、zip 文件名、sha256），解析与版本比较放 DshCore 测试；App 下载到临时目录、校验 sha256、解压后由辅助脚本在应用退出后替换并重新打开，失败回退为打开 dmg。发布脚本：在现有 android-release 流程中（或新增 scripts/macos-release.mts）用 gh 下载对应 tag 的 macOS 资产并同步到 DSH_UPDATES_DIR，沿用强制前置校验。

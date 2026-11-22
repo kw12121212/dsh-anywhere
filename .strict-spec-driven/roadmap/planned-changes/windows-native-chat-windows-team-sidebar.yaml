@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-team-sidebar
+  milestone: windows-native-chat
+status: planned
+summary: 团队侧栏：分组列表、Main Bot 在前与置顶、工作状态、本机已读未读、预览优先级、搜索（Ctrl+K）、需要你汇总、非当前聊天的 notice 横幅
+details: 与 macos-team-sidebar 对应。侧栏 NavigationView 菜单项按 state 渲染分组与条目（头像颜色圈、名称、状态、预览、未读点、置顶），排序、已读合并、预览优先级、notice 游标全部复用 Dsh.Core（共享夹具）；已读状态存 %LOCALAPPDATA%。搜索框 Ctrl+K 聚焦。需要你：侧栏顶部入口带计数，内容区显示分节汇总并可跳转。notice 横幅用 InfoBar 显示约 8 秒，点按切换，设置页可关闭。规格补标 Windows 差异。验收：按里程碑完成标准第 1 条。
+depends_on:
+  - windows-shell-window

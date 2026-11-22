@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: macos-prefs-appearance
+  milestone: macos-native-manage
+status: planned
+summary: 偏好与外观：团队偏好（主题配色、强调色、消息布局、头像动画、Enter 行为、新 Bot 默认模型）经 set-prefs 读写，侧栏分组新建、重命名、拖动排序与删除，本机外观（跟随系统/浅色/深色）与语言（跟随系统/简体中文/English）
+details: 对应 Android dsbot-prefs-theme、dsbot-sidebar-sections 与 dsbot-phone-prefs。团队主题决定配色方案、明暗由本机外观决定（与 Android 规则一致）；未知主题回退默认。侧栏分组：section-save、section-order（侧栏内拖动）、section-delete（二次确认）。本机外观与语言存 Application Support，语言切换用应用内本地化（Localizable.xcstrings 中英文），切换后保留窗口与导航状态。纯逻辑（偏好解析、排序结果计算）放 DshCore。验收：按里程碑完成标准第 1 条第三项与第 2 条第四项。
+depends_on:
+  - macos-team-sidebar

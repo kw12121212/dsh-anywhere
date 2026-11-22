@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-prefs-appearance
+  milestone: windows-native-manage
+status: planned
+summary: 偏好与外观：团队偏好经 set-prefs 读写，侧栏分组新建、重命名、拖动排序与删除，本机外观（跟随系统/浅色/深色）与语言（跟随系统/简体中文/English）
+details: 对应 macos-prefs-appearance。团队主题决定配色、明暗由本机外观决定（三端一致规则），未知主题回退默认；section-save、section-order（侧栏拖动）、section-delete（二次确认）；本机外观（RequestedTheme）与语言（.resw 中英文资源，切换后重建窗口内容并保留导航状态）存 %LOCALAPPDATA%；偏好解析与排序计算在 Dsh.Core。验收：按里程碑完成标准第 1 条第三项与第 2 条第四项。
+depends_on:
+  - windows-team-sidebar

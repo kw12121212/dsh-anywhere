@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-group-chat
+  milestone: windows-native-chat
+status: planned
+summary: 群聊：成员归属与颜色、群公告、@ 成员补全（可多选）、引用另一个聊天、停止群或单个成员工作、群目标与阶段进度、群进度，以及后台任务条、电脑操作请求与模型失败修复卡
+details: 与 macos-group-chat 对应，复用 windows-bot-chat 渲染组件。@ 补全在输入框上方弹出成员列表（上下键选择、Enter 插入）；stop-room-work、stop-member-work；群目标条与 room-progress；后台任务条（bot-stop-task）、电脑操作请求（computer-app-answer 拒绝/本次/总是、computer-stop）、模型失败修复卡（windows-native-manage 完成前指引到对应位置）。验收：按里程碑完成标准第 3 条。
+depends_on:
+  - windows-bot-chat

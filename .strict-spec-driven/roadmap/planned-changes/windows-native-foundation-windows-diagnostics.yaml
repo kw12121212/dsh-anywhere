@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: windows-diagnostics
+  milestone: windows-native-foundation
+status: planned
+summary: Windows 原生版诊断上报：设置页配置 https 上报端点（默认未配置即零行为）、崩溃与错误态报告脱敏后原子落盘、有界队列与发送，报告不含 token、cookie、API 载荷与聊天内容
+details: 与 macos-diagnostics 对应：报告结构、脱敏、队列上限与端点校验复用 Dsh.Core（与 Kotlin/Swift 共享脱敏测试向量）；App 层捕获 AppDomain.UnhandledException、TaskScheduler.UnobservedTaskException 与 WinUI UnhandledException，先原子写本地报告再按默认行为终止；错误页出现时产生分类报告；HttpClient 发送与失败入队，启动与新错误时冲刷。设置页「诊断上报」条目：未配置零行为，仅合法 https 可保存，可清除。diagnostics-reporting 主规格把桌面要求标注为适用于 Electron（Linux）、原生 macOS 与原生 Windows。验收：未配置时无文件与请求；配置后制造连接错误送达一份无 token 与 cookie 的报告；人为崩溃后下次启动送出崩溃报告。
+depends_on:
+  - windows-setup-settings

@@ -1,0 +1,42 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  macos-native-manage:
+    title: macOS 原生：管理、集成与设置
+order: 1100
+goal: 在 macOS 原生应用中实现与 Android 原生 DS-Bot 管理与集成对等的全部页面：Bot 与群管理、头像、工作文件夹、成员与本地 Agent、记忆、团队偏好与侧栏分组、本机外观与语言、模型与服务商、能力、密钥、连接器与邮箱、IM、日程、用量、Bot 浏览器、关于 DS Bot 与更新诊断，布局为桌面分节表单与检查器，至此原生 macOS 覆盖 Electron 版所承载网页端的日常功能。
+scope:
+  in:
+    - 管理：Bot 新建/编辑/复制/删除、Main Bot、私有与标记、模型快速切换、乐观写入；群新建/编辑/删除与成员；头像库（含从 Finder 导入）；工作文件夹浏览选择与团队工作区；成员 Agent 与 DSH Agent 聊天；记忆查看/提问/新增/编辑/置顶/移动/遗忘/历史/恢复
+    - 偏好：团队偏好（主题配色、强调色、消息布局、头像动画、Enter 行为、新 Bot 默认模型）、侧栏分组管理（拖动排序）、本机外观（跟随系统/浅色/深色）与语言（跟随系统/简体中文/English）
+    - 集成与系统：模型与服务商、能力、密钥设置、连接器与邮箱、IM 接入、本地 Agent、日程（含暂停）、用量（Swift Charts）、Bot 浏览器（画面快照、持有状态、接管/交还/停止，按宿主降级）、关于 DS Bot、DS-Bot 与 dsh 更新安装、DS-Bot 诊断日志
+  out:
+    - Touch ID/锁屏验证、系统通知；在 Mac 上操作 Bot 浏览器画面（点击输入）或充当浏览器宿主
+    - 本应用自身的自更新与 Release 切换（macos-native-release 承接）；Windows/Linux 客户端变化
+done_criteria:
+  - 在 Mac 上新建 Bot 并设置名称、角色、指令、模型、思考强度与权限预设后网页端一致；复制、删除（二次确认）、设为 Main Bot 两端一致；新建群、改成员与回复模式两端一致；侧栏分组拖动排序两端一致
+  - 为 Bot 浏览选择工作文件夹并保存，被拒绝位置显示服务端原因；从 Finder 导入头像并设给 Bot；记忆的查看、提问、新增、编辑、遗忘与恢复和网页端一致；切换本机外观与语言即时生效并跨重启保留
+  - 新增服务商并填 key（不回显）、选模型后 Bot 用新模型回复；密钥增删改值不回显不进日志；连接器连接与登录码流程可完成；日程新建、暂停、删除与用量数字与网页端一致；IM 新增与登录流程可完成
+  - 启用浏览器插件的宿主上 Bot 浏览器页显示画面快照并在前台约 2 秒刷新，停止两端一致，不支持的操作按宿主降级提示；关于页显示远端版本与基准，DS-Bot/dsh 更新可触发安装并在重连后刷新版本；DshCore 新增逻辑有 swift test 覆盖且完整回归通过
+  - 在 Mac 上为 Bot 添加、重命名、归档与移除成员 Agent，与 DSH Agent 聊天并停止；本地 Agent 刷新、新增、修改与删除；能力的保存、批准、删除与按 Bot 开关，结果均与网页端一致
+intake_questions:
+  - id: macos-manage-parity
+    question: macOS 管理与设置页的对等基准？
+    context: Android 的管理与集成里程碑在本里程碑之前完成。
+    impact: 决定每个变更的实现范围。
+    recommendation: 以对应 Android 计划变更归档后的规格为准，平台差异按里程碑 notes 的布局映射调整。
+planned_changes: {}
+dependencies:
+  - macos-native-chat 里程碑完成；Android 的 dsbot-native-manage 与 dsbot-native-integrations 已完成并作为对等基准（执行时以其规格与实现的最新状态为准）
+  - IM、邮箱、连接器验收需用户提供测试账号；Bot 浏览器验收需用户 dsh 团队配置启用 browserPlugin
+risks:
+  - 管理与集成端点数量多且随 DS-Bot 版本变化：每个变更提案时须核对 tech/dsbot-api 与 Android 实现的最新状态，未知字段降级为只读
+  - OAuth 回调类登录在 Mac 上可直接用系统浏览器完成，可能与 Android 的替代做法不同：须逐个确认并在规格中标注平台差异，而不是照搬手机做法
+  - 服务商 key、密钥、邮箱密码经 Mac 输入：须用 SecureField，不回显、不入日志与诊断、不留剪贴板
+status: proposed
+notes:
+  - 2026-11-22 用户确认：SwiftUI 原生、宽屏分栏；高权限操作与 Android 一致不做生物识别
+  - 布局：设置类页面放在 Settings 场景的分页（模型、能力、密钥、连接器、IM、本地 Agent、日程、用量、关于）；Bot/群详情与设置放在右侧检查器或 sheet；记忆与 Bot 浏览器可在检查器中打开或独立窗口
+details: 每个计划变更对应 Android 一到三个已完成的计划变更，提案时以对应 Android 变更归档后的规格与 android/core 实现为准，用 Swift 在 DshCore（纯逻辑，共享夹具）与 App（SwiftUI）中实现；交互按桌面习惯调整（右键菜单、拖动排序、Finder 拖放、SecureField、Settings 分页）。所有写操作不自动重试，失败显示服务端原因；Bot/群设置采用与 Android 一致的乐观写入规则。
