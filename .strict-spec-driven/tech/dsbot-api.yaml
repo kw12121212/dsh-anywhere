@@ -136,3 +136,10 @@ rules:
         - api.action(key, "delete-bot", body, { if (connection.page == current) connection.goHome() }) { error = it }（确认框确认后调用）
       bad:
         - 在状态 executor 上同步 postBot 并在成功后无条件 openChat；或把 bot/internal 的 message 原样显示给用户
+  avatar-library-endpoints-0310:
+    strength: MUST
+    statement: 头像库端点（DS-Bot 0.3.10）：avatar-library {offset?, limit?} → {items[{id(sha256), name, mime, bytes, createdAt, image(data URL)}], total, next}（最新在前，每页至多 48；实测空库为 {items:[], total:0, next:offset}）；avatar-import {items[{name, image(data URL)}]} → {imported[条目], duplicates[{id,name}], failed[{name,message}]}（逐张处理，按字节 sha256 去重，库上限 500 张）；avatar-delete {id} → true/false（使用该照片的 Bot 保留自己的副本）。单张 data URL 必须为 PNG/JPEG/WebP/GIF 的 base64，图片字节不超过 119982（(160000-23)/4*3）且 data URL 不超过 160000 字符，格式按魔数判定；设为 Bot 头像为 update-bot {id, avatar:{shape?, image}}，移除为 avatar:{shape} 或 null。avatar-library 实测（只读），导入与删除为源码核对，未写入用户真实头像库
+    rationale: 头像库端点此前未登记；导入的上限与格式判定必须与服务端一致才能在发送前本地拦截；导入/删除会改动用户真实数据，只能源码核对并在 mock 上验收，须标明实测状态
+    enforcement:
+      method: review
+      detail: core JUnit（AvatarLibraryTest）以真实 avatar-library-empty 夹具与源码核对形态覆盖解码、上限边界与魔数；源码核对位置：ds-bot 0.3.10 src/host/avatar-library.js（libraryView、importPhotos、deletePhoto、MAX_LISTED、MAX_PHOTOS）、avatar.js（readDataUrl、toDataUrl、mimeOf、MAX_BYTES）、constants.js（MAX_AVATAR_IMAGE）、channel.js（avatar-library/import/delete）；FINDINGS 第 20 节登记

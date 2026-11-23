@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: android-client
+operations:
+  ADDED:
+    server-image-handling:
+      strength: SHOULD
+      statement: App 显示服务端下发的图片（头像 data URL 等）一律先取尺寸、按显示边长采样解码，并在 IO 线程完成（Compose 中经 produceState 等），不在组合期或主线程按原尺寸解码；为上传而临时落盘的相机照片在读完字节后（含取消拍照留下的空文件）立即删除；批量处理用户选取的多张图片时，整批一次入队，只在全部处理完后发出批量请求
+      rationale: dsbot-avatars 评审发现：上游只限图片字节不限像素，按原尺寸在主线程解码一张 4000×4000 低压缩率 PNG 即占 64 MB 并卡顿；相机临时原图留在 cacheDir 违背头像不在本机持久保存的约定；逐张解码时「队列暂时为空」就触发导入会把一批拆成多次请求并静默丢图——后续群头像与其他图片入口会重复这些处理
+      enforcement:
+        method: review
+        detail: 评审检查新增的服务端图片显示是否经 AvatarImage.thumbnail/rememberThumbnail（或等价的采样 + IO 线程解码），相机 FileProvider URI 读后与取消时是否 delete，批量导入是否在全部处理完后才发请求
+  MODIFIED: {}
+  REMOVED: {}

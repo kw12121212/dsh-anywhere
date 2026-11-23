@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-avatars
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-avatars。
+    answer: 手机用户无法给 Bot 设照片头像，也无法管理头像库；照片都在手机相册里，却只能在电脑网页端操作。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：计划变更验收描述与里程碑完成标准第四条。
+    answer: 从相册导入两张照片、裁剪后出现在头像库并可设给 Bot，网页端同步显示；删除正在使用的头像时显示服务端结果；超限图片被本地拦截并提示。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：avatar-library 列出、avatar-import 导入方形裁剪并压缩的 data URL（一次可多张）、avatar-delete 二次确认；入口在 Bot 外观设置；系统照片选择器与相机取图；本地校验大小与格式；写操作不自动重试、成功后刷新。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: Bot 详情页其余设置、写操作通道、聊天附件照片压缩不变；头像图片不写日志；团队页/聊天页头像显示与群头像不在本变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖的 dsbot-bot-manage 已归档，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: oversize-meaning
+    question: 计划变更要求「超限图片被本地拦截并提示」，但导入前会压缩到 256×256，正常照片不会超限，验收如何解释？
+    context: 影响范围：spec 场景与验收。
+    answer: 按 design 决策 compress-not-reject：本地上限校验作为发送前守卫，压缩到最低质量仍超限或无法解码的图片在本地提示且不发请求；单元测试覆盖上限边界与非图片，设备验收验证大尺寸原图被压缩到上限内。
+    status: resolved
+    answered_by: roadmap

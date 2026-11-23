@@ -2,6 +2,7 @@
 // 按 DS-Bot 0.3.10 源码核对的形态实现管理端点（channel.js / roster.js / privacy.js）。每次写入 revision+1
 // 并经 feed 推 revision 事件；拒绝时回 {ok:false, error:{code:'bot/refused', message}}（上游 channel.js errorCode 对普通 Error 的映射）。
 // 日志只记端点与参数键，不打印正文。
+import { createHash } from 'node:crypto'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -26,6 +27,7 @@ export function createManageTeam(pushRevision) {
     privateArchives: [{ id: 'old-1', name: '旧私有助理', workDir: '/work/old-private' }],
     seq: 10,
   }
+  const library = []
   const fail = (message) => ({ ok: false, error: { code: 'bot/refused', message, details: {} } })
   const ok = (value) => ({ ok: true, value })
   const norm = (s) => String(s ?? '').trim().toLowerCase()
@@ -158,6 +160,37 @@ export function createManageTeam(pushRevision) {
           if (typeof p.hidden === 'boolean') entry.hidden = p.hidden
           bump()
           return ok(entry)
+        }
+        // 头像库（dsbot-avatars，ds-bot 0.3.10 avatar-library.js / avatar.js 形态）：按字节 sha256 去重，单张上限 119982 字节
+        case 'avatar-library': {
+          const ordered = [...library].sort((a, b) => b.createdAt - a.createdAt)
+          const start = Math.max(0, Math.floor(Number(p.offset)) || 0)
+          const count = Math.min(48, Math.max(1, Math.floor(Number(p.limit)) || 48))
+          const page = ordered.slice(start, start + count)
+          return ok({ items: page, total: ordered.length, next: start + page.length })
+        }
+        case 'avatar-import': {
+          const result = { imported: [], duplicates: [], failed: [] }
+          for (const item of Array.isArray(p.items) ? p.items : []) {
+            const name = String(item?.name ?? '').trim().slice(0, 120)
+            const m = /^data:(image\/(png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(String(item?.image ?? ''))
+            if (!m) { result.failed.push({ name, message: 'The avatar data URL must hold a PNG, JPEG, WebP, or GIF image.' }); continue }
+            const bytes = Buffer.from(m[3], 'base64')
+            if (bytes.length > 119982) { result.failed.push({ name, message: `The avatar image is too large: ${bytes.length} bytes, and the limit is 119982 bytes (about 120 KB).` }); continue }
+            const id = createHash('sha256').update(bytes).digest('hex')
+            const known = library.find((e) => e.id === id)
+            if (known) { result.duplicates.push({ id, name: known.name }); continue }
+            const entry = { id, name: name || 'photo', mime: m[1], bytes: bytes.length, createdAt: Date.now() + library.length, image: item.image }
+            library.push(entry)
+            result.imported.push({ id, name: entry.name, mime: entry.mime, bytes: entry.bytes, createdAt: entry.createdAt })
+          }
+          return ok(result)
+        }
+        case 'avatar-delete': {
+          const at = library.findIndex((e) => e.id === p.id)
+          if (at === -1) return ok(false)
+          library.splice(at, 1)
+          return ok(true)
         }
         default:
           return null

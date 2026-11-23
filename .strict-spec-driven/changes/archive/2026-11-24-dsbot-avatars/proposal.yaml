@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-avatars
+  status: proposed
+summary:
+  what:
+    - 新增头像库页（从 Bot 详情页的外观分节进入）：分页显示头像库照片（最新在前，每页最多 48 张，可加载更多），可从手机相册（一次多张）或相机导入；每张导入前经方形裁剪界面（拖动与缩放选取方形区域），裁剪后缩放到 256×256 并压缩为 JPEG，以 data URL 经 avatar-import 一次导入；导入结果显示新增、重复与失败（含服务端原因）
+    - 在头像库点选一张照片即设为该 Bot 的头像（update-bot avatar 保留形象、换上照片），返回详情页后显示照片；详情页提供「移除照片」（保留形象）；头像库照片可删除（二次确认），删除后显示服务端结果（使用它的 Bot 保留各自的副本）
+    - 导入前在本地校验格式与大小（PNG/JPEG/WebP/GIF、字节数不超过服务端上限 119982、data URL 不超过 160000 字符）：压缩后仍超限或无法读取的图片在发送前提示，不发请求
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第四条：从手机相册导入头像并设给 Bot，网页端一致
+    - Bot 外观目前只能选形象与颜色，照片头像只能在电脑网页端设置；手机相册才是用户照片所在之处
+scope:
+  in:
+    - android-dsbot 规格新增 avatar-library 要求；tech/dsbot-api 登记 avatar-library/avatar-import/avatar-delete 的形态与实测状态
+    - core：AvatarLibrary（图片魔数判定、data URL 编码与上限校验、data URL 解码、头像库分页与导入结果解码、方形裁剪区域计算、请求体）与 JUnit；BotManage 的 Bot 资料带照片 data URL
+    - App：头像库页（分页网格、相册多选与相机导入、方形裁剪、压缩编码、导入结果、删除确认、点选设为头像）、Bot 详情页照片显示与移除；mock --manage 增加头像库端点
+  out:
+    - state 以 avatars:'ref' 引用取头像（App 仍取内嵌 data URL）；团队页与聊天页显示 Bot 头像；本地 Agent 徽标照片（网页端切引擎时的 avatarAfter）
+    - 群头像、团队偏好（dsbot-prefs-theme）
+unchanged_behavior:
+  - Bot 详情页其余设置、形象与颜色选择、写操作通道（manage-write-feedback）与聊天附件的照片压缩逻辑不变
+  - 头像图片只经 API 传输，不写入日志、诊断上报或本机持久存储
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-avatars

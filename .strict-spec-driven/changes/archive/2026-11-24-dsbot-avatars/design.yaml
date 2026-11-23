@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-avatars
+approach:
+  - core AvatarLibrary.kt：MAX_BYTES=119982、MAX_URL=160000（上游 avatar.js：(160000-23)/4*3）；mimeOf(bytes) 按魔数判定 PNG/JPEG/GIF/WebP；dataUrl(bytes) 返回 Ok(url) 或 Problem(TOO_LARGE|NOT_IMAGE)；parseDataUrl(url) 解出 (mime, bytes) 供显示；decodePage(value) 解出 {items[{id,name,mime,bytes,createdAt,image}], total, next}（缺 id 或 image 的条目跳过）；decodeImport(value) 解出 {imported[], duplicates[], failed[{name,message}]}；cropRect(w,h,zoom,cx,cy) 计算方形裁剪区域（边长 = 短边/zoom，中心按 0..1 比例并夹在图内）；Requests.library(offset)、import(items[(name,url)])、delete(id)；BotManage.Profile 增加 photo（avatar.image 的 data URL）与 Requests.updatePhoto(id, shape, url)/removePhoto(id, shape)。
+  - App：AvatarImage.kt 读取照片（EXIF 方向校正、采样到长边 ≤1024 供裁剪）、按 cropRect 裁剪并缩放到 256×256、JPEG 质量从 85 逐级降到 40 直到 dataUrl 通过上限校验；AvatarLibraryPage（ShellPage.AvatarLibrary(botId)）：avatar-library 分页读取（读线程）、3 列网格、加载更多；导入按钮用 PickMultipleVisualMedia(最多 10 张) 与相机 TakePicture，逐张弹出 CropDialog（方形取景框、拖动平移、滑杆缩放），全部确认后一次 avatar-import，显示结果摘要并刷新列表；删除经长按菜单与二次确认；点选照片设为 Bot 头像后返回详情页。写操作经 manage-write-feedback 通道。Bot 详情页外观分节显示照片缩略图、「从头像库选择」与「移除照片」。
+decisions:
+  compress-not-reject:
+    decision: 导入前统一裁剪为方形并缩放到 256×256 再 JPEG 压缩，超限时逐级降低质量；本地大小与格式校验作为发送前的守卫，压缩到最低质量仍超限或无法解码时才在本地提示并不发请求。
+    rationale: 上游单张上限约 120 KB 且提示 256×256 方形为宜，手机原图动辄数 MB，直接拦截会让几乎所有照片都无法导入；按上游建议尺寸压缩后正常照片约 20–40 KB，守卫仍保证任何超限图片不会发往服务端（计划变更要求超限在发送前本地提示）。
+  import-batch:
+    decision: 多张照片逐张裁剪后合并为一次 avatar-import {items[{name, image}]}，按服务端返回的 imported/duplicates/failed 显示结果；单张失败不影响其他照片。
+    rationale: 上游 importPhotos 逐张处理并分别归入三类结果，一次请求即可得到每张的结局；逐张请求会在中途失败时留下半导入状态且结果分散。
+  library-from-details:
+    decision: 头像库页只从 Bot 详情页进入（带 botId，点选即设为该 Bot 头像），不另设团队页入口。
+    rationale: 计划变更写明入口在 Bot 外观设置与头像库页；头像库的唯一用途是给 Bot 设照片，从详情页进入能直接完成设为头像，独立入口只会多一个需要再选 Bot 的流程。
+  source-checked-writes:
+    decision: avatar-library 对真实服务只读实测（本机库为空，夹具 avatar-library-empty.json）；avatar-import 与 avatar-delete 只做 0.3.10 源码核对并在 mock 上验收，不写用户真实头像库。
+    rationale: 头像库是用户数据目录下的真实文件，导入与删除会改动用户数据，项目约定不得改动真实数据；上游 avatar-library.js 的结果形态可直接读出。
+alternatives: []
+risks:
+  - 导入与删除的应答形态为源码核对，未对真实服务实测；解码对缺字段一律降级（失败项缺 message 时显示通用原因）
+  - 头像库每页最多 48 张、每张 data URL 至多 160 KB，单页应答可达数 MB：分页加载并只在页面可见时解码缩略图

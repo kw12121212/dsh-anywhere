@@ -54,6 +54,8 @@ class ManageApi(
     val inFlight: List<String>,
     val action: (key: String, endpoint: String, payload: String, onOk: (Json.Value) -> Unit, onError: (String) -> Unit) -> Unit,
     val efforts: (ref: String, cb: (BotManage.Efforts) -> Unit) -> Unit,
+    /** 只读端点（读线程发出，结果回到主线程）；dsbot-avatars 起用于头像库等列表。 */
+    val read: (endpoint: String, payload: String, cb: (work.keepwriting.core.DsbotApi.Result) -> Unit) -> Unit,
 )
 
 /** 写操作返回的对象 id（create-bot/duplicate-bot 的新 Bot）。 */
@@ -249,6 +251,8 @@ fun BotDetailsPage(
     api: ManageApi,
     onOpenChat: (String) -> Unit,
     onDeleted: () -> Unit,
+    /** 打开头像库（dsbot-avatars）为该 Bot 选照片。 */
+    onOpenAvatars: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -260,6 +264,8 @@ fun BotDetailsPage(
         return
     }
     var error by remember(botId) { mutableStateOf<String?>(null) }
+    // 照片头像缩略图（dsbot-avatars）：IO 线程采样解码一次，页头与外观分节共用
+    val photo = rememberThumbnail(profile.photo)
     var picker by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var efforts by remember(profile.currentModel) { mutableStateOf<BotManage.Efforts?>(null) }
@@ -278,7 +284,11 @@ fun BotDetailsPage(
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(16.dp)) {
-            ColorDot(profile.color, false) {}
+            if (photo != null) {
+                androidx.compose.foundation.Image(photo, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.padding(4.dp).size(36.dp).clip(CircleShape))
+            } else {
+                ColorDot(profile.color, false) {}
+            }
             Column(modifier = Modifier.padding(start = 8.dp)) {
                 Text(profile.name, style = MaterialTheme.typography.titleLarge)
                 val sub = listOfNotNull(profile.role.ifEmpty { null }, if (profile.isMain) "Main Bot" else null, if (profile.isPrivate) tr("私有", "Private") else null)
@@ -320,9 +330,28 @@ fun BotDetailsPage(
         SectionTitle(tr("外观", "Appearance"))
         ValueRow(
             tr("形象与颜色", "Character and color"),
-            BotManage.shapeLabel(profile.shape) + (if (profile.hasPhoto) tr(" · 已设照片", " · photo set") else ""),
+            BotManage.shapeLabel(profile.shape),
             enabled = !busy("look"),
         ) { picker = "look" }
+        // 照片头像（dsbot-avatars）：缩略图、从头像库选择、移除照片（保留形象）
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            if (photo != null) {
+                androidx.compose.foundation.Image(photo, contentDescription = tr("照片头像", "Photo avatar"), contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.size(56.dp).clip(CircleShape))
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = if (photo != null) 12.dp else 0.dp)) {
+                Text(tr("照片", "Photo"), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (profile.hasPhoto) tr("已设照片头像", "Photo avatar set") else tr("未设照片，显示形象", "No photo; the character is shown"),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(modifier = Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = onOpenAvatars) { Text(tr("从头像库选择", "Choose from library")) }
+            if (profile.hasPhoto) {
+                TextButton(enabled = !busy("photo"), onClick = { act("photo", "update-bot", R.removePhoto(botId, profile.shape)) }) { Text(tr("移除照片", "Remove photo")) }
+            }
+        }
 
         SectionTitle(tr("工作文件夹", "Working folder"))
         ValueRow(tr("文件夹", "Folder"), profile.workDir ?: tr("团队工作区", "Team workspace"), onClick = null)

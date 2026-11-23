@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-avatars
+sections:
+  Implementation:
+    core-avatar-library:
+      text: core 新增 AvatarLibrary.kt（魔数、data URL 编码/解码与上限、分页与导入结果解码、方形裁剪区域、请求体）；BotManage 资料带照片 data URL 与 updatePhoto/removePhoto 请求体
+      status: complete
+    fixture-library:
+      text: 真实夹具 avatar-library-empty.json（只读实测）；FINDINGS 第 20 节登记头像库端点
+      status: complete
+    app-avatar-image:
+      text: AvatarImage.kt：读取与 EXIF 方向校正、裁剪缩放到 256、JPEG 逐级压缩到上限内
+      status: complete
+    app-library-page:
+      text: AvatarLibraryPage 与 CropDialog：分页网格、相册多选与相机导入、方形裁剪、一次导入与结果摘要、删除确认、点选设为头像；NativeShell 路由
+      status: complete
+    app-details-photo:
+      text: Bot 详情页外观分节：照片缩略图、从头像库选择、移除照片
+      status: complete
+    mock-avatars:
+      text: mock --manage 增加 avatar-library（分页）、avatar-import（按 sha256 去重、上限校验与失败项）、avatar-delete
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：AvatarLibraryTest（魔数四种格式与非图片、上限边界 119982/119983、data URL 往返、分页/导入结果解码与畸形降级、裁剪区域边界与夹取、请求体字面值）与 BotManageTest 照片字段
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：从相册一次选两张照片，逐张裁剪后导入，头像库出现两张、结果摘要正确；再导入同一张显示重复；点选一张设给 Bot，详情页显示照片、mock 收到 avatar.image；移除照片后只剩形象；删除头像库照片二次确认后显示服务端结果；大尺寸原图被压缩到上限内导入
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-avatars
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

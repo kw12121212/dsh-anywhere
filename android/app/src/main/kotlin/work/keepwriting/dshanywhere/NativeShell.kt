@@ -129,6 +129,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object NewBot : ShellPage
         /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
         data object PrivateArchives : ShellPage
+        /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
+        data class AvatarLibrary(val botId: String) : ShellPage
     }
 
 @Composable
@@ -303,6 +305,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             // 写完成时用户可能已离开该页：只在仍停留在本详情页时跳转
                             onOpenChat = { id -> if (connection.page == current) connection.openChat(id) },
                             onDeleted = { if (connection.page == current) connection.goHome() },
+                            onOpenAvatars = { connection.openAvatarLibrary(current.targetId) },
                         )
                     }
                 }
@@ -312,6 +315,13 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onCreated = { id -> if (connection.page == ShellPage.NewBot) connection.openChat(id) },
                 )
                 current is ShellPage.PrivateArchives -> PrivateArchivesPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.AvatarLibrary -> AvatarLibraryPage(
+                    botId = current.botId,
+                    botShape = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.shape,
+                    api = connection.manageApi,
+                    // 设好照片后回到详情页（只在仍停留在头像库页时）
+                    onDone = { if (connection.page == current) connection.goBack() },
+                )
                 else -> {
                     // 某主机首次出现团队：以当前最近活动打底，免得整页未读（之后的新活动照常显示）
                     val team = connection.team
@@ -942,6 +952,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     fun openPrivateArchives() = push(ShellPage.PrivateArchives)
 
+    fun openAvatarLibrary(botId: String) = push(ShellPage.AvatarLibrary(botId))
+
     fun goBack() {
         page = if (backStack.isEmpty()) ShellPage.Team else backStack.removeAt(backStack.size - 1)
     }
@@ -989,6 +1001,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     val r = postBot("efforts", work.keepwriting.core.BotManage.Requests.efforts(ref))
                     val e = work.keepwriting.core.BotManage.efforts((r as? DsbotApi.Result.Ok)?.value)
                     mainHandler.post { cb(e) }
+                }
+            },
+            read = { endpoint, payload, cb ->
+                readExecutor.execute {
+                    val r = postBot(endpoint, payload)
+                    mainHandler.post { cb(r) }
                 }
             },
         )

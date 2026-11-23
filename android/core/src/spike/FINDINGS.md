@@ -320,3 +320,17 @@ bot/refused，内部异常 → bot/internal，客户端对 bot/internal 不显�
 `{model, changeEngine:true}`，徽标照片的处理留给 dsbot-avatars。
 位置：channel.js、roster.js、privacy.js、permissions.js、models.js reasoningOf、shared/mentions.js nameProblem。
 模拟器验收用 `node scripts/mock-dsh-server.mjs --manage` 注入同一形态。
+
+## 20. 头像库（2026-11-24，dsbot-avatars）
+
+**实测（只读）**：`avatar-library {}` → `{items:[], total:0, next:0}`；`{offset:5, limit:2}` → `{items:[], total:0, next:5}`
+（本机头像库为空；夹具 `avatar-library-empty.json`）。
+
+**源码核对、未写入用户真实头像库**（ds-bot 0.3.10 avatar-library.js、avatar.js、constants.js）：条目
+`{id(字节 sha256), name(≤120), mime, bytes, createdAt, image(data URL)}`，最新在前、每页至多 48、库上限 500；
+`avatar-import {items[{name, image}]}` 逐张处理 → `{imported[条目], duplicates[{id,name}], failed[{name,message}]}`；
+`avatar-delete {id}` → `true`/`false`（使用该照片的 Bot 保留自己的副本）。单张：PNG/JPEG/WebP/GIF（按魔数）、
+字节 ≤ 119982（`(160000-23)/4*3`）、data URL ≤ 160000；上游提示 256×256 方形。设为 Bot 头像为
+`update-bot {id, avatar:{shape?, image}}`（网页端 `{...bot.avatar, image}`），移除为 `avatar:{shape}` 或 `null`。
+App 不以 `avatars:'ref'` 取 state，照片 data URL 内嵌在 `bots[].avatar.image`。模拟器验收用 `--manage` 的同形态实现。
+SVG 头像（上游 update-bot 的 cleanAvatar 允许 `image/svg+xml`，头像库不接受）在 App 中无法解码：详情页显示「已设照片头像」但不显示缩略图，页头退回颜色点。

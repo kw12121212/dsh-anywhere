@@ -50,6 +50,29 @@ object ImageCompress {
         return Result(out.toByteArray(), "image/jpeg", jpegName)
     }
 
+    /**
+     * 解码为按 EXIF 方向校正、长边不超过 [maxEdge] 的位图（dsbot-avatars 裁剪用）；无法解码返回 null。
+     */
+    fun loadOriented(bytes: ByteArray, maxEdge: Int): Bitmap? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val sampled = BitmapFactory.decodeByteArray(
+            bytes, 0, bytes.size,
+            BitmapFactory.Options().apply { inSampleSize = ImageSizing.sampleSize(bounds.outWidth, bounds.outHeight, maxEdge) },
+        ) ?: return null
+        val orientation = exifOrientation(bytes)
+        val swap = orientation in SWAPPED
+        val (srcW, srcH) = if (swap) sampled.height to sampled.width else sampled.width to sampled.height
+        val target = ImageSizing.target(srcW, srcH, maxEdge) ?: (srcW to srcH)
+        val matrix = Matrix()
+        applyOrientation(matrix, orientation)
+        matrix.postScale(target.first.toFloat() / srcW, target.second.toFloat() / srcH)
+        val out = Bitmap.createBitmap(sampled, 0, 0, sampled.width, sampled.height, matrix, true)
+        if (out !== sampled) sampled.recycle()
+        out
+    }.getOrNull()
+
     /** EXIF 方向 5–8 显示时宽高互换。 */
     private val SWAPPED = setOf(
         ExifInterface.ORIENTATION_TRANSPOSE, ExifInterface.ORIENTATION_ROTATE_90,

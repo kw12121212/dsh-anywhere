@@ -85,6 +85,8 @@ object BotManage {
         val color: String?,
         val shape: String?,
         val hasPhoto: Boolean,
+        /** 照片头像的 data URL（state 内嵌的 avatar.image；以引用形态下发时为 null）。 */
+        val photo: String?,
         val workDir: String?,
         val isMain: Boolean,
         /** 第一个 Main Bot（侧栏磁贴）：网页端不提供置顶/隐藏。 */
@@ -141,6 +143,7 @@ object BotManage {
             color = bot.str("color"),
             shape = avatar?.str("shape"),
             hasPhoto = avatar?.members?.containsKey("image") == true || avatar?.members?.containsKey("imageRef") == true,
+            photo = avatar?.str("image"),
             workDir = bot.str("workDir"),
             isMain = botId in mains,
             isTile = mains.firstOrNull() == botId,
@@ -307,6 +310,14 @@ object BotManage {
 
         /** 换形象：只改 shape（照片头像保留在 dsbot-avatars 处理；这里设形象即换成形象头像）。 */
         fun updateShape(id: String, shape: String): String = "{" + field("id", id) + ",\"avatar\":{" + field("shape", shape) + "}}"
+
+        /** 设照片头像（dsbot-avatars）：保留形象，换上照片（网页端 {...bot.avatar, image}）。 */
+        fun updatePhoto(id: String, shape: String?, image: String): String =
+            "{" + field("id", id) + ",\"avatar\":{" + (if (shape != null) field("shape", shape) + "," else "") + field("image", image) + "}}"
+
+        /** 移除照片：有形象时只留形象，否则清除头像。 */
+        fun removePhoto(id: String, shape: String?): String =
+            "{" + field("id", id) + ",\"avatar\":" + (if (shape != null) "{" + field("shape", shape) + "}" else "null") + "}"
 
         fun idOnly(id: String): String = "{" + field("id", id) + "}"
 
