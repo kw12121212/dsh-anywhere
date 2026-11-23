@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    work-folder-picker:
+      strength: MUST
+      statement: Bot 详情页、群详情页（从群聊页「详情」进入）与团队页的「团队工作区」入口提供工作文件夹选择：选择页显示当前浏览位置的面包屑（可跳回任一上级）与其子文件夹（隐藏文件夹默认不显示、可切换，列表不完整时提示），可进入子文件夹、选择当前文件夹，也可输入完整路径（非完整路径在本地提示）或点选最近用过的文件夹；远端不支持浏览时只提供输入路径与最近文件夹；Bot 可改回团队工作区，群可改回「各 Bot 用自己的文件夹」；保存后详情页显示新位置并提示该聊天将在新文件夹的新分段继续，网页端显示相同设置；服务端拒绝的位置显示服务端给出的原因且设置不变。App 不打开电脑上的系统选文件夹对话框。
+      scenarios:
+        browse-select:
+          - GIVEN: Bot A 当前在团队工作区工作
+          - WHEN: 在 A 的详情页打开文件夹选择，逐级进入 /home/user/projects/alpha，再点面包屑回到 /home/user 后重新进入 alpha 并选择
+          - THEN: A 的详情页显示 /home/user/projects/alpha 并提示将在新分段继续；网页端 A 的工作文件夹相同
+        refused-location:
+          - GIVEN: Bot A 的文件夹为 alpha
+          - WHEN: 选择 DeepSeek Harness 数据目录下的文件夹并保存
+          - THEN: 页面显示服务端给出的原因，A 的文件夹仍为 alpha
+        back-to-team:
+          - GIVEN: Bot A 有自己的文件夹
+          - WHEN: 在选择页选「团队工作区」
+          - THEN: A 的详情页显示团队工作区，网页端一致
+        room-folder:
+          - GIVEN: 群 G 没有群文件夹
+          - WHEN: 在 G 的详情页选择文件夹 notes 保存，之后再改回「各 Bot 用自己的文件夹」
+          - THEN: 保存后 G 显示 notes；改回后 G 显示各 Bot 用自己的文件夹，网页端一致
+        team-workspace:
+          - GIVEN: 团队工作区为默认位置
+          - WHEN: 在团队工作区页选择另一个文件夹保存
+          - THEN: 团队工作区页显示新位置；选择数据目录下的位置时显示服务端原因且不变
+        path-input:
+          - GIVEN: 在选择页
+          - WHEN: 输入 projects/alpha（不是完整路径）
+          - THEN: 本地提示需要完整路径，不发出请求
+  MODIFIED: {}
+  REMOVED: {}

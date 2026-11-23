@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-folders
+approach:
+  - core WorkFolders.kt：decodeFolders(value) → {team, picker(native|browse|null), folders[{path,title}]}；decodeListing(value) → {path, home, crumbs[{name,path,hidden}], entries[{name,path,hidden}], truncated}；visibleEntries(listing, showHidden)；pathProblem(input) 只接受以 / 或 ~ 开头的完整路径或 Windows 盘符路径（与上游 cleanWorkDir 的 isAbsolute 一致）；ListingGate 记录最新请求代号、过期应答丢弃；Requests.list(path?)、teamWorkspace(path)、botFolder(id, path 或空串=团队工作区)、roomFolder(id, path 或空串=各 Bot 用自己的文件夹)。
+  - App：FolderPicker（ShellPage.FolderPick(target)，target 为 Bot、群或团队工作区）：顶部当前位置与面包屑、子文件夹列表（隐藏文件夹开关、截断提示）、「选择此文件夹」、手输路径框、最近文件夹（folders.folders）与团队工作区快捷项；列表读取走 ManageApi.read（读线程），以 ListingGate 丢弃过期应答；保存经 manage-write-feedback 通道（update-bot / update-room / team-workspace），成功后仅在仍停留在选择页时返回并提示新分段。Bot 详情页文件夹行可点；群详情页（RoomDetailsPage，ShellPage.Details 的群目标）显示群文件夹；团队页新增「团队工作区」入口。
+decisions:
+  browse-only:
+    decision: 只用 folder-list 逐级浏览（宿主 picker 为 browse 时）与手输完整路径，不调用 folder-pick；picker 为 native 或 null 时只提供手输路径与最近文件夹。
+    rationale: 里程碑 intake 问题 folder-picker 已确认（2026-11-11）用 folder-list 浏览而不调用 folder-pick：folder-pick 在电脑桌面弹对话框，手机用户看不到；本机实测宿主 picker 为 browse。
+  room-details-folder-only:
+    decision: 本变更新增的群详情页只承载工作文件夹一节，并在群聊页加「详情」入口；成员、管理员、回复模式、公告等由 dsbot-group-manage 在同一页面补充。
+    rationale: 计划变更要求为群选择工作文件夹，但目前群详情页仍是骨架；先建页面框架与文件夹一节，避免把群管理的其余范围提前拉进来，同时让 group-manage 只需往同一页面加分节。
+  no-approval-path:
+    decision: 用户在 App 里改 Bot/群文件夹或团队工作区直接经 update-bot/update-room/team-workspace 保存，不出现审批；只在保存成功后提示「将在新文件夹的新分段继续」。
+    rationale: 源码核对：approveFolder 只在 Bot 经工具改文件夹时调用，用户经设置端点改动不经审批（roster.js updateBot/updateRoom 直接 cleanWorkDir）；Bot 发起的审批已由停靠区处理，无需本变更另做。
+  source-checked-writes:
+    decision: folders 与 folder-list 对真实服务只读实测并补夹具（folders 夹具的路径已改为合成值）；update-bot/update-room 的 workDir 与 team-workspace 为源码核对、在 mock 上验收，不改用户真实团队。
+    rationale: 修改文件夹会让真实 Bot 在新分段继续、改团队工作区会影响所有 Bot，属于改动用户数据；读取端点不改变任何状态，可实测。
+alternatives: []
+risks:
+  - folder-list 列出的是电脑上的真实目录，大目录条目很多：只渲染可见行（LazyColumn），截断时提示
+  - 手输路径的合法性最终由服务端判定（存在、是文件夹、不在数据目录）；本地只拦截非完整路径

@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-folders
+  status: proposed
+summary:
+  what:
+    - 新增文件夹选择页：先读 folders（团队工作区、最近用过的文件夹与宿主的选择方式），宿主为 browse 时用 folder-list 在手机上逐级浏览电脑上的文件夹（面包屑可跳回任一上级、隐藏文件夹默认收起、列表被截断时提示），也可直接输入完整路径；选定后保存。不调用 folder-pick
+    - Bot 详情页的工作文件夹改为可选：选择文件夹、改回团队工作区；新增群详情页（从群聊页「详情」进入，本变更只含工作文件夹，其余群设置由 dsbot-group-manage 补充）：选择群文件夹或改回「各 Bot 用自己的文件夹」；团队页提供「团队工作区」入口查看与修改团队工作区位置
+    - 服务端拒绝的位置（DeepSeek Harness 数据目录、私有 Bot 的文件夹附近、不存在或不是文件夹等）显示服务端给出的原因且设置不变；保存成功后提示该聊天将在新文件夹的新分段继续
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第三条：为 Bot 与群从文件夹列表选择工作文件夹并保存，被拒绝的位置显示服务端原因
+    - 网页端在电脑上弹系统选文件夹对话框，手机无法操作电脑桌面（intake 问题 folder-picker 已确认用 folder-list 逐级浏览）
+scope:
+  in:
+    - android-dsbot 规格新增 work-folder-picker 要求；tech/dsbot-api 登记 folders/folder-list/team-workspace 与 update-bot/update-room workDir 语义
+    - core：WorkFolders（folders 与 folder-list 解码、面包屑、隐藏项过滤、路径输入校验、列表请求代号防乱序、update-bot/update-room/team-workspace 请求体）与 JUnit；真实夹具 folders/folder-list
+    - App：文件夹选择页、Bot 详情页文件夹行、群详情页（文件夹）与群聊页详情入口、团队页团队工作区入口与页面；mock --manage 增加文件夹端点
+  out:
+    - 群的成员、管理员、回复模式、公告与统一权限（dsbot-group-manage）；在手机上新建文件夹；folder-pick（电脑系统对话框）
+unchanged_behavior:
+  - Bot 详情页其余设置、写操作通道（manage-write-feedback）、群聊页其余功能不变；用户本人修改文件夹不经审批（审批卡只在 Bot 用工具改文件夹时出现，由既有停靠区处理）
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-folders

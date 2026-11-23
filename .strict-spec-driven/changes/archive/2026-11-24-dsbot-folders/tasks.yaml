@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-folders
+sections:
+  Implementation:
+    core-work-folders:
+      text: core 新增 WorkFolders.kt（folders/folder-list 解码、隐藏项过滤、路径校验、ListingGate、请求体）
+      status: complete
+    fixtures-folders:
+      text: 真实夹具 folders.json（路径合成化）、folder-list-usr.json、folder-list-missing.json；FINDINGS 第 21 节登记
+      status: complete
+    app-folder-picker:
+      text: FolderPickerPage：面包屑、子文件夹列表、隐藏开关、截断提示、手输路径、最近文件夹与团队工作区快捷项、选择保存；NativeShell 路由 FolderPick
+      status: complete
+    app-entries:
+      text: Bot 详情页文件夹行可选与改回团队工作区；群详情页（文件夹）与群聊页详情入口；团队页团队工作区入口
+      status: complete
+    mock-folders:
+      text: mock --manage 增加 folders（picker=browse）、folder-list（内存目录树，不存在路径按上游报错）、team-workspace、update-room workDir，拒绝 /home/user/.dsh 下的位置
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：WorkFoldersTest（真实夹具解码、错误夹具、隐藏过滤、路径校验各分支、ListingGate 乱序、请求体字面值）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹，看日志末尾 EXIT）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：Bot 详情页进入选择页逐级浏览、面包屑跳回、选择文件夹保存后详情页显示新路径；改回团队工作区；选择数据目录下的位置显示服务端原因且设置不变；手输非完整路径本地提示；群详情页设群文件夹与改回各 Bot 用自己的文件夹；团队工作区页查看与修改
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-folders
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

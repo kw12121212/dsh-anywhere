@@ -1,0 +1,54 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-folders
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-folders。
+    answer: 手机上无法为 Bot 与群选择工作文件夹，也看不到、改不了团队工作区；网页端靠电脑的系统对话框，手机用不了。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第三条。
+    answer: 为 Bot 与群从文件夹列表选择工作文件夹并保存，网页端一致；被拒绝的位置（dsh 数据目录等）显示服务端给出的原因。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：folders 与 folder-list 逐级浏览（面包屑、返回上级），选定后经 update-bot/update-room 保存；team-workspace 查看与修改；显示服务端拒绝原因；不调用 folder-pick；群可选各 Bot 用自己的文件夹；列表过期应答按请求代号丢弃。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 不调用 folder-pick；群的其余设置属于 dsbot-group-manage；Bot 详情页其余设置与写通道不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖的 dsbot-bot-manage 已归档，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: approval-card
+    question: 里程碑说需要审批的设置走聊天中的审批卡，手机上改文件夹时会出现审批吗？
+    context: 影响范围：spec 场景、实现与测试。
+    answer: 不会：源码核对 approveFolder 只在 Bot 经工具改文件夹时调用；用户经 update-bot/update-room/team-workspace 修改不经审批（design 决策 no-approval-path）。Bot 发起的文件夹审批照常出现在停靠区。
+    status: resolved
+    answered_by: roadmap
+  - id: room-entry
+    question: 目前没有群详情页，群文件夹在哪里设置？
+    context: 影响范围：proposal 范围与实现文件。
+    answer: 新增群详情页（群聊页「详情」进入），本变更只含工作文件夹一节，其余由 dsbot-group-manage 补充（design 决策 room-details-folder-only）。
+    status: resolved
+    answered_by: roadmap

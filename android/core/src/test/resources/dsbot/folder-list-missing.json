@@ -1,0 +1,1 @@
+{"ok":false,"error":{"code":"bot/refused","message":"cannot list /nope/zzz: ENOENT: no such file or directory, opendir '/nope/zzz'","details":{}}}

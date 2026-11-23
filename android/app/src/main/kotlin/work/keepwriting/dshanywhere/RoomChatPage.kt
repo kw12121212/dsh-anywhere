@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +69,8 @@ fun RoomChatPage(
     onBarAction: (String, String, String) -> Unit = { _, _, _ -> },
     /** 文件与图片取回（dsbot-reader-files）。 */
     media: ChatMedia? = null,
+    /** 打开群详情页（dsbot-folders）。 */
+    onOpenDetails: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(roomId)
@@ -278,11 +281,13 @@ fun RoomChatPage(
         if (controller.streamingText != null || controller.busy) {
             ThinkingPill(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // 工具行可横向滚动：窄屏英文界面下五个按钮放不下（dsbot-folders 新增「详情」）
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = { controller.showProgress() }) { Text(tr("进度", "Progress")) }
             TextButton(onClick = { controller.showStats(memberIds, members) }, enabled = members.isNotEmpty()) { Text(tr("统计", "Stats")) }
             TextButton(onClick = { showGoalDialog = true }) { Text(tr("目标", "Goal")) }
             TextButton(onClick = { showRefPicker = true }, enabled = members.isNotEmpty()) { Text(tr("＋引用", "+ Quote")) }
+            TextButton(onClick = onOpenDetails) { Text(tr("详情", "Details")) }
         }
         controller.notice?.let {
             Text(

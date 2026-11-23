@@ -131,6 +131,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object PrivateArchives : ShellPage
         /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
         data class AvatarLibrary(val botId: String) : ShellPage
+        /** 工作文件夹选择（dsbot-folders）。 */
+        data class FolderPick(val target: FolderTarget) : ShellPage
     }
 
 @Composable
@@ -259,6 +261,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                                 connection.barAction(key, endpoint, payload) { connection.roomChatController.postNotice(it) }
                             },
                             media = connection.media,
+                            onOpenDetails = { connection.openDetails(current.targetId) },
                         )
                     } else {
                         LaunchedEffect(entry?.working) { connection.chatController.syncWorking(entry?.working ?: false) }
@@ -294,9 +297,15 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     }
                 }
                 current is ShellPage.Details -> {
-                    // 群目标的详情由 dsbot-group-manage 承接；其余（Bot，含已被删除的）交给 Bot 详情页
+                    // 群目标：群详情页（dsbot-folders 建框架，dsbot-group-manage 补充）；其余（Bot，含已被删除的）交给 Bot 详情页
                     if (isRoomEntry(connection, current.targetId)) {
-                        SkeletonPage("details:${current.targetId}")
+                        RoomDetailsPage(
+                            state = connection.stateSnapshot?.raw,
+                            roomId = current.targetId,
+                            flash = connection.flash,
+                            onDismissFlash = { connection.flash = null },
+                            onPickFolder = { connection.openFolderPick(FolderTarget.Room(current.targetId)) },
+                        )
                     } else {
                         BotDetailsPage(
                             state = connection.stateSnapshot?.raw,
@@ -306,8 +315,32 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             onOpenChat = { id -> if (connection.page == current) connection.openChat(id) },
                             onDeleted = { if (connection.page == current) connection.goHome() },
                             onOpenAvatars = { connection.openAvatarLibrary(current.targetId) },
+                            onPickFolder = { connection.openFolderPick(FolderTarget.Bot(current.targetId)) },
+                            flash = connection.flash,
+                            onDismissFlash = { connection.flash = null },
                         )
                     }
+                }
+                current is ShellPage.FolderPick -> {
+                    val snapshot = connection.stateSnapshot?.raw
+                    val target = current.target
+                    val (title, folder) = when (target) {
+                        is FolderTarget.Bot -> tr("工作文件夹：", "Working folder: ") + (work.keepwriting.core.BotManage.profileOf(snapshot, target.id)?.name ?: "") to
+                            work.keepwriting.core.BotManage.profileOf(snapshot, target.id)?.workDir
+                        is FolderTarget.Room -> tr("群文件夹：", "Group folder: ") + (work.keepwriting.core.WorkFolders.roomName(snapshot, target.id) ?: "") to
+                            work.keepwriting.core.WorkFolders.roomFolder(snapshot, target.id)
+                        FolderTarget.Team -> tr("团队工作区", "Team workspace") to null
+                    }
+                    FolderPickerPage(
+                        target = target, title = title, current = folder, api = connection.manageApi,
+                        // Bot/群保存成功：只在仍停留在选择页时返回详情页，并在那里提示新分段（团队工作区留在本页刷新）
+                        onSaved = {
+                            if (connection.page == current) {
+                                connection.flash = folderSavedText()
+                                connection.goBack()
+                            }
+                        },
+                    )
                 }
                 current is ShellPage.NewBot -> NewBotPage(
                     state = connection.stateSnapshot?.raw,
@@ -338,6 +371,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onNewBot = { connection.openNewBot() },
                     archivedPrivate = work.keepwriting.core.BotManage.privateArchives(connection.stateSnapshot?.raw).size,
                     onOpenArchived = { connection.openPrivateArchives() },
+                    onTeamWorkspace = { connection.openFolderPick(FolderTarget.Team) },
                 )
                 }
             }
@@ -852,11 +886,13 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     private fun push(next: ShellPage) {
         backStack.add(page)
         page = next
+        flash = null // 一次性提示只属于返回到的那一页
     }
 
     fun openChat(id: String) {
         backStack.clear()
         backStack.add(ShellPage.Team)
+        flash = null
         page = ShellPage.Chat(id)
         // 记住上次打开的聊天（只存 id 与类型，启动预取用；dsbot-chat-cache）
         val kind = if (isRoom(id)) "room" else "bot"
@@ -953,6 +989,11 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openPrivateArchives() = push(ShellPage.PrivateArchives)
 
     fun openAvatarLibrary(botId: String) = push(ShellPage.AvatarLibrary(botId))
+
+    fun openFolderPick(target: FolderTarget) = push(ShellPage.FolderPick(target))
+
+    /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
+    var flash by mutableStateOf<String?>(null)
 
     fun goBack() {
         page = if (backStack.isEmpty()) ShellPage.Team else backStack.removeAt(backStack.size - 1)

@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    folder-endpoints-0310:
+      strength: MUST
+      statement: '工作文件夹端点（DS-Bot 0.3.10）：folders {} → {team, picker: native|browse|null, folders[{path,title}]}（实测，本机 picker=browse）；folder-list {path?} → {path, home, crumbs[{name,path,hidden}], entries[{name,path,hidden}], truncated}（实测；不存在或不是目录回 bot/refused「cannot list …: ENOENT/ENOTDIR …」；只在 picker=browse 时可用）；folder-pick 在电脑桌面弹对话框，手机客户端不得调用；team-workspace {path} → {team: 实际路径}（源码核对：数据目录及其上级、私有 Bot 文件夹附近拒绝，不存在时会创建）；update-bot {id, workDir}（空串=团队工作区）与 update-room {id, workDir}（空串=各 Bot 用自己的文件夹）由服务端 cleanWorkDir 校验：必须为完整路径、存在且是文件夹、不含数据目录（源码核对）；用户经这些端点修改不经审批，审批只在 Bot 经工具改文件夹时出现'
+      rationale: 文件夹端点此前未登记；folder-pick 在手机上无法使用必须明确禁用；写端点会改动用户真实团队，只能源码核对并标明实测状态
+      enforcement:
+        method: review
+        detail: core JUnit（WorkFoldersTest）以真实 folders（路径合成化）、folder-list-usr、folder-list-missing 夹具覆盖解码；源码核对位置：ds-bot 0.3.10 src/host/folders.js（folderEndpoint、cleanWorkDir、workFolder、guarded、setTeamWorkspace、approveFolder）、roster.js（updateBot/updateRoom 的 workDir）、channel.js（folders/folder-pick/folder-list/team-workspace）；FINDINGS 第 21 节登记
+  MODIFIED: {}
+  REMOVED: {}

@@ -334,3 +334,16 @@ bot/refused，内部异常 → bot/internal，客户端对 bot/internal 不显�
 `update-bot {id, avatar:{shape?, image}}`（网页端 `{...bot.avatar, image}`），移除为 `avatar:{shape}` 或 `null`。
 App 不以 `avatars:'ref'` 取 state，照片 data URL 内嵌在 `bots[].avatar.image`。模拟器验收用 `--manage` 的同形态实现。
 SVG 头像（上游 update-bot 的 cleanAvatar 允许 `image/svg+xml`，头像库不接受）在 App 中无法解码：详情页显示「已设照片头像」但不显示缩略图，页头退回颜色点。
+
+## 21. 工作文件夹（2026-11-24，dsbot-folders）
+
+**实测（只读）**：`folders {}` → `{team, picker:"browse", folders[{path,title}]}`（本机 17 个最近文件夹；夹具 `folders.json`
+的路径已合成化）；`folder-list {}` 从 home 列出，`{path:"/usr"}` → `{path, home, crumbs[{name,path,hidden}], entries[{name,path,hidden}],
+truncated}`（夹具 `folder-list-usr.json`）；不存在 → `bot/refused`「cannot list /nope/zzz: ENOENT…」（夹具 `folder-list-missing.json`），
+是文件 → `bot/refused`「…ENOTDIR…」。
+
+**源码核对、未改用户真实团队**（ds-bot 0.3.10 folders.js、roster.js）：`folder-list` 只在 picker=browse 时可用；`folder-pick`
+在电脑桌面弹对话框，手机端不调用；`team-workspace {path}` → `{team}`（数据目录及其上级、私有 Bot 文件夹附近拒绝，不存在时创建）；
+`update-bot {id, workDir}`（空串=团队工作区）、`update-room {id, workDir}`（空串=各 Bot 用自己的文件夹）经 cleanWorkDir：
+完整路径、存在、是文件夹、不在数据目录（团队工作区在数据目录内是例外），等于团队工作区时视为未设。用户经这些端点修改不经审批；
+approveFolder 只在 Bot 经工具改文件夹时触发。

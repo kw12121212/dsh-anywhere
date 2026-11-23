@@ -253,6 +253,11 @@ fun BotDetailsPage(
     onDeleted: () -> Unit,
     /** 打开头像库（dsbot-avatars）为该 Bot 选照片。 */
     onOpenAvatars: () -> Unit = {},
+    /** 选择工作文件夹（dsbot-folders）。 */
+    onPickFolder: () -> Unit = {},
+    /** 从选择页带回的一次性提示（如文件夹已保存）。 */
+    flash: String? = null,
+    onDismissFlash: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -296,6 +301,7 @@ fun BotDetailsPage(
             }
         }
         ErrorLine(error) { error = null }
+        InfoLine(flash, error = false, onDismiss = onDismissFlash)
 
         SectionTitle(tr("资料", "Profile"))
         EditableField(tr("名称", "Name"), profile.name, busy("name"), maxLength = BotManage.NAME_MAX, problem = { BotManage.nameProblem(it, names, botId)?.let(BotManage::nameProblemText) }) {
@@ -354,7 +360,7 @@ fun BotDetailsPage(
         }
 
         SectionTitle(tr("工作文件夹", "Working folder"))
-        ValueRow(tr("文件夹", "Folder"), profile.workDir ?: tr("团队工作区", "Team workspace"), onClick = null)
+        ValueRow(tr("文件夹", "Folder"), profile.workDir ?: tr("团队工作区", "Team workspace"), enabled = !busy("folder"), onClick = onPickFolder)
 
         SectionTitle(tr("隐私", "Privacy"))
         SwitchRow(tr("私有", "Private"), BotManage.privateHint(profile), profile.isPrivate, BotManage.canTogglePrivate(profile) && !busy("private")) {

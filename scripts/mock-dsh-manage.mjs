@@ -21,6 +21,8 @@ export function createManageTeam(pushRevision) {
       'bot-2': { id: 'bot-2', name: '运维值班', role: '运维', instructions: '处理告警。', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/ops' },
       'bot-3': { id: 'bot-3', name: '写作搭档', role: '写作', instructions: '', model: 'deepseek/v4', appliedModel: 'deepseek/v4', workDir: '/work/writing', permission: 'workspace-write' },
       'bot-4': { id: 'bot-4', name: '采购助理', role: '', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash' },
+      // 工作文件夹已在电脑上被删除（不在目录树里）：选择页起点读不到时应退回主目录（dsbot-folders）
+      'bot-5': { id: 'bot-5', name: '归档助理', role: '归档', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/gone' },
     },
     rooms: { 'room-1': { id: 'room-1', name: '项目群', color: 'violet', members: ['bot-1', 'bot-2'], admin: 'bot-1', mode: 'auto', notice: '' } },
     sections: [],
@@ -28,6 +30,27 @@ export function createManageTeam(pushRevision) {
     seq: 10,
   }
   const library = []
+  // 工作文件夹（dsbot-folders，ds-bot 0.3.10 folders.js 形态）：内存目录树；/home/user/.dsh 是数据目录（guarded）
+  const DIRS = new Set(['/', '/home', '/home/user', '/home/user/projects', '/home/user/projects/alpha', '/home/user/projects/beta',
+    '/home/user/notes', '/home/user/.config', '/home/user/.dsh', '/home/user/.dsh/ds-bot', '/home/user/.dsh/ds-bot/workspace',
+    '/home/user/big', ...Array.from({ length: 6 }, (_, i) => `/home/user/big/d${i + 1}`),
+    '/work', '/work/ops', '/work/writing', '/work/old-private'])
+  const DATA = '/home/user/.dsh'
+  let teamDir = '/home/user/.dsh/ds-bot/workspace'
+  const within = (inner, outer) => inner === outer || inner.startsWith(outer === '/' ? '/' : outer + '/')
+  const parentOf = (p) => (p === '/' ? '/' : p.slice(0, p.lastIndexOf('/')) || '/')
+  const nameOf = (p) => (p === '/' ? '/' : p.slice(p.lastIndexOf('/') + 1))
+  const expand = (t) => (t === '~' ? '/home/user' : t.startsWith('~/') ? '/home/user' + t.slice(1) : t)
+  // 上游 cleanWorkDir：完整路径、存在、是文件夹、不含也不在数据目录内（团队工作区在数据目录内是例外）；等于团队工作区时视为未设
+  function cleanWorkDir(input) {
+    const text = String(input ?? '').trim()
+    if (text === '') return undefined
+    const path = expand(text).replace(/\/+$/, '') || '/'
+    if (!path.startsWith('/')) throw new Error(`Give the full path of the folder, not ${text}`)
+    if (!DIRS.has(path)) throw new Error(`There is no folder at ${text}`)
+    if (within(DATA, path) || (within(path, DATA) && !within(path, teamDir))) throw new Error(`${path} holds DeepSeek Harness data, so Bots cannot work there`)
+    return path === teamDir ? undefined : path
+  }
   const fail = (message) => ({ ok: false, error: { code: 'bot/refused', message, details: {} } })
   const ok = (value) => ({ ok: true, value })
   const norm = (s) => String(s ?? '').trim().toLowerCase()
@@ -74,6 +97,9 @@ export function createManageTeam(pushRevision) {
   function updateBot(p) {
     const bot = team.bots[p.id]
     if (!bot) throw new Error('Unknown Bot')
+    // 文件夹先校验（上游先检查，失败时其余字段也不改）
+    const moving = p.workDir !== undefined
+    const workDir = moving ? cleanWorkDir(p.workDir) : undefined
     if (p.private === true) {
       if (team.mainBotIds.includes(bot.id)) throw new Error(`${bot.name} is a Main Bot and cannot be private`)
       if (inGroup(bot.id)) throw new Error(`${bot.name} is in a group chat and cannot be private`)
@@ -96,7 +122,7 @@ export function createManageTeam(pushRevision) {
     if (p.effort !== undefined) { if (p.effort === null || p.effort === '') delete bot.effort; else bot.effort = p.effort }
     if (p.permission !== undefined) bot.permission = p.permission
     if (p.private !== undefined) { if (p.private) bot.private = true; else delete bot.private }
-    if (p.workDir !== undefined) { if (p.workDir) bot.workDir = p.workDir; else delete bot.workDir }
+    if (moving) { if (workDir) bot.workDir = workDir; else delete bot.workDir }
     return bot
   }
 
@@ -160,6 +186,37 @@ export function createManageTeam(pushRevision) {
           if (typeof p.hidden === 'boolean') entry.hidden = p.hidden
           bump()
           return ok(entry)
+        }
+        case 'folders':
+          return ok({ team: teamDir, picker: 'browse', folders: [...new Set([...Object.values(team.bots), ...Object.values(team.rooms)].map((e) => e.workDir).filter((p) => p && DIRS.has(p)))].map((path) => ({ path, title: nameOf(path) })) })
+        case 'folder-list': {
+          const path = (typeof p.path === 'string' && p.path !== '' ? expand(p.path) : '/home/user').replace(/\/+$/, '') || '/'
+          if (!DIRS.has(path)) throw new Error(`cannot list ${path}: ENOENT: no such file or directory, opendir '${path}'`)
+          const crumbs = []
+          for (let at = path; ; at = parentOf(at)) { crumbs.unshift({ name: nameOf(at), path: at, hidden: nameOf(at).startsWith('.') }); if (at === '/') break }
+          const entries = [...DIRS].filter((d) => d !== path && parentOf(d) === path).sort().map((d) => ({ name: nameOf(d), path: d, hidden: nameOf(d).startsWith('.') }))
+          // /home/user/big 模拟目录太多被截断
+          return ok({ path, home: '/home/user', crumbs, entries: path === '/home/user/big' ? entries.slice(0, 3) : entries, truncated: path === '/home/user/big' })
+        }
+        case 'team-workspace': {
+          const text = String(p.path ?? '').trim()
+          const path = expand(text).replace(/\/+$/, '') || '/'
+          if (!path.startsWith('/')) throw new Error(`Give the full path of the folder, not ${text}`)
+          if (within(DATA, path) || (within(path, DATA) && path !== '/home/user/.dsh/ds-bot/workspace')) throw new Error(`${text} holds DeepSeek Harness data, so it cannot be the team workspace`)
+          DIRS.add(path)
+          teamDir = path
+          bump()
+          return ok({ team: path })
+        }
+        case 'update-room': {
+          const room = team.rooms[p.id]
+          if (!room) throw new Error('Unknown group chat')
+          if (p.workDir !== undefined) {
+            const wd = cleanWorkDir(p.workDir)
+            if (wd) room.workDir = wd; else delete room.workDir
+          }
+          bump()
+          return ok({ room: view().rooms.find((r) => r.id === room.id), changes: [] })
         }
         // 头像库（dsbot-avatars，ds-bot 0.3.10 avatar-library.js / avatar.js 形态）：按字节 sha256 去重，单张上限 119982 字节
         case 'avatar-library': {
