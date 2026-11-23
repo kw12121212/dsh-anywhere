@@ -76,6 +76,11 @@ fun BotChatPage(
     onOpenSide: () -> Unit = {},
     /** 打开 Bot 详情页（dsbot-bot-manage）。 */
     onOpenDetails: () -> Unit = {},
+    /**
+     * DSH Agent 模式（dsbot-member-agents）：隐藏分段/侧问/统计/详情、附件与恢复入口，操作行只有「会话」菜单（[onAgentMenu]）。
+     */
+    agentMode: Boolean = false,
+    onAgentMenu: () -> Unit = {},
     onOpenLink: (String, Boolean) -> Unit = { _, _ -> },
     /** 最近 state 快照（含 live 字段），派生 0.3.10 聊天条（dsbot-chat-bars-0310）；null 时不显示。 */
     state: work.keepwriting.core.Json.Value.Object? = null,
@@ -279,7 +284,13 @@ fun BotChatPage(
         if (controller.streamingText != null) {
             StreamingBubble(controller.streamingText ?: "")
         }
-        ChatActionRow(controller, parts, onPickPart = { showPartsDialog = true }, onOpenSide = onOpenSide, onOpenDetails = onOpenDetails)
+        if (agentMode) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                TextButton(onClick = onAgentMenu) { Text(tr("会话", "Sessions")) }
+            }
+        } else {
+            ChatActionRow(controller, parts, onPickPart = { showPartsDialog = true }, onOpenSide = onOpenSide, onOpenDetails = onOpenDetails)
+        }
         controller.notice?.let {
             Text(
                 it,
@@ -401,13 +412,15 @@ fun BotChatPage(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { showAttachMenu = true }) {
-                Icon(Icons.Filled.Add, contentDescription = tr("添加附件", "Add attachment"))
+            if (!agentMode) {
+                IconButton(onClick = { showAttachMenu = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = tr("添加附件", "Add attachment"))
+                }
             }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text(tr("发送消息给 Bot", "Message the Bot")) },
+                placeholder = { Text(if (agentMode) tr("发送消息给 DSH Agent", "Message the DSH Agent") else tr("发送消息给 Bot", "Message the Bot")) },
                 maxLines = 4,
                 modifier = Modifier.weight(1f),
             )
@@ -422,7 +435,7 @@ fun BotChatPage(
                             .background(MaterialTheme.colorScheme.onPrimaryContainer, RoundedCornerShape(4.dp)),
                     )
                 }
-                controller.interrupted -> FilledIconButton(onClick = { controller.resume() }) {
+                controller.interrupted && !agentMode -> FilledIconButton(onClick = { controller.resume() }) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = tr("恢复会话", "Resume session"))
                 }
                 controller.busy -> ThinkingPill()

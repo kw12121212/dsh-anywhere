@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: cursor-null-json-null-f59390
+  title: 上游分页到最早时回 cursor:null，JSON null 不能当作还有下一页
+category: api
+status: active
+created_at: '2026-11-23T23:03:01.254Z'
+updated_at: '2026-11-23T23:03:01.254Z'
+context: dsbot-member-agents：Agent 新会话的聊天页
+observation: upstream parts.js partPage/agentPage 在没有更早内容时回 cursor:null；DsbotModels.cursorOf 直接取 members["cursor"] 得到 NullValue 而非 Kotlin null，聊天页因此显示「更早消息」，点按会重取同一页。真实 chat 夹具只有对象形态 cursor，从未覆盖 null；单分段的短 Bot 私聊同样受影响
+takeaway: 解码上游可选字段时把 JSON null 与缺键同等处理（takeUnless NullValue）；为每个分页/可选字段补一条 null 形态的单测，不要只用真实夹具里恰好出现的形态
+applies_when: 解码 DS-Bot 应答中的可选字段（cursor、next、admin 等），尤其是夹具只覆盖了非空形态时
+occurrences:
+  - origin: dsbot-member-agents
+    date: '2026-11-23'
+    evidence: 2026-11-24 模拟器：mock agent-chat 回 cursor:null 时页头显示 Earlier messages；修复后 ChatRenderTest「cursor 为 JSON null 视为到最早」通过、页头为 Reached the beginning

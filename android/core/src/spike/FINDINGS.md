@@ -361,3 +361,17 @@ preview, seq, sessionId`；本机两个群都没有 `permission/workDir/pinned/h
 mode ∈ admin/everyone、公告 ≤2000（trim 后，超长拒绝）、群名超过 60 字截断且不与其他群重名（空串=按成员自动命名）、permission 为预设名或 null
 （只有用户能改）→ `{room, changes[]}`；`delete-room {id}` → 整份 state；`set-flags` 对群同样适用。拒绝为 `bot/refused` + 具体 message。
 用户经这些端点修改不经审批。
+
+## 23. 团队的 DSH Agent（2026-11-24，dsbot-member-agents）
+
+**实测（只读）**：本机 `state.agents` 为 `[]`（团队没有 DSH Agent）；`agent-chat {agentId:"nope"}` → `bot/not-found`「Unknown DSH Agent」；
+hello capabilities 含 `agents`、`stop-agent`。
+
+**源码核对、待实测**（取得成功样本需在用户在用的团队里新建 Agent，项目约定不得改动真实数据；tech/dsbot-api endpoint-inventory-0310 例外）：
+DSH Agent 是团队级、至多一个的普通 dsh 入口（agents.js），`state.agents[{id, name:"DSH Agent", sessions[], createdAt}]`，最新会话为
+sessions 末尾；live `work.agents{agentId→{since,…}}` 表示工作中。`add-agent {}`（已有时拒绝）、`agent-chat {agentId, cursor?}`（parts.js
+agentPage：最新会话、与 chat 同由 partPage 分页；全部归档时 items 为空）、`agent-session {agentId}` → `{sessionId}`、`agent-archive
+{agentId, sessionId}`、`agent-rename {agentId, sessionId, title}`（trim 后非空、截断 80）、`remove-agent {agentId}`（归档全部会话）、
+`stop-agent {agentId}` → 是否停止了运行中的回合。发送为 `send {sessionId, text}`。feed.js 的 message/stream 只为 chatOwners 中的
+Bot 会话发布，Agent 会话只在 agent/status 时触发 live，客户端据 live/轮询重读 agent-chat。`earlier` 对 Agent 会话返回空，更早内容
+用 agent-chat 带 cursor。`agent-adopt` 需要已有 dsh 根会话 id，手机端不使用。

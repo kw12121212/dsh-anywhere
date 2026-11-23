@@ -126,8 +126,9 @@ object DsbotModels {
     }
 
     /** chat/earlier 应答的下一页 cursor：保留原始值形态透传（0.3.x 实测为对象
-     *  {"part","beforeSeq"}，夹具同构；字符串/数字形态也放行），无则视为到最早。 */
-    private fun Json.Value.Object.cursorOf(): Json.Value? = members["cursor"]
+     *  {"part","beforeSeq"}，夹具同构；字符串/数字形态也放行），无则视为到最早。上游 partPage 到最早时回
+     *  cursor:null（parts.js），JSON null 与缺键同样视为到最早（dsbot-member-agents 发现）。 */
+    private fun Json.Value.Object.cursorOf(): Json.Value? = members["cursor"]?.takeUnless { it is Json.Value.NullValue }
 
     /**
      * 把增量应答的 live 字段集（hasLiveFields 时服务端重发的 work/questions/views 等）

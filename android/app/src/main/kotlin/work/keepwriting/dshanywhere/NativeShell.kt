@@ -129,6 +129,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object NewBot : ShellPage
         /** 新建群聊（dsbot-group-manage）。 */
         data object NewRoom : ShellPage
+        /** 团队的 DSH Agent 聊天（dsbot-member-agents）。 */
+        data class AgentChat(val agentId: String) : ShellPage
         /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
         data object PrivateArchives : ShellPage
         /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
@@ -348,6 +350,16 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                         },
                     )
                 }
+                current is ShellPage.AgentChat -> AgentChatPage(
+                    controller = connection.agentChatController,
+                    state = connection.stateSnapshot?.raw,
+                    agentId = current.agentId,
+                    api = connection.manageApi,
+                    onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
+                    media = connection.media,
+                    // 移除成功：只在仍停留在该 Agent 聊天时回团队页
+                    onRemoved = { if (connection.page == current) connection.goHome() },
+                )
                 current is ShellPage.NewRoom -> NewRoomPage(
                     state = connection.stateSnapshot?.raw,
                     api = connection.manageApi,
@@ -381,6 +393,12 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     isUnread = { e -> connection.isUnread(e, open = false) },
                     onNewBot = { connection.openNewBot() },
                     onNewRoom = { connection.openNewRoom() },
+                    // 团队的 DSH Agent（dsbot-member-agents）：只在远端声明 agents 能力时出现
+                    agents = if (connection.capabilities.has(work.keepwriting.core.DshAgents.CAPABILITY)) work.keepwriting.core.DshAgents.agents(connection.stateSnapshot?.raw) else emptyList(),
+                    agentRunning = { id -> work.keepwriting.core.DshAgents.running(connection.stateSnapshot?.raw, id) },
+                    canAddAgent = work.keepwriting.core.DshAgents.canAdd(connection.capabilities, connection.stateSnapshot?.raw),
+                    onAddAgent = { onErr -> connection.manageAction("add-agent", "add-agent", work.keepwriting.core.DshAgents.Requests.add(), {}, onErr) },
+                    onOpenAgent = { id -> connection.openAgentChat(id) },
                     archivedPrivate = work.keepwriting.core.BotManage.privateArchives(connection.stateSnapshot?.raw).size,
                     onOpenArchived = { connection.openPrivateArchives() },
                     onTeamWorkspace = { connection.openFolderPick(FolderTarget.Team) },
@@ -721,6 +739,51 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             hostOf = { cacheHost() },
             readApi = ::readOffExecutor,
         )
+    }
+
+    /**
+     * DSH Agent 聊天控制器（dsbot-member-agents）：agent-chat 读取、stop-agent、不标已读；Agent 会话没有 stream/message 推送，
+     * 由 applyStateResult（live/revision 与兜底轮询）刷新。
+     */
+    val agentChatController: ChatController by lazy {
+        ChatController(
+            api = { endpoint, payloadJson, onResult -> executor.execute { onResult(postBot(endpoint, payloadJson)) } },
+            execute = { r -> executor.execute(r) },
+            onLoadFailure = { code -> graph.diagnostics.recordChatLoadError("agent", code) },
+            hostOf = { cacheHost() },
+            readApi = ::readOffExecutor,
+            agent = true,
+        )
+    }
+
+    /** 上次触发 Agent 聊天重读时的 (revision, 该 Agent 的 live 工作项)；只在它变化或兜底轮询时重读。executor 线程读写。 */
+    private var agentSignal: String? = null
+
+    /**
+     * Agent 会话没有 stream/message（dsbot-member-agents）：state 应用后（executor 线程）按需重读打开中的 Agent 聊天——
+     * revision 变化、该 Agent 的 work.agents 项变化（回复正在此时出现）或兜底轮询/写后补取（[quiet]）时才读，其他 Bot 的
+     * live 不触发；Agent 已不在 state 里（本机或别处移除）则不再读取并回到团队页（仍停留在该页时）。
+     */
+    private fun refreshAgentChat(quiet: Boolean) {
+        val current = page as? ShellPage.AgentChat ?: return
+        if (!inForeground) return
+        val raw = stateSnapshot?.raw ?: return
+        if (work.keepwriting.core.DshAgents.agentOf(raw, current.agentId) == null) {
+            mainHandler.post { if (page == current) goHome() }
+            return
+        }
+        val agentWork = ((raw.members["work"] as? work.keepwriting.core.Json.Value.Object)?.members?.get("agents") as? work.keepwriting.core.Json.Value.Object)?.members?.get(current.agentId)
+        val signal = (lastState?.revision ?: "") + "|" + (agentWork?.let { work.keepwriting.core.Json.encode(it) } ?: "-")
+        if (signal == agentSignal && !quiet) return
+        agentSignal = signal
+        agentChatController.pollRefresh()
+    }
+
+    fun openAgentChat(id: String) {
+        backStack.clear()
+        backStack.add(ShellPage.Team)
+        flash = null
+        page = ShellPage.AgentChat(id)
     }
 
     /** 附件上传（dsbot-attachments）：POST /api/session/uploadFileBinary（octet-stream）。 */
@@ -1269,6 +1332,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     }
                     else -> return // 未知形态：降级不崩溃，等下一轮事件
                 }
+                refreshAgentChat(quiet)
             }
             is DsbotApi.Result.BotError -> {}
             is DsbotApi.Result.Failure -> when (parsed.reason) {

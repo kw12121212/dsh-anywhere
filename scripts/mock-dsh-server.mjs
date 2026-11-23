@@ -62,7 +62,7 @@ const richMode = process.argv.includes('--rich')
 // --manage：可变的内存团队与 Bot/群/团队管理端点（dsbot-native-manage 里程碑模拟器验收，见 mock-dsh-manage.mjs）；
 // 写入后经 feed 推 revision，日志只记端点与参数键。
 const manageMode = process.argv.includes('--manage')
-const manage = manageMode ? createManageTeam((revision) => setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision })}\n\n`)), 50)) : null
+const manage = manageMode ? createManageTeam((revision) => setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision })}\n\n`)), 50), () => setTimeout(() => feedClients.forEach((write) => write(`event: live\ndata: {}\n\n`)), 50)) : null
 const richClosed = new Set()
 const richRevision = { n: 30 }
 function richViews() {

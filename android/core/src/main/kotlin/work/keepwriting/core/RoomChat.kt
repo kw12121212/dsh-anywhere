@@ -34,7 +34,8 @@ object RoomChat {
             },
             running = stringList(obj, "running"),
             speaking = stringList(obj, "speaking"),
-            cursor = obj?.members?.get("cursor"),
+            // 上游到最早时回 cursor:null：与缺键同样视为到最早，否则「更早消息」会重取最新一页并前插造成重复
+            cursor = obj?.members?.get("cursor")?.takeUnless { it is Json.Value.NullValue },
         )
     }
 

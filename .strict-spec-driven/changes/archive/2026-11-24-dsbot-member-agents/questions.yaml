@@ -1,0 +1,54 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-member-agents
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-member-agents。
+    answer: App 不显示也不能使用团队的 DSH Agent，添加、对话、停止、会话管理与移除都只能在电脑网页端做。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑完成标准第六条。
+    answer: 在 App 中添加 DSH Agent 并在其聊天中发送消息与停止，查看会话、重命名、归档与移除，结果与网页端一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details 与上游手机端参考：在服务端声明 agents 能力且团队尚无 DSH Agent 时提供添加；Agent 聊天经 agent-chat 读取、发送沿用发送箱、停止用 stop-agent；不参与已读；会话的新建、重命名、归档与移除（二次确认）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: Bot 私聊、群聊、发送箱、停靠区与已读不变；无 agents 能力时不显示入口。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖已完成，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: per-bot-or-team
+    question: 计划变更写「Bot 详情页的成员 Agent 列表」，但上游 DSH Agent 是团队级且至多一个，按哪个做？
+    context: 影响范围：proposal 范围、spec 与实现。
+    answer: 按上游 0.3.10 的团队级 DSH Agent（design 决策 team-level-agent）；计划变更 details 的上游手机端参考本身也写的是团队「+」菜单添加。
+    status: resolved
+    answered_by: roadmap
+  - id: adopt-scope
+    question: agent-adopt 在手机上如何提供？
+    context: 影响范围：proposal 范围。
+    answer: 不提供（design 决策 no-adopt）：需要已有 dsh 根会话 id，手机无来源；完成标准第六条不含收编。
+    status: resolved
+    answered_by: roadmap

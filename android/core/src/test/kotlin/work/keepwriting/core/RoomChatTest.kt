@@ -10,6 +10,14 @@ import kotlin.test.assertTrue
 class RoomChatTest {
 
     @Test
+    fun `room-chat 的 cursor 为 JSON null 视为到最早`() {
+        // 单分段群到最早时上游回 cursor:null：不能显示「更早消息」，否则点按会重取最新一页并前插造成重复
+        val page = RoomChat.decodeRoomPage(Json.parse("""{"roomId":"r","items":[],"cursor":null}""")!!)
+        assertNull(page.cursor)
+        assertNotNull(RoomChat.decodeRoomPage(Json.parse("""{"roomId":"r","items":[],"cursor":{"part":0,"beforeSeq":9}}""")!!).cursor)
+    }
+
+    @Test
     fun `room-chat 应答解码成员归属与运行态`() {
         val json = """
             {"roomId":"room-1","announcement":"每周一篇","running":["b2"],"speaking":[],

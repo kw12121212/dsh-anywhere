@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-member-agents
+sections:
+  Implementation:
+    core-dsh-agents:
+      text: core 新增 DshAgents.kt（agents 与 work.agents 解码、当前会话、标题校验、请求体、能否添加）
+      status: complete
+    app-controller-kind:
+      text: ChatController 增加 agent 模式：agent-chat 读取、stop-agent、缓存键种类、不标已读、不处理 stream/message
+      status: complete
+    app-agent-page:
+      text: Agent 聊天页（BotChatPage agent 模式）与会话菜单（新会话、重命名、归档、移除，二次确认）；团队页 DSH Agent 条目与添加；NativeShell 路由与 live/轮询刷新
+      status: complete
+    mock-agents:
+      text: mock --manage 增加 add-agent、agent-chat（按会话的条目）、agent-session、agent-archive、agent-rename、remove-agent、stop-agent 与 send 到 Agent 会话（回一条 Agent 回复并推 live）；hello 声明 agents
+      status: complete
+    findings:
+      text: FINDINGS 第 23 节登记 DSH Agent 端点（agent-chat 未知 Agent 实测 bot/not-found，其余源码核对）
+      status: complete
+    fix-null-cursor:
+      text: 发现并修复：上游到最早时回 cursor:null，DsbotModels 与 RoomChat 把 JSON null 当作 cursor，导致 Agent 新会话、单分段私聊与群聊显示无效的「更早消息」（群聊点按会重复前插）；cursorOf 与 decodeRoomPage 忽略 NullValue，补 ChatRenderTest 与 RoomChatTest
+      status: complete
+    review-fixes:
+      text: 评审修复：Agent 换会话经 ChatController.sessionChanged（executor 内作废缓存、整页重取并滚到最新）；Agent 聊天只在 revision 或该 Agent 的 work 项变化、兜底轮询或写后补取时重读，Agent 从 state 消失时回团队页且 not-found 不上报诊断；无会话时提示去「会话」菜单新建；加载更早校验会话 id；DshAgents.Requests.chat 带 cursor 并补测试；重命名成功提示
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：DshAgentsTest（解码与降级、当前会话、running、标题校验、canAdd、请求体字面值）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹，看日志末尾 EXIT）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：团队页添加 DSH Agent 后出现条目；进入 Agent 聊天发送消息，发送箱行被确认、Agent 回复在 live 后出现；工作中停止；新会话、重命名、归档当前会话（二次确认）；移除 Agent（二次确认）回到团队页、条目消失；远端无 agents 能力时不显示入口
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-member-agents
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

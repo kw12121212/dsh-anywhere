@@ -44,7 +44,16 @@ class ChatController(
      * 慢读取不阻塞缓存上屏与其他聊天的打开；缺省退回 [api]。
      */
     private val readApi: (endpoint: String, payloadJson: String, onResult: (DsbotApi.Result) -> Unit) -> Unit = api,
+    /**
+     * 聊天对象种类（dsbot-member-agents）：bot（默认）读 chat{botId}、停止用 stop-member-work；agent 是团队的 DSH Agent，
+     * 读 agent-chat{agentId}、停止用 stop-agent，不标已读（不记 newest），也不处理 feed stream/message（Agent 会话不推送）。
+     */
+    private val agent: Boolean = false,
 ) {
+    /** 读取当前聊天的端点与 payload（按种类）。 */
+    private fun readRequest(id: String): Pair<String, String> =
+        if (agent) "agent-chat" to work.keepwriting.core.DshAgents.Requests.chat(id) else "chat" to "{\"botId\":${JsonString.of(id)}}"
+
     /** 渲染行（稳定 key 供 LazyColumn 锚定：earlier 前插保持滚动位置）。 */
     data class Row(val key: Long, val item: ChatRender.Item)
 
@@ -58,6 +67,7 @@ class ChatController(
         private set
 
     private fun bumpNewest(id: String, at: Long?) {
+        if (agent) return // Agent 不参与已读标记
         if (at == null || at <= 0) return
         val cur = newest?.takeIf { it.first == id }
         if (cur != null && cur.second >= at) return
@@ -102,7 +112,7 @@ class ChatController(
     private var queuedDone: (() -> Unit)? = null
     private var queuedJump = false
 
-    private fun keyOf(id: String) = work.keepwriting.core.ChatCache.key(hostOf(), "bot", id)
+    private fun keyOf(id: String) = work.keepwriting.core.ChatCache.key(hostOf(), if (agent) "agent" else "bot", id)
 
     private fun saveToCache() {
         val id = botId ?: return
@@ -128,7 +138,8 @@ class ChatController(
     fun prefetch(id: String) {
         execute(Runnable {
             if (botId == id || cache[keyOf(id)] != null) return@Runnable
-            readApi("chat", "{\"botId\":${JsonString.of(id)}}") { res ->
+            val (endpoint, body) = readRequest(id)
+            readApi(endpoint, body) { res ->
                 if (res !is DsbotApi.Result.Ok || botId == id || cache[keyOf(id)] != null) return@readApi
                 val page = DsbotModels.decodeChatPage(res.value)
                 val rendered = ChatRender.render(page)
@@ -146,6 +157,8 @@ class ChatController(
 
     private val stream = ChatRender.StreamBuffer()
     private var botId: String? = null
+    /** 至少成功读过一次当前聊天（区分「还在读取」与「读到了但没有会话」）。 */
+    private var openedOnce = false
     private var currentSessionId: String? = null
     private var earlierCursor: Json.Value? = null
     private var openPending = false
@@ -184,6 +197,18 @@ class ChatController(
     }
 
     /**
+     * 当前聊天换了会话（dsbot-member-agents：Agent 新建或归档会话后），可从任意线程调用：投递到状态 executor，
+     * 作废缓存与滚动记忆后整页重取并滚到最新，不与上一个会话的行合并。
+     */
+    fun sessionChanged() {
+        execute(Runnable {
+            val id = botId ?: return@Runnable
+            invalidate(id)
+            openOnExecutor(id, jump = true)
+        })
+    }
+
+    /**
      * 打开/刷新（dsbot-chat-cache）：换目标时先把当前聊天写入缓存，命中目标缓存则立即上屏；
      * [restore]（页面进入）时按滚动记忆恢复位置（同一聊天重进也恢复），无记忆则滚到最新；
      * 再按单飞读取首页（同目标在途时最多排队一次）。会话 id 只在读取确认后恢复，不沿用缓存里
@@ -199,6 +224,7 @@ class ChatController(
         if (botId != id) {
             saveToCache()
             botId = id
+            openedOnce = false
             currentSessionId = null // 切换目标：旧 sessionId 立即失效，读取确认前发送被拒绝而非错发旧会话
             shownSessionId = null
             streamingText = null
@@ -244,8 +270,8 @@ class ChatController(
             }
         }
         openPending = true
-        val payload = "{\"botId\":${JsonString.of(id)}}"
-        readApi("chat", payload) { res ->
+        val (endpoint, payload) = readRequest(id)
+        readApi(endpoint, payload) { res ->
             val fin = flight.finish(gen)
             if (fin.stale || botId != id) return@readApi // 已被更新的 open 或分段切换取代
             openPending = false
@@ -281,6 +307,7 @@ class ChatController(
                         if (!dup) appendItem(extra)
                     }
                     notice = null
+                    openedOnce = true
                     if (wasEmpty || jump) jumpSignal++
                     saveToCache()
                     reconcileOutbox()
@@ -288,7 +315,8 @@ class ChatController(
                 is DsbotApi.Result.BotError -> {
                     liveInFlight.clear() // 重取失败：丢弃在途缓冲，避免下次回放过期条目
                     notice = tr("加载聊天失败：${res.code}", "Could not load chat: ${res.code}")
-                    onLoadFailure?.invoke(res.code)
+                    // 已被移除的 DSH Agent 回 not-found 属于正常结局（连接层随即离开该页），不作为加载失败上报
+                    if (!(agent && res.code == "bot/not-found")) onLoadFailure?.invoke(res.code)
                 }
                 is DsbotApi.Result.Failure -> {
                     liveInFlight.clear()
@@ -311,14 +339,27 @@ class ChatController(
     fun loadEarlier() {
         val sid = currentSessionId ?: return
         val cursor = earlierCursor ?: return
+        val target = botId ?: return
         if (loadingEarlier) return
         loadingEarlier = true
-        val payload = "{\"sessionId\":${JsonString.of(sid)},\"cursor\":${Json.encode(cursor)}}"
-        api("earlier", payload) { res ->
+        // Agent 只有当前会话一段：更早内容由 agent-chat 带 cursor 分页（earlier 只走 Bot/群的分段链）
+        val (endpoint, payload) = if (agent) {
+            "agent-chat" to work.keepwriting.core.DshAgents.Requests.chat(target, Json.encode(cursor))
+        } else {
+            "earlier" to "{\"sessionId\":${JsonString.of(sid)},\"cursor\":${Json.encode(cursor)}}"
+        }
+        api(endpoint, payload) { res ->
             loadingEarlier = false
             when (res) {
                 is DsbotApi.Result.Ok -> {
-                    val rendered = ChatRender.render(DsbotModels.decodeChatPage(res.value))
+                    val page = DsbotModels.decodeChatPage(res.value)
+                    // agent-chat 总按「最新会话」翻页：其间别处新建了会话时这一页属于另一个会话，丢弃并整页重取
+                    if (agent && page.sessionId != null && page.sessionId != sid) {
+                        invalidate(target)
+                        openOnExecutor(target, jump = true)
+                        return@api
+                    }
+                    val rendered = ChatRender.render(page)
                     val newRows = rendered.items.map { Row(nextRowKey++, it) }
                     rows.addAll(0, newRows)
                     earlierCursor = rendered.cursor
@@ -368,7 +409,9 @@ class ChatController(
      */
     fun send(text: String): Boolean {
         if (currentSessionId == null) {
-            notice = tr("会话未就绪，稍候再发", "Session not ready, try again shortly")
+            // Agent 的会话全部归档后没有会话可发：提示去「会话」菜单新建，而不是让用户等待
+            notice = if (agent && openedOnce) tr("还没有会话，请在「会话」菜单新建", "No session yet. Create one from the Sessions menu")
+            else tr("会话未就绪，稍候再发", "Session not ready, try again shortly")
             return false
         }
         execute(Runnable { enqueue(text, text, emptyList()) })
@@ -450,6 +493,7 @@ class ChatController(
 
     /** feed 事件（经 NativeShellConnection 在 executor 线程转发）：stream 逐字、message 定格。 */
     fun onFeedEvent(event: String, dataJson: String) {
+        if (agent) return // Agent 会话不发布 stream/message（feed.js 只发 chatOwners）；靠 live 与轮询刷新
         when (event) {
             "stream" -> {
                 val obj = Json.parse(dataJson) as? Json.Value.Object ?: return
@@ -512,7 +556,8 @@ class ChatController(
 
     fun stop() {
         val id = botId ?: return
-        api("stop-member-work", "{\"roomId\":\"\",\"botId\":${JsonString.of(id)}}") { res ->
+        val (endpoint, body) = if (agent) "stop-agent" to work.keepwriting.core.DshAgents.Requests.stop(id) else "stop-member-work" to "{\"roomId\":\"\",\"botId\":${JsonString.of(id)}}"
+        api(endpoint, body) { res ->
             if (res is DsbotApi.Result.Ok) {
                 working = false
                 interrupted = true

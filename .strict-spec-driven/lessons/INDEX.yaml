@@ -34,6 +34,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/api/ds-bot-shown-4c3529.yaml
+    cursor-null-json-null-f59390:
+      title: 上游分页到最早时回 cursor:null，JSON null 不能当作还有下一页
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/cursor-null-json-null-f59390.yaml
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
@@ -187,7 +192,7 @@ categories:
     electron-e2e-window-open-execution-context-was-d-cc60b5:
       title: Electron e2e「window.open 不弹出新窗口」偶发 Execution context was destroyed，与被测改动无关时整体重跑一次
       status: active
-      occurrences: 2
+      occurrences: 3
       path: .strict-spec-driven/lessons/testing/electron-e2e-window-open-execution-context-was-d-cc60b5.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:

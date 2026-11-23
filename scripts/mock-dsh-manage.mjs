@@ -12,7 +12,7 @@ const MODELS = [
 ]
 const EFFORTS = { 'deepseek/v4': { efforts: MODELS[0].reasoning.efforts } }
 
-export function createManageTeam(pushRevision) {
+export function createManageTeam(pushRevision, pushLive = () => {}) {
   const team = {
     revision: 100,
     mainBotIds: ['bot-1'],
@@ -33,8 +33,16 @@ export function createManageTeam(pushRevision) {
     sections: [],
     privateArchives: [{ id: 'old-1', name: '旧私有助理', workDir: '/work/old-private' }],
     seq: 10,
+    // 团队的 DSH Agent（dsbot-member-agents）：至多一个；chats 按会话存条目，titles 存会话标题，running 表示工作中
+    agents: {},
+    agentChats: {},
+    agentTitles: {},
+    agentRunning: {},
   }
   const library = []
+  const agentTimers = {}
+  // live 键随 Agent 工作状态变化（上游 liveAnswer 按 live 内容生成键）
+  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',')
   // 工作文件夹（dsbot-folders，ds-bot 0.3.10 folders.js 形态）：内存目录树；/home/user/.dsh 是数据目录（guarded）
   const DIRS = new Set(['/', '/home', '/home/user', '/home/user/projects', '/home/user/projects/alpha', '/home/user/projects/beta',
     '/home/user/notes', '/home/user/.config', '/home/user/.dsh', '/home/user/.dsh/ds-bot', '/home/user/.dsh/ds-bot/workspace',
@@ -87,7 +95,7 @@ export function createManageTeam(pushRevision) {
   function view() {
     return {
       revision: team.revision,
-      liveKey: 'manage-' + team.revision,
+      liveKey: liveKey(),
       mainBotId: team.mainBotIds[0] ?? null,
       mainBotIds: team.mainBotIds,
       bots: Object.values(team.bots).map((b) => ({ ...b, sessionId: 's-' + b.id, parts: [] })),
@@ -99,7 +107,8 @@ export function createManageTeam(pushRevision) {
       permissions: { options: [{ value: 'read-only', name: '只读' }, { value: 'workspace-write', name: '工作区可写' }, { value: 'danger-full-access', name: '完全访问' }], defaultPreset: 'danger-full-access' },
       colors: ['deepseek', 'blue', 'violet', 'orange', 'green', 'magenta', 'cyan', 'red', 'yellow', 'brown', 'gray', 'black', 'aurora'],
       prefs: {},
-      work: { bots: {}, rooms: {}, approvals: [] },
+      agents: Object.values(team.agents),
+      work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
     }
   }
 
@@ -154,8 +163,86 @@ export function createManageTeam(pushRevision) {
     try {
       switch (endpoint) {
         case 'state':
-          if (p.since === team.revision) return ok({ revision: team.revision, unchanged: true, liveKey: 'manage-' + team.revision })
+          // 上游 channel.js：since 命中且 live 键相同只回三键；live 键变了附带 live 字段（work 等）
+          if (p.since === team.revision) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work })
           return ok(view())
+        // DSH Agent（dsbot-member-agents，ds-bot 0.3.10 agents.js / parts.js agentPage / turns.js stopAgent 形态）
+        case 'hello':
+          return ok({ api: 1, apiMin: 1, apiMax: 1, plugin: { name: 'ds-bot', version: '0.3.10' }, capabilities: ['state', 'chat', 'room-chat', 'agents', 'send', 'feed', 'stop-agent', 'stop-chat'], boot: 'manage', seq: 0, revision: team.revision })
+        case 'add-agent': {
+          if (Object.keys(team.agents).length > 0) throw new Error('The team already has a DSH Agent')
+          const id = 'agent-' + ++team.seq
+          const sid = 'as-' + ++team.seq
+          team.agents[id] = { id, name: 'DSH Agent', sessions: [sid], createdAt: Date.now() }
+          team.agentChats[sid] = []
+          bump()
+          return ok(team.agents[id])
+        }
+        case 'agent-chat': {
+          const agent = team.agents[p.agentId]
+          if (!agent) return { ok: false, error: { code: 'bot/not-found', message: 'Unknown DSH Agent', details: {} } }
+          const sid = agent.sessions.at(-1)
+          if (sid === undefined) return ok({ items: [], cursor: null })
+          return ok({ sessionId: sid, items: team.agentChats[sid] ?? [], cursor: null })
+        }
+        case 'agent-session': {
+          const agent = team.agents[p.agentId]
+          if (!agent) throw new Error('Unknown DSH Agent')
+          const sid = 'as-' + ++team.seq
+          agent.sessions.push(sid)
+          team.agentChats[sid] = []
+          bump()
+          return ok({ sessionId: sid })
+        }
+        case 'agent-archive': {
+          const agent = team.agents[p.agentId]
+          if (!agent) throw new Error('Unknown DSH Agent')
+          if (!agent.sessions.includes(p.sessionId)) throw new Error('Session does not belong to the DSH Agent')
+          agent.sessions = agent.sessions.filter((s) => s !== p.sessionId)
+          bump()
+          return ok(true)
+        }
+        case 'agent-rename': {
+          const agent = team.agents[p.agentId]
+          if (!agent) throw new Error('Unknown DSH Agent')
+          if (!agent.sessions.includes(p.sessionId)) throw new Error('Session does not belong to the DSH Agent')
+          const title = String(p.title ?? '').trim()
+          if (title === '') throw new Error('A session needs a title')
+          team.agentTitles[p.sessionId] = title.slice(0, 80)
+          return ok(true)
+        }
+        case 'remove-agent': {
+          if (!team.agents[p.agentId]) throw new Error('Unknown DSH Agent')
+          delete team.agents[p.agentId]
+          delete team.agentRunning[p.agentId]
+          bump()
+          return ok(view())
+        }
+        case 'stop-agent': {
+          const was = team.agentRunning[p.agentId] !== undefined
+          delete team.agentRunning[p.agentId]
+          clearTimeout(agentTimers[p.agentId])
+          if (was) pushLive()
+          return ok(was)
+        }
+        case 'send': {
+          // 只接管发往 Agent 会话的消息；其余交回 mock 主体（Bot 私聊）
+          const agent = Object.values(team.agents).find((a) => a.sessions.includes(p.sessionId))
+          if (!agent) return null
+          const chat = team.agentChats[p.sessionId]
+          const seq = chat.length + 1
+          chat.push({ kind: 'user', text: String(p.text ?? ''), turn: seq, seq, time: Date.now() })
+          team.agentRunning[agent.id] = Date.now()
+          pushLive()
+          // 12 秒后回复（留出经 adb 点停止的时间）；回复后推 live（Agent 会话没有 stream/message）
+          agentTimers[agent.id] = setTimeout(() => {
+            if (team.agentRunning[agent.id] === undefined) return
+            chat.push({ kind: 'bot', text: `收到：${p.text}`, turn: seq, seq: seq + 1, time: Date.now() })
+            delete team.agentRunning[agent.id]
+            pushLive()
+          }, 12000)
+          return ok(true)
+        }
         case 'efforts':
           return ok(EFFORTS[p.ref] ?? { efforts: [] })
         case 'chat':

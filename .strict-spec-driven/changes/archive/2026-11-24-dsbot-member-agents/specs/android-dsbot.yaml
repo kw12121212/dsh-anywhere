@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    dsh-agent:
+      strength: MUST
+      statement: 远端声明 agents 能力时，团队页显示团队的 DSH Agent 条目（没有时提供「添加 DSH Agent」，团队至多一个）；点开进入 Agent 聊天页：显示其最新会话的聊天、可加载更早内容，发送消息沿用发送箱（发送中、失败重试与服务端确认后消去本地行），Agent 工作中可停止，Agent 的回复在实时状态更新或前台兜底同步后出现；Agent 聊天不参与已读标记；会话菜单可新建会话、重命名当前会话（1–80 字）、归档当前会话（二次确认，之后显示上一个会话）与移除 DSH Agent（二次确认，之后回到团队页）。所有操作结果与网页端一致；被拒绝时显示服务端给出的原因；远端未声明 agents 能力时不显示任何 Agent 入口。
+      scenarios:
+        add-and-chat:
+          - GIVEN: 远端声明 agents 能力，团队还没有 DSH Agent
+          - WHEN: 在团队页点添加 DSH Agent，进入其聊天发送「你好」
+          - THEN: 团队页出现 DSH Agent 条目；消息先以发送中出现，服务端确认后成为正式消息，Agent 的回复随后出现；网页端看到同一会话内容
+        stop:
+          - GIVEN: DSH Agent 正在工作
+          - WHEN: 在 Agent 聊天页点停止
+          - THEN: 停止请求发出，Agent 回到空闲，网页端同步
+        sessions:
+          - GIVEN: DSH Agent 有一个会话
+          - WHEN: 新建会话、把新会话重命名为「周报」、再归档它并在确认框确认
+          - THEN: 新建后聊天为空的新会话；归档后显示之前的会话；网页端会话列表一致；在确认框取消则不归档
+        remove:
+          - GIVEN: 团队有 DSH Agent
+          - WHEN: 在会话菜单移除 DSH Agent 并确认
+          - THEN: 回到团队页，DSH Agent 条目消失，又显示添加入口
+        no-capability:
+          - GIVEN: 远端未声明 agents 能力
+          - WHEN: 打开团队页
+          - THEN: 不显示 DSH Agent 条目与添加入口
+  MODIFIED: {}
+  REMOVED: {}

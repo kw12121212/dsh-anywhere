@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-member-agents
+approach:
+  - core DshAgents.kt：agents(state) 解码 state.agents[{id, name, sessions[], createdAt}]（缺 id 跳过）；running(state, id) 读 live work.agents[id]；currentSession = sessions 最后一个；titleProblem(title) 为空或超过 80 字；Requests：add()、chat(agentId, cursor?)、newSession(agentId)、archive(agentId, sessionId)、rename(agentId, sessionId, title)、remove(agentId)、stop(agentId)。canAdd(capabilities 含 agents 且 agents 为空)。
+  - App：ChatController 增加 kind（bot 默认 / agent）：读取端点与 payload（chat{botId} ↔ agent-chat{agentId}）、缓存键种类、停止端点（stop-member-work ↔ stop-agent）按 kind 切换，agent 不记 newest（不标已读）、不处理 feed stream/message（Agent 会话不推送）；NativeShellConnection 新建 agentChatController，ShellPage.AgentChat(agentId)，live/revision 应用后与兜底轮询时刷新打开中的 Agent 聊天；BotChatPage 增加 agent 模式（隐藏分段/侧问/统计/详情与附件入口，显示「会话」菜单；工作中取 live work.agents）。团队页在列表上方显示 DSH Agent 条目与添加按钮。
+decisions:
+  team-level-agent:
+    decision: 按上游 0.3.10 模型实现团队级 DSH Agent（至多一个），不做「每个 Bot 的成员 Agent 列表」。
+    rationale: 源码核对 agents.js：DSH Agent 是团队的一个普通 dsh 入口（state.agents，addAgent 在已有时拒绝），与 Bot 无从属关系；计划变更写的「Bot 详情页成员 Agent 列表」在 0.3.10 中不存在，照做会调用不存在的语义。上游手机端同样是团队「+」菜单添加。
+  no-adopt:
+    decision: 不提供 agent-adopt 入口。
+    rationale: adopt 需要一个已存在的 dsh 根会话 id，DS-Bot 接口不列出 dsh 会话，网页端只在 dsh 工作区选择器或分叉时调用；里程碑完成标准第六条不含收编，手机上没有可供用户选择的来源。
+  refresh-on-live:
+    decision: Agent 聊天在 feed live/revision 事件应用 state 后、以及 15 秒前台兜底轮询时重读 agent-chat；不依赖 stream/message。
+    rationale: 源码核对 feed.js：message/stream 只为 chatOwners 中的 Bot 会话发布，Agent 会话只在 agent/status 时触发 live；不按 live 刷新，Agent 的回复要等兜底轮询才出现。
+  exception-agent-chat:
+    decision: agent-chat 成功形态按源码核对实现，并在 tech 为 endpoint-inventory-0310 增加限定例外；只读实测 agent-chat 未知 Agent 回 bot/not-found。
+    rationale: 本机团队没有 DSH Agent，取得成功样本需在用户在用的团队里新建 Agent（项目约定不得改动真实数据）；agentPage 与已实测的 chat 由同一 partPage 生成，形态风险低，缺字段一律降级。
+alternatives: []
+risks:
+  - Agent 回复只能按 live/轮询刷新，比 Bot 的流式显示慢；工作中状态取 live work.agents，缺失时按空闲显示
+  - agent-chat 与 Agent 写端点未对真实服务实测成功形态；首次在有 DSH Agent 的服务上使用时需复核

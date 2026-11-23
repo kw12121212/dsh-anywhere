@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-member-agents
+  status: proposed
+summary:
+  what:
+    - 团队的 DSH Agent（上游每个团队至多一个，普通 dsh 会话、不是 Bot）：远端声明 agents 能力且团队还没有时，团队页提供「添加 DSH Agent」（add-agent）；已有时团队页列出 DSH Agent 条目，点开进入 Agent 聊天页
+    - Agent 聊天页：经 agent-chat 读取最新会话的聊天（复用聊天条目渲染与加载更早），发送沿用发送箱（send {sessionId}），工作中可停止（stop-agent）；Agent 会话不推送 stream/message，聊天在 live/revision 与前台兜底轮询时刷新；Agent 不参与已读标记
+    - Agent 聊天页的「会话」菜单：新会话（agent-session）、重命名当前会话（agent-rename，1–80 字）、归档当前会话（agent-archive，二次确认，之后显示上一个会话）、移除 DSH Agent（remove-agent，二次确认，回到团队页）
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第六条：添加 DSH Agent 并在其聊天中发送消息与停止，查看其会话、重命名、归档与移除，结果与网页端一致
+    - 目前 App 完全不显示团队的 DSH Agent，用户只能在电脑网页端使用它
+scope:
+  in:
+    - android-dsbot 规格新增 dsh-agent 要求；tech/dsbot-api 登记 DSH Agent 端点与字段，并为 endpoint-inventory-0310 增加 agent-chat 成功形态的限定例外
+    - core：DshAgents（state.agents 与 live work.agents 解码、当前会话、标题校验、各端点请求体）与 JUnit
+    - App：ChatController 支持 Agent 模式（agent-chat 读取、stop-agent、不标已读）、Agent 聊天页与会话菜单、团队页入口与添加、NativeShell 路由与刷新；mock --manage 增加 Agent 端点
+    - 发现并修复（私聊与群聊共有）：上游分页到最早时回 cursor:null，客户端曾把 JSON null 当作还有更早一页，单分段私聊/群聊与 Agent 新会话会显示无效的「更早消息」（群聊点按会重复前插最新一页）；改为与缺键同样视为到最早
+  out:
+    - agent-adopt（把一个已有 dsh 根会话收编进 Agent）：手机端无从获得 dsh 根会话 id，网页端也只在 dsh 工作区选择器或分叉时触发
+    - Agent 会话历史列表（state 只给会话 id、没有标题）；Agent 的附件与图片发送
+unchanged_behavior:
+  - Bot 私聊、群聊、发送箱、停靠区与团队页既有条目、已读与未读计算不变（除上述 cursor:null 修复：到最早时不再显示无效的「更早消息」）；没有 agents 能力的远端不显示任何 Agent 入口
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-member-agents

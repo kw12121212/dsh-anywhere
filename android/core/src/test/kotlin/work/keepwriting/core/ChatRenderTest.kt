@@ -67,6 +67,14 @@ class ChatRenderTest {
     }
 
     @Test
+    fun `cursor 为 JSON null 视为到最早`() {
+        // 上游 partPage/agentPage 到最早时回 cursor:null：不能当成还有更早一页（否则「更早消息」重取同一页）
+        val page = DsbotModels.decodeChatPage(Json.parse("""{"sessionId":"s","items":[],"cursor":null}""")!!)
+        assertEquals(null, page.cursor)
+        assertTrue(ChatRender.render(page).exhausted)
+    }
+
+    @Test
     fun `工具与图片条目折叠为卡与引用`() {
         val json = """
             {"sessionId":"s1","items":[

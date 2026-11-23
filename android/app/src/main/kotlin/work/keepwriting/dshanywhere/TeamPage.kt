@@ -1,6 +1,8 @@
 package work.keepwriting.dshanywhere
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,16 +56,44 @@ fun TeamPage(
     onOpenArchived: () -> Unit = {},
     /** 团队工作区（dsbot-folders）。 */
     onTeamWorkspace: () -> Unit = {},
+    /** 团队的 DSH Agent（dsbot-member-agents；远端未声明 agents 能力时为空）。 */
+    agents: List<work.keepwriting.core.DshAgents.Agent> = emptyList(),
+    agentRunning: (String) -> Boolean = { false },
+    canAddAgent: Boolean = false,
+    /** 添加 DSH Agent；参数为失败回调（可读原因）。 */
+    onAddAgent: (onError: (String) -> Unit) -> Unit = {},
+    onOpenAgent: (String) -> Unit = {},
 ) {
     var query by remember { mutableStateOf("") }
+    var agentError by remember { mutableStateOf<String?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         if (team != null) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 入口按钮可横向滚动：窄屏上放不下时不挤压
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.TextButton(onClick = onNewBot) { Text(tr("＋ 新建 Bot", "+ New Bot")) }
                 androidx.compose.material3.TextButton(onClick = onNewRoom) { Text(tr("＋ 新建群聊", "+ New group")) }
+                if (canAddAgent) {
+                    androidx.compose.material3.TextButton(onClick = { agentError = null; onAddAgent { agentError = it } }) { Text(tr("＋ DSH Agent", "+ DSH Agent")) }
+                }
                 androidx.compose.material3.TextButton(onClick = onTeamWorkspace) { Text(tr("团队工作区", "Team workspace")) }
                 if (archivedPrivate > 0) {
                     androidx.compose.material3.TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }
+                }
+            }
+            agentError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
+            for (a in agents) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenAgent(a.id) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text("⌘", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(a.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (agentRunning(a.id)) tr("工作中", "Working") else tr("DSH Agent · ${a.sessions.size} 个会话", "DSH Agent · ${a.sessions.size} sessions"),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }

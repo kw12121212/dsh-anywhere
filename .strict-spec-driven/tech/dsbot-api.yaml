@@ -87,6 +87,7 @@ rules:
       - dock-fields-0310 登记的停靠区数据（live learning 提案与 state connectorRequests）：真实服务需 Bot 产生学习提案或请求连接器才会出现，本机当前无样本，消费方可先按源码核对形态实现，前提是缺字段时只显示标题、作答端点错误时给可读提示，并在 FINDINGS 第 16 节登记待实测
       - file-text 成功应答与群帖 whole{length,file}：真实服务暂无带 attachmentId 的文件附件或被截断的长群帖（需用户上传附件或 Bot 在群里发超长帖，取样会触发真实模型运行），消费方可先按 0.3.10 源码核对形态实现「阅读全文」，前提是只在条目带 whole.file 时显示入口、失败给可读提示且不影响其他操作，并在 FINDINGS 第 17 节登记待实测
       - show_view 蓝图（state.views[sessionId].view，deep-view 0.1.2 组件树）：真实服务目前只有 stack/text/choice/submit 的卡片样本（夹具 view-blueprint-choice.json），图表、指标、进度、表格、滑块、数字、开关、选项、确认、表单与公式、let 的形态只能按 deep-view 0.1.2 源码核对（取样需 Bot 调用 show_view，触发真实模型运行）；消费方可先按源码移植的校验规则实现，前提是校验不通过一律降级为只读摘要、作答参数与 validateViewAnswer 一致，并在 FINDINGS 第 18 节登记待实测
+      - agent-chat 成功应答与 DSH Agent 写端点（dsh-agent-endpoints-0310）：真实团队没有 DSH Agent，取得成功样本需在用户在用的团队里新建 Agent（项目约定不得改动真实数据）；消费方可先按 0.3.10 源码核对形态实现，前提是 agent-chat 的条目经与 chat 相同的解码与渲染、缺字段降级、失败给可读原因，只读实测未知 Agent 的错误形态，并在 FINDINGS 第 23 节登记待实测
   spike-write-probes-non-mutating:
     strength: MUST
     statement: 对真实 dsh 做取证或复验时，写类端点（停止、作答、取消、记忆增改、日程暂停、上传暂存、发送等）只能用不存在的 id 或无效参数取错误形态，不得改动真实团队、会话、记忆或日程；需要写端点的成功形态时，由消费它的变更在可撤销的合成对象上取证并记录清理方式
@@ -157,3 +158,10 @@ rules:
     enforcement:
       method: review
       detail: core JUnit（GroupManageTest）以真实 state-full 夹具覆盖群字段解码，shownModeMatchesWeb 覆盖管理员为无/已删除/未知模式；源码核对位置：ds-bot 0.3.10 src/host/channel.js（create-room 的参数转发、update-room、delete-room）、roster.js（createRoom/buildRoom、planRoomChange、updateRoom、deleteRoom、checkMembers、cleanRoomName、cleanNotice、defaultAdmin、autoRoomName）、permissions.js（cleanRoomPermission）、groups.js 与 tools.js（mode 生效判定）、client.js shownMode；FINDINGS 第 22 节
+  dsh-agent-endpoints-0310:
+    strength: MUST
+    statement: 'DSH Agent 端点（DS-Bot 0.3.10）：团队至多一个 DSH Agent，state.agents[{id, name, sessions[], createdAt}]，sessions 末尾为最新会话；live work.agents{agentId→{since, …}} 表示工作中；hello capabilities 的 agents 为入口门控。add-agent {} → Agent 对象（已有时拒绝）；agent-chat {agentId, cursor?} → {sessionId?, items[], cursor?}（最新会话的分页，与 chat 同由 partPage 生成；全部会话已归档时 items 为空；未知 Agent 回 bot/not-found，已实测）；agent-session {agentId} → {sessionId}；agent-archive {agentId, sessionId} → true；agent-rename {agentId, sessionId, title(trim 后非空，截断到 80)} → true；remove-agent {agentId} → 整份 state；stop-agent {agentId} → 是否停止了运行中的回合；agent-adopt {agentId, sessionId} 手机端不使用。发送为 send {sessionId: Agent 最新会话, text}。Agent 会话不发布 feed stream/message，只在状态变化时发布 live，客户端据此或兜底轮询重读 agent-chat'
+    rationale: DSH Agent 端点此前未登记；Agent 会话不走 chatOwners，客户端若照 Bot 聊天依赖 stream/message 会收不到回复；写端点改动用户真实团队，只能源码核对
+    enforcement:
+      method: review
+      detail: core JUnit（DshAgentsTest）覆盖解码、当前会话与请求体；源码核对位置：ds-bot 0.3.10 src/host/agents.js（addAgent、createAgentSession、archiveAgentSession、renameAgentSession、removeAgent）、parts.js agentPage、turns.js stopAgent/agentWorkView、feed.js（message/stream 只发 chatOwners）、channel.js（agent-* 与 send）、constants.js（AGENT_NAME、AGENT_SESSION_TITLE_MAX）；FINDINGS 第 23 节
