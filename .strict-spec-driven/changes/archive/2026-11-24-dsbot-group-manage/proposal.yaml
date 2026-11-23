@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-group-manage
+  status: proposed
+summary:
+  what:
+    - 群详情页（dsbot-folders 已建框架）补齐群设置：名称（留空用自动名）、公告（最多 2000 字）、成员（可搜索的 Bot 列表增删，2–12 个、私有 Bot 不可加入）、管理员（成员之一或无）、回复模式（管理员优先 admin / 全员轮流 everyone）、统一权限预设（对所有成员相同，或各 Bot 用自己的）、侧栏置顶与隐藏、删除群（二次确认）
+    - 团队页新增「新建群聊」：选管理员与其他成员、可选群名，create-room（与网页端一致带 greet，由管理员打招呼），成功后进入新群聊
+    - 所有写操作经 manage-write-feedback 通道：服务端拒绝（人数不足或超限、私有 Bot、管理员不在成员中、重名等）显示服务端原因且设置不变；本地先做人数、公告长度与管理员归属的提示
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第二条：在 App 中新建群聊、增删成员、设管理员与回复模式、改公告后网页端一致
+    - 群设置目前只能在电脑网页端修改，手机上的群详情页只有工作文件夹
+scope:
+  in:
+    - android-dsbot 规格新增 group-manage 要求；tech/dsbot-api 登记 create-room/update-room/delete-room 与群字段
+    - core：GroupManage（群资料解码、成员候选与搜索、本地校验、create/update/delete 请求体）与 JUnit
+    - App：群详情页各分节、成员选择页、新建群聊页、团队页入口；mock --manage 增加 create-room/delete-room 与完整 update-room
+  out:
+    - 侧栏分组（dsbot-sidebar-sections）；群目标、待办与任务板；群头像
+unchanged_behavior:
+  - 群聊页聊天、停靠区、聊天条与群文件夹设置不变；角色权限（用户、Main Bot、群管理员）由服务端执行，App 只按结果显示
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-group-manage

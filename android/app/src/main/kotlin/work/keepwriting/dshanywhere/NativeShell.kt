@@ -127,6 +127,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class Details(val targetId: String) : ShellPage
         /** 新建 Bot（dsbot-bot-manage）。 */
         data object NewBot : ShellPage
+        /** 新建群聊（dsbot-group-manage）。 */
+        data object NewRoom : ShellPage
         /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
         data object PrivateArchives : ShellPage
         /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
@@ -297,14 +299,18 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     }
                 }
                 current is ShellPage.Details -> {
-                    // 群目标：群详情页（dsbot-folders 建框架，dsbot-group-manage 补充）；其余（Bot，含已被删除的）交给 Bot 详情页
-                    if (isRoomEntry(connection, current.targetId)) {
+                    // 是 state 里的 Bot → Bot 详情页；否则是群（团队列表或 state 里有）→ 群详情页；都没有（已在别处删除）→ Bot 详情页的中性「找不到」
+                    val snapshot = connection.stateSnapshot?.raw
+                    val isBot = work.keepwriting.core.BotManage.profileOf(snapshot, current.targetId) != null
+                    if (!isBot && (isRoomEntry(connection, current.targetId) || work.keepwriting.core.GroupManage.roomOf(snapshot, current.targetId) != null)) {
                         RoomDetailsPage(
                             state = connection.stateSnapshot?.raw,
                             roomId = current.targetId,
+                            api = connection.manageApi,
                             flash = connection.flash,
                             onDismissFlash = { connection.flash = null },
                             onPickFolder = { connection.openFolderPick(FolderTarget.Room(current.targetId)) },
+                            onDeleted = { if (connection.page == current) connection.goHome() },
                         )
                     } else {
                         BotDetailsPage(
@@ -342,6 +348,11 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                         },
                     )
                 }
+                current is ShellPage.NewRoom -> NewRoomPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    onCreated = { id -> if (connection.page == ShellPage.NewRoom) connection.openChat(id) },
+                )
                 current is ShellPage.NewBot -> NewBotPage(
                     state = connection.stateSnapshot?.raw,
                     api = connection.manageApi,
@@ -369,6 +380,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onOpenChat = { id -> connection.openChat(id ?: "unknown") },
                     isUnread = { e -> connection.isUnread(e, open = false) },
                     onNewBot = { connection.openNewBot() },
+                    onNewRoom = { connection.openNewRoom() },
                     archivedPrivate = work.keepwriting.core.BotManage.privateArchives(connection.stateSnapshot?.raw).size,
                     onOpenArchived = { connection.openPrivateArchives() },
                     onTeamWorkspace = { connection.openFolderPick(FolderTarget.Team) },
@@ -985,6 +997,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openDetails(id: String) = push(ShellPage.Details(id))
 
     fun openNewBot() = push(ShellPage.NewBot)
+
+    fun openNewRoom() = push(ShellPage.NewRoom)
 
     fun openPrivateArchives() = push(ShellPage.PrivateArchives)
 

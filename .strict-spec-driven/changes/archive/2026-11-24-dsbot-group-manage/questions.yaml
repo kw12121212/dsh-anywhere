@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-group-manage
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-group-manage。
+    answer: 手机上不能新建群、改群名公告、增删成员、设管理员与回复模式、统一权限或删除群，只能回电脑网页端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第二条。
+    answer: 在 App 中新建群聊、增删成员、设管理员与回复模式、改公告后网页端一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：create-room、update-room（名称、公告、成员增删、管理员、回复模式、统一权限预设）、delete-room（二次确认）；成员选择用可搜索的 Bot 列表；角色权限由服务端执行。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 群聊页聊天、停靠区、群文件夹设置不变；侧栏分组属于 dsbot-sidebar-sections。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖已完成，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: approval-case
+    question: 计划变更说加入在外部文件夹工作的群等情况需审批，手机上操作会出现等待审批吗？
+    context: 影响范围：spec 场景与实现。
+    answer: 不会：用户经 update-room 修改不经审批（design 决策 no-approval-for-user），Bot 经工具发起的审批由既有停靠区处理。
+    status: resolved
+    answered_by: roadmap

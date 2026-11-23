@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-group-manage
+approach:
+  - core GroupManage.kt：roomOf(state, id) 解码 {id, name, named, members, admin, mode(admin|everyone), notice, permission, workDir, pinned, hidden}；candidates(state, query) 返回可加入的 Bot（非私有，按名称搜索，保持团队顺序）；problems：成员数 2..12、管理员须为成员、公告 ≤2000、群名 ≤60；Requests：createRoom(members, admin, name?) 带 greet:true、updateName/updateNotice/updateMembers(members 全量)/updateAdmin(id|null)/updateMode/updatePermission(preset|null)、deleteRoom、setFlag 复用 BotManage。
+  - App：RoomDetailsPage 扩展为分节表单：资料（群名、公告，复用 EditableField）、成员（列表 + 「管理成员」进入 MemberPickerPage：可搜索多选，保存为一次 update-room members）、管理员（选择页，含「无」）、回复模式（两项单选）、权限（复用 PickerDialog，含「各 Bot 用自己的」）、工作文件夹（已有）、侧栏（置顶/隐藏）、删除（确认后回团队页）。NewRoomPage（ShellPage.NewRoom）：选管理员、勾选其他成员、可选群名，create-room 成功后进入新群聊。写操作全部经 manageAction。
+decisions:
+  members-full-list:
+    decision: '成员增删在成员选择页一次确认，以 update-room {members: 全量} 提交，不逐个 add/remove。'
+    rationale: 上游 planRoomChange 对 members 全量与 add/remove 等价且都按当前成员重算；一次提交只触发一次「added/removed」系统消息并只做一次人数校验，逐个提交在中间状态可能不足两人而被拒绝。
+  greet-like-web:
+    decision: 新建群聊与网页端 NewGroupForm 一致：成员为 [管理员, ...其他]、admin=管理员、greet:true。
+    rationale: 网页端新建群默认由管理员打招呼，两端一致是完成标准；不带 greet 会让手机建的群与网页建的群行为不同。
+  no-approval-for-user:
+    decision: 用户在 App 里增删成员或改群设置不出现等待审批；审批只在 Bot 经工具发起时出现，由既有停靠区处理。
+    rationale: 源码核对：updateRoom 的 actorId 为空（用户）时不经 approveFolder；计划变更提到的审批情形来自 Bot 经工具加人到外部文件夹的群，属于停靠区已覆盖的工具审批。
+  source-checked-writes:
+    decision: 群字段以真实 state 夹具实测；create-room/update-room/delete-room 为源码核对并在 mock 上验收，不改用户真实团队。
+    rationale: 新建群会触发真实模型打招呼，删除群不可逆；项目约定不得改动真实数据。
+alternatives: []
+risks:
+  - 管理员优先模式下群的发言顺序由服务端控制，App 只显示设置值；回复模式文案以网页端为准

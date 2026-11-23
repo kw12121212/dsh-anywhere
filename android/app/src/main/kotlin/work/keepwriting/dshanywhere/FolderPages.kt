@@ -245,21 +245,3 @@ fun FolderPickerPage(target: FolderTarget, title: String, current: String?, api:
     }
 }
 
-/** 群详情页（dsbot-folders 建立框架，本变更只含工作文件夹；其余群设置由 dsbot-group-manage 补充）。 */
-@Composable
-fun RoomDetailsPage(state: Json.Value.Object?, roomId: String, flash: String?, onDismissFlash: () -> Unit, onPickFolder: () -> Unit) {
-    val name = WorkFolders.roomName(state, roomId) ?: roomId
-    val folder = WorkFolders.roomFolder(state, roomId)
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
-        InfoLine(flash, error = false, onDismiss = onDismissFlash)
-        Text(tr("工作文件夹", "Working folder"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onPickFolder).padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(tr("文件夹", "Folder"), style = MaterialTheme.typography.bodyLarge)
-                Text(tr("设了群文件夹时，所有成员在群里都在这个文件夹工作。", "With a group folder, every member works there in this group."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(folder ?: tr("各 Bot 用自己的文件夹", "Each Bot uses its own folder"), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp))
-        }
-    }
-}

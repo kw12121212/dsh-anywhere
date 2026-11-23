@@ -347,3 +347,17 @@ truncated}`（夹具 `folder-list-usr.json`）；不存在 → `bot/refused`「c
 `update-bot {id, workDir}`（空串=团队工作区）、`update-room {id, workDir}`（空串=各 Bot 用自己的文件夹）经 cleanWorkDir：
 完整路径、存在、是文件夹、不在数据目录（团队工作区在数据目录内是例外），等于团队工作区时视为未设。用户经这些端点修改不经审批；
 approveFolder 只在 Bot 经工具改文件夹时触发。
+
+## 22. 群管理（2026-11-24，dsbot-group-manage）
+
+**实测（state-full 夹具）**：rooms[] 带 `id, name, named, members[], admin, mode:"admin", notice, createdAt, createdBy, ownParts, parts,
+preview, seq, sessionId`；本机两个群都没有 `permission/workDir/pinned/hidden`。
+
+**源码核对、未改用户真实团队**（ds-bot 0.3.10 channel.js、roster.js、permissions.js、constants.js、groups.js、tools.js）：
+`create-room` 只转发 `{members[], name?, admin?（仅字符串）, section?, sectionId?, greet?}`——mode 与 notice 不转发（新群为 admin 模式、
+空公告），admin 非字符串时取成员中的 Main Bot；网页端新建群带 `greet:true`，由管理员打招呼。回复模式只有 `mode==="admin"` 且管理员
+仍是团队 Bot 时才生效为管理员优先，否则全员轮流（网页端 shownMode 同此；把管理员设为无或移出群时上游不改 mode）。自动群名为
+`["You", ...成员名].join(", ")`。`update-room {id, …}` 先整体校验再写入（planRoomChange）：成员 2–12、不含私有 Bot、管理员须为成员（管理员被移出时清空）、
+mode ∈ admin/everyone、公告 ≤2000（trim 后，超长拒绝）、群名超过 60 字截断且不与其他群重名（空串=按成员自动命名）、permission 为预设名或 null
+（只有用户能改）→ `{room, changes[]}`；`delete-room {id}` → 整份 state；`set-flags` 对群同样适用。拒绝为 `bot/refused` + 具体 message。
+用户经这些端点修改不经审批。

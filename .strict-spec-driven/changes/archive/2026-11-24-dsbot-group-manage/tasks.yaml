@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-group-manage
+sections:
+  Implementation:
+    core-group-manage:
+      text: core 新增 GroupManage.kt（群资料解码、成员候选与搜索、本地校验、请求体）
+      status: complete
+    app-room-details:
+      text: 群详情页分节：群名、公告、成员与成员选择页、管理员、回复模式、统一权限、侧栏置顶/隐藏、删除（二次确认）
+      status: complete
+    app-new-room:
+      text: 新建群聊页与团队页入口：选管理员与成员、可选群名，创建后进入新群聊
+      status: complete
+    mock-rooms:
+      text: mock --manage：create-room（greet 只记录）、delete-room、update-room 全字段与上游校验（人数、私有、管理员、重名、模式、公告长度、权限）
+      status: complete
+    findings:
+      text: FINDINGS 第 22 节登记群管理端点与字段
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：GroupManageTest（真实 state 群字段、候选与搜索、校验各分支、请求体字面值）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹，看日志末尾 EXIT）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：新建群聊并进入（请求带 greet）；改公告、增删成员（一次提交全量）、设管理员、改回复模式与统一权限、置顶，mock 收到的参数正确且页面刷新；成员少于 2 人本地提示且不发请求；候选列表不出现私有 Bot；改成与其他群重名时显示服务端原因且群名不变；删除群二次确认（取消不发请求）后回到团队页；管理员设为无后回复模式显示全员轮流且管理员优先不可选
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-group-manage
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

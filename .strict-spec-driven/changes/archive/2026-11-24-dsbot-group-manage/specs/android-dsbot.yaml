@@ -1,0 +1,29 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    group-manage:
+      strength: MUST
+      statement: 群详情页提供群设置：群名（留空使用按成员生成的名称）、公告（最多 2000 字）、成员（从可搜索的 Bot 列表增删，至少 2 个、至多 12 个，私有 Bot 不能加入）、管理员（成员之一或无）、回复模式（管理员优先 / 全员轮流）、统一权限预设（对所有成员相同，或各 Bot 用自己的权限）、侧栏置顶与隐藏，以及删除群（须二次确认，删除后回到团队页）；团队页提供新建群聊（选管理员与成员、可选群名），成功后进入新群聊。所有修改保存后网页端显示相同设置；服务端拒绝时显示服务端给出的原因且设置不变；成员数不在 2–12 之间、管理员不在成员中或公告超长时在本地先提示。
+      scenarios:
+        create-room:
+          - GIVEN: 团队有 Bot A（Main）、B、C
+          - WHEN: 在新建群聊页选 A 为管理员、勾选 B 与 C、群名填「发布组」并创建
+          - THEN: 进入「发布组」群聊；网页端出现该群，成员 A、B、C，管理员 A
+        edit-room:
+          - GIVEN: 群 G 有成员 A、B，管理员 A，回复模式管理员优先
+          - WHEN: 在 G 的详情页改公告、加入成员 C、把管理员改为 B、回复模式改为全员轮流、统一权限设为只读
+          - THEN: 详情页显示新设置，网页端 G 的设置相同
+        delete-room:
+          - GIVEN: 群 G 存在
+          - WHEN: 在 G 的详情页点删除并确认
+          - THEN: 回到团队页，G 从两端消失；在确认框取消则不删除
+        member-limits:
+          - GIVEN: 群 G 有成员 A、B；团队里有私有 Bot P；另一个群叫「闲聊群」
+          - WHEN: 在成员选择页取消 B 后保存；查看候选列表；再把 G 改名为「闲聊群」
+          - THEN: 第一次本地提示群聊至少需要 2 个 Bot 且不发请求；候选列表不出现 P；改名时显示服务端给出的重名原因，群名不变
+  MODIFIED: {}
+  REMOVED: {}

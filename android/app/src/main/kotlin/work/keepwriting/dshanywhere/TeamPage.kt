@@ -47,6 +47,8 @@ fun TeamPage(
     isUnread: (TeamHome.Entry) -> Boolean = { false },
     /** 新建 Bot（dsbot-bot-manage）。 */
     onNewBot: () -> Unit = {},
+    /** 新建群聊（dsbot-group-manage）。 */
+    onNewRoom: () -> Unit = {},
     /** 保留关闭的已删除私有 Bot 数（>0 时显示入口）。 */
     archivedPrivate: Int = 0,
     onOpenArchived: () -> Unit = {},
@@ -58,6 +60,7 @@ fun TeamPage(
         if (team != null) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.TextButton(onClick = onNewBot) { Text(tr("＋ 新建 Bot", "+ New Bot")) }
+                androidx.compose.material3.TextButton(onClick = onNewRoom) { Text(tr("＋ 新建群聊", "+ New group")) }
                 androidx.compose.material3.TextButton(onClick = onTeamWorkspace) { Text(tr("团队工作区", "Team workspace")) }
                 if (archivedPrivate > 0) {
                     androidx.compose.material3.TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }

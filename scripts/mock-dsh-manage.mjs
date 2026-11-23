@@ -22,9 +22,14 @@ export function createManageTeam(pushRevision) {
       'bot-3': { id: 'bot-3', name: '写作搭档', role: '写作', instructions: '', model: 'deepseek/v4', appliedModel: 'deepseek/v4', workDir: '/work/writing', permission: 'workspace-write' },
       'bot-4': { id: 'bot-4', name: '采购助理', role: '', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash' },
       // 工作文件夹已在电脑上被删除（不在目录树里）：选择页起点读不到时应退回主目录（dsbot-folders）
+      // 私有 Bot：不能进群（dsbot-group-manage 候选列表不显示）
+      'bot-6': { id: 'bot-6', name: '私密助理', role: '', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/home/user/notes', private: true },
       'bot-5': { id: 'bot-5', name: '归档助理', role: '归档', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/gone' },
     },
-    rooms: { 'room-1': { id: 'room-1', name: '项目群', color: 'violet', members: ['bot-1', 'bot-2'], admin: 'bot-1', mode: 'auto', notice: '' } },
+    rooms: {
+      'room-1': { id: 'room-1', name: '项目群', named: true, color: 'violet', members: ['bot-1', 'bot-2'], admin: 'bot-1', mode: 'admin', notice: '' },
+      'room-2': { id: 'room-2', name: '闲聊群', named: true, members: ['bot-3', 'bot-4'], admin: null, mode: 'everyone', notice: '周五下午茶' },
+    },
     sections: [],
     privateArchives: [{ id: 'old-1', name: '旧私有助理', workDir: '/work/old-private' }],
     seq: 10,
@@ -51,6 +56,25 @@ export function createManageTeam(pushRevision) {
     if (within(DATA, path) || (within(path, DATA) && !within(path, teamDir))) throw new Error(`${path} holds DeepSeek Harness data, so Bots cannot work there`)
     return path === teamDir ? undefined : path
   }
+  const ROOM_MODES = ['everyone', 'admin']
+  const PRESETS = ['read-only', 'workspace-write', 'danger-full-access']
+  function checkMembers(members) {
+    if (members.length < 2) throw new Error('A group chat needs at least two Bots')
+    if (members.length > 12) throw new Error('A group chat holds at most 12 Bots')
+    const priv = members.map((m) => team.bots[m]).find((b) => b?.private)
+    if (priv) throw new Error(`${priv.name} is a private Bot and cannot be in a group chat: what is said in a group is read by every member`)
+  }
+  function cleanNotice(text) {
+    const notice = String(text ?? '').trim()
+    if (notice.length > 2000) throw new Error(`A group's notice can hold at most 2000 characters; this one has ${notice.length}`)
+    return notice
+  }
+  function cleanRoomName(text, selfId) {
+    const next = String(text ?? '').trim().replace(/\s+/g, ' ').slice(0, 60)
+    if (next !== '' && Object.values(team.rooms).some((r) => r.id !== selfId && norm(r.name) === norm(next))) throw new Error(`Another group chat is already called "${next}"`)
+    return next
+  }
+  const autoRoomName = (members) => ['You', ...members.map((m) => team.bots[m]?.name).filter(Boolean)].join(', ')
   const fail = (message) => ({ ok: false, error: { code: 'bot/refused', message, details: {} } })
   const ok = (value) => ({ ok: true, value })
   const norm = (s) => String(s ?? '').trim().toLowerCase()
@@ -208,15 +232,56 @@ export function createManageTeam(pushRevision) {
           bump()
           return ok({ team: path })
         }
+        // 群管理（dsbot-group-manage，ds-bot 0.3.10 roster.js planRoomChange/updateRoom/createRoom/deleteRoom 形态）
         case 'update-room': {
           const room = team.rooms[p.id]
           if (!room) throw new Error('Unknown group chat')
-          if (p.workDir !== undefined) {
-            const wd = cleanWorkDir(p.workDir)
-            if (wd) room.workDir = wd; else delete room.workDir
+          // 先完整校验（上游 planRoomChange），失败时什么都不改
+          let members = Array.isArray(p.members) ? [...new Set(p.members)] : [...room.members]
+          for (const m of p.add ?? []) if (!members.includes(m)) members.push(m)
+          members = members.filter((m) => !(p.remove ?? []).includes(m) && team.bots[m])
+          // 与仍存在的成员比较（上游 room.members.filter(liveBot)）：被删 Bot 留下的单人群仍可改其他设置
+          const current = room.members.filter((m) => team.bots[m])
+          if (members.length !== current.length || members.some((m) => !current.includes(m))) checkMembers(members)
+          let admin = room.admin ?? null
+          if (p.admin !== undefined) {
+            admin = p.admin || null
+            if (admin !== null && !members.includes(admin)) throw new Error(`${team.bots[admin]?.name ?? 'That Bot'} must be a member to be the admin`)
           }
+          if (admin !== null && !members.includes(admin)) admin = null
+          if (p.mode !== undefined && !ROOM_MODES.includes(p.mode)) throw new Error(`Reply mode must be one of ${ROOM_MODES.join(', ')}`)
+          const notice = p.notice === undefined ? undefined : cleanNotice(p.notice)
+          const name = p.name === undefined ? undefined : cleanRoomName(p.name, room.id)
+          if (p.permission !== undefined && p.permission !== null && p.permission !== '' && !PRESETS.includes(p.permission)) throw new Error(`Unknown permission preset ${p.permission}`)
+          const wd = p.workDir === undefined ? undefined : cleanWorkDir(p.workDir)
+          room.members = members
+          room.admin = admin
+          if (p.mode !== undefined) room.mode = p.mode
+          if (notice !== undefined) room.notice = notice
+          if (name !== undefined) { if (name) { room.name = name; room.named = true } else delete room.named }
+          if (!room.named) room.name = autoRoomName(members)
+          if (p.permission !== undefined) { if (p.permission) room.permission = p.permission; else delete room.permission }
+          if (p.workDir !== undefined) { if (wd) room.workDir = wd; else delete room.workDir }
           bump()
           return ok({ room: view().rooms.find((r) => r.id === room.id), changes: [] })
+        }
+        case 'create-room': {
+          const members = [...new Set(Array.isArray(p.members) ? p.members : [])].filter((m) => team.bots[m])
+          checkMembers(members)
+          const custom = cleanRoomName(p.name ?? '')
+          // 上游 channel 只在 admin 为字符串时转发；mode 与 notice 不转发（新群为 admin 模式、空公告）
+          const admin = typeof p.admin === 'string' ? p.admin : members.find((m) => team.mainBotIds.includes(m)) ?? null
+          if (admin !== null && !members.includes(admin)) throw new Error('The admin must be a member of the group')
+          const id = 'room-' + ++team.seq
+          team.rooms[id] = { id, name: custom || autoRoomName(members), ...(custom ? { named: true } : {}), members, admin, mode: 'admin', notice: '', greeted: p.greet === true }
+          bump()
+          return ok(team.rooms[id])
+        }
+        case 'delete-room': {
+          if (!team.rooms[p.id]) throw new Error('Unknown group chat')
+          delete team.rooms[p.id]
+          bump()
+          return ok(view())
         }
         // 头像库（dsbot-avatars，ds-bot 0.3.10 avatar-library.js / avatar.js 形态）：按字节 sha256 去重，单张上限 119982 字节
         case 'avatar-library': {

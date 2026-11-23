@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: ds-bot-shown-4c3529
+  title: DS-Bot 的存储字段不等于生效值：显示设置前先找网页端的 shown*/有效值推导
+category: api
+status: active
+created_at: '2026-11-23T19:08:35.149Z'
+updated_at: '2026-11-23T19:08:35.149Z'
+context: dsbot-group-manage：群详情页按 rooms[].mode 显示回复模式
+observation: 把管理员设为无或移出群时上游不改 mode，App 仍显示「管理员优先」，网页端（client.js shownMode）与服务端（groups.js/tools.js 要求 mode==='admin' 且有管理员）实际都按全员轮流；同一变更还发现 create-room 的 channel 只转发部分参数（mode/notice 被丢弃），按 roster 函数签名登记会写错
+takeaway: 实现设置页前，在 client.js 搜同名字段的派生（shownX、effective、?? 默认值）并在服务端找使用点，把「生效值」的推导放 core 并测试；登记端点参数以 channel.js 的转发为准，而不是 rt.* 内部函数的签名
+applies_when: 原生端显示或编辑 DS-Bot state 中的设置字段（模式、权限、文件夹等可能有默认或条件生效的字段），或登记某个写端点的请求参数时
+occurrences:
+  - origin: dsbot-group-manage
+    date: '2026-11-23'
+    evidence: 2026-11-24 评审：client.js shownMode=(room)=>roster.byId[room.admin]?room.mode:'everyone'；channel.js create-room 只转发 members/name/section/sectionId/admin(字符串)/greet；修复后 GroupManageTest.shownModeMatchesWeb 与模拟器验收（管理员设为无后显示全员轮流）

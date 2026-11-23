@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    room-manage-endpoints-0310:
+      strength: MUST
+      statement: 群管理端点（DS-Bot 0.3.10）：state rooms[] 字段 {id, name, named?, members[], admin, mode, notice, permission?, workDir?, pinned?, hidden?, sectionId?}（实测 id/name/named/members/admin/mode/notice）；回复模式只有 mode 为 admin 且管理员仍是团队里的 Bot 时才是管理员优先，否则按全员轮流（网页端 shownMode、服务端 groups.js 同此判定；把管理员设为无或移出群不改 mode），客户端显示必须按此判定；create-room 只转发 {members[], name?, admin?(仅字符串), section?, sectionId?, greet?}——mode 与 notice 不转发（新群为 admin 模式、空公告），admin 非字符串时取成员中的 Main Bot；网页端新建群带 greet:true（管理员打招呼）；update-room {id, name?(空串=自动名，超过 60 字截断), notice?(trim 后 ≤2000，超长拒绝), members?(全量) | add?/remove?, admin?(id 或 null), mode?(admin|everyone), permission?(预设或 null=各 Bot 用自己的), workDir?, sectionId?} → {room, changes[]}；delete-room {id} → 整份 state 视图；set-flags {id, pinned?, hidden?} 对群同样适用。服务端校验：成员 2–12、不可含私有 Bot、管理员须为成员、群名不与其他群重名、权限只有用户能改；拒绝为 bot/refused + 具体 message。写端点为源码核对，未改用户真实团队
+      rationale: 群管理端点此前未登记；新建群触发真实模型、删除不可逆，只能源码核对并在 mock 上验收，须标明实测状态；评审实证 create-room 不转发 mode/notice、无管理员时实际为全员轮流，登记以免后续变更照错误形态实现
+      enforcement:
+        method: review
+        detail: core JUnit（GroupManageTest）以真实 state-full 夹具覆盖群字段解码，shownModeMatchesWeb 覆盖管理员为无/已删除/未知模式；源码核对位置：ds-bot 0.3.10 src/host/channel.js（create-room 的参数转发、update-room、delete-room）、roster.js（createRoom/buildRoom、planRoomChange、updateRoom、deleteRoom、checkMembers、cleanRoomName、cleanNotice、defaultAdmin、autoRoomName）、permissions.js（cleanRoomPermission）、groups.js 与 tools.js（mode 生效判定）、client.js shownMode；FINDINGS 第 22 节
+  MODIFIED: {}
+  REMOVED: {}

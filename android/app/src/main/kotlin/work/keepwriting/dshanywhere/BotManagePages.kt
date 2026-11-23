@@ -62,7 +62,7 @@ class ManageApi(
 private fun idOf(v: Json.Value): String? = ((v as? Json.Value.Object)?.members?.get("id") as? Json.Value.StringValue)?.value
 
 @Composable
-private fun ErrorLine(error: String?, onDismiss: () -> Unit) {
+internal fun ErrorLine(error: String?, onDismiss: () -> Unit) {
     if (error == null) return
     Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
@@ -73,12 +73,12 @@ private fun ErrorLine(error: String?, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp))
 }
 
 @Composable
-private fun ValueRow(label: String, value: String, hint: String? = null, enabled: Boolean = true, onClick: (() -> Unit)?) {
+internal fun ValueRow(label: String, value: String, hint: String? = null, enabled: Boolean = true, onClick: (() -> Unit)?) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().let { if (onClick != null && enabled) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -92,7 +92,7 @@ private fun ValueRow(label: String, value: String, hint: String? = null, enabled
 }
 
 @Composable
-private fun SwitchRow(label: String, hint: String?, on: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(label: String, hint: String?, on: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -104,7 +104,7 @@ private fun SwitchRow(label: String, hint: String?, on: Boolean, enabled: Boolea
 
 /** 可编辑文字字段：草稿与已保存值不同时显示「保存」与「还原」；[problem] 非空时不可保存并显示原因。 */
 @Composable
-private fun EditableField(label: String, saved: String, busy: Boolean, multiline: Boolean = false, maxLength: Int = Int.MAX_VALUE, problem: (String) -> String? = { null }, onSave: (String) -> Unit) {
+internal fun EditableField(label: String, saved: String, busy: Boolean, multiline: Boolean = false, maxLength: Int = Int.MAX_VALUE, problem: (String) -> String? = { null }, onSave: (String) -> Unit) {
     var draft by remember(saved) { mutableStateOf(saved) }
     val dirty = draft != saved
     val issue = if (dirty) problem(draft) else null
@@ -134,7 +134,7 @@ private fun EditableField(label: String, saved: String, busy: Boolean, multiline
 
 /** 全屏选择页：[options] 为 (值, 标题, 说明)；选中即回调并关闭。 */
 @Composable
-private fun <T> PickerDialog(title: String, options: List<Triple<T, String, String?>>, selected: T?, headers: Map<Int, String> = emptyMap(), onPick: (T) -> Unit, onDismiss: () -> Unit) {
+internal fun <T> PickerDialog(title: String, options: List<Triple<T, String, String?>>, selected: T?, headers: Map<Int, String> = emptyMap(), onPick: (T) -> Unit, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
@@ -176,7 +176,7 @@ private fun ModelPicker(state: Json.Value.Object?, selected: String?, allowDefau
 }
 
 @Composable
-private fun ConfirmDialog(title: String, text: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun ConfirmDialog(title: String, text: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -263,7 +263,8 @@ fun BotDetailsPage(
     if (profile == null) {
         // 被删除（本机或网页端）后 state 里已没有该 Bot
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(tr("找不到这个 Bot，它可能已被删除", "This Bot was not found. It may have been deleted"))
+            // Bot 或群在别处被删除后都会落到这里（详情页按 state 判定对象种类）
+            Text(tr("找不到它，可能已被删除", "Not found. It may have been deleted"))
             TextButton(onClick = onDeleted) { Text(tr("回到团队", "Back to team")) }
         }
         return
