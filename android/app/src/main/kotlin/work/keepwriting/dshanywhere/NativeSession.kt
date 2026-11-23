@@ -128,13 +128,19 @@ class NativeSession(context: Context, private val dial: (String, Int) -> java.ne
         http.feed(url, listOfNotNull(cookieHeader()?.let { "Cookie" to it }), stop, onFrame)
 
     /** 供后续原生界面的 API 调用入口（本变更先由核心逻辑测试覆盖，界面在后续变更接入）。 */
-    fun apiRequest(method: String, url: String, contentType: String?, body: ByteArray?): HttpSocket.Response {
+    fun apiRequest(method: String, url: String, contentType: String?, body: ByteArray?, slow: Boolean = false): HttpSocket.Response {
         val headers = buildList {
             cookieHeader()?.let { add("Cookie" to it) }
             contentType?.let { add("Content-Type" to it) }
         }
-        return http.request(method, url, headers, body)
+        return (if (slow) slowHttp else http).request(method, url, headers, body)
     }
+
+    /**
+     * 同步等模型的端点（dsbot-memory：memory-ask 上游单次模型调用上限 120 秒、失败还会换模型重试）用的连接：读超时 5 分钟，
+     * 避免 30 秒超时误报失败而服务端照样改了记忆。
+     */
+    private val slowHttp = HttpSocket(dial, readTimeoutMs = 300_000)
 
     /** 把原生存储的会话 cookie 同步到 WebView CookieManager（单向：原生为事实来源）。 */
     private fun syncToWebView(origin: String) {

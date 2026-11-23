@@ -405,7 +405,7 @@ const server = createServer((req, res) => {
   if (url === '/api/bot' && req.method === 'POST') {
     let body = ''
     req.on('data', (c) => (body += c))
-    req.on('end', () => {
+    req.on('end', async () => {
       const sid = sessionCookie(req)
       if (!sid || !sessions.has(sid)) {
         res.writeHead(401, { 'Content-Type': 'text/plain' })
@@ -421,7 +421,7 @@ const server = createServer((req, res) => {
       if (manageMode) {
         let payload = {}
         try { payload = JSON.parse(body).payload ?? {} } catch {}
-        const out = manage.handle(endpoint, payload)
+        const out = await manage.handle(endpoint, payload)
         if (out) {
           if (endpoint !== 'state' && endpoint !== 'chat') console.log('  manage:', endpoint, Object.keys(payload).join(','), out.ok ? 'ok' : 'refused: ' + out.error.message)
           res.writeHead(200, { 'Content-Type': 'application/json' })

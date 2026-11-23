@@ -67,6 +67,8 @@ fun RoomDetailsPage(
     onDismissFlash: () -> Unit,
     onPickFolder: () -> Unit,
     onDeleted: () -> Unit,
+    /** 打开群记忆（dsbot-memory）。 */
+    onOpenMemory: () -> Unit = {},
 ) {
     val room = GroupManage.roomOf(state, roomId)
     if (room == null) {
@@ -139,6 +141,11 @@ fun RoomDetailsPage(
 
         SectionTitle(tr("工作文件夹", "Working folder"))
         ValueRow(tr("文件夹", "Folder"), room.workDir ?: tr("各 Bot 用自己的文件夹", "Each Bot uses its own folder"), hint = tr("设了群文件夹时，所有成员在群里都在这个文件夹工作。", "With a group folder, every member works there in this group."), onClick = onPickFolder)
+
+        if (work.keepwriting.core.MemoryPanel.enabled(state)) {
+            SectionTitle(tr("记忆", "Memory"))
+            ValueRow(tr("群记忆", "Group memory"), "›", onClick = onOpenMemory)
+        }
 
         SectionTitle(tr("侧栏", "Sidebar"))
         SwitchRow(tr("置顶", "Pin"), tr("排在其他聊天之上。", "Kept above the other chats."), room.pinned, !busy("pinned")) { act("pinned", "set-flags", BotManage.Requests.setFlag(roomId, "pinned", it)) }

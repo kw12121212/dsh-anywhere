@@ -375,3 +375,22 @@ agentPage：最新会话、与 chat 同由 partPage 分页；全部归档时 ite
 `stop-agent {agentId}` → 是否停止了运行中的回合。发送为 `send {sessionId, text}`。feed.js 的 message/stream 只为 chatOwners 中的
 Bot 会话发布，Agent 会话只在 agent/status 时触发 live，客户端据 live/轮询重读 agent-chat。`earlier` 对 Agent 会话返回空，更早内容
 用 agent-chat 带 cursor。`agent-adopt` 需要已有 dsh 根会话 id，手机端不使用。
+
+## 24. 记忆面板（2026-11-24，dsbot-memory）
+
+**实测（只读，不带 summarize，不触发模型）**：`memory-view {botId}` → `{botId, entries[{scope:own|team, topic|null, text, id, added,
+by|null, source, until|null, pinned, expired}], sizes{own,team}, limits{entry:300, group:12000, bot:8000, team:4000, topic:16000, topics:40, own},
+summary:null, fresh, summarizing, tidy{scope, batch, at, merged, moved, retired, items[{op,text}]}, keys{own:"bot:<id>", team:"team"},
+places[{key, kind:bot|group, name}], error:null}`（主 Bot 50 条、10 个主题、0 条置顶）；`memory-view {roomId}` → `{roomId, entries:[],
+sizes{group}, keys{group:"group:<id>"}, tidy:null, …}`；`memory-history {botId}` → `{rows[{id, time, op:add|replace, scope, text, by,
+restored}], more:"<下一页 before 的 id>"}`（每页 50），群为 `{rows:[], more:null}`；`memory-restore` 未知 id → `bot/refused`「That change is not in
+the change log of this memory.」；`memory-edit` 未知 Bot → `bot/refused`「Unknown Bot」。夹具 `memory-view-bot.json`、`memory-view-room-empty.json`、
+`memory-history.json` 按实测形态脱敏（正文全部合成），`memory-restore-unknown.json` 为实测原文。
+
+**源码核对、待实测**（改写真实记忆会改变 Bot 行为；tech/dsbot-api endpoint-inventory-0310 例外）：memory-ask {…, text≤2000} → {reply,
+changes[{op, scope, text, before?, ok, error?}], view}（调用模型）；pin/forget/edit/add/move/layer/restore/tidy-undo 均返回最新视图；条目以
+(scope, topic, text) 定位，条目已变回 NO_MATCH 类拒绝；memory-layer 只用于团队条目（always=true 移到主文件、false 放回 shared 主题）；
+memory-move 的 to 为 places[].key 或 team。memory-ask 同步等模型写完才返回（单次模型调用上限 120 秒、失败重试并换默认模型，
+本地 Agent 路线通常更久），客户端对它使用 5 分钟读超时，失败时重读视图并提示可能已在服务端完成。只读主机（另一处持有团队）的 READS
+含 memory-view 但不含 memory-history，此时历史页显示「团队当前只读」。整理条目的 op 为 merged/moved/retired。条目 id 只在同一记忆范围内
+唯一（无 meta.id 时为正文 sha256 前 4 位），同页并列多组时列表键须带范围。

@@ -131,6 +131,9 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object NewRoom : ShellPage
         /** 团队的 DSH Agent 聊天（dsbot-member-agents）。 */
         data class AgentChat(val agentId: String) : ShellPage
+        /** 记忆页与记忆历史（dsbot-memory）。 */
+        data class Memory(val owner: work.keepwriting.core.MemoryPanel.Owner, val title: String) : ShellPage
+        data class MemoryHistory(val owner: work.keepwriting.core.MemoryPanel.Owner) : ShellPage
         /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
         data object PrivateArchives : ShellPage
         /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
@@ -313,6 +316,10 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             onDismissFlash = { connection.flash = null },
                             onPickFolder = { connection.openFolderPick(FolderTarget.Room(current.targetId)) },
                             onDeleted = { if (connection.page == current) connection.goHome() },
+                            onOpenMemory = {
+                                val name = work.keepwriting.core.WorkFolders.roomName(snapshot, current.targetId) ?: ""
+                                connection.openMemory(work.keepwriting.core.MemoryPanel.Owner.Room(current.targetId), tr("群记忆：", "Group memory: ") + name)
+                            },
                         )
                     } else {
                         BotDetailsPage(
@@ -326,9 +333,20 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             onPickFolder = { connection.openFolderPick(FolderTarget.Bot(current.targetId)) },
                             flash = connection.flash,
                             onDismissFlash = { connection.flash = null },
+                            onOpenMemory = {
+                                val name = work.keepwriting.core.BotManage.profileOf(snapshot, current.targetId)?.name ?: ""
+                                connection.openMemory(work.keepwriting.core.MemoryPanel.Owner.Bot(current.targetId), tr("记忆：", "Memory: ") + name)
+                            },
                         )
                     }
                 }
+                current is ShellPage.Memory -> MemoryPage(
+                    owner = current.owner,
+                    title = current.title,
+                    api = connection.manageApi,
+                    onOpenHistory = { connection.openMemoryHistory(current.owner) },
+                )
+                current is ShellPage.MemoryHistory -> MemoryHistoryPage(current.owner, connection.manageApi)
                 current is ShellPage.FolderPick -> {
                     val snapshot = connection.stateSnapshot?.raw
                     val target = current.target
@@ -990,6 +1008,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             val res = graph.nativeSession.apiRequest(
                 "POST", DsbotApi.url(clean, "/api/bot"),
                 "application/json", DsbotApi.buildRequest(endpoint, payloadJson).toByteArray(),
+                // 同步等模型的端点用长读超时（dsbot-memory）
+                slow = endpoint in work.keepwriting.core.MemoryPanel.SLOW_ENDPOINTS,
             )
             DsbotApi.parseResponse(res.status, res.bodyText())
         } catch (_: Exception) {
@@ -1062,6 +1082,10 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openNewBot() = push(ShellPage.NewBot)
 
     fun openNewRoom() = push(ShellPage.NewRoom)
+
+    fun openMemory(owner: work.keepwriting.core.MemoryPanel.Owner, title: String) = push(ShellPage.Memory(owner, title))
+
+    fun openMemoryHistory(owner: work.keepwriting.core.MemoryPanel.Owner) = push(ShellPage.MemoryHistory(owner))
 
     fun openPrivateArchives() = push(ShellPage.PrivateArchives)
 

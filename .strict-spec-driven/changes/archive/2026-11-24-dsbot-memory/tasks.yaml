@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-memory
+sections:
+  Implementation:
+    core-memory-panel:
+      text: core 新增 MemoryPanel.kt（视图、历史、提问结果解码，分组排序，条目长度校验，移动目标，请求体）
+      status: complete
+    fixtures-memory:
+      text: 按真实 memory-view/memory-history 形态的脱敏夹具（memory-view-bot、memory-view-room-empty、memory-history、memory-restore-unknown）；FINDINGS 第 24 节登记
+      status: complete
+    app-memory-page:
+      text: 记忆页（分组列表、展开与复制、操作菜单、新增、提问与结果、整理撤销）与历史页（分页、恢复）；Bot 与群详情页入口；NativeShell 路由
+      status: complete
+    mock-memory:
+      text: mock --manage 增加 memory-view/ask/pin/edit/add/forget/move/layer/history/restore/tidy-undo（内存记忆与变更日志，写后返回最新视图）
+      status: complete
+    review-fixes:
+      text: 评审修复：列表键与展开状态带记忆范围（跨范围同 id 不再崩溃）；memory-ask 用 5 分钟读超时、失败后重读视图并提示；整理条目 op 改为上游 merged/moved/retired 并翻译显示；写应答只采用最后一次；显示 summarizing 与摘要失败；条目输入换行转空格；读取失败可重试；FINDINGS 与 tech 补充耗时、只读主机与 id 唯一性
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：MemoryPanelTest（夹具解码、分组与置顶排序、移动目标、长度校验、提问结果、历史分页、各请求体字面值、畸形降级）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹，看日志末尾 EXIT）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：从 Bot 详情页打开记忆页看到自己的与团队记忆分组；置顶、编辑、新增（超长本地提示）、遗忘（确认）、移动到另一个 Bot、团队条目层级切换；提问显示加载与回答、变更列表；历史分页与恢复；撤销整理；群详情页打开群记忆
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-memory
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

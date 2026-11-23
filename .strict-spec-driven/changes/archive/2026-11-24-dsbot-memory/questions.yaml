@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-memory
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-memory。
+    answer: 手机上看不到也管不了 Bot、群与团队的记忆（提问、置顶、移动、遗忘、历史与恢复、撤销整理），只能回电脑网页端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑完成标准第四条。
+    answer: 查看、提问、置顶、遗忘与恢复某个 Bot 的记忆，结果与网页端一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：按 Bot 记忆、群记忆、团队共享记忆分组；memory-ask 进行中有加载状态；置顶、层级移动、遗忘（二次确认）、历史与恢复、撤销整理；另有 memory-add 与 memory-edit；私有 Bot 可见性以服务端为准；长文本可展开与复制。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 详情页其余设置与写通道不变；不在 App 端推断记忆可见性；不重新生成摘要。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖已完成，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

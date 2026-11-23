@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-memory
+approach:
+  - core MemoryPanel.kt：decodeView(value) → {owner(botId|roomId), entries[{scope, topic, text, id, added, by, source, until, pinned, expired}], sizes, limits(entry 等), summary{text, at}?, tidy{scope, batch, at, merged, moved, retired, items[{op,text}]}?, keys{scope→key}, places[{key, kind, name}], error}；groups(view) 按 own → team 或 group 分组、组内置顶在前、保持服务端顺序；decodeHistory → {rows[{id, time, op, scope, text, by, restored}], more}；decodeAsk → {reply, changes[{op, scope, text, before?, ok, error?}], view}；entryProblem(text, limit)；moveTargets(view, scope) 排除当前记忆；Requests 以 Owner（botId 或 roomId）生成 view/ask/pin/edit/add/forget/move/layer/history(before)/restore/tidyUndo 请求体。
+  - App：MemoryPage（ShellPage.Memory(owner)）：读 memory-view（读线程），分组列表；条目点按展开/收起、长按复制并弹出操作菜单（置顶、编辑、遗忘（确认）、移动（选择目标）、团队条目的层级切换）；顶部提问框（memory-ask，进行中禁用并显示加载，结果卡片列出回答与逐条变更）、新增条目、历史入口；整理卡片带撤销。写操作经 manage-write-feedback 通道，成功后以应答里的视图直接替换列表（memory-* 写端点都返回最新视图）。MemoryHistoryPage：分页（more → before）、恢复按钮（已恢复的不显示）。
+decisions:
+  view-from-response:
+    decision: 记忆写操作成功后用应答返回的最新视图替换列表，不另发 memory-view。
+    rationale: 源码核对：pin/forget/move/layer/restore/tidy-undo/edit/add 都 return memoryView(...)，ask 返回 {view}；记忆不在 state 里，没有 revision 事件可依赖，直接用应答视图既准确又省一次请求（与 manage-write-feedback 的「不做本地乐观修改」一致：显示的是服务端结果）。
+  ask-blocks-ui:
+    decision: 提问进行中禁用提问框并显示加载，完成前不允许再次提问；失败显示服务端原因。
+    rationale: memory-ask 会调用模型并可能逐条改写记忆（最多 20 条变更），并发提问会让后一个基于过期编号工作；计划变更要求请求进行中可见加载状态。
+  exception-memory-add-edit:
+    decision: memory-view 与 memory-history 对真实服务只读实测并以同形态脱敏夹具解码；memory-add/memory-edit 及其他写端点源码核对，在 tech 为 endpoint-inventory-0310 增加 memory-add/memory-edit 的限定例外。
+    rationale: 记忆是用户在用团队的真实数据，写入不可撤回地改变 Bot 行为；读端点不改变状态且实测形态已覆盖解码所需字段。
+  ask-long-timeout:
+    decision: memory-ask 走 5 分钟读超时的连接（core MemoryPanel.SLOW_ENDPOINTS 声明），失败时重读 memory-view 并提示请求可能已在服务端完成。
+    rationale: 上游 memoryAsk 同步等模型写完（单次 120 秒上限、失败会重试并换模型），默认 30 秒读超时会误报失败而服务端照样写入最多 20 条变更，用户重问会重复执行同一指令（评审实证）。
+  rowkey-with-scope:
+    decision: 列表行键与展开状态都带记忆范围（MemoryPanel.rowKey），写应答只采用最后一次发起的写。
+    rationale: 上游条目 id 只在同一范围内唯一，own 与 team 并列时可能同 id，Compose 键重复会崩溃；两个读线程上的写应答可能乱序，较旧视图后到会把列表改回去。
+alternatives: []
+risks:
+  - 记忆正文可能含敏感内容：只在页面显示，不写日志与诊断；复制由用户发起
+  - 写端点未对真实服务实测成功形态；失败一律显示服务端原因，不改变显示的列表

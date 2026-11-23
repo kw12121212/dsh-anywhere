@@ -39,6 +39,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/api/cursor-null-json-null-f59390.yaml
+    ds-bot-httpsocket-30-e242f3:
+      title: 同步等模型的 DS-Bot 端点会超过原生 HttpSocket 30 秒读超时：误报失败而服务端照样执行
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/ds-bot-httpsocket-30-e242f3.yaml
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: ds-bot-httpsocket-30-e242f3
+  title: 同步等模型的 DS-Bot 端点会超过原生 HttpSocket 30 秒读超时：误报失败而服务端照样执行
+category: api
+status: active
+created_at: '2026-11-23T23:38:35.535Z'
+updated_at: '2026-11-23T23:38:35.535Z'
+context: dsbot-memory：记忆页的 memory-ask
+observation: NativeSession 的 HttpSocket 默认读超时 30 秒；上游 memoryAsk 同步调用模型（单次上限 120 秒、失败重试并换默认模型，本地 Agent 路线更久），整段完成才返回。App 在 30 秒得到网络失败，服务端随后照样写入最多 20 条记忆变更，用户重问会重复执行。mock 只延迟 3 秒，设备验收测不出
+takeaway: 消费任何「等模型写完才应答」的端点前，查上游是否同步调用模型并估算最坏耗时；这类端点登记到 core 的长超时集合（如 MemoryPanel.SLOW_ENDPOINTS）走长读超时连接，失败后重读服务端状态并提示可能已完成；mock 要按真实最坏耗时模拟一次
+applies_when: 原生端调用会触发模型的 DS-Bot 写端点（memory-ask、摘要、学习、目标起草等），或任何服务端处理可能超过 30 秒的请求
+occurrences:
+  - origin: dsbot-memory
+    date: '2026-11-23'
+    evidence: 2026-11-24 评审：HttpSocket.kt readTimeoutMs=30_000，memory.js MODEL_TIMEOUT_MS=120_000；修复为 slow 连接 300 秒并在失败时重读 memory-view

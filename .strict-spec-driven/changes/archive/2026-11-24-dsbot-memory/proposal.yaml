@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-memory
+  status: proposed
+summary:
+  what:
+    - 新增记忆页（从 Bot 详情页与群详情页的「记忆」进入，团队关闭记忆时不显示入口）：Bot 记忆按「它自己的记忆」与「团队共享记忆」分组、群记忆单独一组，每条显示正文（长文可展开、长按复制）、主题、置顶、到期/已过期标记；显示已有的摘要与最近一次自动整理（合并/移动/淘汰条数与条目），可撤销整理（memory-tidy-undo）
+    - 条目操作：置顶/取消置顶（memory-pin）、编辑（memory-edit）、遗忘（memory-forget，二次确认）、移动到另一个 Bot/群的记忆或团队记忆（memory-move）、团队条目在「所有 Bot 总是读到」与「放回主题」之间切换（memory-layer）；新增条目（memory-add）；单条不超过 300 字在本地先提示
+    - 对记忆提问或下指令（memory-ask）：请求进行中显示加载状态，完成后显示回答与逐条变更（新增/修改/删除，成功或失败原因），并以应答中的最新视图刷新列表；历史页（memory-history，分页）显示变更记录并可恢复（memory-restore）
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第四条：查看、提问、置顶、遗忘与恢复某个 Bot 的记忆，结果与网页端一致
+    - 目前手机上看不到也管不了 Bot 和群的记忆，只能回电脑网页端
+scope:
+  in:
+    - android-dsbot 规格新增 memory-panel 要求；tech/dsbot-api 登记记忆端点（memory-view/history 实测，写端点源码核对）并为 endpoint-inventory-0310 增加 memory-add/memory-edit 成功形态的限定例外
+    - core：MemoryPanel（视图、历史、提问结果解码，分组与排序，条目长度校验，各端点请求体）与 JUnit；真实形态脱敏夹具
+    - App：记忆页、条目操作菜单、提问、历史页、撤销整理；Bot 与群详情页入口；mock --manage 增加记忆端点
+  out:
+    - 重新生成摘要（regenerate，会触发模型调用）；记忆容量设置（团队偏好 memoryLimits，归 dsbot-prefs-theme 之外的设置页）；记忆审查（memoryReviews）
+unchanged_behavior:
+  - Bot 与群详情页其余设置、写操作通道不变；私有 Bot 的可见性完全由服务端决定，App 只显示服务端返回的内容；记忆正文不写入日志与诊断上报
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-memory

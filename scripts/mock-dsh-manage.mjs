@@ -83,6 +83,57 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     return next
   }
   const autoRoomName = (members) => ['You', ...members.map((m) => team.bots[m]?.name).filter(Boolean)].join(', ')
+  // 记忆：按记忆键存条目（bot:<id> / group:<id> / team），变更日志与最近一次整理
+  const memories = {
+    'bot:bot-1': [
+      { topic: null, text: '用户偏好用中文回复', id: 'm-1', added: '2026-11-20', by: null, source: 'conversation', until: null, pinned: false },
+      { topic: 'work', text: '周报每周五下午发到项目群', id: 'm-2', added: '2026-11-21', by: 'user', source: 'memory panel', until: '2026-12-31', pinned: true },
+      { topic: null, text: '这是一条很长的记忆，用来验证长文本可以展开与收起：' + '项目计划、风险清单、里程碑安排与每周例会的记录要点都写在共享文件夹里，需要时先查最新版本再回答。'.repeat(3), id: 'm-5', added: '2026-11-22', by: null, source: 'conversation', until: null, pinned: false },
+    ],
+    team: [
+      { topic: null, text: '团队仓库在 /work/repo', id: 'm-3', added: '2026-11-01', by: null, source: 'review', until: '2026-11-10', pinned: false },
+      { topic: 'shared', text: '发布前要跑完整回归', id: 'm-4', added: '2026-11-02', by: null, source: 'review', until: null, pinned: false },
+    ],
+    'group:room-1': [{ topic: null, text: '项目群每周一早上同步进度', id: 'm-6', added: '2026-11-15', by: null, source: 'conversation', until: null, pinned: false }],
+  }
+  const memJournal = [{ id: 'h-0', key: 'bot:bot-1', scope: 'own', op: 'remove', text: '旧的会议时间是周三', time: '2026-11-19T08:00:00.000Z', entry: { topic: null, text: '旧的会议时间是周三', id: 'm-0', added: '2026-11-10', by: null, source: 'conversation', until: null, pinned: false } }]
+  let memTidy = { key: 'bot:bot-1', scope: 'own', batch: 'tidy-1', at: '2026-11-23T02:00:00.000Z', merged: 0, moved: 0, retired: 1, items: [{ op: 'retired', text: '被淘汰的旧会议时间' }] }
+  const memStore = (key) => (memories[key] ??= [])
+  const memPanel = (p) => {
+    if (p.roomId !== undefined && p.roomId !== null) {
+      if (!team.rooms[p.roomId]) throw new Error('Unknown group chat')
+      return { body: { roomId: p.roomId }, scopes: { group: 'group:' + p.roomId } }
+    }
+    if (!team.bots[p.botId]) throw new Error('Unknown Bot')
+    return { body: { botId: p.botId }, scopes: { own: 'bot:' + p.botId, team: 'team' } }
+  }
+  const memText = (raw) => {
+    const text = String(raw ?? '').trim()
+    if (!text) throw new Error('A memory entry needs some text')
+    if (text.length > 300) throw new Error('A memory entry holds at most 300 characters')
+    return text
+  }
+  const memFind = (p) => {
+    const key = memPanel(p).scopes[p.scope]
+    const e = memStore(key ?? '').find((x) => x.text === p.text && (x.topic ?? null) === (p.topic ?? null))
+    if (!e) throw new Error('This entry changed or moved. Reload the memory and try again.')
+    return e
+  }
+  const memLog = (op, p, text, before, entry) => {
+    const key = memPanel(p).scopes[p.scope]
+    memJournal.push({ id: 'h-' + ++team.seq, key, scope: p.scope, op, text, ...(before !== undefined ? { before } : {}), ...(entry ? { entry: { ...entry } } : {}), time: new Date().toISOString() })
+  }
+  function memoryView(p) {
+    const panel = memPanel(p)
+    const entries = Object.entries(panel.scopes).flatMap(([scope, key]) => memStore(key).map((e) => ({ scope, ...e, expired: e.until !== null && e.until < '2026-11-24' })))
+    const tidy = memTidy && Object.values(panel.scopes).includes(memTidy.key) ? { scope: memTidy.scope, batch: memTidy.batch, at: memTidy.at, merged: memTidy.merged, moved: memTidy.moved, retired: memTidy.retired, items: memTidy.items } : null
+    return {
+      ...panel.body, entries, sizes: {}, limits: { entry: 300, group: 12000, bot: 8000, team: 4000, topic: 16000, topics: 40 },
+      summary: null, fresh: true, summarizing: false, tidy, keys: panel.scopes,
+      places: [...Object.values(team.bots).map((b) => ({ key: 'bot:' + b.id, kind: 'bot', name: b.name })), ...Object.values(team.rooms).map((r) => ({ key: 'group:' + r.id, kind: 'group', name: r.name }))],
+      error: null,
+    }
+  }
   const fail = (message) => ({ ok: false, error: { code: 'bot/refused', message, details: {} } })
   const ok = (value) => ({ ok: true, value })
   const norm = (s) => String(s ?? '').trim().toLowerCase()
@@ -107,6 +158,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       permissions: { options: [{ value: 'read-only', name: '只读' }, { value: 'workspace-write', name: '工作区可写' }, { value: 'danger-full-access', name: '完全访问' }], defaultPreset: 'danger-full-access' },
       colors: ['deepseek', 'blue', 'violet', 'orange', 'green', 'magenta', 'cyan', 'red', 'yellow', 'brown', 'gray', 'black', 'aurora'],
       prefs: {},
+      memory: true,
       agents: Object.values(team.agents),
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
     }
@@ -242,6 +294,93 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
             pushLive()
           }, 12000)
           return ok(true)
+        }
+        // 记忆（dsbot-memory，ds-bot 0.3.10 memory.js 形态）：条目以 (scope, topic, text) 定位；写后返回最新视图
+        case 'memory-view':
+          return ok(memoryView(p))
+        case 'memory-history': {
+          const panel = memPanel(p)
+          const keys = new Set(Object.values(panel.scopes))
+          const rows = memJournal.filter((r) => keys.has(r.key)).slice().reverse()
+          const at = p.before ? rows.findIndex((r) => r.id === p.before) : -1
+          const slice = p.before ? (at === -1 ? [] : rows.slice(at + 1)) : rows
+          const page = slice.slice(0, 50)
+          const undone = new Set(memJournal.map((r) => r.restored).filter(Boolean))
+          return ok({ rows: page.map((r) => ({ id: r.id, time: r.time, op: r.op, scope: r.scope, text: r.text, by: 'user', restored: undone.has(r.id) })), more: slice.length > 50 ? page.at(-1).id : null })
+        }
+        case 'memory-pin': {
+          const e = memFind(p)
+          e.pinned = p.pin === true
+          return ok(memoryView(p))
+        }
+        case 'memory-edit': {
+          const e = memFind(p)
+          const next = memText(p.next)
+          memLog('replace', p, next, e.text)
+          e.text = next
+          return ok(memoryView(p))
+        }
+        case 'memory-add': {
+          const panel = memPanel(p)
+          const scope = panel.scopes[p.scope] ? p.scope : Object.keys(panel.scopes)[0]
+          const text = memText(p.text)
+          memStore(panel.scopes[scope]).push({ topic: p.topic ?? null, text, id: 'm-' + ++team.seq, added: '2026-11-24', by: 'user', source: 'memory panel', until: null, pinned: false })
+          memLog('add', { ...p, scope }, text)
+          return ok(memoryView(p))
+        }
+        case 'memory-forget': {
+          const e = memFind(p)
+          const list = memStore(memPanel(p).scopes[p.scope])
+          list.splice(list.indexOf(e), 1)
+          memLog('remove', p, e.text, undefined, e)
+          return ok(memoryView(p))
+        }
+        case 'memory-move': {
+          const e = memFind(p)
+          const from = memStore(memPanel(p).scopes[p.scope])
+          if (!p.to) throw new Error('Choose where to move the entry')
+          from.splice(from.indexOf(e), 1)
+          memStore(p.to).push({ ...e, topic: p.to === 'team' ? 'shared' : null })
+          return ok(memoryView(p))
+        }
+        case 'memory-layer': {
+          const e = memFind({ ...p, scope: 'team' })
+          e.topic = p.always === true ? null : 'shared'
+          return ok(memoryView(p))
+        }
+        case 'memory-restore': {
+          const row = memJournal.find((r) => r.id === p.id)
+          if (!row) throw new Error('That change is not in the change log of this memory.')
+          if (memJournal.some((r) => r.restored === p.id)) throw new Error('That change is already restored.')
+          const list = memStore(row.key)
+          if (row.op === 'remove') list.push({ ...row.entry })
+          else if (row.op === 'add') { const at = list.findIndex((e) => e.text === row.text); if (at >= 0) list.splice(at, 1) }
+          else if (row.op === 'replace') { const e = list.find((x) => x.text === row.text); if (e) e.text = row.before }
+          memJournal.push({ id: 'h-' + ++team.seq, key: row.key, scope: row.scope, op: row.op === 'add' ? 'remove' : row.op === 'remove' ? 'add' : 'replace', text: row.before ?? row.text, time: new Date().toISOString(), restored: row.id })
+          return ok(memoryView(p))
+        }
+        case 'memory-tidy-undo': {
+          if (!memTidy || memTidy.batch !== p.batch) throw new Error('This tidy can no longer be undone')
+          memStore(memTidy.key).push({ topic: null, text: '被淘汰的旧会议时间', id: 'm-' + ++team.seq, added: '2026-11-01', by: null, source: 'conversation', until: null, pinned: false })
+          memTidy = null
+          return ok(memoryView(p))
+        }
+        case 'memory-ask': {
+          // 模拟模型耗时 3 秒；回答并新增一条（与上游一样返回 {reply, changes, view}）
+          const text = String(p.text ?? '').trim()
+          if (!text) throw new Error('Type a question or a change first')
+          return new Promise((resolve) => setTimeout(() => {
+            try {
+              const panel = memPanel(p)
+              const scope = Object.keys(panel.scopes)[0]
+              const added = `记住：${text}`.slice(0, 300)
+              memStore(panel.scopes[scope]).push({ topic: null, text: added, id: 'm-' + ++team.seq, added: '2026-11-24', by: 'user', source: 'memory panel', until: null, pinned: false })
+              memLog('add', { ...p, scope }, added)
+              resolve(ok({ reply: `好的，我已经记下了：${text}`, changes: [{ op: 'add', scope, text: added, ok: true }], view: memoryView(p) }))
+            } catch (error) {
+              resolve(fail(error.message))
+            }
+          }, 3000))
         }
         case 'efforts':
           return ok(EFFORTS[p.ref] ?? { efforts: [] })

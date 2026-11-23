@@ -258,6 +258,8 @@ fun BotDetailsPage(
     /** 从选择页带回的一次性提示（如文件夹已保存）。 */
     flash: String? = null,
     onDismissFlash: () -> Unit = {},
+    /** 打开该 Bot 的记忆页（dsbot-memory）。 */
+    onOpenMemory: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -362,6 +364,11 @@ fun BotDetailsPage(
 
         SectionTitle(tr("工作文件夹", "Working folder"))
         ValueRow(tr("文件夹", "Folder"), profile.workDir ?: tr("团队工作区", "Team workspace"), enabled = !busy("folder"), onClick = onPickFolder)
+
+        if (work.keepwriting.core.MemoryPanel.enabled(state)) {
+            SectionTitle(tr("记忆", "Memory"))
+            ValueRow(tr("记忆", "Memory"), "›", hint = tr("它自己的记忆与团队共享记忆", "Its own memory and the team memory"), onClick = onOpenMemory)
+        }
 
         SectionTitle(tr("隐私", "Privacy"))
         SwitchRow(tr("私有", "Private"), BotManage.privateHint(profile), profile.isPrivate, BotManage.canTogglePrivate(profile) && !busy("private")) {
