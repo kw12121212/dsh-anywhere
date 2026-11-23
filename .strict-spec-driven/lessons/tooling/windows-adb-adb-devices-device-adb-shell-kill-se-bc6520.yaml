@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: windows-adb-adb-devices-device-adb-shell-kill-se-bc6520
+  title: Windows 侧 adb 服务端卡死：adb devices 显示 device 但 adb shell 全部挂起，先 kill-server 再判断模拟器
+category: tooling
+status: active
+created_at: '2026-11-23T15:35:45.672Z'
+updated_at: '2026-11-23T15:35:45.672Z'
+context: dsbot-bot-manage 模拟器验收：经 /mnt/c 下的 adb.exe 安装 APK 与取 loadavg
+observation: adb devices 列出 emulator-5554 device，但 adb shell/install 任何命令都无输出直至超时；tasklist 显示 299 个挂起的 adb.exe 客户端（其他进程每分钟轮询 dumpsys package com.google.android.gms 堆积而成），emu kill 无效。adb kill-server 重启服务端后设备先 offline/authorizing，wait-for-device 后 boot_completed=1、loadavg 0.5，安装与 uiautomator 恢复正常
+takeaway: adb 命令在 Windows 侧一律带 timeout 并以 < /dev/null 运行；adb shell 无响应而 devices 仍显示 device 时，先用 tasklist 看是否堆积大量 adb.exe，再 adb kill-server 并 wait-for-device，不要直接判定模拟器损坏或去杀 qemu；截图用 screencap 到 /sdcard 再 pull，不要 exec-out 经过 tr 管道（会破坏 PNG）
+applies_when: 在 WSL 经 Windows adb.exe 驱动模拟器验收时 adb shell/install 挂起、超时或无输出，或截图文件损坏
+occurrences:
+  - origin: dsbot-bot-manage
+    date: '2026-11-23'
+    evidence: 2026-11-23 adb.exe 进程 299 个（最早 16:27），kill-server 后 getprop sys.boot_completed=1、install Success

@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-bot-manage
+  status: proposed
+summary:
+  what:
+    - 新增 Bot 详情页（从私聊页顶部「详情」进入）：分节显示并编辑名称、标签（角色）、指令、模型、思考强度、权限预设、外观（20 种角色形象与 12 种颜色）、私有、Main Bot、置顶与隐藏；工作文件夹只读显示（选择在 dsbot-folders），照片头像显示为已设照片（头像库在 dsbot-avatars）
+    - 模型、思考强度与权限预设用全屏选择页：模型按服务商分组、来自 state.models，思考强度来自 efforts 端点（无可选级别时隐藏），权限预设来自 state.permissions；切换到不同运行引擎（本地 Agent 与模型互换）先二次确认再带 changeEngine 保存
+    - 团队页新增「新建 Bot」：填写名称（本地先做非空、禁用字符、保留词与重名检查）、标签、指令、模型与思考强度后 create-bot，成功后进入新 Bot 的私聊；详情页提供复制（私有 Bot 不提供，成功后进入副本私聊）与删除（Main Bot 不提供，二次确认）；团队有保留关闭的已删除私有 Bot 时，团队页提供入口逐个释放（private-release，二次确认）
+    - 所有写操作经 /api/bot 发出、不自动重试，失败显示服务端给出的原因；成功后静默补取一次 state 增量并依赖 feed revision 刷新，两端设置一致
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第一条：在 App 中新建 Bot 并设置名称、角色、指令、模型、思考强度与权限预设后网页端立即显示相同设置；复制、删除、设为 Main Bot、标记私有在两端一致
+    - 目前手机上只能聊天，管理 Bot 必须回到电脑网页端；详情页仍是骨架占位
+scope:
+  in:
+    - android-dsbot 规格新增 bot-manage 要求；tech/dsbot-api 登记 Bot 管理端点（create-bot、update-bot、duplicate-bot、delete-bot、set-main、private-release、set-flags、efforts）的请求/响应形态与实测状态
+    - core：BotManage（state 中 Bot 资料、模型目录、思考强度、权限目录、保留关闭的私有 Bot 解码；名称校验与重名检查；私有/Main/删除/复制可用性判定；运行引擎变更判定；各写端点请求体）与 JUnit
+    - App：Bot 详情页、新建 Bot 页、全屏选择页（模型/思考强度/权限/外观）、二次确认、私聊页顶部详情入口、团队页新建 Bot 与保留私有 Bot 入口、返回栈；mock-dsh-server --manage 模式供模拟器验收
+  out:
+    - 工作文件夹选择（dsbot-folders）、头像库与相册导入（dsbot-avatars）、成员 Agent 入口（dsbot-member-agents）、记忆（dsbot-memory）、侧栏分组（dsbot-sidebar-sections）、群管理（dsbot-group-manage）、团队偏好（dsbot-prefs-theme）
+    - 浏览器授权、能力与电脑操作设置、日程（dsbot-native-integrations 里程碑）；聊天页头部的模型快速切换抽屉；本地乐观写入
+unchanged_behavior:
+  - 私聊、群聊、停靠区、聊天条、提醒横幅、发送箱与团队页列表/搜索/未读的既有行为不变；连接、feed 增量同步与兜底轮询不变
+  - 权限预设只有用户能改、Main Bot 不能删除、私有 Bot 不能复制或设为 Main Bot 等约束以服务端为准，客户端只做与网页端一致的入口显隐
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-bot-manage

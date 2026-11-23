@@ -125,6 +125,10 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object Team : ShellPage
         data class Chat(val targetId: String) : ShellPage
         data class Details(val targetId: String) : ShellPage
+        /** 新建 Bot（dsbot-bot-manage）。 */
+        data object NewBot : ShellPage
+        /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
+        data object PrivateArchives : ShellPage
     }
 
 @Composable
@@ -268,6 +272,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                                 connection.barAction(key, endpoint, payload) { connection.chatController.postNotice(it) }
                             },
                             media = connection.media,
+                            onOpenDetails = { connection.openDetails(current.targetId) },
                             onOpenSide = {
                                 val sid = entry?.sessionId
                                 if (sid != null) {
@@ -286,7 +291,27 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     }
                     }
                 }
-                current is ShellPage.Details -> SkeletonPage("details:${current.targetId}")
+                current is ShellPage.Details -> {
+                    // 群目标的详情由 dsbot-group-manage 承接；其余（Bot，含已被删除的）交给 Bot 详情页
+                    if (isRoomEntry(connection, current.targetId)) {
+                        SkeletonPage("details:${current.targetId}")
+                    } else {
+                        BotDetailsPage(
+                            state = connection.stateSnapshot?.raw,
+                            botId = current.targetId,
+                            api = connection.manageApi,
+                            // 写完成时用户可能已离开该页：只在仍停留在本详情页时跳转
+                            onOpenChat = { id -> if (connection.page == current) connection.openChat(id) },
+                            onDeleted = { if (connection.page == current) connection.goHome() },
+                        )
+                    }
+                }
+                current is ShellPage.NewBot -> NewBotPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    onCreated = { id -> if (connection.page == ShellPage.NewBot) connection.openChat(id) },
+                )
+                current is ShellPage.PrivateArchives -> PrivateArchivesPage(connection.stateSnapshot?.raw, connection.manageApi)
                 else -> {
                     // 某主机首次出现团队：以当前最近活动打底，免得整页未读（之后的新活动照常显示）
                     val team = connection.team
@@ -300,6 +325,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     team = connection.team,
                     onOpenChat = { id -> connection.openChat(id ?: "unknown") },
                     isUnread = { e -> connection.isUnread(e, open = false) },
+                    onNewBot = { connection.openNewBot() },
+                    archivedPrivate = work.keepwriting.core.BotManage.privateArchives(connection.stateSnapshot?.raw).size,
+                    onOpenArchived = { connection.openPrivateArchives() },
                 )
                 }
             }
@@ -309,6 +337,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
         }
     }
 }
+
+private fun isRoomEntry(connection: NativeShellConnection, id: String): Boolean =
+    connection.team?.sections.orEmpty().flatMap { it.entries }.firstOrNull { it.id == id }?.kind == TeamHome.Entry.Kind.ROOM
 
 @Composable
 private fun StatusDot(status: DsbotConnection.Status) {
@@ -805,7 +836,17 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         executor.execute { machine.onBackground() }
     }
 
+    /** 返回栈（主线程读写）：团队页为根；聊天页总在团队页之上，详情/新建等页压在当前页之上。 */
+    private val backStack = ArrayList<ShellPage>()
+
+    private fun push(next: ShellPage) {
+        backStack.add(page)
+        page = next
+    }
+
     fun openChat(id: String) {
+        backStack.clear()
+        backStack.add(ShellPage.Team)
         page = ShellPage.Chat(id)
         // 记住上次打开的聊天（只存 id 与类型，启动预取用；dsbot-chat-cache）
         val kind = if (isRoom(id)) "room" else "bot"
@@ -895,12 +936,62 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         if (prefs.getString(LAST_CHAT_KIND, "bot") == "room") roomChatController.prefetch(id) else chatController.prefetch(id)
     }
 
-    fun openDetails(id: String) {
-        page = ShellPage.Details(id)
-    }
+    fun openDetails(id: String) = push(ShellPage.Details(id))
+
+    fun openNewBot() = push(ShellPage.NewBot)
+
+    fun openPrivateArchives() = push(ShellPage.PrivateArchives)
 
     fun goBack() {
+        page = if (backStack.isEmpty()) ShellPage.Team else backStack.removeAt(backStack.size - 1)
+    }
+
+    /** 回到团队页并清空返回栈（删除 Bot 后）。 */
+    fun goHome() {
+        backStack.clear()
         page = ShellPage.Team
+    }
+
+    /** Bot 管理写操作在途键：主线程登记（点按当场判重），executor 结束时移除。 */
+    private val manageInFlight = androidx.compose.runtime.mutableStateListOf<String>()
+
+    /**
+     * Bot 管理写操作（dsbot-bot-manage），主线程调用：同键在途直接忽略；网络在读线程发出、不自动重试；
+     * 成功后先静默补取一次 state 增量（结果尽快上屏，feed revision 照常驱动后续刷新），再回调 [onOk]；
+     * 失败回调可读原因（服务端 message 优先）。回调都投回主线程。
+     */
+    fun manageAction(key: String, endpoint: String, payloadJson: String, onOk: (work.keepwriting.core.Json.Value) -> Unit, onError: (String) -> Unit) {
+        if (key in manageInFlight) return
+        manageInFlight.add(key)
+        // 写请求在读线程发出（create/duplicate 可能耗时数秒，不占状态 executor）；补取 state 回到状态 executor
+        readOffExecutor(endpoint, payloadJson) { result ->
+            if (result is DsbotApi.Result.Ok) lastState.let { fetchStateOnce(it?.revision, it?.liveKey, quiet = true) }
+            mainHandler.post {
+                manageInFlight.remove(key)
+                when (result) {
+                    is DsbotApi.Result.Ok -> onOk(result.value)
+                    is DsbotApi.Result.BotError -> onError(work.keepwriting.core.BotManage.errorText(result.code, result.message))
+                    is DsbotApi.Result.Failure -> onError(work.keepwriting.core.BotManage.errorText(null, null))
+                }
+            }
+        }
+    }
+
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** 详情/新建页用的管理入口；efforts 读取在读线程，结果投回主线程。 */
+    val manageApi: ManageApi by lazy {
+        ManageApi(
+            inFlight = manageInFlight,
+            action = ::manageAction,
+            efforts = { ref, cb ->
+                readExecutor.execute {
+                    val r = postBot("efforts", work.keepwriting.core.BotManage.Requests.efforts(ref))
+                    val e = work.keepwriting.core.BotManage.efforts((r as? DsbotApi.Result.Ok)?.value)
+                    mainHandler.post { cb(e) }
+                }
+            },
+        )
     }
 
     fun stop() {

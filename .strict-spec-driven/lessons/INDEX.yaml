@@ -188,7 +188,7 @@ categories:
     wslg-weston-7217b7:
       title: WSLg 的 Weston 不支持窗口最小化，不能用它验证最小化/恢复
       status: active
-      occurrences: 4
+      occurrences: 5
       path: .strict-spec-driven/lessons/tooling/wslg-weston-7217b7.yaml
     wails3-update-build-assets-build-ios-plist-72a1b8:
       title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
@@ -300,6 +300,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/generate-tasks-status-complete-apply-5f7615.yaml
+    windows-adb-adb-devices-device-adb-shell-kill-se-bc6520:
+      title: Windows 侧 adb 服务端卡死：adb devices 显示 device 但 adb shell 全部挂起，先 kill-server 再判断模拟器
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/windows-adb-adb-devices-device-adb-shell-kill-se-bc6520.yaml
   ui:
     compose-key-compose-7f09bd:
       title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态

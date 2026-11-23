@@ -292,3 +292,31 @@ slider/number/choice/toggle、options/confirm/form/submit；上限 8 层、64 �
 action, values}`，values 为 `{inputs?}` 加 options→`selected[]`、confirm→`confirmed`、form→`fields{}`/`canceled:true`，
 submit 只带 inputs；服务端以 validateViewAnswer 校验，视图已关闭回 bot/stale。客户端（core ViewCard）逐条移植上述校验，
 另加序列 ≤ 8、点数 ≤ 50 的绘制上限，不通过即降级只读摘要。
+
+## 19. Bot 管理端点（2026-11-23，dsbot-bot-manage）
+
+**实测（只读，DS-Bot 0.3.10）**：
+
+| 请求 / 字段 | 应答（实测） |
+|---|---|
+| `efforts {ref}`（有级别的模型） | `{efforts:[{id:"low",name:"Low"},{id:"high",name:"High"},{id:"max",name:"Max"}]}`，本机无 `defaultEffort` |
+| `efforts {ref}`（无级别或未知 ref） | `{efforts:[]}` |
+| state `bots[]` 管理字段 | `model`、`appliedModel`、`effort`、`appliedEffort`、`permission`（仅 1 个 Bot 设过）、`color`、`avatar{shape}`、`workDir`；`private/pinned/hidden/sectionId` 本机无样本 |
+| state `models[]` | `{ref,provider,providerName,id,name,input[]}`，Bot 在用的模型另带 `reasoning{efforts[]}` |
+| state `permissions` | `{options:[{value,name}], defaultPreset}`（夹具 state-full.json） |
+| state `privateArchives` | `[]`（本机无已删除私有 Bot） |
+
+夹具：`efforts.json`、`efforts-empty.json`。
+
+**源码核对、未对真实团队写入**（真实服务是用户在用的团队：新建会触发真实模型问候，删除不可逆）：
+`create-bot {name, role?, instructions?, color?, avatar?{shape?|image?}, model?, effort?, workDir?, sectionId?}` → 新 Bot 对象；
+`update-bot {id, …patch}`（name/role/instructions/color(null 清除)/avatar(null 清除)/model/effort(null=模型默认)/permission/
+private/workDir；运行引擎（本地 Agent 与模型之间）变化须 `changeEngine:true`）→ 更新后的 Bot；`duplicate-bot {id}` → 副本 Bot
+（私有 Bot 拒绝）；`delete-bot {id}`（Main Bot 拒绝）、`private-release {id}`、`set-main {id, main, primary?, replace?}`
+（私有 Bot 拒绝、唯一 Main 不可取消）→ 整份 state 视图；`set-flags {id, pinned?, hidden?, sectionId?}` → 该条目。拒绝为
+`{ok:false, error:{code:"bot/refused", message}}`，message 是具体原因（channel.js handle 的 catch 经 errorCode：普通 Error →
+bot/refused，内部异常 → bot/internal，客户端对 bot/internal 不显示原文）。换模型时上游保留 effort，新模型不支持该级别时按模型默认。
+**与网页端的差异**：网页端切换运行引擎时附带 `avatarAfter`（换掉本地 Agent 徽标照片），手机拿不到徽标图，只发
+`{model, changeEngine:true}`，徽标照片的处理留给 dsbot-avatars。
+位置：channel.js、roster.js、privacy.js、permissions.js、models.js reasoningOf、shared/mentions.js nameProblem。
+模拟器验收用 `node scripts/mock-dsh-server.mjs --manage` 注入同一形态。

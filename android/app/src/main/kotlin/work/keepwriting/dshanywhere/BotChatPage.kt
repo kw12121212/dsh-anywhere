@@ -74,6 +74,8 @@ fun BotChatPage(
     botId: String,
     parts: List<String>,
     onOpenSide: () -> Unit = {},
+    /** 打开 Bot 详情页（dsbot-bot-manage）。 */
+    onOpenDetails: () -> Unit = {},
     onOpenLink: (String, Boolean) -> Unit = { _, _ -> },
     /** 最近 state 快照（含 live 字段），派生 0.3.10 聊天条（dsbot-chat-bars-0310）；null 时不显示。 */
     state: work.keepwriting.core.Json.Value.Object? = null,
@@ -277,7 +279,7 @@ fun BotChatPage(
         if (controller.streamingText != null) {
             StreamingBubble(controller.streamingText ?: "")
         }
-        ChatActionRow(controller, parts, onPickPart = { showPartsDialog = true }, onOpenSide = onOpenSide)
+        ChatActionRow(controller, parts, onPickPart = { showPartsDialog = true }, onOpenSide = onOpenSide, onOpenDetails = onOpenDetails)
         controller.notice?.let {
             Text(
                 it,
@@ -651,7 +653,7 @@ private fun ImageRow(item: ChatRender.Item.Image, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun ChatActionRow(controller: ChatController, parts: List<String>, onPickPart: () -> Unit, onOpenSide: () -> Unit = {}) {
+private fun ChatActionRow(controller: ChatController, parts: List<String>, onPickPart: () -> Unit, onOpenSide: () -> Unit = {}, onOpenDetails: () -> Unit = {}) {
     // 停止/恢复已并入输入区图标按钮；此处只保留会话操作。
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -663,6 +665,7 @@ private fun ChatActionRow(controller: ChatController, parts: List<String>, onPic
         }
         TextButton(onClick = onOpenSide) { Text(tr("侧问", "Side chat")) }
         TextButton(onClick = { controller.showStats() }) { Text(tr("统计", "Stats")) }
+        TextButton(onClick = onOpenDetails) { Text(tr("详情", "Details")) }
     }
 }
 

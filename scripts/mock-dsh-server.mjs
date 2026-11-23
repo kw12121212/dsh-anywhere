@@ -2,10 +2,11 @@
 // 监听 127.0.0.1:13080，模拟器经 10.0.2.2:13080 访问宿主。
 // 页面包含：流式 chunked 输出、同源链接、外部链接、window.open（同源/外部）、
 // file: 打开按钮、跨主机 http 子资源引用。
-// 用法：node scripts/mock-dsh-server.mjs [--port 13080] [--status <code>] [--delay <ms>] [--chat-bars] [--chat-cache] [--notices] [--outbox] [--dock] [--read-state] [--reader] [--rich]
+// 用法：node scripts/mock-dsh-server.mjs [--port 13080] [--status <code>] [--delay <ms>] [--chat-bars] [--chat-cache] [--notices] [--outbox] [--dock] [--read-state] [--reader] [--rich] [--manage]
 import { createServer } from 'node:http'
 import { writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
+import { createManageTeam } from './mock-dsh-manage.mjs'
 
 function argValue(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -58,6 +59,10 @@ const readerMode = process.argv.includes('--reader')
 // view-reply 校验 viewId/action 后移除该卡片并推 revision；聊天含宽表格、任务列表、本地路径与 data 图片，
 // markdown-image 对 /work/ 下路径返回 PNG、其余 bot/forbidden（dsbot-rich-render 模拟器验收）。
 const richMode = process.argv.includes('--rich')
+// --manage：可变的内存团队与 Bot/群/团队管理端点（dsbot-native-manage 里程碑模拟器验收，见 mock-dsh-manage.mjs）；
+// 写入后经 feed 推 revision，日志只记端点与参数键。
+const manageMode = process.argv.includes('--manage')
+const manage = manageMode ? createManageTeam((revision) => setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision })}\n\n`)), 50)) : null
 const richClosed = new Set()
 const richRevision = { n: 30 }
 function richViews() {
@@ -412,6 +417,17 @@ const server = createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, value: { current: '9.9.9', dsh: { current: '9.9.9' } } }))
         return
+      }
+      if (manageMode) {
+        let payload = {}
+        try { payload = JSON.parse(body).payload ?? {} } catch {}
+        const out = manage.handle(endpoint, payload)
+        if (out) {
+          if (endpoint !== 'state' && endpoint !== 'chat') console.log('  manage:', endpoint, Object.keys(payload).join(','), out.ok ? 'ok' : 'refused: ' + out.error.message)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(out))
+          return
+        }
       }
       if (outboxMode && endpoint === 'state') {
         // 发送箱验收：Bot 都空闲（输入区显示发送按钮而不是停止按钮）

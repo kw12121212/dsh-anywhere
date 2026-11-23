@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-10-27T14:52:53.385Z'
-updated_at: '2026-11-22T16:46:40.534Z'
+updated_at: '2026-11-23T15:35:45.464Z'
 context: single-instance 验证需要在 WSLg 下最小化主窗口、再次启动应用，确认窗口恢复并聚焦。
 observation: WSLg Weston 的 xprop -root _NET_SUPPORTED 只列出移动、最大化、全屏和 _NET_ACTIVE_WINDOW，没有隐藏或最小化状态；对 GTK4 窗口调用 Wails Minimise() 后 is-minimised 仍为 false，窗口保持 viewable，XIconifyWindow 发送 WM_CHANGE_STATE 也没有效果。
 takeaway: 在 WSLg 上做窗口最小化、恢复或窗口状态持久化的端到端验证前，先检查 _NET_SUPPORTED 是否声明最小化/隐藏状态；不支持时改用单元测试加 Wails 源码依据覆盖分支，并在真实桌面或带窗口管理器的 CI runner 复验，不要把“未能最小化”当成实现缺陷。
@@ -26,3 +26,6 @@ occurrences:
   - origin: dsbot-chat-bars-0310
     date: '2026-11-22'
     evidence: 2026-11-23 完整回归在 DISPLAY=:0（WSLg）下 window-state 三项失败（位置偏移 6,27），本变更未改桌面代码；按 takeaway 改用 xvfb-run -a 运行同一回归命令 42 通过 2 跳过
+  - origin: dsbot-bot-manage
+    date: '2026-11-23'
+    evidence: 2026-11-23 dsbot-bot-manage 完整回归在 DISPLAY=:0 下 window-state 三项失败（位置 6,27 对 60,40），本变更未改桌面代码；xvfb-run -a 包裹同一命令 EXIT=0（e2e 42 通过 2 跳过）

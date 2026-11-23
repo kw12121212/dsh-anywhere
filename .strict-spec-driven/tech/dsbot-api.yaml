@@ -117,3 +117,22 @@ rules:
     enforcement:
       method: test
       detail: core JUnit（PendingDockTest）以源码核对形态的 state 样本覆盖各来源的汇集、会话/归属过滤、answerable=false 排除、排序与作答请求体字面值；CardsTest 以真实夹具同构的 answer 条目断言只读「已回答」。源码核对位置：ds-bot 0.3.10 src/host/channel.js（view/live、answer-question、view-reply、dismiss-*、approval-answer、btw-delete、browser-give-back、answerQuestion、answerView）、approvals.js（approvalsView、answerApproval、OUTCOMES）、secrets.js（requestsOf、secret-set/allow/cancel）、tools.js（state.questions/views 写入）、learning.js、connectors/index.js、browser.js（setHold）、parts.js（REPLY_KIND 回复记录、questionReply）
+  bot-manage-endpoints-0310:
+    strength: MUST
+    statement: Bot 管理端点（DS-Bot 0.3.10）：create-bot {name, role?, instructions?, color?, avatar?{shape?}, model?, effort?, workDir?, sectionId?} → value 为新 Bot 对象（含 id）；update-bot {id, …patch}（name/role/instructions/color(null 清除)/avatar(null 清除)/model/effort(null=模型默认)/permission/private/workDir；改变运行引擎时须带 changeEngine:true）→ value 为更新后的 Bot；duplicate-bot {id} → value 为副本 Bot；delete-bot {id}、private-release {id}、set-main {id, main, primary?, replace?} → value 为整份 state 视图；set-flags {id, pinned?, hidden?, sectionId?} → value 为该条目；efforts {ref} → {efforts[{id,name,description?}], defaultEffort?}（实测，无级别时 efforts 为空数组）。拒绝统一为 {ok:false, error:{code, message}}，message 是具体原因。state 中的 Bot 字段（model/appliedModel/effort/appliedEffort/permission/private/pinned/hidden/color/avatar{shape?,image?}/workDir/sectionId）、models[{ref,provider,providerName,id,name,input,reasoning?,needsKey?}]、permissions{options[{value,name}],defaultPreset}、privateArchives[{id,name,workDir?}] 实测；写端点为源码核对，未对用户真实团队执行写入
+    rationale: 这些端点 0.3.6 起已存在但从未登记进端点清单；真实服务是用户在用的团队，新建会触发真实模型问候、删除不可逆，写端点只能源码核对并在 mock 上验收，必须标明实测状态，避免后续把源码核对当实测
+    enforcement:
+      method: review
+      detail: core JUnit（BotManageTest）以真实 state-full/efforts 夹具覆盖解码、以字面值断言各写端点请求体；源码核对位置：ds-bot 0.3.10 src/host/channel.js（create-bot、update-bot、duplicate-bot、delete-bot、private-release、set-main、set-flags、efforts、错误信封）、roster.js（createBot/buildBot、updateBot、duplicateBot、setFlags、setMain、deleteBot、cleanAvatar）、privacy.js（releaseArchive、archivesView）、permissions.js（permissionCatalog、setPermission）、models.js（reasoningOf）、shared/mentions.js（nameProblem）；FINDINGS 第 19 节登记
+  manage-write-feedback:
+    strength: SHOULD
+    statement: 原生管理类写操作（Bot、群、侧栏分组、文件夹、头像、记忆、成员 Agent、团队偏好等 /api/bot 写端点）统一经一个写通道：点按线程（主线程）登记在途键防重复；网络在读线程发出、不自动重试；成功后不做本地乐观修改，静默补取一次 state 增量并继续由 feed revision 驱动刷新；失败显示服务端 error.message（bot/internal 的原文不显示，改用通用文案），message 为空时按错误码映射；删除、遗忘、释放等不可逆操作先二次确认；写完成后的页面跳转只在用户仍停留在发起页时执行
+    rationale: dsbot-native-manage 里程碑 details 约定写操作不自动重试、依赖 feed 刷新并显示服务端原因；dsbot-bot-manage 评审发现写请求占用状态 executor 会卡住 feed 合并、bot/internal 会泄露内部异常原文、写完成后无条件跳转会把已离开的用户拉回——同里程碑其余 7 个变更都要重复这套写路径，登记为约定避免逐个重犯
+    enforcement:
+      method: review
+      detail: 评审检查新增管理写操作是否经 NativeShellConnection.manageAction（或同等通道）：在途键主线程登记、readOffExecutor 发出、成功后 fetchStateOnce、失败经 BotManage.errorText；不可逆操作有确认框；onOk 跳转前判断当前页
+    examples:
+      good:
+        - api.action(key, "delete-bot", body, { if (connection.page == current) connection.goHome() }) { error = it }（确认框确认后调用）
+      bad:
+        - 在状态 executor 上同步 postBot 并在成功后无条件 openChat；或把 bot/internal 的 message 原样显示给用户

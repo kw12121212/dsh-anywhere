@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-bot-manage
+approach:
+  - App：ShellPage 增加 NewBot 与 PrivateArchives，Details 对 Bot 目标渲染 BotDetailsPage（群目标保持骨架，由 dsbot-group-manage 填充）；返回栈改为列表，详情从私聊进入时返回私聊。BotDetailsPage 分节：资料（名称/标签/指令，各自编辑后保存）、模型（模型与思考强度入口）、权限（预设入口）、外观（形象与颜色网格）、工作文件夹（只读）、隐私（私有开关与说明）、Main Bot、侧栏（置顶/隐藏）、管理（复制/删除）。写操作经 NativeShellConnection.manageAction(endpoint, payload, onOk, onError)：在途键防重复、读线程发出、Ok 后静默补取 state 增量；错误文案优先取服务端 message。选择页为全屏 Dialog；删除与释放用 AlertDialog 二次确认。
+  - core BotManage.kt：profileOf(state, botId) 从 state.raw 的 bots[] 解码 BotProfile{id,name,role,instructions,model,appliedModel,effort,permission,private,pinned,hidden,color,shape,hasPhoto,workDir,sectionId,isMain,isTile(mainBotIds[0]),inGroup(任一 rooms[].members 含该 id)}；models(state) 把 state.models 按 providerName 分组（保持服务端顺序），engineOf(ref)= provider 以 local- 开头即该 provider、否则 model；efforts(value) 解码 {efforts[{id,name,description?}], defaultEffort?}；permissions(state) 解码 {options[{value,name}], defaultPreset}；privateArchives(state) 解码 [{id,name,workDir?}]；nameProblem(name, others, selfId) 复刻上游 shared/mentions.js（空、含 @/反引号/换行、群呼叫词 all/everyone/所有人/全体、用户代称 user/you，均不区分大小写）与 40 字截断、重名（trim+小写比较，排除自身）；canPrivate/canMain/canDelete/canDuplicate/canHide 按网页端 BotSettings 的显隐规则；needsEngineConfirm(当前 ref, 新 ref)；Requests 生成各写端点请求体（字符串经 JsonString 转义，null 表示清除）。
+decisions:
+  feed-refresh-not-optimistic:
+    decision: 写成功后不做本地乐观修改，而是静默补取一次 state 增量，并继续依赖 feed revision 事件刷新详情页与团队页。
+    rationale: 里程碑 details 明确「成功后依赖 feed 的 revision 事件刷新状态而非本地乐观修改」；planned change 提到的上游乐观写入只是可选替代，乐观补丁需要在途叠加与失败回滚，复杂度高且容易让两端暂时不一致；补取增量（与聊天条 barAction 一致）已能让结果在一次往返内上屏。
+  server-reason-text:
+    decision: 写失败时优先显示服务端 error.message（如名称不可用、私有 Bot 不能设为 Main Bot），message 为空时按错误码映射为可读原因；网络失败显示网络错误。
+    rationale: 里程碑要求被拒绝时显示服务端给出的原因；上游 roster.js 的拒绝都以 Error(message) 抛出、经 channel.js 以 fail(message, code) 返回，message 是唯一能说明具体原因的字段。
+  shapes-as-labels:
+    decision: 外观选择以文字标签加颜色圆点呈现 20 种形象与 12 种颜色（与网页端 CHARACTERS/CHARACTER_COLORS 同名同序），不在 App 内复刻上游 SVG 形象图。
+    rationale: App 目前没有任何头像渲染，复刻 20 个上游 SVG 图形属于视觉资产搬运且超出本变更；保存的值（avatar.shape、color）与网页端完全一致，网页端按同一值渲染，两端设置一致即满足完成标准。
+  write-endpoints-source-checked:
+    decision: efforts 与 state 中 Bot/模型/权限字段对真实服务只读实测并补夹具；写端点（create/update/duplicate/delete/set-main/private-release/set-flags）只做 0.3.10 源码核对并在 mock 上验收，不对用户真实团队执行写入。
+    rationale: 真实服务是用户正在使用的 12 个 Bot 的团队，新建 Bot 会触发真实模型问候、删除不可逆；项目约定不得改动真实数据。写端点形态在 channel.js/roster.js/privacy.js 中直接可读，登记为源码核对并在 tech 中注明，后续有安全样本时再补实测。
+alternatives:
+  - option: 在聊天页头部加模型快速切换底部抽屉（上游手机端做法）
+    reason: 属于聊天页交互改动，本变更只交付详情页内的模型选择；放进来会扩大对既有私聊页的改动面，记为范围外。
+risks:
+  - 写端点未对真实服务实测：字段名以 0.3.10 源码为准，若上游再变化，失败会以服务端原因显示，不会静默改坏数据
+  - 名称本地校验与上游规则可能漂移：本地校验只用于提前提示，最终以服务端拒绝原因为准
+  - 与网页端差异：网页端切换运行引擎时附带 avatarAfter 换掉本地 Agent 徽标照片，手机拿不到徽标图只发 {model, changeEngine:true}，徽标照片留给 dsbot-avatars 处理（FINDINGS 第 19 节登记）

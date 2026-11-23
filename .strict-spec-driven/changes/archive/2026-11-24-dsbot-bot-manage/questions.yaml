@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-bot-manage
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：路线图计划变更 dsbot-bot-manage 与里程碑 dsbot-native-manage。
+    answer: 手机用户只能和 Bot 聊天，新建、编辑、复制、删除 Bot 以及设置模型、思考强度、权限、Main Bot、私有都必须回到电脑网页端；App 的详情页仍是骨架占位。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第一条。
+    answer: 在 App 中新建 Bot 并设置名称、角色、指令、模型、思考强度与权限预设后网页端立即显示相同设置；复制、删除、设为 Main Bot、标记私有在两端一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：Bot 详情页（从私聊页进入）展示并编辑名称、角色、指令、模型、思考强度、权限预设、私有、Main Bot 与标记；实现 create/update/duplicate/delete（二次确认）/set-main/private-release/set-flags；模型与思考强度来自 models/efforts；外观为 20 种形象与 12 种颜色；权限预设只有用户能改；保存后以 feed 刷新确认。工作文件夹选择、头像库、成员 Agent 由同里程碑后续变更承接。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 私聊、群聊、停靠区、聊天条、团队页列表与连接同步行为不变；服务端约束（Main Bot 不能删、私有 Bot 不能复制或设为 Main 等）不在客户端另起规则；文件夹、头像库、记忆、成员 Agent、侧栏分组、群管理、团队偏好属于后续变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: dsbot-mobile-polish 已完成，脚本推荐的下一个可做变更即本项；同里程碑其余 7 个变更都依赖它。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: optimistic-or-feed
+    question: 计划变更提到上游手机端的乐观写入，里程碑 details 要求依赖 feed 刷新，按哪个做？
+    context: 影响范围：设计与实现文件。两者互斥：乐观写入需要在途补丁叠加与失败回滚。
+    answer: 按里程碑 details：成功后静默补取 state 增量并依赖 feed revision 刷新，不做本地乐观修改（design 决策 feed-refresh-not-optimistic）；计划变更原文写的是「可替代」，非必须。
+    status: resolved
+    answered_by: roadmap

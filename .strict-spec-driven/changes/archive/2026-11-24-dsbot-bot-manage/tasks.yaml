@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-bot-manage
+sections:
+  Implementation:
+    core-bot-manage:
+      text: core 新增 BotManage.kt：Bot 资料、模型目录（按服务商分组）、思考强度、权限目录、保留关闭的私有 Bot 解码；名称校验与重名；私有/Main/删除/复制/隐藏可用性；运行引擎变更判定；create-bot/update-bot/duplicate-bot/delete-bot/set-main/private-release/set-flags/efforts 请求体
+      status: complete
+    fixture-efforts:
+      text: 补真实夹具 efforts.json（对真实服务只读实测 efforts，含级别列表）与 efforts-empty.json；FINDINGS 第 19 节登记 Bot 管理端点实测/源码核对状态
+      status: complete
+    app-shell-nav:
+      text: NativeShell：返回栈改为列表（详情从私聊进入时返回私聊）、ShellPage 增加 NewBot 与 PrivateArchives、Details 对 Bot 渲染 BotDetailsPage；manageAction 写操作通道（在途防重、读线程发出、成功后静默补取 state、失败给服务端原因）
+      status: complete
+    app-bot-details:
+      text: BotDetailsPage.kt：资料（名称/标签/指令编辑保存）、模型与思考强度、权限预设、外观（形象与颜色）、工作文件夹只读、私有开关、Main Bot、置顶/隐藏、复制、删除（二次确认）；全屏选择页；引擎变更二次确认
+      status: complete
+    app-new-bot:
+      text: NewBotPage 与团队页入口（新建 Bot、保留关闭的私有 Bot 列表与释放）；私聊页顶部详情入口；中英文案
+      status: complete
+    mock-manage:
+      text: mock-dsh-server 增加 --manage 模式（scripts/mock-dsh-manage.mjs）：可变的团队（Bot、模型含 reasoning、权限目录、privateArchives），实现 Bot 管理写端点与 efforts、按上游规则拒绝（含以 held 开头的保留名称），写后推 feed revision，日志只记端点与参数键
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：BotManageTest（真实 state 夹具与 efforts 夹具解码、模型分组与引擎判定、名称校验各分支与重名、可用性规则、各请求体字面值与转义、畸形输入降级）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 或 DISPLAY=:0 运行 e2e）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：私聊页进入详情；改名、标签、指令、模型、思考强度、权限、外观、置顶后 mock 收到的参数正确且页面刷新；私有开关在不满足条件时禁用并说明；设为/取消 Main Bot；复制后进入副本私聊；删除二次确认后回到团队页；新建 Bot 重名本地提示、成功后进入新私聊；释放保留的私有 Bot；服务端拒绝时显示原因
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-bot-manage
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit
