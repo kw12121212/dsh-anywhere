@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-phone-prefs
+approach:
+  - core：PhonePrefs.Appearance{SYSTEM, LIGHT, DARK} 与 Language{SYSTEM, ZH, EN} 的 parse（未知/缺失回退 SYSTEM）与 resolve(language, systemTag)（SYSTEM 时系统语言以 zh 开头为 ZH，否则 EN）；I18n.tr(zh, en) 按 I18n.lang 输出，lang 优先取 App 注入的来源 I18n.source（未注入时为设定值，供 JVM 测试）。ChatBars/WorkPhrase 的 lang 参数默认值改为 I18n.lang；Notices.banner、PendingDock 类型标签与缺省标题、Cards 只读提示与「已回答」、TeamHome 缺省分组名与待办摘要、JumpButton 文案、BotStatsText 统计文案经 I18n.tr 输出。
+  - App：AppGraph.phone（PhonePrefsStore，SharedPreferences 文件 phone，键 appearance/language，AppGraph.load 时即初始化）持有可观察的 appearance、language 与 lang（实际语言），并把 I18n.source 设为读取 lang 状态；App 的 tr(zh, en) 即 I18n.tr。组合期间调用任何文案都读取该状态而订阅，切换语言时只有用到文案的调用处重组，不用 key 整体重建，输入草稿、滚动位置、停靠区已作答记录与设置页滚动都保留；以文案为结果的 remember 计算把 I18n.lang 加入键。连接对象里预先组装的团队列表在语言变化时由 NativeShellConnection.relocalize 在 executor 上按新语言重组装。MainActivity：colorScheme 按外观与系统深色判定（Android 12+ dynamicLight/DarkColorScheme）；系统栏图标明暗跟随应用外观，Android 15 以下栏底色同步为界面底色；以 ContextWrapper 覆盖 getResources 为按语言配置的资源，经 CompositionLocalProvider 提供给 stringResource。设置页新增外观与语言单选卡片（整行 selectable、单选语义）。新增 res/values-en/strings.xml；代码内中文字面量改为 tr("中文", "English")；诊断上报文本保持中文。Haptics.kt 统一 confirm/reject 触感（API 30+ CONFIRM/REJECT），发送箱与停靠区改用。
+decisions:
+  inline-pairs-not-resources:
+    decision: 代码内文案用 tr(中文, English) 对照函数而非全部迁移到 strings.xml；已有的资源字符串补 values-en。
+    rationale: 约 260 处文案分散在控制器（executor 线程生成的提示）、页面与 core（纯 JVM，无 Android 资源）里，资源化需要把 Context 传进控制器与 core；对照函数与 core 已有的 ZH/EN 做法一致，切换即时、改动可机械完成且可由 JUnit 覆盖 core 部分。
+  prefs-sharedpreferences:
+    decision: 外观与语言保存在独立的 SharedPreferences 文件 phone，而非计划变更提到的 DataStore。
+    rationale: 与 App 现有偏好（tunnel、updates、chat、notices）一致，免新增依赖；单个枚举值的本机持久化 SharedPreferences 足够，符合 state-persistence 的 separate-state-files。
+alternatives: []
+risks:
+  - 核心以外的少量文本（诊断报告、HTTP 底层错误细节、spike 工具）仍为中文或原文，属范围外
+  - 已显示的一次性提示（提醒横幅、错误提示、更新失败原因、已加载聊天行里的「已回答」标题）在切换语言时保持原语言，直到下次刷新

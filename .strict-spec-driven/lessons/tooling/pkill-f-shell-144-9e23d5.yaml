@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: pkill-f-shell-144-9e23d5
+  title: pkill -f 的模式会匹配到执行它的那条 shell 命令自身，命令以 144 退出且后续步骤静默没跑
+category: tooling
+status: active
+created_at: '2026-11-23T14:01:13.824Z'
+updated_at: '2026-11-23T14:01:13.824Z'
+context: dsbot-rich-render：在同一条 Bash 命令里先 pkill -f "mock-dsh-server.mjs --port 13090" 再改 mock 文件、重启 mock
+observation: pkill -f 按完整命令行匹配，执行它的 bash -c 命令行里也含同一字符串，于是把自己杀掉：命令以 exit 144 结束，pkill 之后的 python 改文件没有执行，随后另起的 mock 仍是旧代码，设备验收看到的还是旧行为。
+takeaway: 停后台进程用 ps aux | grep "[n]ode scripts/…" | awk '{print $2}' | xargs -r kill 这类不会匹配自身的写法（方括号技巧），或单独一条命令执行 pkill；看到 144 退出要检查同一命令里 pkill 之后的步骤是否生效。
+applies_when: 在同一条 shell 命令里用 pkill -f/killall 停进程后还要继续做别的事，或命令意外以 144/143 退出时
+occurrences:
+  - origin: dsbot-rich-render
+    date: '2026-11-23'
+    evidence: 'Bash 返回 Exit code 144；grep -c "sessionId: ''s-'' + (/" scripts/mock-dsh-server.mjs 为 0（改动未落盘）'

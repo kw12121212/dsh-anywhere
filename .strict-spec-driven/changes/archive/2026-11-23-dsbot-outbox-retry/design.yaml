@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-outbox-retry
+approach:
+  - 'core Outbox.kt：Outbox 以聊天键（ChatCache.key 同款）保存 Entry(id, chatKey, text 实际提交文本, display 显示文本含附件名, receipts, state SENDING|SENT|FAILED, window 发送时该聊天已知的最大顺序值)；add/entries/get/setState/remove；reconcile(chatKey, userRows: List<(order?, text)>) 分两轮——先按发送顺序为 SENDING/SENT 行、再为 FAILED 行，在 userRows 中找第一条顺序值非空、大于窗口、未被占用、规范化文本相等的服务端用户行，找到即移除；normalize 折叠空白并去首尾。顺序值私聊为 seq、群聊为服务端 time（真实 room-chat 用户行没有 seq，FINDINGS 第 15 节实测）。ImageSizing.target(w, h, max=2048) 返回等比缩小后的尺寸（长边不超过上限时返回 null，不放大），sampleSize 给出不低于目标的 2 的幂采样率。'
+  - App：两个控制器把原先插入 rows 的乐观消息改为发送箱：send/sendOrAttach 在 executor 上建 Entry（私聊窗口取当前 rows 最大 seq；群聊窗口取最近一次读取群页的最大 time，尚未读到时不给自动确认），附件消息把 receipts 与名称转入 Entry 并清空附件栏（附件栏已空的重复点按直接返回），然后发起与原来相同的请求（私聊纯文本 send，附件与群聊 session/prompt）；成功置 SENT 并自增 sentSignal，群聊另立即重读群页（群 feed 只推 room 信号）；失败置 FAILED；retry(id) 仅对当前聊天的 FAILED 行置回 SENDING 并重发同一请求，delete(id) 直接移除。可观察的 outbox 为当前聊天条目的不可变列表（单次写入）。私聊 feed message 的 kind=user（当前聊天、事件带 sessionId 时须为当前会话、seq 未出现过）实时追加为用户行；读取/刷新合并后与 feed 用户行追加后对账；在途实时条目回放带 seq 时按 seq 去重。页面在 LazyColumn 末尾渲染本地行：发送中「发送中…」、已发送「已发送，等待确认」+删除、失败「未发送，点按重试」+删除；只对进入页面后 sendScrollSignal/sentSignal 的变化滚到末尾与触感。附件读取与 ImageCompress 在附件 IO 线程执行、结果投回 executor：非 PNG/GIF 的图片按 EXIF 方向（含翻转与转置）与缩放合成一个矩阵一次生成目标位图，JPEG 82 重编码，未超限与解码失败原样上传。
+decisions:
+  seq-window-match:
+    decision: 对账以「发送时已知最大顺序值」为窗口：只有顺序值大于该值、文本一致的服务端用户行才能消掉本地行；先确认发送中/已发送的行，剩余的服务端行再给未发送的行；顺序值为空的服务端行不参与匹配。
+    rationale: 计划变更要求限定匹配窗口、判断不了时保留本地行；窗口排除聊天里更早已有的同文本消息，先进先出处理快速连发相同内容；两轮匹配避免一条真失败的行抢走后来同文本发送的确认（评审实证）。
+  live-user-rows:
+    decision: feed 的 message 事件中 kind=user 的条目（当前聊天、seq 未出现过）改为实时追加到聊天，作为对账依据。
+    rationale: 原实现靠乐观消息顶替、忽略 feed 用户行，服务端确认只能等刷新（最长 15 秒兜底轮询）才出现，发送箱会长时间停在「发送中」；实时追加还让网页端发出的消息即时出现在手机上。
+  compress-photos-only:
+    decision: 只压缩照片类图片（非 PNG/GIF 的 image/*）：按 EXIF 方向校正后长边超过 2048 才缩小并以 JPEG 82 重编码；PNG（截图、透明图）与 GIF（动图）以及未超限的照片原样上传。
+    rationale: JPEG 重编码会丢 PNG 的透明通道与 GIF 动画；未超限时重编码只会损失画质而不减小多少体积；直接解码会丢 EXIF 方向导致相机照片横躺，必须先校正。
+  outbox-in-memory:
+    decision: 发送箱只在内存中按聊天保存（随连接对象存续），不落盘、不跨进程；失败行不自动重发。
+    rationale: 里程碑只要求切换聊天不丢；落盘会把消息正文写入存储并需要清理策略；不自动重发是计划变更与既有规格的一致要求，避免网络恢复时意外发出过期消息。
+  sent-state-exit:
+    decision: 请求成功后的本地行进入「已发送，等待确认」状态并提供删除，作为服务端行对不上（文本被改写、纯附件消息无文本、无顺序值等）时的退出路径；仍从不自动重发。
+    rationale: 评审实证：只有失败行可删除时，请求成功但对账失败的行会永久停在「发送中」并与正式消息重复显示，违反「由正式消息取代、不重复显示」；给 SENT 行删除入口既不重发也不丢用户的控制权，是 design risk 中「需要用户手动删除」的实际落点。
+  group-time-order:
+    decision: 群聊以服务端 time 为对账顺序值，窗口取发送时群页的最大 time，群页未读到时不自动确认；群消息发送成功后立即重读群页以确认。
+    rationale: 真实 room-chat 的用户条目没有 seq（FINDINGS 第 15 节只读实测），群 feed 也不推群内用户消息；用服务端自己的 time 作顺序既可排除早前的同文本旧消息，又不受手机与服务器时钟偏差影响。
+alternatives: []
+risks:
+  - 服务端用户行文本与发送文本不一致时（例如服务端改写或截断）本地行不会被消掉，需要用户手动删除：宁可多留一行也不重复发送
+  - 按返回键退出 App 界面后连接对象重建，发送箱随之清空（与聊天缓存相同的已知限制）

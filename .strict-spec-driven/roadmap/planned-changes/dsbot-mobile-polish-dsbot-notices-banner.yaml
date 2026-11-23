@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-notices-banner
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 接入 feed notice 事件与 (boot, seq) 游标：非当前聊天的提问、审批、回复、群消息与任务结束显示约 8 秒的应用内横幅，点按进入对应聊天；重连后经 notices 补齐，boot 变化或 reset 时重取整体状态；设置页可关闭横幅
 details: 参考上游 team/notices.ts 与 ShellB 横幅。core：NoticeCursor 记录 (boot, seq)，seq ≤ 已见值的实时 notice 丢弃；重连后以 notices {boot, since} 补齐，boot 不同或服务端返回 reset 时报告需要整体重取；notice kind 白名单（question、approval、message、group、done），未知 kind 忽略；JUnit 覆盖乱序、重复、boot 变化与 reset。App：横幅显示「来源：摘要」，仅针对非当前打开的聊天，8 秒后自动收起，点按经现有导航进入该 Bot 或群聊天，多条到来时只保留最新一条；设置页新增「应用内提醒」开关（本机 DataStore 持久化，默认开）；横幅文本不写入日志与诊断上报。不做系统通知与推送。验收：停在 A 聊天时 B 提问出现横幅并可跳转；dsh 重启后重连不重复弹出已显示过的横幅；关闭开关后不再出现。
 depends_on:

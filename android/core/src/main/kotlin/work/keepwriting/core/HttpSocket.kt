@@ -39,6 +39,8 @@ class HttpSocket(
         url: String,
         headers: List<Pair<String, String>> = emptyList(),
         body: ByteArray? = null,
+        /** 响应体上限：Content-Length 超限不分配直接抛 [HttpException]，分块/读到 EOF 超限即中止。 */
+        maxBody: Int = Int.MAX_VALUE,
     ): Response {
         val u = URI(url)
         val host = u.host ?: throw IllegalArgumentException("URL 缺主机")
@@ -61,7 +63,7 @@ class HttpSocket(
             out.write(sb.toString().toByteArray(Charsets.ISO_8859_1))
             if (body != null) out.write(body)
             out.flush()
-            readResponse(s.getInputStream())
+            readResponse(s.getInputStream(), maxBody)
         }
     }
 
@@ -217,7 +219,7 @@ class HttpSocket(
         }
     }
 
-    private fun readResponse(input: InputStream): Response {
+    private fun readResponse(input: InputStream, maxBody: Int = Int.MAX_VALUE): Response {
         var statusLine = readStatusLine(input) ?: throw HttpException("无状态行")
         var attempts = 0
         while (!statusLine.startsWith("HTTP/") && attempts < 4) {
@@ -245,7 +247,8 @@ class HttpSocket(
         }
         val body: ByteArray = when {
             status == 204 || status == 304 || status in 100..199 -> ByteArray(0)
-            chunked -> ChunkedInput(input).use { it.readBytes() }
+            chunked -> ChunkedInput(input).use { readLimited(it, maxBody) }
+            contentLength > maxBody -> throw HttpException("响应体超过上限")
             contentLength >= 0 -> {
                 val buf = ByteArray(contentLength)
                 var off = 0
@@ -256,9 +259,23 @@ class HttpSocket(
                 }
                 buf.copyOf(off)
             }
-            else -> input.readBytes() // Connection: close 读到 EOF
+            else -> readLimited(input, maxBody) // Connection: close 读到 EOF
         }
         return Response(status, headers, body)
+    }
+
+    /** 读到流结束，超过 [max] 字节即抛 [HttpException]（不无限累积）。 */
+    private fun readLimited(input: InputStream, max: Int): ByteArray {
+        if (max == Int.MAX_VALUE) return input.readBytes()
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(16 * 1024)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            if (out.size() + n > max) throw HttpException("响应体超过上限")
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
     }
 
     private fun readStatusLine(input: InputStream): String? {

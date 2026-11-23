@@ -30,7 +30,7 @@ milestones:
   dsbot-mobile-polish:
     title: 原生 DS-Bot：对照上游手机端打磨聊天体验
     path: roadmap/milestones/dsbot-mobile-polish.yaml
-    status: proposed
+    status: complete
   dsbot-native-manage:
     title: 原生 DS-Bot：Bot、群与团队管理
     path: roadmap/milestones/dsbot-native-manage.yaml

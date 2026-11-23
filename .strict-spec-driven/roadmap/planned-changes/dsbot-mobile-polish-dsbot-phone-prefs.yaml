@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-phone-prefs
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 手机本机偏好：外观（跟随系统/浅色/深色）与语言（跟随系统/简体中文/English）在设置页切换并即时生效、跨重启保留；关键操作触感反馈与系统减少动态效果的统一处理
 details: 参考上游 Settings.tsx、ui/tokens.ts 与 ui/i18n.ts。App：设置页新增「外观」与「语言」项，本机 DataStore 持久化；外观覆盖 Material3 动态/浅色/深色配色，后续 dsbot-prefs-theme 的团队主题与强调色在此基础上叠加（本机外观优先决定明暗）；语言通过 AppCompat 按应用语言切换，补全现有界面的英文字符串资源（strings.xml 与 values-zh），切换后保留导航状态；发送成功、长按、作答成功/警告、停靠区展开统一使用触感反馈封装；动效统一读取系统减少动态效果设置。core：偏好枚举与解析（未知值回退跟随系统），JUnit 覆盖。验收：切换外观与语言后界面即时变化并跨重启保留；英文模式下无中文残留的主要界面文案。 依赖说明：排在 dsbot-notices-banner 之后，是因为两者都在设置页新增本机偏好分组（应用内提醒开关与外观/语言），先后进行避免并行改同一页面。
 depends_on:

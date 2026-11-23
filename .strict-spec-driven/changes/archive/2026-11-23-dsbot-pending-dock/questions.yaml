@@ -1,0 +1,54 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-pending-dock
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：路线图计划变更 dsbot-pending-dock。
+    answer: 一个聊天里同时有审批、提问、卡片时它们散落在长聊天流中，用户要上下翻找、容易漏；学习审批看不到 Bot 要改什么；连接器请求在手机上看不到也不能取消。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第五条。
+    answer: 同时存在审批、提问与卡片时停靠区只展开第一张需要处理的卡片且高度不超过屏幕约一半，作答后自动展开下一张，网页端同步；学习审批显示逐行差异。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：统一的待处理模型、停靠区手风琴（排序、一次展开一张、作答后展开下一张、限高约 52%）、学习审批逐行差异超 8 行折叠、连接器请求取消、作答触感；现有内联卡片的渲染与作答逻辑复用，不改作答语义。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 各卡片作答端点与语义不变；已关闭卡片只读、多问题条目引导网页端、沙箱 HTML 隔离不变；连接器真正连接与管理页由后续里程碑承接；图表富渲染由 dsbot-rich-render 承接。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 里程碑完成标准第五条；依赖 dsbot-baseline-0310 已完成，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: needs-you-page
+    question: 计划变更要求「需要你页按类型分节」，但 App 已没有「需要你」页面，是否要恢复？
+    context: 影响范围：proposal 范围与导航。dsbot-native-chat 期间该汇总页已被团队页行内待办提示取代（TeamPage 实现与注释）。
+    answer: 不恢复（design 决策 no-needs-you-page）：团队页行内提示负责跨聊天入口，停靠区负责聊天内按类型处理。
+    status: resolved
+    answered_by: roadmap
+  - id: state-sourced-scope
+    question: 评审发现 0.3.10 的待处理项都在 state、聊天里的 answer 条目只是回复记录，且既有作答参数已失效。停靠区是否扩展为以 state 为来源并修正作答参数？
+    context: 影响范围：proposal 范围、spec delta（interactive-cards 修改）、实现文件、测试与 tech/dsbot-api。若不扩展，停靠区在真实服务上收不到真正的待处理项，还会把已回答的提问当成待处理。
+    answer: 扩展（design 决策 state-sourced-pending）：计划变更 details 本就写明「统一的 Pending 模型从 state 与聊天条目汇集待处理项（工具审批只计 answerable 不为 false 的）」，以 state 为来源、按 0.3.10 参数作答是让该计划可用的必要条件；show_view 表单交互按里程碑分工留给 dsbot-rich-render，插话留在聊天内联。
+    status: resolved
+    answered_by: roadmap

@@ -2,8 +2,10 @@
 // 监听 127.0.0.1:13080，模拟器经 10.0.2.2:13080 访问宿主。
 // 页面包含：流式 chunked 输出、同源链接、外部链接、window.open（同源/外部）、
 // file: 打开按钮、跨主机 http 子资源引用。
-// 用法：node scripts/mock-dsh-server.mjs [--port 13080] [--status <code>] [--delay <ms>]
+// 用法：node scripts/mock-dsh-server.mjs [--port 13080] [--status <code>] [--delay <ms>] [--chat-bars] [--chat-cache] [--notices] [--outbox] [--dock] [--read-state] [--reader] [--rich]
 import { createServer } from 'node:http'
+import { writeFileSync } from 'node:fs'
+import { deflateSync } from 'node:zlib'
 
 function argValue(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -16,6 +18,135 @@ const port = argValue('port', 13080)
 const status = argValue('status', 200)
 const delayMs = argValue('delay', 0)
 const forbidden = process.argv.includes('--forbidden')
+// --chat-bars：state 额外带 0.3.10 聊天条字段（dsbot-chat-bars-0310 模拟器验收；字段形态为
+// ds-bot 0.3.10 源码核对，见 tech/dsbot-api 的 chat-bars-fields-0310），并处理对应写端点。
+const chatBars = process.argv.includes('--chat-bars')
+// --chat-cache：每个 Bot 的私聊为 40 条长列表、chat 读取延迟 1.5s（区分缓存上屏与网络读取），
+// GET /mock/push?bot=<id>[&feed=1] 追加一条 Bot 消息（feed=1 时同时推 feed message 事件，
+// 否则模拟实时推送遗漏、由兜底轮询补齐）（dsbot-chat-cache 模拟器验收）。
+const chatCacheMode = process.argv.includes('--chat-cache')
+const cacheChats = {}
+function cacheChatOf(botId) {
+  if (!cacheChats[botId]) {
+    cacheChats[botId] = Array.from({ length: 40 }, (_, i) => ({ kind: i % 2 ? 'bot' : 'user', text: `${botId} 第 ${i + 1} 条消息`, turn: Math.floor(i / 2) + 1, seq: i + 1 }))
+  }
+  return cacheChats[botId]
+}
+// --notices：hello 声明 notices 能力、feed 首帧带 boot/seq、notices {boot, since} 补齐；
+// GET /mock/notice?bot=&kind=&text=[&room=][&feed=0] 追加一条提醒（默认同时推 feed notice 事件），
+// GET /mock/restart-boot 换 boot 并断开 feed（模拟 dsh 重启）（dsbot-notices-banner 模拟器验收）。
+const noticesMode = process.argv.includes('--notices')
+const noticeState = { boot: 'boot-' + Date.now(), seq: 0, list: [] }
+const feedResponses = new Set()
+// --outbox：GET /mock/fail-sends?on=1|0 切换发送失败（直接断开连接，客户端得到网络错误）；send 成功时
+// 计数并在 300ms 后经 feed 推送对应的用户消息（kind=user、seq 递增，模拟服务端确认），GET /mock/sends
+// 返回各文本收到的次数；上传的附件另存到 /tmp/dsbot-probe/last-upload.bin（dsbot-outbox-retry 验收）。
+const outboxMode = process.argv.includes('--outbox')
+const outboxState = { fail: false, userSeq: 1000, sends: {}, roomLines: [] }
+// --dock：聊天同时含审批、提问、卡片、密钥与插话，state 的 live learning 带一条技能更新提案、connectorRequests
+// 带一条待处理请求；作答端点记录 id 并从后续应答中移除（dsbot-pending-dock 模拟器验收）。
+const dockMode = process.argv.includes('--dock')
+// --read-state：团队条目都带 lastAt，覆盖预览各优先级（Main Bot、待回答、工作中、群里工作、交接包装预览、仅角色）；
+// GET /mock/bump?id=<bot|room id>[&message=1] 把该条目 lastAt 前移到现在、预览换成新消息并经 feed 推 revision；
+// message=1 时同时推该 Bot 的实时 message 事件（带 time，验收「打开着的聊天收到实时消息随之已读」）（dsbot-read-state）。
+const readStateMode = process.argv.includes('--read-state')
+// --reader：聊天里 Bot 交付文件（files[]：小 md 与 1.3 MB 二进制，file-download 按 512 KiB 分块、带 version）、
+// 用户消息 imageRefs（三张图，image 端点 preview/原图）、群长帖 whole{length,file}（file-text）；
+// hello 声明 image-preview（dsbot-reader-files 模拟器验收）。GET /mock/touch-file 改动大文件的 version（模拟下载中途变更）。
+const readerMode = process.argv.includes('--reader')
+// --rich：state.views 带一张含五种图表、滑块与公式、表格、选项与表单的卡片（s-bot-1）和一张畸形卡片（s-bot-2），
+// view-reply 校验 viewId/action 后移除该卡片并推 revision；聊天含宽表格、任务列表、本地路径与 data 图片，
+// markdown-image 对 /work/ 下路径返回 PNG、其余 bot/forbidden（dsbot-rich-render 模拟器验收）。
+const richMode = process.argv.includes('--rich')
+const richClosed = new Set()
+const richRevision = { n: 30 }
+function richViews() {
+  const views = {}
+  if (!richClosed.has('s-bot-1')) views['s-bot-1'] = { id: 'view-1', title: '季度经营看板', view: { type: 'stack', let: { total: 'base * (1 + growth / 100)' }, children: [
+    { type: 'text', text: '拖动增长率，看合计与图表变化。' },
+    { type: 'slider', id: 'growth', label: '增长率', min: 0, max: 50, step: 5, value: 10, unit: '%' },
+    { type: 'number', id: 'base', label: '基数', min: 0, step: 10, value: 100 },
+    { type: 'row', children: [
+      { type: 'metric', label: '合计', value: { '=': 'round(total, 1)' }, tone: 'good' },
+      { type: 'metric', label: '占比', value: { '=': "percent(growth / 100, 0)" } },
+    ] },
+    { type: 'chart', kind: 'bar', categories: ['一季', '二季', '三季', '四季'], series: [{ name: '收入', values: [80, 95, { '=': 'total' }, 120] }, { name: '成本', values: [60, 70, 75, 90] }], unit: '万' },
+    { type: 'chart', kind: 'line', categories: ['周一', '周二', '周三', '周四', '周五'], series: [{ name: '访问', values: [12, 18, 15, 22, { '=': 'growth' }] }] },
+    { type: 'chart', kind: 'area', categories: ['1', '2', '3', '4'], series: [{ values: [3, 5, 4, 6] }] },
+    { type: 'chart', kind: 'hbar', categories: ['北京', '上海', '深圳'], series: [{ values: [30, 45, 25] }] },
+    { type: 'chart', kind: 'donut', categories: ['线上', '线下', '渠道'], series: [{ values: [50, 30, 20] }], unit: '%' },
+    { type: 'progress', label: '目标完成', value: { '=': 'min(total, 150)' }, max: 150 },
+    { type: 'callout', text: '三季度数据含预估。', tone: 'warn' },
+    { type: 'table', columns: [{ key: 'q', label: '季度' }, { key: 'v', label: '收入（万）' }], rows: [['一季', 80], ['三季', { '=': 'round(total, 1)' }]] },
+    { type: 'sources', items: [{ label: '经营周报', url: 'https://example.com/report' }] },
+    { type: 'options', id: 'plan', options: [{ label: '按计划推进', description: '保持当前节奏' }, { label: '加大投入' }] },
+    { type: 'form', id: 'memo', fields: [{ id: 'note', label: '备注', placeholder: '补充说明', multiline: true }], submitLabel: '提交备注' },
+  ] } }
+  if (!richClosed.has('s-bot-2')) views['s-bot-2'] = { id: 'view-2', title: '坏掉的图表', view: { type: 'chart', categories: ['a', 'b'], series: [{ values: [1, 2, 3] }] } }
+  return views
+}
+const readerFiles = {
+  's-bot-1#41#0': { name: '周报.md', mime: 'text/markdown', data: Buffer.from('# 周报\n\n' + Array.from({ length: 200 }, (_, i) => `第 ${i + 1} 行：本周进展与风险说明。`).join('\n'), 'utf8') },
+  's-bot-1#41#1': { name: 'dataset.bin', mime: 'application/octet-stream', data: Buffer.alloc(1300 * 1024, 7) },
+}
+let readerVersion = 1
+function readerPng(w, h, rgb) {
+  const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)) } return ~c >>> 0 }
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]) }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(w * 3).map((_, i) => rgb[i % 3])])
+  const raw = Buffer.concat(Array.from({ length: h }, () => row))
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
+}
+const readerImages = { 'sha256:red': [220, 40, 40], 'sha256:green': [40, 180, 60], 'sha256:blue': [40, 80, 220] }
+const readStateClock = { base: Date.now() - 3600_000, bumped: {}, previews: {}, revision: 20 }
+function readStateValue() {
+  const at = (id, offset) => readStateClock.bumped[id] ?? readStateClock.base + offset
+  const value = {
+    revision: readStateClock.revision, liveKey: 'rs-' + readStateClock.revision, mainBotIds: ['bot-1'],
+    bots: [
+      { id: 'bot-1', name: '研究主管', color: 'blue', role: '研究', sessionId: 's-bot-1', parts: ['part-0'], preview: '[Message from 用户] 早上好', lastAt: at('bot-1', 1000) },
+      { id: 'bot-2', name: '运维值班', color: 'green', role: '运维', sessionId: 's-bot-2', parts: ['part-0'], preview: '磁盘告警已处理', lastAt: at('bot-2', 5000) },
+      { id: 'bot-3', name: '采购助理', color: 'orange', role: '采购', sessionId: 's-bot-3', parts: ['part-0'], preview: '[Browser handoff] 需要登录供应商后台 — 登录后点完成\nAnswer: done', lastAt: at('bot-3', 4000) },
+      { id: 'bot-4', name: '写作搭档', color: 'red', role: '写作', sessionId: 's-bot-4', parts: ['part-0'], lastAt: at('bot-4', 2000) },
+      { id: 'bot-5', name: '数据分析', color: 'teal', role: '分析', sessionId: 's-bot-5', parts: ['part-0'], preview: '[Answer to question card] 用哪个口径？\nAnswer: 自然月', lastAt: at('bot-5', 3000) },
+    ],
+    rooms: [{ id: 'room-1', name: '项目群', color: 'violet', members: ['bot-2', 'bot-4'], sessionId: 'room-1', parts: ['g-1'], preview: '运维值班：发布窗口定在周六', lastAt: at('room-1', 6000) }],
+    sections: [],
+    questions: { 's-bot-1': { id: 'q-1', question: '选哪个发布窗口？', options: [{ label: '周六' }] } },
+    work: { approvals: [], bots: { 'bot-2': { since: 1, tool: 'bash', target: 'df -h' } }, rooms: { 'room-1': [{ botId: 'bot-4', since: 1, tool: 'web_search' }] } },
+  }
+  for (const entry of [...value.bots, ...value.rooms]) if (readStateClock.previews[entry.id]) entry.preview = readStateClock.previews[entry.id]
+  return value
+}
+const dockAnswered = new Set()
+const bars = { revision: 7, stopped: new Set(), answered: new Set(), computerStopped: false, resumed: false }
+function chatBarsState() {
+  const tasks = [
+    { id: 'task-1', title: '整理本周市场数据', status: 'running', sessionId: 't-1', startedAt: 1, updatedAt: 2, running: true },
+    { id: 'task-2', title: '核对报价表', status: 'waiting_approval', sessionId: 't-2', startedAt: 1, updatedAt: 2, running: false },
+    { id: 'task-0', title: '已完成任务（不应显示）', status: 'completed', sessionId: 't-0', startedAt: 1, updatedAt: 2, running: false },
+  ].filter(t => !bars.stopped.has(t.id))
+  const asks = {}
+  if (!bars.answered.has('ask-1')) asks['ask-1'] = { id: 'ask-1', botId: 'bot-1', sessionId: 's-bot-1', appName: 'Notes', at: 10 }
+  if (!bars.answered.has('ask-2')) asks['ask-2'] = { id: 'ask-2', botId: 'bot-2', sessionId: 'room-1', roomId: 'room-1', appName: 'Calendar', at: 11 }
+  return {
+    revision: bars.revision, liveKey: 'bars-' + bars.revision, mainBotIds: ['bot-1'],
+    bots: [
+      { id: 'bot-1', name: '研究主管', color: 'blue', role: '研究', sessionId: 's-bot-1', parts: ['part-0'], tasks },
+      { id: 'bot-2', name: '运维值班', color: 'green', role: '运维', sessionId: 's-bot-2', parts: ['part-0'],
+        ...(bars.resumed ? {} : { blocked: { code: 'QUOTA', provider: 'deepseek-official', status: 402, at: 5 } }) },
+    ],
+    rooms: [{ id: 'room-1', name: '项目群', color: 'violet', members: ['bot-1', 'bot-2'], sessionId: 'room-1',
+      goal: { id: 'goal-1', status: 'active', title: '发布 2.0 版本', current: 1, stages: [
+        { id: 's1', title: '需求确认', status: 'passed' }, { id: 's2', title: '实现与联调', status: 'active' },
+        { id: 's3', title: '测试', status: 'pending' }, { id: 's4', title: '发布', status: 'pending' }] } }],
+    sections: [],
+    work: { bots: { 'bot-1': { since: 1, tool: 'web_search', target: 'example.com' } }, agents: {},
+      rooms: { 'room-1': [{ botId: 'bot-2', since: 1, tool: 'bash', said: '正在跑回归测试。' }] }, approvals: [] },
+    computerLive: { bots: bars.computerStopped ? {} : { 'bot-1': { state: 'waiting', app: 'Notes', steps: 1 } }, leases: [], cursors: [], asks, holds: {} },
+  }
+}
 
 const crossOriginPort = port + 1
 const page = () => `<!doctype html>
@@ -282,6 +413,226 @@ const server = createServer((req, res) => {
         res.end(JSON.stringify({ ok: true, value: { current: '9.9.9', dsh: { current: '9.9.9' } } }))
         return
       }
+      if (outboxMode && endpoint === 'state') {
+        // 发送箱验收：Bot 都空闲（输入区显示发送按钮而不是停止按钮）
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: {
+          revision: 7, liveKey: 'outbox-live', mainBotIds: ['bot-1'],
+          bots: [
+            { id: 'bot-1', name: '研究主管', color: 'blue', role: '研究', sessionId: 's-bot-1', parts: ['part-0'] },
+            { id: 'bot-2', name: '运维值班', color: 'green', role: '运维', sessionId: 's-bot-2', parts: ['part-0'] },
+          ],
+          rooms: [{ id: 'room-1', name: '项目群', color: 'violet', members: ['bot-1', 'bot-2'], sessionId: 'room-1' }],
+          sections: [], work: { bots: {}, rooms: {}, approvals: [] },
+        } }))
+        return
+      }
+      if (readStateMode && endpoint === 'state') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: readStateValue() }))
+        return
+      }
+      if (readStateMode && endpoint === 'chat') {
+        const botId = /"botId":"([^"]*)"/.exec(body)?.[1] ?? 'bot-1'
+        const last = readStateValue().bots.find(b => b.id === botId)?.lastAt ?? Date.now()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { sessionId: 's-' + botId, items: [
+          { kind: 'user', text: '最近怎么样？', turn: 1, seq: 1, time: last - 1000 },
+          { kind: 'bot', text: '一切正常。', turn: 1, seq: 2, time: readStateClock.bumped[botId] ? last - 500 : last },
+          // bump 过的条目：聊天里有对应的新消息（与 state 的 lastAt/preview 一致，重取时不丢实时消息）
+          ...(readStateClock.bumped[botId] ? [{ kind: 'bot', text: readStateClock.previews[botId], turn: 2, seq: 1000 + readStateClock.revision, time: last }] : []),
+        ] } }))
+        return
+      }
+      if (dockMode && endpoint === 'state') {
+        // 0.3.10 形态：待处理项都在 state（questions/views 按会话 id，work.approvals、secretRequests、connectorRequests、
+        // learning、browserHolds），已作答的移除
+        const has = (id) => !dockAnswered.has(id)
+        const value = {
+          revision: 7, liveKey: 'dock-' + dockAnswered.size, mainBotIds: ['bot-1'],
+          bots: [{ id: 'bot-1', name: '研究主管', color: 'blue', sessionId: 's-bot-1', parts: ['part-0'] }, { id: 'bot-2', name: '运维值班', color: 'green', sessionId: 's-bot-2', parts: ['part-0'] }],
+          rooms: [], sections: [],
+          questions: has('q-1') ? { 's-bot-1': { id: 'q-1', question: '选择发布窗口？', options: [{ label: '周六', description: '低峰' }, { label: '周日' }], multiSelect: false, askedAt: 1 } } : {},
+          views: has('v-1') ? { 's-bot-1': { id: 'v-1', title: '巡检表', view: { blocks: [] }, askedAt: 1 } } : {},
+          work: { bots: {}, rooms: {}, approvals: has('ap-1') ? [{ id: 'ap-1', sessionId: 's-bot-1', botId: 'bot-1', tool: 'bash', reason: 'kubectl apply -f prod.yaml', at: 1, answerable: true }] : [] },
+          secretRequests: { 'bot-1': has('sr-1') ? [{ id: 'sr-1', sessionId: 's-bot-1', name: 'OPENAI_KEY', purpose: '调用模型', kind: 'fill', status: 'pending', askedAt: 1 }] : [] },
+          connectorRequests: { 'bot-1': has('cr-1') ? [{ id: 'cr-1', connectorId: 'gmail', name: 'Gmail', purpose: '读取客户来信', status: 'pending', sessionId: 's-bot-1', askedAt: 1 }] : [] },
+          learning: { 'bot-1': has('lp-1') ? [{ id: 'lp-1', kind: 'skill', action: 'update', botId: 'bot-1', name: '周报整理', description: '整理每周数据', why: '最近三次都手动整理周报', content: '1. 拉取本周数据\n2. 按项目分组\n3. 生成图表\n4. 写结论\n5. 发群里', previous: { description: '整理每周数据', content: '1. 拉取本周数据\n2. 生成图表\n3. 写结论\n' } }] : [] },
+          browserHolds: has('handoff:bot-1') ? { 'bot-1': { by: 'bot', reason: '需要登录', note: '登录供应商后台后点完成', callId: 'c-9', sessionId: 's-bot-1' } } : {},
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value }))
+        return
+      }
+      if (dockMode && endpoint === 'chat') {
+        // 聊天里的 kind=answer 是用户已经给出的回复记录（只读）
+        const items = [
+          { kind: 'user', text: '帮我准备上线', turn: 1, seq: 1 },
+          { kind: 'answer', questions: [{ id: 'q-0', question: '先做哪个环境？', options: [{ label: '测试' }, { label: '生产' }] }], answers: [{ id: 'q-0', selected: ['测试'] }], time: 2 },
+          { kind: 'bot', text: '好的，测试环境已就绪。', turn: 2, seq: 3 },
+        ]
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { sessionId: 's-bot-1', items } }))
+        return
+      }
+      if (dockMode && ['approval-answer', 'answer-question', 'dismiss-question', 'view-reply', 'dismiss-view', 'secret-set', 'secret-allow', 'secret-cancel', 'learning-answer', 'connector-request-cancel', 'browser-give-back'].includes(endpoint)) {
+        const p = JSON.parse(body).payload ?? {}
+        const id = endpoint === 'answer-question' ? p.questionId
+          : endpoint === 'dismiss-question' ? 'q-1'
+          : endpoint === 'dismiss-view' ? 'v-1'
+          : endpoint === 'browser-give-back' ? 'handoff:' + p.botId
+          : (p.requestId ?? p.id)
+        dockAnswered.add(String(id))
+        // 不打印密钥值等正文：只记端点、id 与参数键
+        console.log('  dock answer:', endpoint, id, Object.keys(p).join(','), endpoint === 'approval-answer' ? p.choice : endpoint === 'answer-question' ? JSON.stringify(p.answer) : '')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: true }))
+        return
+      }
+      if (richMode && endpoint === 'state') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: {
+          revision: richRevision.n, liveKey: 'rich-' + richRevision.n, mainBotIds: ['bot-1'],
+          bots: [{ id: 'bot-1', name: '研究主管', color: 'blue', sessionId: 's-bot-1', parts: ['part-0'] }, { id: 'bot-2', name: '运维值班', color: 'green', sessionId: 's-bot-2', parts: ['part-0'] }],
+          rooms: [], sections: [], views: richViews(), work: { approvals: [], bots: {}, rooms: {} },
+        } }))
+        return
+      }
+      if (richMode && endpoint === 'view-reply') {
+        const p = JSON.parse(body).payload
+        const v = richViews()[p.sessionId]
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        if (!v || v.id !== p.viewId) { res.end(JSON.stringify({ ok: false, error: { code: 'bot/stale', message: 'This view is no longer open', details: {} } })); return }
+        // 与 validateViewAnswer 同口径的最小校验：action 必须是作答组件 id，slider/number 输入在范围内
+        const nodes = []
+        const walk = (n) => { if (n && typeof n === 'object') { nodes.push(n); for (const c of n.children ?? []) walk(c) } }
+        walk(v.view)
+        const invalid = (message) => { console.log('  view-reply rejected:', message); res.end(JSON.stringify({ ok: false, error: { code: 'bot/invalid', message, details: {} } })) }
+        if (!nodes.some(n => ['options', 'confirm', 'form', 'submit'].includes(n.type) && n.id === p.action)) return invalid('action: no interactive component with id ' + p.action)
+        for (const n of nodes.filter(n => n.type === 'slider' || n.type === 'number')) {
+          const val = p.values?.inputs?.[n.id]
+          if (val === undefined) continue
+          if (typeof val !== 'number' || (n.min !== undefined && val < n.min) || (n.max !== undefined && val > n.max)) return invalid(`values.inputs.${n.id}: expected a number from ${n.min ?? '-∞'} to ${n.max ?? '∞'}`)
+        }
+        console.log('  view-reply', p.sessionId, 'action', p.action, 'values', JSON.stringify(p.values))
+        richClosed.add(p.sessionId); richRevision.n += 1
+        res.end(JSON.stringify({ ok: true, value: true }))
+        setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision: richRevision.n })}\n\n`)), 100)
+        return
+      }
+      if (richMode && endpoint === 'dismiss-view') {
+        const p = JSON.parse(body).payload
+        console.log('  dismiss-view', p.sessionId)
+        richClosed.add(p.sessionId); richRevision.n += 1
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: true }))
+        setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision: richRevision.n })}\n\n`)), 100)
+        return
+      }
+      if (richMode && endpoint === 'chat') {
+        const dot = readerPng(32, 32, [240, 160, 0]).toString('base64')
+        const wide = '| 项目 | 负责人 | 开始 | 结束 | 状态 | 预算 | 风险 | 备注 |\n|---|---|---|---|---|---|---|---|\n' +
+          ['官网改版', '数据平台', '移动端'].map((n, i) => `| ${n} | 张${i} | 2026-0${i + 1}-01 | 2026-0${i + 4}-30 | 进行中 | ${(i + 1) * 120} 万 | 中 | 第 ${i + 1} 期说明较长需要横向滚动 |`).join('\n')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { sessionId: 's-' + (/"botId":"([^"]*)"/.exec(body)?.[1] ?? 'bot-1'), items: [
+          { kind: 'bot', text: '项目总览：\n' + wide, time: 1, seq: 1, turn: 1 },
+          { kind: 'bot', text: '本周任务：\n- [x] 完成需求评审\n- [ ] 上线灰度\n- [ ] 复盘', time: 2, seq: 2, turn: 1 },
+          { kind: 'bot', text: '截图如下：\n![截图](/work/shot.png)\n![外部截图](/etc/secret.png)\n![内联](data:image/png;base64,' + dot + ')', time: 3, seq: 3, turn: 1 },
+        ] } }))
+        return
+      }
+      if (richMode && endpoint === 'markdown-image') {
+        const p = JSON.parse(body).payload
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        if (!String(p.path).startsWith('/work/')) { res.end(JSON.stringify({ ok: false, error: { code: 'bot/forbidden', message: 'Image outside workspace', details: {} } })); return }
+        const png = readerPng(320, 180, [30, 140, 200])
+        const rev = `${png.length}:0123456789abcdef`
+        console.log('  markdown-image', p.path, p.knownRev ? 'knownRev' : '')
+        res.end(JSON.stringify({ ok: true, value: p.knownRev === rev ? { mime: 'image/png', unchanged: true, size: png.length, rev } : { mime: 'image/png', bytes: png.toString('base64'), size: png.length, rev } }))
+        return
+      }
+      if (readerMode && endpoint === 'hello') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { api: 1, apiMin: 1, apiMax: 1, plugin: { name: 'ds-bot', version: '0.3.10' }, capabilities: ['state', 'chat', 'room-chat', 'feed', 'image-preview', 'file-download', 'file-download-chunks'], boot: 'reader', seq: 0, revision: 7 } }))
+        return
+      }
+      if (readerMode && endpoint === 'chat') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { sessionId: 's-bot-1', items: [
+          { kind: 'user', text: '看看这几张图', time: 1, seq: 30, turn: 1, images: 3, imageRefs: Object.keys(readerImages).map((id, i) => ({ attachmentId: id, mime: 'image/png', name: `图${i + 1}.png` })) },
+          { kind: 'bot', text: '这是一条很长的回复。' + '每一段都在讨论细节，长按可以选择文字。'.repeat(30) + '\n\n参考 [官网](https://example.com)。', time: 2, seq: 40, turn: 1 },
+          { kind: 'bot', text: '交付了两个文件。', time: 3, seq: 42, turn: 1, sessionId: 's-bot-1', files: [{ name: '周报.md', sessionId: 's-bot-1', seq: 41, index: 0 }, { name: 'dataset.bin', sessionId: 's-bot-1', seq: 41, index: 1 }] },
+        ] } }))
+        return
+      }
+      if (readerMode && endpoint === 'room-chat') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { roomId: 'room-1', running: [], speaking: [], items: [
+          { id: '1', kind: 'user', text: '大家汇报一下', time: 1 },
+          { id: '2', kind: 'bot', botId: 'bot-1', name: '研究主管', color: 'blue', text: '[A long message: 9000 characters. Its start is below; all of it is in the attached file.]\n本周完成了……', time: 2, whole: { length: 9000, file: { attachmentId: 'att-long-1', name: 'long-post.txt' } } },
+        ] } }))
+        return
+      }
+      if (readerMode && endpoint === 'file-text') {
+        const ok = /"attachmentId":"att-long-1"/.test(body)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(ok ? { ok: true, value: { text: '本周完成了全部里程碑。\n' + '详细说明：每一项任务都按计划推进。\n'.repeat(300), whole: true } } : { ok: false, error: { code: 'bot/unavailable', message: 'This file cannot be read here', details: {} } }))
+        return
+      }
+      if (readerMode && endpoint === 'file-download') {
+        const p = JSON.parse(body).payload
+        const f = readerFiles[`${p.sessionId}#${p.seq}#${p.index}`]
+        const version = `1:2:${f?.data.length}:${readerVersion}`
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        if (!f || (p.version !== undefined && p.version !== version) || p.offset > f.data.length) {
+          res.end(JSON.stringify({ ok: false, error: { code: 'bot/not-found', message: 'This file is no longer available', details: {} } }))
+          return
+        }
+        const part = f.data.subarray(p.offset, p.offset + 512 * 1024)
+        console.log('  file-download', p.seq, p.index, 'offset', p.offset, 'bytes', part.length)
+        res.end(JSON.stringify({ ok: true, value: { name: f.name, mime: f.mime, bytes: part.toString('base64'), size: f.data.length, version, nextOffset: p.offset + part.length, done: p.offset + part.length === f.data.length } }))
+        return
+      }
+      if (readerMode && endpoint === 'image') {
+        const p = JSON.parse(body).payload
+        const rgb = readerImages[p.attachmentId]
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        if (!rgb) { res.end(JSON.stringify({ ok: false, error: { code: 'bot/not-found', message: 'Unknown attachment', details: {} } })); return }
+        const png = p.preview ? readerPng(24, 24, rgb.map(c => Math.floor(c / 2))) : readerPng(480, 360, rgb)
+        console.log('  image', p.attachmentId, p.preview ? 'preview' : 'original')
+        setTimeout(() => res.end(JSON.stringify({ ok: true, value: { mime: 'image/png', data: png.toString('base64'), ...(p.preview ? { preview: true } : {}) } })), p.preview ? 0 : 1200)
+        return
+      }
+      if (noticesMode && endpoint === 'hello') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { api: 1, apiMin: 1, apiMax: 1, plugin: { name: 'ds-bot', version: '0.3.10' }, capabilities: ['state', 'chat', 'feed', 'notices'], boot: noticeState.boot, seq: noticeState.seq, revision: 7 } }))
+        return
+      }
+      if (noticesMode && endpoint === 'notices') {
+        const boot = /"boot":"([^"]*)"/.exec(body)?.[1]
+        const since = Number(/"since":(\d+)/.exec(body)?.[1] ?? 0)
+        const fresh = boot !== noticeState.boot
+        console.log('  notices fill: since', since, fresh ? '(reset: foreign boot)' : '')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { boot: noticeState.boot, seq: noticeState.seq, reset: fresh, notices: noticeState.list.filter(n => n.seq > (fresh ? 0 : since)) } }))
+        return
+      }
+      if (chatBars && endpoint === 'state') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: chatBarsState() }))
+        return
+      }
+      if (chatBars && ['bot-stop-task', 'computer-app-answer', 'computer-stop', 'resume'].includes(endpoint)) {
+        console.log('  chat-bars write:', endpoint, body)
+        if (endpoint === 'bot-stop-task') bars.stopped.add(/"taskId":"([^"]+)"/.exec(body)?.[1])
+        if (endpoint === 'computer-app-answer') bars.answered.add(/"id":"([^"]+)"/.exec(body)?.[1])
+        if (endpoint === 'computer-stop') bars.computerStopped = true
+        if (endpoint === 'resume') bars.resumed = true
+        bars.revision++
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: true }))
+        return
+      }
       if (endpoint === 'state') {
         // since+live 全命中：按契约回最小 unchanged 形态（第一次带 work 变化档、之后纯三键）
         const since = /"since":(\d+)/.exec(body)?.[1]
@@ -311,6 +662,15 @@ const server = createServer((req, res) => {
             work: { approvals: cardAnswered ? [] : [{ sessionId: 's-bot-1', botId: 'bot-1', title: '部署审批' }], bots: { 'bot-2': { turn: 1 } } },
           },
         }))
+        return
+      }
+      if (outboxMode && endpoint === 'room-chat' && !/"cursor"/.test(body)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { roomId: 'room-1', running: [], speaking: [], items: [
+          { id: 'b1', kind: 'bot', botId: 'bot-1', name: '研究主管', color: 'blue', text: '收到，安排分工', time: 1700000000000 },
+          { id: 'u-old', kind: 'user', text: 'kaigong', time: 1700000001000 },
+          ...outboxState.roomLines,
+        ] } }))
         return
       }
       if (endpoint === 'room-chat') {
@@ -366,6 +726,26 @@ const server = createServer((req, res) => {
         }
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, value: endpoint === 'room-progress' ? [] : true }))
+        return
+      }
+      if (chatCacheMode && endpoint === 'chat') {
+        const botId = /"botId":"([^"]+)"/.exec(body)?.[1] ?? 'bot-1'
+        setTimeout(() => {
+          // 首页只给最新 20 条并带游标（新消息让窗口前移），更早的经 earlier 翻出
+          const list = cacheChatOf(botId)
+          const page = list.slice(-20)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, value: { sessionId: 's-' + botId, items: page, cursor: { part: 0, beforeSeq: page[0].seq } } }))
+        }, 1500)
+        return
+      }
+      if (chatCacheMode && endpoint === 'earlier') {
+        const botId = (/"sessionId":"s-([^"]+)"/.exec(body)?.[1]) ?? 'bot-1'
+        const before = Number(/"beforeSeq":(\d+)/.exec(body)?.[1] ?? 0)
+        const older = cacheChatOf(botId).filter(m => m.seq < before)
+        const page = older.slice(-20)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { items: page, ...(older.length > 20 ? { cursor: { part: 0, beforeSeq: page[0].seq } } : {}) } }))
         return
       }
       if (endpoint === 'chat') {
@@ -533,6 +913,21 @@ const server = createServer((req, res) => {
         res.end(JSON.stringify({ ok: true, value: { note: 'mock placeholder' } }))
         return
       }
+      if (outboxMode && endpoint === 'send') {
+        if (outboxState.fail) {
+          console.log('  outbox: send dropped (fail mode)')
+          res.destroy()
+          return
+        }
+        const text = JSON.parse(body).payload?.text ?? ''
+        outboxState.sends[text] = (outboxState.sends[text] ?? 0) + 1
+        console.log('  outbox: send accepted, count', outboxState.sends[text])
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: true }))
+        const item = { kind: 'user', text, time: Date.now(), seq: ++outboxState.userSeq }
+        setTimeout(() => feedClients.forEach((write) => write(`event: message\ndata: ${JSON.stringify({ botId: 'bot-1', sessionId: 's-bot-1', item })}\n\n`)), 300)
+        return
+      }
       if (endpoint === 'send') {
         // 发送后 3s 发 stream（start/text/end）与 message 定格（经 feed 推送）
         setTimeout(() => {
@@ -594,6 +989,10 @@ data: {"botId":"bot-1","sessionId":"s-bot-1","item":{"kind":"bot","text":"好的
       const buf = Buffer.concat(chunks)
       const sha = createHash('sha256').update(buf).digest('hex')
       uploads.set(sessionId + ':' + sha, { data: buf, name })
+      if (outboxMode) {
+        writeFileSync('/tmp/dsbot-probe/last-upload.bin', buf)
+        console.log('  outbox: upload', name, buf.length, 'bytes')
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({
         ok: true,
@@ -630,6 +1029,27 @@ data: {"botId":"bot-1","sessionId":"s-bot-1","item":{"kind":"bot","text":"好的
       }
       const request = envelope.payload?.args?.request
       let result
+      if (outboxMode && url === '/api/session/prompt') {
+        // 发送箱验收：同样响应失败开关；私聊推 feed 用户行（seq），群聊把用户行记入 room-chat（只带 time，与真实同构）
+        if (outboxState.fail) {
+          console.log('  outbox: prompt dropped (fail mode)')
+          res.destroy()
+          return
+        }
+        const text = (request?.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('')
+        const sid = request?.sessionId ?? ''
+        outboxState.sends[text] = (outboxState.sends[text] ?? 0) + 1
+        console.log('  outbox: prompt accepted', sid, 'count', outboxState.sends[text])
+        if (sid.startsWith('room-')) {
+          outboxState.roomLines.push({ id: 'u' + outboxState.roomLines.length, kind: 'user', text, time: Date.now() })
+        } else {
+          const item = { kind: 'user', text, time: Date.now(), seq: ++outboxState.userSeq }
+          setTimeout(() => feedClients.forEach((write) => write(`event: message\ndata: ${JSON.stringify({ botId: 'bot-1', sessionId: sid, item })}\n\n`)), 300)
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ type: 'server-response', rpcId: envelope.rpcId, result: { ok: true, value: { accepted: true } } }))
+        return
+      }
       if (url === '/api/session/prompt') {
         const blocks = Array.isArray(request?.content) ? request.content : []
         const files = blocks.filter((b) => b.type === 'file').map((b) => b.receiptId)
@@ -667,9 +1087,14 @@ data: {"botId":"bot-1","sessionId":"s-bot-1","item":{"kind":"bot","text":"好的
       res.end(EXPIRED_MARKER)
       return
     }
-    feedClients.add(res.write.bind(res))
+    const writeFeed = res.write.bind(res)
+    feedClients.add(writeFeed)
+    feedResponses.add(res)
+    res.on('close', () => { feedClients.delete(writeFeed); feedResponses.delete(res) })
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Transfer-Encoding': 'chunked' })
-    res.write(`event: hello
+    res.write(noticesMode
+      ? `event: hello\ndata: ${JSON.stringify({ revision: 7, api: 1, boot: noticeState.boot, seq: noticeState.seq })}\n\n`
+      : `event: hello
 data: {"revision":7}
 
 `)
@@ -692,6 +1117,81 @@ data: {"revision":8}
     const sid = sessionCookie(req)
     res.writeHead(sid && sessions.has(sid) ? 200 : 401, { 'Content-Type': 'text/plain' })
     res.end(sid && sessions.has(sid) ? sid : 'no-session')
+    return
+  }
+  if (readerMode && url === '/mock/touch-file') {
+    readerVersion += 1
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('version ' + readerVersion)
+    return
+  }
+  if (readStateMode && url.startsWith('/mock/bump')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    const id = q.get('id') ?? 'bot-4'
+    const time = Date.now()
+    readStateClock.bumped[id] = time
+    readStateClock.previews[id] = '新消息 ' + new Date(time).toISOString().slice(11, 19)
+    readStateClock.revision += 1
+    if (q.get('message') === '1') {
+      const item = { kind: 'bot', text: readStateClock.previews[id], seq: 1000 + readStateClock.revision, time }
+      feedClients.forEach((write) => write(`event: message\ndata: ${JSON.stringify({ botId: id, sessionId: 's-' + id, item })}\n\n`))
+    }
+    feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision: readStateClock.revision })}\n\n`))
+    console.log('  bump:', id, readStateClock.bumped[id])
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('bumped ' + id)
+    return
+  }
+  if (outboxMode && url.startsWith('/mock/fail-sends')) {
+    outboxState.fail = new URLSearchParams(url.split('?')[1] ?? '').get('on') === '1'
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('fail=' + outboxState.fail)
+    return
+  }
+  if (outboxMode && url === '/mock/sends') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(outboxState.sends))
+    return
+  }
+  if (noticesMode && url.startsWith('/mock/notice')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    const botId = q.get('bot') ?? 'bot-2'
+    const notice = { seq: ++noticeState.seq, time: Date.now(), botId, name: botId === 'bot-1' ? '研究主管' : '运维值班', kind: q.get('kind') ?? 'question', sessionId: 's-' + botId, ...(q.get('room') ? { roomId: q.get('room'), title: '项目群' } : {}), text: q.get('text') ?? '要选哪个维护窗口？' }
+    noticeState.list.push(notice)
+    if (q.get('feed') !== '0') feedClients.forEach((write) => write(`event: notice\ndata: ${JSON.stringify(notice)}\n\n`))
+    console.log('  notice:', notice.seq, notice.kind, botId, q.get('feed') === '0' ? '(no feed)' : '')
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('notice ' + notice.seq)
+    return
+  }
+  if (noticesMode && url === '/mock/restart-boot') {
+    noticeState.boot = 'boot-' + Date.now()
+    noticeState.seq = 0
+    noticeState.list = []
+    for (const r of feedResponses) r.destroy()
+    console.log('  restart-boot ->', noticeState.boot)
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('restarted')
+    return
+  }
+  if (noticesMode && url === '/mock/drop-feed') {
+    for (const r of feedResponses) r.destroy()
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('dropped')
+    return
+  }
+  if (chatCacheMode && url.startsWith('/mock/push')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    const botId = q.get('bot') ?? 'bot-1'
+    const list = cacheChatOf(botId)
+    const item = { kind: 'bot', text: `${botId} 新消息 ${list.length + 1}`, turn: 99, seq: list.length + 1 }
+    list.push(item)
+    if (q.get('feed') === '1') {
+      feedClients.forEach((write) => write(`event: message\ndata: ${JSON.stringify({ botId, sessionId: 's-' + botId, item })}\n\n`))
+    }
+    console.log('  chat-cache push:', botId, q.get('feed') === '1' ? 'with feed' : 'no feed')
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('pushed')
     return
   }
   if (url === '/invalidate') {

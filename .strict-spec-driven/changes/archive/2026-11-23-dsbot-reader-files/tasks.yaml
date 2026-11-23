@@ -1,0 +1,55 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-reader-files
+sections:
+  Implementation:
+    probe-fixtures:
+      text: 对真实服务实测 file-download 分块（presented 文件，>512 KiB 第二块、版本变化、未知会话）并补脱敏夹具 file-download-chunk*.json 与 chat 条目 files 形态；FINDINGS 第 17 节登记实测结论与 file-text 待实测
+      status: complete
+    core-file-download:
+      text: core FileDownload：请求体、分块解码、Assembler（连续性、版本锁定、总量上限、失败原因）、safeName、isText
+      status: complete
+    core-render:
+      text: core ChatRender：bot.files → PresentedFile、user.imageRefs → Image、群帖 whole → Message.wholeFileJson；ImageGallery.of；FileText 请求与解码
+      status: complete
+    app-downloads:
+      text: App DownloadManager：读线程逐块下载写 cache/downloads/<UUID>/、进度与取消、失败提示；分享（ACTION_SEND）与打开（ACTION_VIEW）；启动清理 24 小时前的下载目录
+      status: complete
+    app-bubble-reader:
+      text: 私聊与群聊气泡：点按复制整条、长按底部菜单（复制整条 / 选择文字）、全屏可选阅读器；群长帖与文本类交付文件「阅读全文」
+      status: complete
+    app-file-items:
+      text: 交付文件条目：名称、点开操作菜单（打开 / 分享 / 阅读全文）与下载进度、取消
+      status: complete
+    app-image-gallery:
+      text: 图片查看器：HorizontalPager 多图滑动、image preview 先显示（image-preview 能力门控）再取原图、原图 LRU 3 张、保存到相册沿用
+      status: complete
+    mock-reader:
+      text: mock-dsh-server --reader：bot 条目带 files（小 md、>512 KiB 二进制）、user 条目带 imageRefs（多张）、群长帖 whole、file-download 分块与 file-text、image（preview/原图）
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：FileDownloadTest（夹具解码、拼接连续性、版本变化、错位、上限、safeName 路径穿越、isText）、ChatRender 交付文件/图片/whole 渲染、ImageGallery、FileText 解码
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --reader）：长按消息出菜单、选择文字进阅读器可选中复制；群长帖与 md 文件阅读全文；>512 KiB 交付文件下载完成并经分享面板发出；多图左右滑动、先预览后原图；点按气泡仍复制整条、长按链接仍出选择器
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-reader-files
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

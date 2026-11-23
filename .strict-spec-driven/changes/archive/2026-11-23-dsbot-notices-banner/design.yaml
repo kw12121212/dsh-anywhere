@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-notices-banner
+approach:
+  - 'core 新增 Notices.kt：Notices.decode(obj) 解出 seq、time、botId、name、kind、sessionId、roomId、title、text（缺 seq/botId/kind 返回 null）；decodeBatch(value) 解出 boot、seq、reset 与 notices[]；KINDS 白名单 question/approval/message/group/done，其余（含 view 与未知）忽略；banner(n) 生成「[群名 · ]名称 · 类型：摘要」——title 按上游语义是群名（只在带 roomId 时作来源），摘要一律取 text（去换行、截 80 字），text 为空时只显示来源与类型；target(n) 为 roomId ?: botId；pickBanner(fresh, currentTarget) 取最后一条白名单内且目标不是当前聊天的提醒。NoticeCursor 持有 boot 与 seq：onHello(boot, seq) 首次（无游标）直接采用 hello 的游标且不补弹，boot 相同且 hello.seq 更大时返回 Fill(since)，boot 变化或不再带 boot 时返回 Reset 并采用新游标；accept(n) 仅在 n.seq 大于已见 seq 时接收并推进；onBatch(batch) 遇 reset=true 或 boot 不同返回需要重取并重置游标（不弹旧提醒），否则按序 accept 并返回新接收的条目。'
+  - App：NativeShellConnection 在 forwardChatEvent 中把 notice 事件交 handleNotice（executor 线程）：capabilities.has("notices") 且 cursor.accept 时交 showNotices；onFeedHello 先按既有逻辑判定重读能力，再按 cursor.onHello：Fill 时经 IO 线程 POST notices {boot, since}、应答投回 executor——若游标 boot 已不是请求时的 boot（期间远端重启并已 Reset）则丢弃——交 onBatch，把新接收的条目整批交 showNotices；Reset 或批量 reset 时静默取全量 state。showNotices 在开关关闭时不显示，否则以 Notices.pickBanner(fresh, 当前聊天 id) 选出一条写入可观察的 noticeBanner（含递增 id）。NativeShell 在版本提示条下方插入横幅 Surface（出现时把下方内容下推，约 60dp，远小于「回到最新」阈值）：LaunchedEffect(banner.id) 8 秒后清除，点按调用 openChat(target) 并清除；设置页新增「应用内提醒」卡片 Switch，读写 AppGraph.noticePrefs（SharedPreferences 文件 notices，键 bannerEnabled，默认 true）。横幅文本只在内存，不经日志或诊断上报。
+decisions:
+  cursor-no-backfill-on-first:
+    decision: 首次连接（本机无游标）与远端重启（boot 变化）时直接采用 hello 携带的游标，不把服务端环形缓冲里的历史提醒补弹为横幅；只有同一 boot 内断线重连才经 notices 补齐。
+    rationale: 横幅是「刚刚发生」的提示，启动或重启后补弹最多 200 条历史提醒既打扰又不准确；dsh 重启后 boot 变化，按旧游标补齐会重复弹出已显示过的横幅（完成标准明确禁止），此时重取整体状态即可让团队页反映最新情况。
+  prefs-not-datastore:
+    decision: 「应用内提醒」开关用独立的 SharedPreferences 文件 notices 保存，而不是计划变更提到的 DataStore。
+    rationale: App 现有偏好（tunnel、updates、chat）都用 SharedPreferences 独立文件，引入 DataStore 需要新增依赖与协程读取；单个布尔开关用 SharedPreferences 即满足本机持久化，且符合 state-persistence 的 separate-state-files。
+  latest-only:
+    decision: 同一时刻只显示一条横幅：新提醒到来替换当前横幅并重新计时 8 秒；补齐批量中只显示最后一条。
+    rationale: 计划变更要求多条到来时只保留最新一条；横幅只是入口提示，团队页的「需要你」行内提示与未读状态承担完整列表。
+  capability-gated:
+    decision: notice 事件处理与 notices 补齐以 capabilities.has("notices") 门控；远端未声明时（0.3.6、LEGACY、无共同 api）不显示横幅也不请求 notices。
+    rationale: notices 是 0.3.10 新增能力，hello-capabilities 规则要求新入口经能力位判定；0.3.6 不会推 notice 事件，门控也避免对旧版发出未知端点请求。
+  pick-banner-in-core:
+    decision: 要显示哪一条由 core 的 Notices.pickBanner 决定：在新到达的一批提醒里取最后一条白名单内且不是当前打开聊天的提醒；实时（单条）与补齐（整批）共用。
+    rationale: 补齐时若先取最新一条再判断是否当前聊天，最新一条恰是当前聊天的回复时会把其他 Bot 的提问一并压掉（评审实证），违背「有人在等就要提示」的目的；把判定下沉 core 也满足 android-client 的 pure-logic-in-core 并获得 JUnit 回归信号。
+  group-notice-source-checked:
+    decision: 群类提醒（group/done 与群内 approval）按上游 mobile.js 源码核对的形态消费：title 是群名、只作来源，摘要取 text；在 tech/dsbot-api 以 notices-fields-0310 登记并在 endpoint-inventory-0310 增加限定例外，FINDINGS 第 14 节登记待实测。
+    rationale: dsbot-baseline-0310 的真实样本只有 kind=message，群类提醒需要群内成员发言或完成任务才会产生，取证会触发真实模型运行并改动用户群聊；源码核对显示 title 固定为 room.name，按此实现并登记能避免把群名误当摘要，同时不把源码核对当实测。
+alternatives: []
+risks:
+  - notice 只存在服务端内存环形缓冲（200 条）：长时间断线后补齐会收到 reset，届时不弹横幅、改为重取整体状态，用户需从团队页查看
+  - 横幅只在 App 前台且 feed 在线时出现，后台时不提醒（不做系统通知，符合里程碑范围）

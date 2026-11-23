@@ -1,0 +1,24 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-reader-files
+approach:
+  - core FileDownload：presented(sessionId, seq, index, offset, version?) 与 attachment(sessionId, attachmentId, offset) 请求体；Chunk.decode({name,mime,bytes,size,version,nextOffset,done})；Assembler(maxBytes)：期望 offset 从 0 起，accept(chunk) 校验 bytes 解码长度 = nextOffset - offset、size 不变、version 与首块一致，返回 Next(offset, version) / Done / Fail(VERSION_CHANGED|OUT_OF_ORDER|TOO_LARGE|MALFORMED)；safeName 取最后一段、去控制字符与 .. 、以 . 开头加前缀、限 120 字符保留扩展名、空回落 file；isText 按扩展名（md/txt/log/csv/json/yaml/yml/xml/html/htm）或 text/* mime。服务端版本变化回 bot/not-found「This file is no longer available」，客户端按失败处理并提示文件已变更或不可用。
+  - core ChatRender：Item.PresentedFile(name, sessionId, seq, index) 由 bot 条目 files[] 产生、紧随该消息；user 条目 imageRefs[] 产生 Item.Image(attachmentRefJson={attachmentId,mime,name})；Message 新增 wholeFileJson（群帖 whole.file）与 wholeLength；ImageGallery.of(items, tapped) 返回 attachmentRefJson 列表与起始下标；FileText.request(fileJson) 与 decode({text, whole})。私聊 render 与群聊 RoomChat.renderRoom 共用。
+  - App：DownloadManager（每个控制器持有）在读线程逐块调用 file-download，块经 Assembler 校验后追加写入 cache/downloads/<UUID>/<safeName>，进度 (已收, 总量) 为可观察状态，完成回调 File；同一时刻一个下载，可取消；失败与版本变化给可读提示。分享用 ACTION_SEND（FileProvider URI + 授权），打开用 ACTION_VIEW（沿用 AttachmentOpen.mimeOf）。启动时清理 cache/downloads 下超过 24 小时的目录。气泡 combinedClickable：点按复制整条、长按出 ModalBottomSheet（复制整条 / 选择文字），去掉气泡内 SelectionContainer；阅读器为全屏 Dialog + SelectionContainer + 纵向滚动。图片查看器：全屏 Dialog + HorizontalPager，页面先请求 image {sessionId, attachmentId, preview:true}（hello 声明 image-preview 时）再取原图（image 无 preview），原图 LRU 保留 3 张，预览可多保留；保存到相册沿用现有实现。
+  - 评审后补充：链接长按只在命中链接时接管手势并标记 LinkLongPress，气泡长按菜单在其后 1.5 秒内跳过，未命中链接时不消费事件（手指微抖也能出菜单）；ChatMedia 全局一个（私聊群聊共用，新下载顶替旧下载），base64 解码与写盘在独立 IO 线程、状态 executor 只推进状态；「阅读全文」文本只取回开头 512 KB（够数即停止请求后续块，截断处退回 UTF-8 字符边界），加载框显示进度、关闭即作废迟到结果；拼接器以字节数等于总量为完结，done 与总量不符判为畸形；文件名去双向控制符；图片查看器淘汰原图时不淘汰正在看的页并保留预览；实时 message 同样展开 files/imageRefs/whole。「选择文字」阅读器显示消息的 Markdown 源文本（便于完整复制链接地址等）；离开聊天后进行中的下载继续，完成时照常打开或分享。
+decisions:
+  presented-files-as-items:
+    decision: Bot 交付的文件以独立文件条目显示在该消息之后，点击给出「打开 / 分享 / 阅读全文（文本类）」；下载一律分块写缓存文件，不把整个文件读进内存。
+    rationale: 0.3.10 实测 bot 条目的 files 为 {name, sessionId, seq, index}，file-download 以这组定位符分块取回（实测 101 MB 视频按 512 KiB 分块）；整块读进内存在大文件上会 OOM。
+  read-full-via-download:
+    decision: 「阅读全文」：群长帖用 file-text（源码核对、带 attachmentId 的 whole.file），交付的文本文件用分块下载后 UTF-8 解码（实测路径），两者都在阅读器里显示，超过 2 MiB 只显示前 2 MiB 并注明。
+    rationale: file-text 只认带 attachmentId 的文件，交付文件没有 attachmentId；真实服务暂无群长帖样本，file-text 成功应答只能源码核对，失败时给可读提示不影响其他入口（delta tech 登记例外）。
+  long-press-menu:
+    decision: 长按气泡改为底部菜单（复制整条 / 选择文字），部分选择在全屏阅读器里完成，取代气泡内长按拖选。
+    rationale: 上游手机端同此交互；气泡内 SelectionContainer 与长按菜单争用长按手势，且长消息在气泡里拖选困难。链接自身的长按选择器优先于气泡长按。
+alternatives: []
+risks:
+  - file-text 成功应答与群长帖 whole 字段未实测（真实服务无样本），形态以 0.3.10 源码为准，失败降级为提示
+  - 缓存目录中的下载文件在分享后仍保留到下次启动清理（24 小时），系统清理缓存时可能更早删除

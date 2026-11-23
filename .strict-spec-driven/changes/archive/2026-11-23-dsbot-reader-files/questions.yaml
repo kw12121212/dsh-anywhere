@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-reader-files
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 需求问题（路线图回放）
+    answer: 手机端用户看不到 Bot 交付的文件与自己发的图片（0.3.10 的 bot.files、user.imageRefs 未渲染）；长消息只能在气泡里拖选；服务器上的大文件没有下载分享途径。每次查看 Bot 交付成果都会遇到。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 验收标准（路线图回放）
+    answer: 长消息可在阅读器中选择复制；服务器上的大文件可下载并分享；多图可滑动查看（计划变更验收原文），并见 delta spec 场景与设备验收任务。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 触发（路线图回放）
+    answer: dsbot-mobile-polish 里程碑对照上游手机端打磨；0.3.10 基准（dsbot-baseline-0310 已完成）引入 files/imageRefs 与 file-download 分块，手机端尚未消费。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 非目标（路线图回放）
+    answer: 点按气泡复制整条、长按链接选择器、代码块复制、服务器本地文件链接的取回打开、旧形态附件查看与保存相册不变；不做 markdown-image 内联图（富渲染变更）与上传侧改动。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 解读（路线图回放）
+    answer: 「现有服务器文件链接交系统应用打开路径改为复用分块下载」按可行性解读：/api/file?path= 链接不是 file-download 可寻址对象，保留其取回方式；分块下载用于 Bot 交付文件（files）与附件。「阅读全文」覆盖群长帖（file-text）与文本类交付文件（分块下载后解码）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-phone-prefs
+  status: proposed
+summary:
+  what:
+    - 设置页新增「外观」（跟随系统/浅色/深色）与「语言」（跟随系统/简体中文/English）两项本机偏好，切换后界面即时生效（不重连、不丢失当前所在页面），并跨重启保留
+    - 外观决定 Material3 明暗配色（Android 12+ 使用系统动态配色）；语言切换资源文案（新增英文资源）与代码内文案（统一经中英文对照函数），覆盖团队页、聊天页、待处理停靠区、聊天条、提醒横幅、发送箱、设置页与首次设置页等主要界面
+    - 触感反馈统一封装（发送成功、作答成功/失败），动效统一遵循系统减少动态效果设置
+  why:
+    - App 目前只有浅色界面，夜间使用刺眼；界面文案全部写死为中文，英文用户无法使用；上游手机端已支持外观与语言切换
+    - 里程碑 dsbot-mobile-polish 完成标准第六条：切换手机外观与语言后界面即时生效并跨重启保留
+scope:
+  in:
+    - core：PhonePrefs（外观/语言枚举、存储值解析与未知值回退跟随系统、按系统语言解析实际语言）与 I18n（当前语言与中英文对照），聊天条、工作短语、提醒横幅、停靠区、卡片只读提示、团队页分组名、回到最新按钮、统计弹窗等 core 文案按当前语言输出；JUnit
+    - App：PhonePrefsStore（独立 SharedPreferences 文件 phone）与可观察状态；MainActivity 按外观选配色、按语言提供本地化 Context；外壳与设置页按语言重组（连接对象与导航状态保留）；设置页外观与语言卡片；values-en 英文资源；代码内中文文案改为中英文对照；Haptics 统一封装
+    - android-dsbot 规格新增手机外观与语言要求
+  out:
+    - 团队主题与强调色（dsbot-prefs-theme 承接，在本机明暗之上叠加）；诊断报告、日志与 spike 工具的文本；HTTP 底层错误的原始英文/中文细节
+    - 跟随系统之外的第三种语言
+unchanged_behavior:
+  - 连接、会话、聊天、发送箱、停靠区、提醒等功能行为不变；切换语言或外观不重新连接、不清空聊天缓存与发送箱
+  - 默认（未设置）时外观跟随系统、语言跟随系统；系统为中文时与现在的界面文案一致
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-phone-prefs

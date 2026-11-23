@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-rich-render
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 富渲染：show_view 卡片原生绘制折线、面积、柱、横柱与环形图及滑块、数字、开关、提示框、来源段，表格可复制为 CSV；Markdown 表格横向滚动、复制为 TSV 与展开查看，任务列表与服务器本地图片（markdown-image）显示
 details: 参考上游 screens/chat/view.tsx、markdown.tsx 与 markdown-model.ts。core：图表段解码与校验（序列数、点数、数值有限性），沿用 Cards 的深度、条目数与大小上限，超限或畸形降级为只读文本；新增控件段（slider、number、toggle、callout、sources）解码与作答参数构造；Markdown 解析补任务列表与图片节点，表格导出 TSV、卡片表格导出 CSV；JUnit 覆盖校验、上限、导出与解析。App：Compose Canvas 绘制图表（不执行脚本、不访问网络），宽表格横向滚动并提供复制与全屏展开；Markdown 中 https/data 图片直接显示，服务器本地路径图片经 markdown-image 取回（内存缓存、有时效），失败显示占位。单个条目渲染异常时该条目显示可重试的错误占位，不影响整页。验收：含图表的卡片按数据绘制、畸形数据降级不崩溃；宽表格可横向滚动并复制为 TSV；Markdown 本地图片可显示。
 depends_on:

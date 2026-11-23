@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-pending-dock
+sections:
+  Implementation:
+    core-dock:
+      text: core 新增 PendingDock.kt：待处理项汇集（聊天卡片、live learning、connectorRequests、btw，排除已作答，learning 去重）、排序与展开项；LearningProposal 解码与差异行生成；LineDiff 逐行 LCS 与 8 行折叠；ConnectorRequest 解码
+      status: complete
+    app-dock-ui:
+      text: PendingDockViews.kt：DockArea 手风琴（限高 52% 可滚动、一次展开一项、作答后展开下一项、成功/失败触感）、LearningCardView（差异着色与折叠、同意/拒绝）、ConnectorCardView（取消、连接提示网页端），复用 CardView
+      status: complete
+    app-dock-pages:
+      text: BotChatPage/RoomChatPage 接入停靠区：内联待处理卡片换成占位行，answered 集合按聊天记忆；私聊汇集 learning/connector（按 botId 与当前会话）
+      status: complete
+    mock-dock:
+      text: mock-dsh-server 增加 --dock 模式（0.3.10 形态）：state 带 questions/views/work.approvals/secretRequests/connectorRequests/learning/browserHolds 各一条，聊天只含 answer 回复记录；各作答端点按参数识别 id 并从后续应答移除，日志只记端点、id 与参数键（不打印密钥值）
+      status: complete
+    review-fixes:
+      text: 评审修复：待处理项改从 state 汇集并按 0.3.10 参数作答（提问/卡片/审批/密钥/连接器/学习/交接）、聊天 answer 回复记录只读、插话留在内联并改用 {sessionId, cardId} 删除、展开项首次固定且可收起、key(id)、按键盘外可用高度限高、AGENTS.md 提案逐条理由、差异结尾换行、私聊以确认后的会话过滤并在看旧分段时隐藏学习审批与交接、tech 登记 dock-fields-0310 与 FINDINGS 第 16 节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：PendingDockTest（私聊/群聊各来源汇集与优先级、answerable=false/其他会话/已取消/旧分段排除、已作答排除、交接需 callId、0.3.10 作答请求体字面值、学习提案 skill/agents 差异与逐条理由、LineDiff 与折叠、畸形输入）、CardsTest（answer 回复记录只读与所选答案）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --dock，0.3.10 state 形态）：聊天里的回复记录显示为只读「已回答」；停靠区 7 类待处理项按序、默认展开学习审批并显示差异；依次作答学习审批、审批、提问（点选即提交）、密钥（不回显、日志无值）、连接器取消、交接完成、卡片关闭，mock 收到的参数与 0.3.10 一致、每次作答后自动展开下一项，全部处理后停靠区消失；无崩溃
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-pending-dock
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

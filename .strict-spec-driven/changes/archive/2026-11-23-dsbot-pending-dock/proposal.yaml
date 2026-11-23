@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-pending-dock
+  status: proposed
+summary:
+  what:
+    - 学习审批（live learning 的技能提案与 AGENTS.md 修改提案）在停靠区显示名称、理由与逐行差异（新增/删除行着色，超过 8 行折叠，可展开），提供同意/拒绝（learning-answer {id, approve}）；连接器请求卡显示连接器名与用途，提供取消（connector-request-cancel {requestId}），连接动作在连接器页上线前提示到电脑网页端处理；作答成功与失败分别给不同触感反馈
+    - 待处理项改从 state 汇集（DS-Bot 0.3.10 源码核对）：questions/views 按会话 id、live work.approvals、secretRequests、connectorRequests、live learning 与 browserHolds，并按 0.3.10 的参数作答；聊天条目中的 kind=answer 是用户已给出的回复记录，改为只读「已回答」呈现，不再当作待答卡；插话（btw）不进停靠区，仍在聊天中显示，删除改用 0.3.10 的 {sessionId, cardId}
+    - 私聊与群聊在输入框上方新增待处理停靠区：以手风琴汇集当前聊天待处理的学习审批、工具审批、提问、密钥请求、连接器请求、浏览器交接与 show_view 卡片，一次只展开一项（首次为第一项）；作答成功后该项移出，自动展开下一项；停靠区高度不超过键盘之外可用高度的约一半，超出可滚动
+  why:
+    - 一个聊天里同时有审批、提问和卡片时，它们散落在长长的聊天流中，用户要上下翻找、容易漏掉；学习审批只有一行标题，看不到 Bot 要改什么就要用户同意；连接器请求在手机上看不到也无法取消
+    - 里程碑 dsbot-mobile-polish 完成标准第五条：聊天中同时存在审批、提问与卡片时，停靠区只展开第一张需要处理的卡片且高度不超过屏幕约一半，作答后自动展开下一张
+    - 既有内联卡片按 0.3.5 时期的聊天条目与参数实现：在 0.3.10 上聊天里的 answer 条目只是回复记录，真正待处理的项都在 state 里，原有作答参数（如审批 {callId, approved}、插话删除 {id}）也会被服务端拒绝——停靠区必须改用 state 来源与 0.3.10 参数才能真正可用（评审实证）
+scope:
+  in:
+    - android-dsbot 规格新增停靠区、学习审批差异与连接器请求卡要求
+    - tech/dsbot-api 新增 dock-fields-0310（登记 learning 提案与 connectorRequests 的源码核对形态）并为 endpoint-inventory-0310 增加限定例外；FINDINGS 第 16 节登记待实测
+    - core：PendingDock（从 state 汇集当前聊天会话的待处理项：提问、卡片、工具审批、密钥请求、连接器请求、学习提案、浏览器交接，排除已作答，按优先级稳定排序）与 0.3.10 作答请求体（approval-answer {id, choice}、answer-question {sessionId, questionId, answer}、dismiss-question/dismiss-view {sessionId}、secret-set/allow/cancel {requestId…}、learning-answer {id, approve}、connector-request-cancel {requestId}、browser-give-back {botId, outcome}、btw-delete {sessionId, cardId}）；LearningProposal 解码（含 AGENTS.md 修改的逐条理由）与 LineDiff；Cards.fromChatItem 把回复记录判为只读；JUnit
+    - App：DockArea 手风琴组件（按可用高度限高可滚动、展开项首次固定可收起、按聊天重置、作答后展开下一项、成功/失败触感）、各类型作答界面（审批、提问、密钥、卡片关闭、交接、学习审批差异、连接器取消）；私聊与群聊页接入停靠区，聊天流里的卡片条目一律只读呈现；作答失败给可读原因；mock --dock 模式供验收
+  out:
+    - 「需要你」汇总页分节：该汇总页已被团队页行内待办提示取代（team-page 现状），本变更不恢复汇总页
+    - 连接器的实际连接/授权流程与连接器管理页（dsbot-native-integrations 承接）；show_view 图表与富渲染（dsbot-rich-render 承接）
+    - show_view 卡片的表单与图表交互（dsbot-rich-render 承接）：停靠区内只显示标题与「请在电脑网页端填写」并可关闭
+unchanged_behavior:
+  - 团队页的行内待办提示、聊天消息、发送箱与聊天条（任务、电脑操作、修复卡）不变；密钥输入不回显、值不进日志与诊断上报
+  - 已关闭卡片只读、沙箱 HTML 隔离显示、多问题条目引导网页端的既有呈现不变；各类待处理项作答的语义（允许/拒绝、选择、提交、取消、关闭）与网页端一致
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-pending-dock

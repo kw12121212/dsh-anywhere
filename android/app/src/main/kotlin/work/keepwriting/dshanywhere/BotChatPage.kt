@@ -59,6 +59,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import work.keepwriting.core.ChatRender
+import androidx.compose.foundation.combinedClickable
 
 /**
  * 私聊页（dsbot-bot-chat / dsbot-attachments）：消息列表（ChatRender 渲染模型 +
@@ -74,12 +75,25 @@ fun BotChatPage(
     parts: List<String>,
     onOpenSide: () -> Unit = {},
     onOpenLink: (String, Boolean) -> Unit = { _, _ -> },
+    /** 最近 state 快照（含 live 字段），派生 0.3.10 聊天条（dsbot-chat-bars-0310）；null 时不显示。 */
+    state: work.keepwriting.core.Json.Value.Object? = null,
+    /** 该 Bot 当前分段的会话 id（state 的 bots[].sessionId）：判断是否在看旧分段。 */
+    entrySessionId: String? = null,
+    barInFlight: List<String> = emptyList(),
+    /** 聊天条写操作：(在途键, 端点, payload JSON)。 */
+    onBarAction: (String, String, String) -> Unit = { _, _, _ -> },
+    /** 文件与图片取回（dsbot-reader-files）；null 时不显示交付文件操作与图片查看器（旧行为）。 */
+    media: ChatMedia? = null,
 ) {
     val listState = rememberLazyListState()
+    val jump = rememberJumpButton(botId)
+    val mediaUi = rememberChatMediaUi()
+    OutboxEffects(listState, controller.sendScrollSignal, controller.sentSignal)
+    // 待处理停靠区已作答的 id（dsbot-pending-dock）：随聊天记忆，只在主线程增删
+    val dockAnswered = remember(botId) { androidx.compose.runtime.mutableStateListOf<String>() }
     var input by remember { mutableStateOf("") }
     var showPartsDialog by remember { mutableStateOf(false) }
     var showAttachMenu by remember { mutableStateOf(false) }
-    var viewingImage by remember { mutableStateOf<ByteArray?>(null) }
     var viewingFile by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
@@ -107,8 +121,8 @@ fun BotChatPage(
         if (uri != null && bytes != null) {
             runCatching {
                 context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
-                controller.postNotice("已保存")
-            }.onFailure { controller.postNotice("保存失败") }
+                controller.postNotice(tr("已保存", "Saved"))
+            }.onFailure { controller.postNotice(tr("保存失败", "Save failed")) }
         }
         pendingSaveBytes = null
     }
@@ -122,9 +136,9 @@ fun BotChatPage(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.weight(1f)) {
-            if (controller.rows.isEmpty()) {
+            if (controller.rows.isEmpty() && controller.outbox.isEmpty()) {
                 Text(
-                    "还没有消息，发送第一条开始对话",
+                    tr("还没有消息，发送第一条开始对话", "No messages yet. Send the first one to start."),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -136,12 +150,12 @@ fun BotChatPage(
                                 onClick = { controller.loadEarlier() },
                                 enabled = !controller.loadingEarlier,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text(if (controller.loadingEarlier) "加载中…" else "更早的消息") }
+                            ) { Text(if (controller.loadingEarlier) tr("加载中…", "Loading…") else tr("更早的消息", "Earlier messages")) }
                         }
                     } else {
                         item(key = "earliest") {
                             Text(
-                                "已到最早",
+                                tr("已到最早", "Reached the beginning"),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -154,14 +168,22 @@ fun BotChatPage(
                                 fromUser = item.fromUser,
                                 markdown = item.markdown,
                                 onCopy = { clipboard.setText(AnnotatedString(item.markdown)) },
+                                onLongPress = { mediaUi.menuFor = item },
                                 onCopyBlock = { clipboard.setText(AnnotatedString(it)) },
                                 onOpenLink = onOpenLink,
+                            )
+                            is ChatRender.Item.PresentedFile -> PresentedFileRow(
+                                item = item,
+                                progress = media?.progress?.takeIf { it.key == media.keyOf(item) },
+                                onClick = { if (media != null) mediaUi.fileSheet = item },
+                                onCancel = { media?.cancel() },
                             )
                             is ChatRender.Item.ToolCard -> ToolCardRow(item)
                             is ChatRender.Item.Image -> ImageRow(item, onOpen = {
                                 val refJson = item.attachmentRefJson
                                 if (refJson != null) {
-                                    controller.readAttachment(refJson) { bytes -> viewingImage = bytes }
+                                    // 图片查看器：同一聊天的图片左右滑动，先预览后原图（dsbot-reader-files）
+                                    mediaUi.gallery = ChatRender.gallery(controller.rows.map { it.item }, item)
                                 } else {
                                     item.ref?.let { ref ->
                                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(ref))) }
@@ -185,17 +207,15 @@ fun BotChatPage(
                                     },
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("📎 ${item.name ?: "附件文件"}", style = MaterialTheme.typography.bodyMedium)
+                                Text(tr("📎 ${item.name ?: "附件文件"}", "📎 ${item.name ?: "Attachment"}"), style = MaterialTheme.typography.bodyMedium)
                             }
                             is ChatRender.Item.InteractiveCard -> {
-                                var dismissed by remember(row.key) { mutableStateOf(false) }
-                                if (!dismissed) {
-                                    CardView(
-                                        card = item.card,
-                                        onAnswer = { ep, pj -> controller.answerCard(ep, pj) { ok -> if (ok) dismissed = true } },
-                                        onNotice = { controller.postNotice(it) },
-                                    )
-                                }
+                                // 0.3.10 聊天里的卡片条目是回复记录（只读）；待处理项在下方停靠区（dsbot-pending-dock）
+                                CardView(
+                                    card = work.keepwriting.core.Cards.asReadOnly(item.card),
+                                    onAnswer = { ep, pj -> controller.answerCard(ep, pj) { } },
+                                    onNotice = { controller.postNotice(it) },
+                                )
                             }
                             is ChatRender.Item.Btw -> {
                                 var deleted by remember(row.key) { mutableStateOf(false) }
@@ -208,12 +228,15 @@ fun BotChatPage(
                                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Text("💬 ${item.from?.let { "$it: " } ?: ""}${item.text}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                                             TextButton(onClick = {
-                                                item.id?.let { id ->
-                                                    controller.answerCard("btw-delete", work.keepwriting.core.SideChat.btwDelete(id)) { ok ->
+                                                val sid = controller.shownSessionId
+                                                val id = item.id
+                                                if (sid != null && id != null) {
+                                                    // 0.3.10 btw-delete 需要 {sessionId, cardId}（dsbot-pending-dock 评审修正）
+                                                    controller.answerCard("btw-delete", work.keepwriting.core.PendingDock.Requests.btwDelete(sid, id)) { ok ->
                                                         if (ok) deleted = true
                                                     }
                                                 }
-                                            }) { Text("删除") }
+                                            }) { Text(tr("删除", "Delete")) }
                                         }
                                     }
                                 }
@@ -226,13 +249,30 @@ fun BotChatPage(
                             )
                         }
                     }
+                    // 发送箱本地行（发送中 / 未发送点按重试 / 删除；dsbot-outbox-retry）
+                    outboxItems(controller.outbox, onRetry = { controller.retryOutbox(it) }, onDelete = { controller.deleteOutbox(it) })
                 }
                 // 流式期间自动滚动到底；更早记录前插（rows.size 也变）不滚动，key 保持视口
                 val streaming by remember { derivedStateOf { controller.streamingText != null } }
                 LaunchedEffect(controller.rows.size, streaming) {
-                    if (controller.rows.isNotEmpty() && streaming) listState.animateScrollToItem(controller.rows.size)
+                    // 离底较远翻看历史时不强拉到底（由「回到最新」按钮提示；dsbot-chat-cache）
+                    if (controller.rows.isNotEmpty() && streaming && !jump.away) listState.animateScrollToItem(controller.rows.size)
                 }
             }
+            // 缓存滚动恢复/保存与「回到最新 / N 条新消息」（dsbot-chat-cache）
+            ChatScrollSupport(
+                chatId = botId,
+                listState = listState,
+                jump = jump,
+                // 组合期间读 rows（快照隔离，executor 线程并发修改不影响）；只在条数或末行变化时重算
+                rowKeys = remember(controller.rows.size, controller.rows.lastOrNull()?.key) { controller.rows.map { it.key } },
+                // 末行是用户消息（本机发出的经 feed/刷新确认后带 seq）时跟随到底
+                lastIsMine = (controller.rows.lastOrNull()?.item as? ChatRender.Item.Message)?.fromUser == true,
+                freezeAway = { controller.streamingText != null },
+                restoreSignal = controller.restoreSignal,
+                restorePosition = { controller.restorePosition },
+                onSave = { i, o -> controller.saveScroll(i, o) },
+            )
         }
         if (controller.streamingText != null) {
             StreamingBubble(controller.streamingText ?: "")
@@ -272,11 +312,11 @@ fun BotChatPage(
                             when (att.status) {
                                 "uploading" -> Row(verticalAlignment = Alignment.CenterVertically) {
                                     ThinkingPill()
-                                    Text(" 上传中", style = MaterialTheme.typography.labelSmall)
+                                    Text(tr(" 上传中", " Uploading"), style = MaterialTheme.typography.labelSmall)
                                 }
-                                "ready" -> Text("已就绪", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                "ready" -> Text(tr("已就绪", "Ready"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 "failed" -> TextButton(onClick = { controller.retryAttachment(att.id) }) {
-                                    Text("重试（${att.failReason ?: "失败"}）", style = MaterialTheme.typography.labelSmall)
+                                    Text(tr("重试（${att.failReason ?: "失败"}）", "Retry (${att.failReason ?: "failed"})"), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -284,22 +324,88 @@ fun BotChatPage(
                 }
             }
         }
+        // 0.3.10 聊天条：按远端是否返回对应字段显隐（字段缺失时整块不渲染，页面与原来一致）
+        val repair = remember(state, botId) { work.keepwriting.core.ChatBars.repair(state, botId) }
+        val asks = remember(state, botId) { work.keepwriting.core.ChatBars.computerAsks(state, botId = botId) }
+        val tasks = remember(state, botId) { work.keepwriting.core.ChatBars.tasks(state, botId) }
+        val computerBusy = remember(state, botId) { work.keepwriting.core.ChatBars.computerBusy(state, botId) }
+        val workEntry = remember(state, botId) { work.keepwriting.core.ChatBars.botWork(state, botId) }
+        val idJson = work.keepwriting.core.JsonString.of(botId)
+        if (repair != null) {
+            RepairCard(
+                repair = repair,
+                busy = "resume:$botId" in barInFlight,
+                onRetry = { onBarAction("resume:$botId", "resume", "{\"botId\":$idJson}") },
+                onTopUp = { onOpenLink(work.keepwriting.core.ChatBars.TOP_UP_URL, false) },
+            )
+        }
+        ComputerAskCards(asks = asks, inFlight = barInFlight) { ask, answer ->
+            onBarAction(
+                "computer:${ask.id}", "computer-app-answer",
+                "{\"id\":${work.keepwriting.core.JsonString.of(ask.id)},\"answer\":\"$answer\"}",
+            )
+        }
+        if (computerBusy) {
+            ComputerStopBar(busy = "computer-stop:$botId" in barInFlight) {
+                onBarAction("computer-stop:$botId", "computer-stop", "{\"botId\":$idJson}")
+            }
+        }
+        if (tasks.isNotEmpty()) {
+            TaskBar(tasks = tasks, inFlight = barInFlight) { task ->
+                onBarAction(
+                    "task:${task.id}", "bot-stop-task",
+                    "{\"botId\":$idJson,\"taskId\":${work.keepwriting.core.JsonString.of(task.id)}}",
+                )
+            }
+        }
+        // 待处理停靠区：从 state 汇集本聊天（当前显示的会话）的审批、提问、密钥/连接器请求、学习审批、交接与卡片；
+        // 打开旧分段时不显示只属于当前分段的学习审批与交接
+        val shownSid = controller.shownSessionId
+        val viewingCurrent = shownSid != null && shownSid == entrySessionId
+        val dockItems = remember(state, shownSid, viewingCurrent, dockAnswered.size, work.keepwriting.core.I18n.lang) {
+            // 会话确认前不显示（避免先按「旧分段」过滤再出现学习审批，把展开项固定到错误的那一项）
+            if (shownSid == null) return@remember emptyList()
+            work.keepwriting.core.PendingDock.collect(
+                state = state,
+                sessionIds = setOfNotNull(shownSid),
+                botId = botId,
+                roomId = null,
+                answered = dockAnswered.toSet(),
+            ).filter { viewingCurrent || (it.kind != work.keepwriting.core.PendingDock.Kind.LEARNING && it.kind != work.keepwriting.core.PendingDock.Kind.HANDOFF) }
+        }
+        // 按聊天重置停靠区的展开/收起状态
+        androidx.compose.runtime.key(botId) {
+            DockArea(
+                items = dockItems,
+                onAnswer = { ep, pj, done -> controller.answerCard(ep, pj, done) },
+                onAnswered = { dockAnswered.add(it) },
+                onNotice = { controller.postNotice(it) },
+            )
+        }
+        if (controller.working || controller.busy || controller.streamingText != null) {
+            // 工作中显示按工具区分的工作短语（远端未返回工作详情时只显示原指示）
+            // 工作详情带 roomId 时 Bot 正在群里工作：注明，避免误以为是私聊里的工作
+            val phrase = if (controller.working && workEntry != null) {
+                work.keepwriting.core.WorkPhrase.phrase(workEntry) +
+                    (if (workEntry.members["roomId"] is work.keepwriting.core.Json.Value.StringValue) tr("（群聊中）", " (in a group)") else "")
+            } else {
+                null
+            }
+            WorkPhraseLine(phrase, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         // 发送/停止/恢复合一的图标按钮（现代聊天输入区形态）：Bot 工作中=停止、
         // 会话被中断=恢复、其余=发送；发送中（busy）以思考条占位。
-        if (controller.working || controller.busy || controller.streamingText != null) {
-            ThinkingPill(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
-        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { showAttachMenu = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "添加附件")
+                Icon(Icons.Filled.Add, contentDescription = tr("添加附件", "Add attachment"))
             }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("发送消息给 Bot") },
+                placeholder = { Text(tr("发送消息给 Bot", "Message the Bot")) },
                 maxLines = 4,
                 modifier = Modifier.weight(1f),
             )
@@ -315,7 +421,7 @@ fun BotChatPage(
                     )
                 }
                 controller.interrupted -> FilledIconButton(onClick = { controller.resume() }) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "恢复会话")
+                    Icon(Icons.Filled.PlayArrow, contentDescription = tr("恢复会话", "Resume session"))
                 }
                 controller.busy -> ThinkingPill()
                 else -> FilledIconButton(
@@ -329,7 +435,7 @@ fun BotChatPage(
                     enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) &&
                         attachmentsReady,
                 ) {
-                    Icon(Icons.Filled.Send, contentDescription = "发送")
+                    Icon(Icons.Filled.Send, contentDescription = tr("发送", "Send"))
                 }
             }
         }
@@ -339,7 +445,7 @@ fun BotChatPage(
     controller.statsText?.let { body ->
         AlertDialog(
             onDismissRequest = { controller.dismissStats() },
-            title = { Text("统计") },
+            title = { Text(tr("统计", "Stats")) },
             text = {
                 SelectionContainer {
                     Text(
@@ -351,13 +457,13 @@ fun BotChatPage(
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text("关闭") } },
+            confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text(tr("关闭", "Close")) } },
         )
     }
     if (showAttachMenu) {
         AlertDialog(
             onDismissRequest = { showAttachMenu = false },
-            title = { Text("添加附件") },
+            title = { Text(tr("添加附件", "Add attachment")) },
             text = {
                 Column {
                     TextButton(onClick = {
@@ -365,28 +471,28 @@ fun BotChatPage(
                         pickImage.launch(androidx.activity.result.PickVisualMediaRequest(
                             ActivityResultContracts.PickVisualMedia.ImageOnly,
                         ))
-                    }) { Text("从相册选择图片") }
+                    }) { Text(tr("从相册选择图片", "Choose from photos")) }
                     TextButton(onClick = {
                         showAttachMenu = false
                         val uri = CameraOutput.newUri(context)
                         cameraUri = uri
                         if (uri != null) takePicture.launch(uri)
-                    }) { Text("拍照") }
+                    }) { Text(tr("拍照", "Take photo")) }
                     TextButton(onClick = {
                         showAttachMenu = false
                         pickFile.launch("*/*")
-                    }) { Text("选择文件") }
+                    }) { Text(tr("选择文件", "Choose file")) }
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showAttachMenu = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showAttachMenu = false }) { Text(tr("取消", "Cancel")) } },
         )
     }
 
     if (showPartsDialog && parts.size > 1) {
         AlertDialog(
             onDismissRequest = { showPartsDialog = false },
-            title = { Text("切换分段") },
+            title = { Text(tr("切换分段", "Switch part")) },
             text = {
                 Column {
                     parts.forEachIndexed { i, _ ->
@@ -395,70 +501,43 @@ fun BotChatPage(
                                 showPartsDialog = false
                                 controller.openPart(i, parts[i], parts.size)
                             },
-                        ) { Text("分段 ${i + 1}${if (i == parts.lastIndex) "（当前）" else ""}") }
+                        ) { Text(tr("分段 ${i + 1}${if (i == parts.lastIndex) "（当前）" else ""}", "Part ${i + 1}${if (i == parts.lastIndex) " (current)" else ""}")) }
                     }
                 }
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showPartsDialog = false }) { Text("取消") }
+                TextButton(onClick = { showPartsDialog = false }) { Text(tr("取消", "Cancel")) }
             },
         )
     }
 
-    // 图片附件查看（readAttachment 字节 → 位图）+ 保存到相册
-    viewingImage?.let { bytes ->
-        val bitmap = remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
-        Dialog(onDismissRequest = { viewingImage = null }) {
-            Surface(shape = MaterialTheme.shapes.large) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    if (bitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "附件图片",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        Text("无法解码图片（${bytes.size} 字节）")
-                    }
-                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                        TextButton(onClick = {
-                            val saved = runCatching {
-                                // API 29+ 无权限写共享存储：RELATIVE_PATH + IS_PENDING 提交
-                                val values = android.content.ContentValues().apply {
-                                    put(MediaStore.Images.Media.DISPLAY_NAME, "dsh-attachment-${System.currentTimeMillis()}.png")
-                                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-                                    put(MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES)
-                                    put(MediaStore.Images.Media.IS_PENDING, 1)
-                                }
-                                val uri = context.contentResolver.insert(
-                                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values,
-                                )
-                                val bmp = bitmap
-                                if (uri != null && bmp != null) {
-                                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                                        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                                    }
-                                    values.clear()
-                                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                                    context.contentResolver.update(uri, values, null, null)
-                                    true
-                                } else {
-                                    false
-                                }
-                            }.recover { e ->
-                                android.util.Log.e("DSBOT-ATT", "save failed", e)
-                                false
-                            }.getOrDefault(false)
-                            controller.postNotice(if (saved) "已保存到相册" else "保存失败")
-                            viewingImage = null
-                        }) { Text("保存到相册") }
-                        TextButton(onClick = { viewingImage = null }) { Text("关闭") }
-                    }
-                }
-            }
+    // 查看层：长按菜单、阅读器、交付文件菜单、图片查看器（dsbot-reader-files）
+    if (media != null) {
+        ChatMediaOverlays(
+            ui = mediaUi,
+            media = media,
+            sessionId = controller.shownSessionId,
+            onNotice = { controller.postNotice(it) },
+            readAttachment = { ref, cb -> controller.readAttachment(ref, cb) },
+        )
+    } else {
+        mediaUi.gallery?.let { (images, start) ->
+            ImageGalleryDialog(
+                images = images, start = start,
+                load = { image, preview, cb -> val ref = image.attachmentRefJson; if (preview || ref == null) cb(null) else controller.readAttachment(ref, cb) },
+                onSave = { bytes -> controller.postNotice(if (saveToGallery(context, bytes)) tr("已保存到相册", "Saved to Photos") else tr("保存失败", "Save failed")) },
+                onDismiss = { mediaUi.gallery = null },
+            )
         }
+        mediaUi.menuFor?.let { m ->
+            MessageMenuSheet(
+                onDismiss = { mediaUi.menuFor = null },
+                onCopy = { clipboard.setText(AnnotatedString(m.markdown)) },
+                onSelect = { mediaUi.reader = m.markdown to null },
+            )
+        }
+        mediaUi.reader?.let { (text, note) -> ReaderDialog(text, note) { mediaUi.reader = null } }
     }
 
     // 文件附件查看（dsbot-attachments）：字节写 cache 临时文件交系统查看器；保存经系统文件保存器
@@ -466,18 +545,18 @@ fun BotChatPage(
         Dialog(onDismissRequest = { viewingFile = null }) {
             Surface(shape = MaterialTheme.shapes.large) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("文件：$name（${bytes.size} 字节）", style = MaterialTheme.typography.bodyMedium)
+                    Text(tr("文件：$name（${bytes.size} 字节）", "File: $name (${bytes.size} bytes)"), style = MaterialTheme.typography.bodyMedium)
                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                         TextButton(onClick = {
                             AttachmentOpen.openWith(context, name, bytes)
                             viewingFile = null
-                        }) { Text("用其他应用打开") }
+                        }) { Text(tr("用其他应用打开", "Open with another app")) }
                         TextButton(onClick = {
                             pendingSaveBytes = bytes
                             saveFile.launch(name)
                             viewingFile = null
-                        }) { Text("保存") }
-                        TextButton(onClick = { viewingFile = null }) { Text("关闭") }
+                        }) { Text(tr("保存", "Save")) }
+                        TextButton(onClick = { viewingFile = null }) { Text(tr("关闭", "Close")) }
                     }
                 }
             }
@@ -501,6 +580,7 @@ private fun MessageBubble(
     fromUser: Boolean,
     markdown: String,
     onCopy: () -> Unit,
+    onLongPress: () -> Unit,
     onCopyBlock: (String) -> Unit,
     onOpenLink: (String, Boolean) -> Unit,
 ) {
@@ -511,14 +591,12 @@ private fun MessageBubble(
         Surface(
             color = if (fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.widthIn(max = 320.dp).clickable(onClick = onCopy),
+            // 点按复制整条；长按出「复制整条 / 选择文字」菜单，部分选择在全屏阅读器里做（dsbot-reader-files）。
+            // 链接自身的点击与长按选择器由 MarkdownText 先消费，不触发气泡手势。
+            modifier = Modifier.widthIn(max = 320.dp).combinedClickable(onClick = onCopy, onLongClick = { if (!LinkLongPress.recent()) onLongPress() }),
         ) {
             Column(modifier = Modifier.padding(10.dp)) {
-                // 长按可选择复制部分文字（fix-android-chat-links-and-copy）；
-                // 点按气泡复制整条与链接点击/长按选择器不受影响
-                SelectionContainer {
-                    MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
-                }
+                MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
             }
         }
     }
@@ -551,7 +629,7 @@ private fun ToolCardRow(item: ChatRender.Item.ToolCard) {
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Text(
-                "工具调用：${item.name ?: "未知"}",
+                tr("工具调用：${item.name ?: "未知"}", "Tool call: ${item.name ?: "unknown"}"),
                 style = MaterialTheme.typography.labelMedium,
                 fontFamily = FontFamily.Monospace,
             )
@@ -568,7 +646,7 @@ private fun ImageRow(item: ChatRender.Item.Image, onOpen: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable(onClick = onOpen),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("🖼️ ${item.name ?: item.ref ?: "图片"}", style = MaterialTheme.typography.bodyMedium)
+        Text(tr("🖼️ ${item.name ?: item.ref ?: "图片"}", "🖼️ ${item.name ?: item.ref ?: "Image"}"), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -579,11 +657,12 @@ private fun ChatActionRow(controller: ChatController, parts: List<String>, onPic
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        TextButton(onClick = { controller.newPart() }) { Text("新分段") }
+        TextButton(onClick = { controller.newPart() }) { Text(tr("新分段", "New part")) }
         if (parts.size > 1) {
-            TextButton(onClick = onPickPart) { Text("旧分段") }
+            TextButton(onClick = onPickPart) { Text(tr("旧分段", "Earlier parts")) }
         }
-        TextButton(onClick = onOpenSide) { Text("侧问") }
-        TextButton(onClick = { controller.showStats() }) { Text("统计") }
+        TextButton(onClick = onOpenSide) { Text(tr("侧问", "Side chat")) }
+        TextButton(onClick = { controller.showStats() }) { Text(tr("统计", "Stats")) }
     }
 }
+

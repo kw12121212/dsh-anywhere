@@ -39,6 +39,8 @@ rules:
     enforcement:
       method: test
       detail: 脱敏实现必须命中内容键后递归进内容区：区域内所有字符串叶节点（含嵌套对象与字符串数组的每个元素）一律替换占位符——卡片类内容（如问答卡的 options/selected）不是平铺字符串，仅按固定键清单平铺替换必漏（dsbot-api-spike 评审实证：role/why/purpose/question 对象曾整体漏过）。夹具校验测试按同一语义断言内容键值为占位符形态，测试键清单与脱敏键清单保持同步。
+    exceptions:
+      - android/core/src/test/resources/dsbot-source/ 下的源码核对样本：只用于真实服务尚无样本的字段（chat-bars-fields-0310），必须与真实夹具目录 dsbot/ 分开、由该目录 README 标注来源与替换义务、内容全部为合成文本；同一字段一旦取得真实样本须改为 dsbot/ 下的脱敏夹具并删除对应样本
   secrets-env-gated:
     strength: MUST
     statement: spike 与验证工具的带 token 地址等敏感输入一律经环境变量传入；命令行参数、输出、dump 与仓库内容中不得出现 token、cookie 或密钥
@@ -70,13 +72,21 @@ rules:
     enforcement:
       method: test
       detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+    exceptions:
+      - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
     rationale: 这些是上游为手机端新增的内部接口，可能继续漂移；经 dsh 的 HTTP/SSE 路径与上游手机加密链路不同，只有真实实测能确定哪些可用；本次服务器缺少部分样本（无文件附件、窗口内无群活动），必须把实测债务显式交给消费方
     enforcement:
       method: review
-      detail: 实测（DS-Bot 0.3.10 / dsh 0.2.2-rc.3）：hello、notices、feed hello 与 notice、image（preview）、avatar、usage-summary、room-chat 取到成功应答；各写端点与 file-download/file-text/markdown-image 取到错误应答（新增错误码 bot/forbidden、bot/unavailable，经 reasonOf 缺省归 REFUSED）；未知端点回 bot/not-found；聊天条目图片引用为 imageRefs[]={attachmentId,mime,name}。仅源码核对、待首个消费变更实测补夹具：feed room 事件形态、file-download 成功分块（512 KiB、offset/version/nextOffset）、file-text 与 markdown-image 成功应答、state avatars:ref 下的 imageRef（本服务器头像均为 shape）。评审核对新端点的解码实现引用了 0.3.10 夹具与 FINDINGS 登记、源码核对项已先补实测；未实测可用的能力必须经 hello-capabilities 门控
+      detail: 实测（DS-Bot 0.3.10 / dsh 0.2.2-rc.3）：hello、notices、feed hello 与 notice、image（preview）、avatar、usage-summary、room-chat 取到成功应答；各写端点与 file-download/file-text/markdown-image 取到错误应答（新增错误码 bot/forbidden、bot/unavailable，经 reasonOf 缺省归 REFUSED）；未知端点回 bot/not-found；聊天条目图片引用为 imageRefs[]={attachmentId,mime,name}。file-download 成功分块已由 dsbot-reader-files 实测（presented 文件以 files[] 的 sessionId/seq/index 定位，512 KiB 分块、version 连续、版本变化与未知会话回 bot/not-found；夹具 file-download-chunk*.json，FINDINGS 第 17 节）。markdown-image 成功应答已由 dsbot-rich-render 实测（{mime, bytes, size, rev}；带 knownRev 且未变回 {mime, unchanged:true, size, rev}；工作区外 bot/forbidden；夹具 markdown-image-ok/unchanged.json，FINDINGS 第 18 节）。仅源码核对、待首个消费变更实测补夹具：feed room 事件形态、file-text 成功应答、state avatars:ref 下的 imageRef（本服务器头像均为 shape）。评审核对新端点的解码实现引用了 0.3.10 夹具与 FINDINGS 登记、源码核对项已先补实测；未实测可用的能力必须经 hello-capabilities 门控
+    exceptions:
+      - chat-bars-fields-0310 登记的聊天条字段：真实服务暂时无法产生样本（无任务/阻塞/群目标、电脑操作关闭、无零成本可撤销的触发途径）时，消费方可先按源码核对形态实现，前提是缺失或畸形一律降级为不显示、源码核对位置与取样尝试登记在 FINDINGS 第 13 节，并在服务器出现样本时实测替换
+      - notices-fields-0310 登记的群类提醒形态（kind=group/done 与群内 approval 的 roomId、title=群名）：真实服务需群里有成员发言或完成任务才产生、取证会触发真实模型运行，消费方可先按源码核对形态实现，前提是 title 只作来源、摘要取 text，缺失字段降级为私聊形态，并在 FINDINGS 第 14 节登记待实测
+      - dock-fields-0310 登记的停靠区数据（live learning 提案与 state connectorRequests）：真实服务需 Bot 产生学习提案或请求连接器才会出现，本机当前无样本，消费方可先按源码核对形态实现，前提是缺字段时只显示标题、作答端点错误时给可读提示，并在 FINDINGS 第 16 节登记待实测
+      - file-text 成功应答与群帖 whole{length,file}：真实服务暂无带 attachmentId 的文件附件或被截断的长群帖（需用户上传附件或 Bot 在群里发超长帖，取样会触发真实模型运行），消费方可先按 0.3.10 源码核对形态实现「阅读全文」，前提是只在条目带 whole.file 时显示入口、失败给可读提示且不影响其他操作，并在 FINDINGS 第 17 节登记待实测
+      - show_view 蓝图（state.views[sessionId].view，deep-view 0.1.2 组件树）：真实服务目前只有 stack/text/choice/submit 的卡片样本（夹具 view-blueprint-choice.json），图表、指标、进度、表格、滑块、数字、开关、选项、确认、表单与公式、let 的形态只能按 deep-view 0.1.2 源码核对（取样需 Bot 调用 show_view，触发真实模型运行）；消费方可先按源码移植的校验规则实现，前提是校验不通过一律降级为只读摘要、作答参数与 validateViewAnswer 一致，并在 FINDINGS 第 18 节登记待实测
   spike-write-probes-non-mutating:
     strength: MUST
     statement: 对真实 dsh 做取证或复验时，写类端点（停止、作答、取消、记忆增改、日程暂停、上传暂存、发送等）只能用不存在的 id 或无效参数取错误形态，不得改动真实团队、会话、记忆或日程；需要写端点的成功形态时，由消费它的变更在可撤销的合成对象上取证并记录清理方式
@@ -86,3 +96,24 @@ rules:
       detail: 评审检查 android/core/src/spike 探针的写端点 payload 只含不存在的 id 或无效参数，新增成功形态取证附带合成对象与清理步骤
     exceptions:
       - runSpike 的 DSH_SPIKE_SEND=1（默认关闭）向第一个主 Bot 发一条 hi 以取得 message/stream/notice 事件，这是既有的显式开关，不受本规则约束
+  chat-bars-fields-0310:
+    strength: MUST
+    statement: 聊天条的数据来源（DS-Bot 0.3.10，源码核对，待实测）：后台任务取 state 的 bots[].tasks[]={id,title,status,sessionId,roomId?,startedAt,updatedAt,summary?,error?,running}，只显示 status ∈ running/waiting_work/waiting_approval，私聊只取不带 roomId 的任务（群里接的任务属于群，对齐网页端 tasksForChat），等你审批在前、其余按 updatedAt（缺省 startedAt）倒序；停止为 POST /api/bot bot-stop-task {botId,taskId}（无此 Bot 回 bot/not-found，已实测）。电脑操作取 state/live 合并对象的 computerLive.asks{id→{id,botId,sessionId,appName,at,roomId?,icon?,callId?}} 与 computerLive.bots{botId→{state,app?,waitingFor?,steps}}（state 为 bot/waiting 视为正在操作）；作答 computer-app-answer {id,answer:deny|once|always}（请求不存在回 value:false，已实测），停止 computer-stop {botId}（value:true，已实测）。模型失败取 bots[].blocked={code,provider?,status?,requestId?,at}，code ∈ MISSING_CREDENTIAL/INVALID_CREDENTIAL/AUTH/QUOTA/ACCOUNT_QUOTA/ACCOUNT_SIGN_IN_REQUIRED/ACCOUNT_SIGNED_OUT/ACCOUNT_TOKEN_INVALID/LOCAL_AGENT_*，重试为 resume {botId}。群目标取 rooms[].goal={title,status:drafting|active|paused|complete|stopped,stages[{id,title,status:pending|active|passed}],current}。工作详情取 live 的 work.bots{botId→{since,tool?,said?,note?,target?,roomId?}} 与 work.rooms{roomId→[{botId,tool?,said?,note?,target?,speaking?}]}。这些字段不在 hello 能力名单内，客户端按字段存在显隐，缺失或畸形一律降级为不显示
+    rationale: 0.3.10 的 hello capabilities 不覆盖这些聊天条，且本次取证服务器没有任务/阻塞/群目标样本、电脑操作关闭；把源码核对位置与形态登记为单一事实来源，并显式标注实测状态，避免后续变更把源码核对当实测，也让上游字段漂移时能定位到对照位置
+    enforcement:
+      method: test
+      detail: core JUnit（ChatBarsTest、WorkPhraseTest）以源码核对形态夹具覆盖解码、活动状态与私聊 roomId 过滤及排序、真实 0.3.10 夹具（state-full、state-unchanged-live 经 mergeDelta）下全部派生为空且 live 字段可读、字段缺失与畸形降级、上限截断、修复卡文案与充值链接判定、工作短语映射顺序；源码核对位置：ds-bot 0.3.10 src/host/channel.js（view/live/state 应答合并）、bot-tasks.js taskViewOf、turns.js blockBot/doingOf/workView/roomWorkView、computer/index.js computerLive/answerAppAccess、goals.js；设备验收取得真实样本后替换夹具并在 FINDINGS 登记
+  notices-fields-0310:
+    strength: MUST
+    statement: 应用内提醒的数据来源（DS-Bot 0.3.10）：feed notice 事件与 POST /api/bot notices {boot, since} 应答的条目形态 {seq,time,botId,name,kind,sessionId?,roomId?,title?,text}，应答外层 {boot,seq,reset,notices[]}（实测，夹具 notices.json、notices-reset.json、feed-stream-0310.sse，样本均为 kind=message）。按上游 mobile.js 源码核对、待实测：kind=group 与 done 来自群日志（roomLineAdded），带 roomId 与 title=群名，group 的 text 为消息正文、done 的 text 为空；kind=approval 的 text 为工具名，群内审批同样带 roomId 与 title=群名；kind=question/view 来自私聊卡片（cardShown），不带 title。客户端只显示 question/approval/message/group/done，title 只作来源（群名）、摘要一律取 text；(boot, seq) 游标去重，reset 或 boot 变化时重取整体状态而不补弹
+    rationale: dsbot-baseline-0310 只取到 kind=message 的真实提醒，群类提醒需要群活动才产生；首个消费方把 title 误当摘要的评审实证说明字段语义必须登记，否则群消息会显示成群名而丢掉正文
+    enforcement:
+      method: test
+      detail: core JUnit（NoticesTest）以真实夹具覆盖解码与 reset，并以源码核对形态的内联样本覆盖群消息/群任务完成/群内审批的横幅文案（群名作来源、摘要取 text）、pickBanner 跳过当前聊天、游标首次不补弹/同 boot 补齐/boot 变化重置/补齐与实时交错
+  dock-fields-0310:
+    strength: MUST
+    statement: 待处理停靠区的数据来源与作答参数（DS-Bot 0.3.10，源码核对，待实测）：提问 state.questions{会话id→{id, callId?, question, detail?, options[{label, description?}], multiSelect, allowCustom?, askedAt}}，作答 answer-question {sessionId, questionId, answer:{selected:[选项文字], custom?}}，忽略 dismiss-question {sessionId}；卡片 state.views{会话id→{id, callId?, title, view, askedAt}}，关闭 dismiss-view {sessionId}（view-reply {sessionId, viewId, action, values} 留给富渲染）；工具审批 live work.approvals[{id, sessionId, botId, roomId?, taskId?, taskTitle?, tool, reason, detail, at, answerable}]，作答 approval-answer {id, choice:allow|reject}；密钥请求 state.secretRequests{botId→[{id, callId?, sessionId, name, purpose, kind:fill|allow, status, askedAt}]}，作答 secret-set {requestId, value} / secret-allow {requestId} / secret-cancel {requestId}；连接器请求 state.connectorRequests{botId→[{id, callId?, sessionId, connectorId, name, purpose, status, askedAt}]}，取消 connector-request-cancel {requestId}；学习审批 live learning{botId→[skill {id, action, name, description, content, why, previous?{content}} | agents {id, path, edits[{op, old, text, why}]}]}，作答 learning-answer {id, approve}；浏览器交接 live browserHolds{botId→{by, reason, note, callId?, sessionId?}}（带 callId 才是 Bot 发起），交还 browser-give-back {botId, outcome:done|skip}；插话删除 btw-delete {sessionId, cardId}。聊天条目 kind=answer（带 answers/handoff/views）是用户回复记录（parts.js REPLY_KIND），客户端只读呈现。缺字段降级只显示标题
+    rationale: 0.3.5 时期的内联卡片按聊天条目与旧参数实现，0.3.10 已把待处理项移到 state、参数也已改变（评审核对 channel.js/approvals.js/secrets.js/parts.js 实证）；本机真实服务当前没有这些待处理项的成功样本，必须登记源码核对位置与形态，避免把源码核对当实测并为后续实测替换留出对照
+    enforcement:
+      method: test
+      detail: core JUnit（PendingDockTest）以源码核对形态的 state 样本覆盖各来源的汇集、会话/归属过滤、answerable=false 排除、排序与作答请求体字面值；CardsTest 以真实夹具同构的 answer 条目断言只读「已回答」。源码核对位置：ds-bot 0.3.10 src/host/channel.js（view/live、answer-question、view-reply、dismiss-*、approval-answer、btw-delete、browser-give-back、answerQuestion、answerView）、approvals.js（approvalsView、answerApproval、OUTCOMES）、secrets.js（requestsOf、secret-set/allow/cancel）、tools.js（state.questions/views 写入）、learning.js、connectors/index.js、browser.js（setHold）、parts.js（REPLY_KIND 回复记录、questionReply）

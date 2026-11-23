@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-rich-render
+sections:
+  Implementation:
+    probe-fixtures:
+      text: 实测 markdown-image 成功与 knownRev 未变应答、真实 show_view 蓝图，补脱敏夹具 markdown-image-ok/unchanged.json、view-blueprint-choice.json；FINDINGS 第 18 节登记实测与源码核对项
+      status: complete
+    core-formula:
+      text: core ViewFormula：deep-view 公式语言移植（解析、函数、let 作用域、求值、显示）
+      status: complete
+    core-view-card:
+      text: core ViewCard：蓝图解码与校验（deep-view 规则与上限 + 客户端上限）、作用域与 resolve、图表与进度数据、表格 CSV、降级摘要、view-reply 请求体
+      status: complete
+    core-markdown:
+      text: core MarkdownParse：任务列表、独占一行图片（含 <…> 路径）、表格 TSV
+      status: complete
+    app-view-card:
+      text: App ViewCardView：组件递归绘制、输入状态与公式重算、Canvas 图表（bar/hbar/line/area/donut）、表格横向滚动与复制 CSV、作答经 view-reply、Invalid 降级；接入停靠区 VIEW
+      status: complete
+    app-markdown:
+      text: App MarkdownText：表格横向滚动、复制 TSV、全屏展开；任务列表；图片（data 解码、https 经 split-dial、本地路径 markdown-image 内存缓存与 knownRev）、失败占位可重试
+      status: complete
+    mock-rich:
+      text: mock-dsh-server --rich：state.views 带含图表/输入/公式/表格/表单的蓝图，view-reply 校验 action 并移除视图；聊天含宽表格、任务列表与本地/data 图片，markdown-image 返回 PNG
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：ViewCardTest（公式语义、真实蓝图解码与作答、公式驱动的图表/指标/进度/CSV、畸形与超限降级、表单/确认作答、Markdown 任务/图片/TSV）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --rich）：停靠区卡片按数据绘制五种图表、拖动滑块后公式指标与图表即时变化、表格复制 CSV、提交后卡片消失；畸形卡片降级不崩溃；聊天宽表格横向滚动并复制 TSV、展开全屏；任务列表与本地图片显示
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-rich-render
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

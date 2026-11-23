@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-pending-dock
+approach:
+  - core PendingDock.kt：collect(state, sessionIds, botId?, roomId?, answered) 从 state 汇集——questions[会话id]（id、question、detail、options[label, description]、multiSelect、allowCustom）、views[会话id]（id、title）、live work.approvals（私聊取该 Bot 且无 roomId、群聊取 roomId 匹配，answerable=false 不计；id、tool、reason、taskTitle）、secretRequests[botId] 与 connectorRequests[botId]（status=pending 且 sessionId 属当前会话）、live learning[botId] 与 browserHolds[botId]（带 callId 的才是 Bot 发起的交接）；按 学习/审批 → 提问 → 密钥/连接器 → 交接 → 卡片 稳定排序，排除已作答 id。Requests 生成 0.3.10 作答请求体。LearningProposal 解码技能/AGENTS.md 提案（含 edits[].why），lines() 生成差异行；LineDiff 逐行 LCS（结尾换行不产生空行，超 400 行降级全删全增）与 8 行折叠。Cards.fromChatItem 对带 answers/handoff/views 的 kind=answer 回复记录返回只读「已回答：问题 / 所选答案」。
+  - App：DockArea（PendingDockViews.kt）在消息列表与输入框之间，限高为键盘之外可用高度的约一半并可滚动；首次显示展开第一项并以 SideEffect 固定（之后新到更高优先级项不打断正在输入的项），展开项被移出才回落，点按已展开项收起全部；每项以 key(id) 保持状态。按类型渲染：审批（工具、理由、允许/拒绝）、提问（单选点即提交，多选勾选与自填用提交，忽略=dismiss-question）、密钥（fill 输入不回显后提交、allow 允许使用已保存的、取消）、卡片（标题+到网页端填写+关闭=dismiss-view）、交接（已完成/跳过）、学习审批（差异着色折叠、逐条理由、同意/拒绝）、连接器（取消、去连接提示网页端）。作答回调经 view.post 回主线程记入 answered 并给 CONFIRM/REJECT 触感。私聊以控制器确认后的 shownSessionId 为会话（未确认前不显示停靠区；看旧分段时不显示学习审批与交接），群聊以 rooms[].sessionId 与 parts 为会话集合。聊天流内联的卡片条目照旧经 CardView 呈现（0.3.10 下为只读回复记录），插话内联显示并以 {sessionId, cardId} 删除。
+decisions:
+  no-needs-you-page:
+    decision: 不实现计划变更中的「需要你页按类型分节」：该汇总页已在 dsbot-native-chat 期间被团队页行内待办提示取代，本变更保持现状。
+    rationale: App 当前没有「需要你」页面（TeamPage 注释与实现均为行内提示），恢复一个页面只为分节属于范围外的导航改动；停靠区已在聊天内按类型排序呈现待处理项，团队页行内提示负责跨聊天的入口。
+  learning-from-live:
+    decision: 学习审批以 state 的 live learning[botId] 提案为准（含差异所需的 previous.content/content 与 edits[].why），答复用 learning-answer {id, approve}；聊天流中的学习卡片条目一律只读。
+    rationale: 上游 learning.js 的提案对象才带差异所需字段，聊天条目只有标题；answer({id, approve}) 是上游 0.3.10 的端点签名（源码核对）；停靠区不再从聊天条目取卡片，避免一张审批出现两处。
+  state-sourced-pending:
+    decision: 停靠区的待处理项全部来自 state（questions/views/work.approvals/secretRequests/connectorRequests/learning/browserHolds），作答参数按 DS-Bot 0.3.10 channel.js 源码核对；聊天条目里的 kind=answer 视为用户回复记录只读呈现。
+    rationale: 评审核对上游 parts.js：0.3.10 的 answer 条目由用户回复（REPLY_KIND）打标，真实夹具 chat-page.json 也是带 answers 的形态；待处理的提问/卡片/审批/密钥请求只存在 state 中，且 answer-question、approval-answer、btw-delete 的参数与旧实现不同。只有以 state 为来源、按 0.3.10 参数作答，停靠区在真实服务上才能工作。
+  btw-stays-inline:
+    decision: 插话（btw）不进入停靠区，仍内联显示在聊天中，删除改用 btw-delete {sessionId, cardId}。
+    rationale: 插话不需要用户处理，计入停靠区会让「待处理 N 项」与停靠区常驻失真（评审指出）；内联保留上下文且删除入口不变，只修正为 0.3.10 参数。
+  view-readonly-in-dock:
+    decision: show_view 卡片在停靠区只显示标题、提示到电脑网页端填写并可关闭（dismiss-view），表单与图表交互交给本里程碑后续的 dsbot-rich-render。
+    rationale: 0.3.10 的 view 结构（view.blocks、answerView 的 action/values 校验）与现有 CardView 的解析不一致，完整支持属于富渲染变更的范围；给出明确指引与关闭入口比显示一张无法正确提交的表单更安全。
+  handoff-callid:
+    decision: 浏览器交接项的 id 含 callId，交还请求带 callId（{botId, callId, outcome}）。
+    rationale: 同一聊天可先后发起多次交接，id 固定会让已作答的第一次挡住第二次（复审实证）；上游只有带 callId 时才判过期，不带会在交接已换新时误交还新的那次。
+alternatives: []
+risks:
+  - learning 与 connectorRequests 的字段形态为 0.3.10 源码核对（learning.js reviewSkill/reviewAgents、connectors/index.js request_connector），本机真实服务当前没有待处理样本；解码一律容错，缺字段时只显示标题
+  - 停靠区与聊天条（任务条、电脑操作请求、修复卡）同在输入框上方，内容多时可占用较多高度：停靠区限高为可用高度（Compose 视图实际高度与屏高减键盘取小）的约一半并可滚动

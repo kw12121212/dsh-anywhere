@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-reader-files
+  status: proposed
+summary:
+  what:
+    - 聊天查看增强：长按消息弹出「复制整条 / 选择文字」，选择文字进入全屏可选阅读器；群里被截断的长帖与 Bot 交付的文本文件可「阅读全文」；Bot 交付的文件（deliverables 的 files）显示为文件条目，经 file-download 分块下载到 App 缓存后交系统分享面板或打开；用户消息里的图片（imageRefs）显示为图片条目，图片查看器可左右滑动，先显示预览再加载原图。
+  why:
+    - 0.3.10 的聊天里 Bot 交付的文件（bot 条目的 files）与用户发的图片（imageRefs）手机端完全不显示；长消息只能在气泡里艰难地长按拖选；服务器上的大文件（PDF、压缩包、视频）没有可靠的下载与分享途径。对照上游手机端（items.tsx 长按菜单、file-download.ts、图片查看器）补齐。
+scope:
+  in:
+    - core FileDownload：请求体（presented 文件 sessionId/seq/index 与附件 attachmentId 两种）、分块解码、拼接器（512 KiB 分块、offset/nextOffset 连续性、首块 version 锁定、版本变化或错位即中止并报告、总量上限）、文件名清洗防路径穿越、是否文本判定
+    - core ChatRender：bot 条目的 files 渲染为交付文件条目，user 条目的 imageRefs 渲染为图片条目；群帖的 whole{length,file} 带到消息上；ImageGallery 从当前条目列表取图片序列与点开位置；FileText 请求与应答解码
+    - App：气泡长按菜单与全屏可选阅读器；「阅读全文」（群长帖经 file-text，文本类交付文件经分块下载后按 UTF-8 解码，限 2 MiB）；交付文件下载到 cache/downloads/<随机目录>/ 后经 FileProvider 分享或打开、进度与失败提示；图片查看器 HorizontalPager、preview 先显示（image 端点，image-preview 能力门控）再取原图、原图内存最多 3 张；下载与图片内容不进日志与诊断
+    - mock-dsh-server --reader 模式（交付文件、超 512 KiB 分块、图片、群长帖、file-text）与设备验收
+    - FINDINGS 第 17 节登记 file-download 分块实测与夹具；delta tech 为 endpoint-inventory-0310 增加 file-text 成功应答待实测的例外
+  out:
+    - markdown-image（Markdown 里的服务器本地图片内联显示，属富渲染变更 dsbot-rich-render）
+    - 服务器本地路径链接（/api/file?path=）的传输方式：它按路径取文件、不是 file-download 可寻址的附件或交付文件，保持现有取回与打开
+    - 上传侧附件与发送箱行为
+unchanged_behavior:
+  - 点按气泡复制整条消息、长按链接出「选择打开方式」选择器、代码块复制按钮、文件链接打开、现有附件（kind=file/image 旧形态）查看与保存到相册的行为不变
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-reader-files

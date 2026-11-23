@@ -18,6 +18,8 @@ object ChatRender {
             val seq: Long?,
             val speakerName: String? = null,
             val speakerColor: String? = null,
+            /** 群里被截断的长帖的全文文件（room-chat bot 条目 whole.file 原始 JSON；「阅读全文」经 file-text）。 */
+            val wholeFileJson: String? = null,
         ) : Item
         /** 工具调用折叠卡（call 名与状态摘要）。 */
         data class ToolCard(val name: String?, val summary: String?) : Item
@@ -36,6 +38,12 @@ object ChatRender {
 
         /** btw 插话卡（dsbot-side-chat）：显示插话文本与来源，可删除（btw-delete）。 */
         data class Btw(val id: String?, val text: String, val from: String? = null) : Item
+
+        /**
+         * Bot 交付的文件（dsbot-reader-files）：bot 条目 files[] 的一项，{name, sessionId, seq, index}
+         * 是 file-download 的定位符（seq 属于交付事件所在会话，不是消息自己的 seq）。
+         */
+        data class PresentedFile(val name: String, val sessionId: String, val seq: Long, val index: Int) : Item
     }
 
     /** 分页信息（earlier/chat 的下一页 cursor，原始值形态透传）。 */
@@ -49,6 +57,7 @@ object ChatRender {
         val out = mutableListOf<Item>()
         for (raw in page.items) {
             renderItem(raw)?.let { out.add(it) }
+            out.addAll(extras(raw))
         }
         // cursor 存在即可再取更早一页；应答未带 cursor 视为到最早（保守：不可再翻）
         return Page(out, page.cursor, page.cursor == null)
@@ -59,7 +68,14 @@ object ChatRender {
         val obj = raw.raw as? Json.Value.Object ?: return null
         return when (raw.kind) {
             "user" -> raw.text?.let { Item.Message(fromUser = true, markdown = it, turn = raw.turn, seq = raw.seq) }
-            "bot" -> raw.text?.let { Item.Message(fromUser = false, markdown = it, turn = raw.turn, seq = raw.seq) }
+            "bot" -> raw.text?.let {
+                val whole = obj.members["whole"] as? Json.Value.Object
+                val file = whole?.members?.get("file") as? Json.Value.Object
+                Item.Message(
+                    fromUser = false, markdown = it, turn = raw.turn, seq = raw.seq,
+                    wholeFileJson = file?.takeIf { f -> f.members["attachmentId"] is Json.Value.StringValue }?.let(Json::encode),
+                )
+            }
             "tool" -> Item.ToolCard(
                 name = (obj.members["call"] as? Json.Value.Object)?.stringOr("name"),
                 summary = obj.stringOr("label") ?: obj.stringOr("status"),
@@ -98,6 +114,36 @@ object ChatRender {
             // 分段边界/checkpoint/未知 kind：不可见（网页端一致）
             else -> null
         }
+    }
+
+    /**
+     * 条目附带的可见内容（dsbot-reader-files，0.3.10 实测形态）：bot 条目的 files[]（交付文件）逐项成
+     * [Item.PresentedFile]；user 条目的 imageRefs[]（{attachmentId, mime, name}）逐项成 [Item.Image]。
+     * 形态不符的项跳过。
+     */
+    fun extras(raw: DsbotModels.ChatItem): List<Item> {
+        val obj = raw.raw as? Json.Value.Object ?: return emptyList()
+        val out = mutableListOf<Item>()
+        (obj.members["files"] as? Json.Value.Array)?.items?.forEach { f ->
+            val o = f as? Json.Value.Object ?: return@forEach
+            val sessionId = o.stringOr("sessionId") ?: return@forEach
+            val seq = (o.members["seq"] as? Json.Value.NumberValue)?.raw?.toLongOrNull() ?: return@forEach
+            val index = (o.members["index"] as? Json.Value.NumberValue)?.raw?.toIntOrNull() ?: 0
+            out.add(Item.PresentedFile(o.stringOr("name") ?: "file", sessionId, seq, index))
+        }
+        (obj.members["imageRefs"] as? Json.Value.Array)?.items?.forEach { r ->
+            val o = r as? Json.Value.Object ?: return@forEach
+            if (o.stringOr("attachmentId") == null) return@forEach
+            out.add(Item.Image(ref = null, name = o.stringOr("name"), attachmentRefJson = Json.encode(o)))
+        }
+        return out
+    }
+
+    /** 图片查看器的序列（dsbot-reader-files）：当前条目里可取字节的图片（带附件引用）与点开的位置。 */
+    fun gallery(items: List<Item>, tapped: Item.Image): Pair<List<Item.Image>, Int> {
+        val images = items.filterIsInstance<Item.Image>().filter { it.attachmentRefJson != null }
+        val at = images.indexOfFirst { it === tapped }.takeIf { it >= 0 } ?: images.indexOf(tapped)
+        return if (at < 0) listOf(tapped) to 0 else images to at
     }
 
     /**

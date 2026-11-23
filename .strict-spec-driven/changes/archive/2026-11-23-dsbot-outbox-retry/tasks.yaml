@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-outbox-retry
+sections:
+  Implementation:
+    core-outbox:
+      text: core 新增 Outbox.kt（Outbox 本地行、状态、seq 窗口先进先出对账、normalize）与 ImageSizing（长边上限换算）
+      status: complete
+    app-chat-outbox:
+      text: ChatController：send/sendOrAttach 经发送箱（成功 sentSignal、失败 FAILED、retry/delete），feed kind=user 实时追加并对账，刷新后对账；去掉 rows 中的乐观消息
+      status: complete
+    app-room-outbox:
+      text: RoomChatController 同样经发送箱（session/prompt），feed 用户行追加与对账
+      status: complete
+    app-pages-outbox:
+      text: BotChatPage/RoomChatPage 在列表末尾渲染发送箱行（发送中/未发送点按重试/删除）、发送后滚到末尾、成功触感反馈
+      status: complete
+    app-image-compress:
+      text: ImageCompress：照片按 EXIF 方向解码、ImageSizing 缩小、JPEG 82 重编码；两个控制器的 addAttachmentFromUri 接入（PNG/GIF/非图片/未超限原样）
+      status: complete
+    mock-outbox:
+      text: mock-dsh-server 增加 --outbox 模式：state 中 Bot 空闲；send 与 session/prompt 均响应 GET /mock/fail-sends?on=1 的失败开关（断开连接），成功时私聊推 feed 用户消息（seq 从 1000 递增）、群聊把用户行（只带 time）记入 room-chat；GET /mock/sends 返回收到次数；上传另存 last-upload.bin
+      status: complete
+    review-fixes:
+      text: 评审修复：SENT 状态与删除出口、两轮对账、群聊按服务端 time 对账并在成功后重读、入页信号不重复触发、回放按 seq 去重、附件栏已空的重复点按不发空消息、私聊 feed 用户行按会话过滤、照片压缩移到附件 IO 线程并合成单矩阵、EXIF 翻转/转置、发送箱单次写入不可变列表、重试校验聊天键
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：OutboxTest（发送后服务端行出现即移除、窗口外同文本旧行不误配、无顺序值不配、快速连发相同内容先进先出、失败行随服务端行移除、失败行不抢后来同文本发送的确认、群聊以服务端 time 为顺序值、空文本只配空文本、文本空白差异视为一致、切换聊天互不影响、retry 状态切换与 delete）、ImageSizing（横竖图缩放、恰好 2048 与过小不缩、异常尺寸、采样率）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --outbox）：私聊正常发送由服务端行取代；失败显示未发送、切走再回来仍在、恢复后连点重试只发一次；连发相同文本各取代一次；删除失败行不发送；群聊早前已有同文本时新发的消息由新行确认、旧行不误配；群聊失败后重试只发一次并经刷新确认；4000×3000 EXIF 旋转照片上传为 1536×2048 且方向正确；全程无崩溃
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-outbox-retry
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

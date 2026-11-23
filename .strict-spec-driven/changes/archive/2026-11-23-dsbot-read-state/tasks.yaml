@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-read-state
+sections:
+  Implementation:
+    core-read-state:
+      text: core ReadState：mark 只前移、merge、isUnread、hostKey、JSON 编解码（忽略 0/非法值、整体非法回空）
+      status: complete
+    core-preview:
+      text: core TeamPreview：Bot/群预览优先级与 cleanPreview（去消息头、浏览器交接/提问卡/卡片回复包装转可读文本，中英文）
+      status: complete
+    core-team-home:
+      text: TeamHome：Main Bot 最前、置顶、lastAt 降序、名称；Entry 带 preview，lastSummary 为清洗后摘要，删除远端 unread
+      status: complete
+    app-read-store:
+      text: App ReadStore：私有文件 read-state.json、可观察状态、单线程写入（临时文件原子改名）、失败置脏下次重写；AppGraph 持有
+      status: complete
+    app-mark-read:
+      text: ChatController/RoomChatController 暴露 newest(目标 id, 最新条目时间)；NativeShell 聊天分支在 RESUMED 时以 max(lastAt, newest) 标记已读
+      status: complete
+    app-team-row:
+      text: TeamPage：本机未读点（替代远端数字）与按优先级的预览（等你回答/审批强调色）
+      status: complete
+    mock-read-state:
+      text: mock-dsh-server --read-state：Main Bot、待回答、工作中、群里工作、交接/提问卡包装预览等条目带 lastAt；GET /mock/bump?id=[&message=1] 前移 lastAt、换预览、推 revision（message=1 时同时推带 time 的实时 message），聊天接口含 bump 后的新消息
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：ReadStateTest（只前移、合并、边界、非法值、序列化往返、hostKey、首次打底、readAt 只认同一聊天）、TeamPreviewTest（各优先级、清洗规则中英文、混合记录、全角冒号结尾保留原文）、TeamHomeTest（Main Bot 排序、预览字段）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --read-state）：团队页 Main Bot 在最前、待回答条目预览「等你回答」、交接预览为可读文本、工作中显示工作短语；bump 后出现未读点，打开聊天后消失，强杀重开仍保持已读
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-read-state
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

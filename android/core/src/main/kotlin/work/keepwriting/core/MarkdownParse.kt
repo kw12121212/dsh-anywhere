@@ -21,6 +21,15 @@ object MarkdownParse {
         data class Code(val code: String) : MdBlock
         data class Table(val header: List<List<InlinePart>>, val rows: List<List<List<InlinePart>>>) : MdBlock
         data class Paragraph(val parts: List<InlinePart>) : MdBlock
+
+        /** 任务列表行（`- [ ]` / `- [x]`，dsbot-rich-render）：只读勾选状态。 */
+        data class Task(val checked: Boolean, val parts: List<InlinePart>) : MdBlock
+
+        /**
+         * 独占一行的图片（`![alt](src)`，src 可用 `<…>` 包住含空格的路径；dsbot-rich-render）：https/data 直接显示，
+         * 服务器本地路径经 markdown-image 取回。
+         */
+        data class Image(val alt: String, val src: String) : MdBlock
     }
 
     enum class InlineKind { PLAIN, BOLD, ITALIC, CODE, LINK }
@@ -58,6 +67,12 @@ object MarkdownParse {
                 line.startsWith("### ") -> out.add(MdBlock.Heading(3, parseInline(line.removePrefix("### "))))
                 line.startsWith("## ") -> out.add(MdBlock.Heading(2, parseInline(line.removePrefix("## "))))
                 line.startsWith("# ") -> out.add(MdBlock.Heading(1, parseInline(line.removePrefix("# "))))
+                TASK.matchEntire(line) != null -> TASK.matchEntire(line)!!.let { m ->
+                    out.add(MdBlock.Task(m.groupValues[1].isNotBlank(), parseInline(m.groupValues[2])))
+                }
+                IMAGE_LINE.matchEntire(line.trim()) != null -> IMAGE_LINE.matchEntire(line.trim())!!.let { m ->
+                    out.add(MdBlock.Image(m.groupValues[1], m.groupValues[2].removeSurrounding("<", ">").trim()))
+                }
                 line.startsWith("- ") -> out.add(MdBlock.Bullet(parseInline(line.removePrefix("- "))))
                 Regex("^\\d+\\. ").containsMatchIn(line) -> out.add(
                     MdBlock.Ordered(line.substringBefore(". "), parseInline(line.substringAfter(". "))),
@@ -106,6 +121,24 @@ object MarkdownParse {
             rest = rest.substring(hit.range.last + 1)
         }
         return parts
+    }
+
+    private val TASK = Regex("^[-*] \\[([ xX])] (.*)$")
+    private val IMAGE_LINE = Regex("^!\\[([^\\]]*)]\\((<[^>]+>|[^)\\s]+)\\)$")
+
+    /** 行内片段的纯文本（复制用：链接只取文字）。 */
+    fun plain(parts: List<InlinePart>): String = parts.joinToString("") { it.text }
+
+    /**
+     * 表格导出 TSV（dsbot-rich-render）：表头一行、每行一行，单元格内的制表符与换行换成空格，
+     * 列数不齐的行按表头列数补空。
+     */
+    fun tsv(table: MdBlock.Table): String {
+        fun cell(parts: List<InlinePart>) = plain(parts).replace(Regex("[\\t\\r\\n]+"), " ").trim()
+        val width = table.header.size
+        val lines = mutableListOf(table.header.joinToString("\t") { cell(it) })
+        for (row in table.rows) lines.add((0 until maxOf(width, row.size)).joinToString("\t") { i -> row.getOrNull(i)?.let(::cell) ?: "" })
+        return lines.joinToString("\n")
     }
 
     private fun splitTableRow(line: String): List<String> =

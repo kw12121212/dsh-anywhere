@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-rich-render
+  status: proposed
+summary:
+  what:
+    - 富渲染：待处理停靠区里的 show_view 卡片按 deep-view 组件树在手机上原生绘制——折线、面积、柱、横柱与环形图，指标、进度、提示框、来源、表格（可复制为 CSV），滑块、数字、开关、单选输入（公式即时重算），选项、确认、表单与提交作答（view-reply）；畸形或超限的卡片降级为只读摘要。聊天 Markdown：宽表格横向滚动、复制为 TSV 与全屏展开，任务列表，独占一行的图片（https/data 直接显示，服务器本地路径经 markdown-image 取回）。
+  why:
+    - 0.3.10 的 show_view 卡片在手机上只提示「请在电脑网页端填写」，Bot 给出的图表与表单无法在手机上查看与作答；聊天里的宽表格挤压变形、无法复制，任务列表与本地截图（Bot 常用 ![](路径) 汇报）只显示原文。对照上游手机端 view.tsx、markdown.tsx 补齐。
+scope:
+  in:
+    - core ViewFormula（移植 deep-view formula.js：表达式解析、函数、let 作用域、求值与显示）与 ViewCard（蓝图解码、移植 views.js 校验与上限、作用域与公式求值、图表数据、进度、表格 CSV、降级摘要、view-reply 请求体）
+    - core MarkdownParse：任务列表、独占一行图片（含 <…> 路径）节点、表格 TSV 导出
+    - App：停靠区 VIEW 原生绘制（Compose Canvas 图表、不执行脚本、不访问网络；html 组件只显示摘要）与作答；Markdown 表格横向滚动/复制 TSV/全屏展开、任务列表、图片（data 直接解码、https 经 split-dial 取回无 cookie 限大小、本地路径经 markdown-image 带内存缓存与 knownRev 复用）；单条渲染异常显示可重试占位
+    - 实测 markdown-image 成功与 knownRev 未变应答、show_view 蓝图并补脱敏夹具；FINDINGS 第 18 节；delta tech 登记图表等组件形态源码核对的例外
+    - mock-dsh-server --rich 模式与设备验收
+  out:
+    - html 组件的沙箱渲染（只显示 summary，网页端才运行）
+    - 聊天消息里的 view 回复记录改为原生绘制（仍按只读记录显示）
+unchanged_behavior:
+  - 停靠区其他类型（审批、提问、密钥、学习、连接器、交接）与关闭卡片行为不变；聊天 Markdown 现有标题、列表、链接、代码块与长按行为不变
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-rich-render

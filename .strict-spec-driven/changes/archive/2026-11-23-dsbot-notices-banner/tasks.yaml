@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-notices-banner
+sections:
+  Implementation:
+    core-notices:
+      text: core 新增 Notices.kt：notice 条目与批量应答解码、kind 白名单、横幅文案与目标；NoticeCursor（onHello 初始化/Fill/Reset、accept 去重、onBatch 重置判定）
+      status: complete
+    app-notice-flow:
+      text: NativeShellConnection：feed notice 事件（能力门控 + 游标去重）与 onFeedHello 游标判定；Fill 时经 IO 线程请求 notices 补齐、Reset 时静默取全量 state；showNotice 按开关与当前聊天过滤，写入 noticeBanner
+      status: complete
+    app-banner-ui:
+      text: NativeShell 顶部横幅（8 秒自动收起、点按进入聊天）；设置页「应用内提醒」开关，AppGraph.noticePrefs 独立偏好文件
+      status: complete
+    fix-rows-race:
+      text: 修复 ChatScrollSupport 的 rows 并发遍历闪退：rowKeys/lastIsMine 改由页面在组合期间计算（remember 按条数与末行 key 重算）后以不可变值传入，协程内不再直接遍历 SnapshotStateList；模拟器复现并复验不再闪退
+      status: complete
+    mock-notices:
+      text: mock-dsh-server 增加 --notices 模式：hello 声明 notices、GET /mock/notice?bot=&kind= 推 feed notice 事件、notices 端点按 since 返回、/mock/restart-boot 换 boot，供模拟器验收
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：NoticesTest（真实 notices.json/notices-reset.json/feed-stream-0310.sse 夹具解码、缺字段与未知 kind；横幅文案截断与目标、群提醒 title=群名作来源而摘要取 text、群任务完成无摘要；pickBanner 跳过当前聊天与非白名单；游标首次不补弹、乱序与重复丢弃、同 boot Fill、boot 变化 Reset、批量 reset 与 boot 不同重置、补齐与实时交错）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --notices）：停在 A 时 B 提问出现横幅、8 秒收起、点按进入 B；当前聊天不弹；换 boot 重连不重复弹；关闭开关后不再出现且重启保留
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-notices-banner
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

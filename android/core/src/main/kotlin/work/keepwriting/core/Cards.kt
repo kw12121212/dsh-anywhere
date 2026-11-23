@@ -54,20 +54,25 @@ object Cards {
     fun fromChatItem(raw: DsbotModels.ChatItem): Card? {
         val obj = raw.raw as? Json.Value.Object ?: return null
         if (raw.kind !in setOf("answer", "closed")) return null
+        // DS-Bot 0.3.10：kind=answer 且带 answers/handoff/views 的是用户已经给出的回复记录（parts.js REPLY_KIND），
+        // 不是待答卡——按只读「已回答」呈现；真正待处理的提问/卡片/审批在 state 里（dsbot-pending-dock 停靠区）
+        if (raw.kind == "answer" && (obj.members.containsKey("answers") || obj.members.containsKey("handoff") || obj.members.containsKey("views"))) {
+            return answeredRecord(obj)
+        }
         val nested = obj.members["question"] as? Json.Value.Object
             ?: (obj.members["questions"] as? Json.Value.Array)?.items?.firstOrNull() as? Json.Value.Object
             ?: obj.members["view"] as? Json.Value.Object
             ?: obj.members["secret"] as? Json.Value.Object
         // closed（已答/已关闭）条目按只读呈现，不再出交互卡（避免重取后复现已答卡）
         if (raw.kind == "closed") {
-            return nested?.let { Card.ReadOnly(str(it, "question") ?: str(it, "title"), "已处理") }
+            return nested?.let { Card.ReadOnly(str(it, "question") ?: str(it, "title"), I18n.tr("已处理", "Handled")) }
         }
         if (nested != null) {
             val card = parse(nested)
             // 多问题条目：首卡之外标注余量（0.3.5 实测 questions[] 可复数）
             val extra = (obj.members["questions"] as? Json.Value.Array)?.items?.size?.minus(1) ?: 0
             if (extra > 0 && card != null) {
-                return Card.ReadOnly("本条含 ${extra + 1} 个待办问题", "请在网页端逐个处理（原生端暂不支持多问题条目作答）")
+                return Card.ReadOnly(I18n.tr("本条含 ${extra + 1} 个待办问题", "This entry has ${extra + 1} pending questions"), I18n.tr("请在网页端逐个处理（原生端暂不支持多问题条目作答）", "Answer them one by one in the web app (multi-question entries are not supported here yet)"))
             }
             return card
         }
@@ -76,12 +81,42 @@ object Cards {
         return null
     }
 
+    /**
+     * 聊天流里的卡片一律只读（dsbot-pending-dock）：DS-Bot 0.3.10 的待处理项在停靠区按新参数作答，
+     * 聊天条目中残留的可作答形态（0.3.5 时期的扁平卡）在 0.3.10 上提交必然失败，转成只读提示；
+     * 只读与沙箱 HTML 原样保留。
+     */
+    fun asReadOnly(card: Card): Card = when (card) {
+        is Card.ReadOnly, is Card.SandboxHtml -> card
+        is Card.Approval -> Card.ReadOnly(card.title ?: I18n.tr("审批", "Approval"), READ_ONLY_HINT)
+        is Card.Question -> Card.ReadOnly(card.title ?: I18n.tr("提问", "Question"), READ_ONLY_HINT)
+        is Card.View -> Card.ReadOnly(card.title ?: I18n.tr("卡片", "Card"), READ_ONLY_HINT)
+        is Card.SecretRequest -> Card.ReadOnly(card.title ?: I18n.tr("密钥请求", "Key request"), READ_ONLY_HINT)
+        is Card.Learning -> Card.ReadOnly(card.title ?: I18n.tr("学习审批", "Learning approval"), READ_ONLY_HINT)
+        is Card.BrowserHandoff -> Card.ReadOnly(card.title ?: I18n.tr("浏览器交接", "Browser handoff"), READ_ONLY_HINT)
+    }
+
+    val READ_ONLY_HINT: String get() = I18n.tr("待处理项请在输入框上方的待处理区或网页端处理", "Handle pending items in the panel above the input box or in the web app")
+
+    /** 回复记录的只读摘要：问题文本与所选/自填的答案。 */
+    private fun answeredRecord(obj: Json.Value.Object): Card.ReadOnly {
+        val questions = (obj.members["questions"] as? Json.Value.Array)?.items.orEmpty()
+        val question = (questions.firstOrNull() as? Json.Value.Object)?.let { str(it, "question") }
+            ?.let { if (questions.size > 1) I18n.tr("$it（共 ${questions.size} 个问题）", "$it (${questions.size} questions)") else it }
+        val answer = ((obj.members["answers"] as? Json.Value.Array)?.items?.firstOrNull() as? Json.Value.Object)
+        val picked = (answer?.members?.get("selected") as? Json.Value.Array)?.items?.mapNotNull { (it as? Json.Value.StringValue)?.value }.orEmpty() +
+            listOfNotNull(answer?.let { str(it, "custom") })
+        val title = question?.let { I18n.tr("已回答：$it", "Answered: $it") } ?: str(obj, "text")?.let { I18n.tr("已回复", "Replied") } ?: I18n.tr("已回复", "Replied")
+        val body = picked.joinToString("、").ifEmpty { str(obj, "text") ?: I18n.tr("已处理", "Handled") }
+        return Card.ReadOnly(title, body.take(MAX_CHARS))
+    }
+
     /** 从 state 的待办键（questions/views/secretRequests 数组元素）解析。 */
     fun fromStateEntry(value: Json.Value): Card? = (value as? Json.Value.Object)?.let { parse(it) }
 
     /** 统一解析与校验：callId 必有（作答端点需要），否则降级只读。 */
     fun parse(obj: Json.Value.Object): Card? {
-        if (Json.encode(obj).length > MAX_CHARS) return Card.ReadOnly(null, "卡片内容过大，已折叠")
+        if (Json.encode(obj).length > MAX_CHARS) return Card.ReadOnly(null, I18n.tr("卡片内容过大，已折叠", "Card is too large and was collapsed"))
         val callId = str(obj, "callId") ?: str(obj, "id") ?: return null
         // 无 kind 的待办对象：带 options/question 字段按提问处理（chat 条目 questions[] 的形态）；
         // 外层 chat kind（answer/closed）不是卡类型——作 fallback 处理（扁平卡形态）
@@ -105,7 +140,7 @@ object Cards {
             }
             "browser-handoff", "browser" -> Card.BrowserHandoff(callId, str(obj, "title"))
             "html" -> {
-                val html = str(obj, "html") ?: return Card.ReadOnly(str(obj, "title"), "空 HTML 卡")
+                val html = str(obj, "html") ?: return Card.ReadOnly(str(obj, "title"), I18n.tr("空 HTML 卡", "Empty HTML card"))
                 Card.SandboxHtml(callId, str(obj, "title"), html)
             }
             else -> null // 未知类型交由调用方降级

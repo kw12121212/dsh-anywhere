@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    phone-appearance:
+      strength: MUST
+      statement: 设置页提供「外观」：跟随系统、浅色、深色三选一，默认跟随系统；切换后界面明暗即时变化，不重新连接、不离开当前页面，强杀重开后保持所选外观。
+      scenarios:
+        appearance-dark:
+          - GIVEN: 外观为跟随系统且系统为浅色
+          - WHEN: 在设置页选择「深色」并返回
+          - THEN: 整个界面立即变为深色，当前聊天与连接不受影响；强杀重开后仍为深色
+    phone-language:
+      strength: MUST
+      statement: 设置页提供「语言」：跟随系统、简体中文、English 三选一，默认跟随系统（系统为中文时显示中文，否则显示英文）；切换后团队页、聊天页、待处理停靠区、聊天条、提醒横幅、发送箱、设置页与首次设置页等主要界面文案即时切换为所选语言，不重新连接、保留当前所在页面，强杀重开后保持所选语言；聊天内容与 Bot 产生的文本不翻译。
+      scenarios:
+        switch-to-english:
+          - GIVEN: 停在某 Bot 的私聊页，语言为简体中文
+          - WHEN: 在设置页选择 English 并返回
+          - THEN: 仍在该私聊页，输入框提示、按钮、停靠区与聊天条文案为英文，主要界面无中文残留；强杀重开后仍为英文
+    haptics-unified:
+      strength: SHOULD
+      statement: 发送成功、待处理项作答成功与失败给出一致的触感反馈（成功与失败可区分）；动效统一遵循系统的减少动态效果设置。
+      scenarios:
+        answer-fail-haptic:
+          - GIVEN: 停靠区作答因网络失败
+          - WHEN: 失败返回
+          - THEN: 给出与成功不同的触感反馈，并显示可读的失败原因
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,69 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    model-repair-card:
+      strength: MUST
+      statement: Bot 因只有用户能修复的模型失败（缺 API key、key 格式不对、key 被拒、额度或余额不足、DeepSeek 账号登录失效、本地 Agent 缺失/未登录/额度/异常退出）被阻塞时，私聊页显示修复卡：可读的原因（含服务商名称与状态码，若有）与修复指引——需要配置密钥、登录或换模型时指引到电脑网页端设置，DeepSeek 官方服务额度不足或 DeepSeek 账号余额不足时提供「去充值」链接经系统浏览器打开；修复卡提供「重试」（resume），重试后以服务端推送状态为准；未知失败代码显示通用说明；修复卡与日志不显示或记录任何密钥内容。
+      scenarios:
+        missing-key-card:
+          - GIVEN: Bot 的模型没有配置 API key，上一轮因此失败
+          - WHEN: 打开该 Bot 的私聊页
+          - THEN: 显示修复卡，说明该 Bot 的模型还没有 API key 并指引到网页端设置，提供重试
+        quota-topup-link:
+          - GIVEN: Bot 使用 DeepSeek 官方服务且余额不足被阻塞
+          - WHEN: 在修复卡上点按「去充值」
+          - THEN: 系统浏览器打开 DeepSeek 充值页
+    group-goal-bar:
+      strength: MUST
+      statement: 群聊页在群有进行中的目标（起草中、进行中、已暂停）时在顶部显示群目标条：目标标题、状态，以及阶段进度（第 N/M 阶段与当前阶段标题、进度条按已通过阶段数）；起草中尚无阶段时只显示标题与「起草中」；目标已完成或已停止、或远端未返回目标数据时不显示；点按目标条打开既有目标操作对话框。
+      scenarios:
+        goal-stage-progress:
+          - GIVEN: 群目标进行中，共 4 个阶段，前 1 个已通过，第 2 阶段进行中
+          - WHEN: 打开该群聊页
+          - THEN: 顶部显示目标标题与「第 2/4 阶段」及第 2 阶段标题，进度条反映 1/4 已通过
+    work-phrase:
+      strength: MUST
+      statement: Bot 工作中时，私聊页的工作指示旁显示工作短语，群聊页运行中成员显示各自工作短语：Bot 自己说明在做什么时显示其说明，否则按正在使用的工具显示对应短语（如联网搜索、阅读网页、运行命令、打开文件、查找文件、写入修改、使用电脑、询问其他 Bot、查看记忆），有操作对象时附「· 对象」，未知工具显示通用短语，没有工具时显示「思考中」；工作指示带轻量动效，系统关闭动画时改为静态显示；远端未返回工作详情时只显示原有工作指示。
+      scenarios:
+        phrase-by-tool:
+          - GIVEN: Bot 正在用联网搜索工具且未自述
+          - WHEN: 查看私聊页工作指示
+          - THEN: 显示「联网搜索」类短语
+        reduced-motion-static:
+          - GIVEN: 系统设置关闭了动画（动画时长缩放为 0）
+          - WHEN: Bot 工作中
+          - THEN: 工作指示与短语静态显示，不播放动效
+    chat-task-bar:
+      strength: MUST
+      statement: 私聊页在 Bot 有活动中的后台任务（运行中、等待审批、等待交接）时，在输入框上方显示后台任务条：只含该 Bot 在私聊里接的任务（Bot 在群里接的任务不在私聊显示，与网页端一致），显示任务数量，展开后逐个显示任务标题与状态（等待审批的排在最前，其余按最近更新排序；任务多时展开区域限高可滚动），每个任务提供停止按钮（bot-stop-task）；点按停止后该按钮立即禁用直到请求结束，成功后以服务端推送的状态为准移除该任务并与网页端同步，失败显示可读提示；已结束的任务不显示；远端未返回任务数据时不显示任务条。
+      scenarios:
+        task-stop-one:
+          - GIVEN: Bot 有两个运行中的后台任务
+          - WHEN: 在私聊页展开任务条并停止其中一个
+          - THEN: 该任务从任务条消失且网页端显示已停止，另一个任务仍在任务条中运行
+        no-tasks-no-bar:
+          - GIVEN: Bot 没有活动中的后台任务，或远端为 0.3.6 不返回任务数据
+          - WHEN: 打开该 Bot 的私聊页
+          - THEN: 不显示任务条，页面与原来一致
+        group-task-not-in-private:
+          - GIVEN: Bot 只有一个在群里接的后台任务
+          - WHEN: 打开该 Bot 的私聊页
+          - THEN: 私聊页不显示任务条
+    computer-use-request:
+      strength: MUST
+      statement: Bot 请求操作电脑上的某个应用时，对应私聊页（群内请求则在对应群聊页）显示电脑操作请求卡：显示应用名（群内显示发起成员），提供「拒绝」「本次允许」「总是允许」三个作答（computer-app-answer 的 deny/once/always），点按后该卡按钮立即禁用直到请求结束，作答后卡片以服务端推送状态消隐并与网页端一致；同时有多个请求时最多展开两张、其余显示数量提示，作答后下一张补上；请求已被其他端处理时卡片随刷新消失，失败显示可读提示；Bot 正在操作电脑时私聊页提供「停止操作电脑」入口（computer-stop）；远端未返回电脑操作数据时不显示。
+      scenarios:
+        computer-answer-once:
+          - GIVEN: Bot 请求操作某应用，私聊页显示请求卡
+          - WHEN: 点按「本次允许」
+          - THEN: 请求按本次允许提交，卡片消失，网页端同一请求同步消失
+        computer-stop:
+          - GIVEN: Bot 正在操作电脑
+          - WHEN: 点按「停止操作电脑」
+          - THEN: Bot 停止操作电脑，入口随状态刷新消失
+  MODIFIED: {}
+  REMOVED: {}

@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-chat-bars-0310
+sections:
+  Implementation:
+    core-chat-bars:
+      text: core 新增 ChatBars：tasks（活动状态过滤）、computerAsks（私聊按 botId 且无 roomId、群按 roomId）、computerBusy、repair（blocked → 标题/指引/动作，含充值链接判定与未知代码通用文案，中英文）、goal（drafting/active/paused 才返回，阶段与 current 解码）、workOf/roomWork；全部容错与上限截断
+      status: complete
+    core-work-phrase:
+      text: core 新增 WorkPhrase：按网页端 0.3.10 workPhrase 顺序（switching → 自述 → 无工具思考中 → 专属工具短语 → 正则表 → 通用），附 target，ZH/EN 两套文案
+      status: complete
+    app-state-snapshot:
+      text: NativeShellConnection 暴露可观察的 stateSnapshot（每次全量/合并 state 后写入），并提供 bot-stop-task、computer-app-answer、computer-stop、resume 的写调用（经既有 api 通道，在途防重复、失败可读提示）
+      status: complete
+    app-bot-bars:
+      text: BotChatPage：输入框上方依次显示修复卡（重试、去充值经系统浏览器、网页端指引）、电脑操作请求卡（拒绝/本次/总是）、后台任务条（折叠/展开、逐任务停止）；工作指示旁显示工作短语，电脑控制中显示停止操作电脑；动画时长缩放为 0 时静态
+      status: complete
+    app-room-bars:
+      text: RoomChatPage：顶部群目标条（标题、状态、第 N/M 阶段与当前阶段标题、进度条，点按打开既有目标对话框）、群内电脑操作请求卡、运行中成员工作短语
+      status: complete
+    findings-update:
+      text: 在 android/core/src/spike/FINDINGS.md 增补聊天条字段的源码核对登记（位置与形态），设备验收取得真实样本后改为实测并替换夹具
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：ChatBarsTest（任务活动过滤与上限、电脑请求私聊/群过滤与 busy 判定、修复卡各代码文案与充值链接条件、未知代码、群目标状态过滤与阶段进度、字段缺失/类型不符/畸形不抛异常）、WorkPhraseTest（自述优先与去尾标点、专属工具、正则顺序、未知工具通用、target 拼接、EN 文案）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 Medium_Phone_API_36.1，mock-dsh-server --chat-bars 注入 0.3.10 源码核对形态）：私聊页修复卡（DeepSeek 额度、去充值打开系统浏览器、重试后消失）、电脑操作请求卡（本次允许后消失）、停止操作电脑、后台任务条（已完成任务不显示、逐个停止后数量减少）、工作短语（联网搜索 · 目标；关闭动画时静态）；群聊页群目标条（第 2/4 阶段与进度、点按打开目标对话框）、群内电脑请求拒绝、成员工作短语；不带 --chat-bars 时无新条目。真实服务尝试取样：无任务/阻塞/群目标样本，create-bot 用未配置模型被拒未创建对象，无零成本触发阻塞途径，结论登记 FINDINGS 第 13 节
+      status: complete
+    computer-residual:
+      text: 电脑操作请求：以 JUnit 与注入的模拟 state 验证请求卡渲染与作答请求构造；真实触发因服务器电脑操作关闭且宿主为 Linux 无法进行，在 FINDINGS 与评审中登记为残余风险
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify，确认任务、delta-spec 与 delta-tech 一致
+      status: complete
+      command: strict-spec-cli verify dsbot-chat-bars-0310
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

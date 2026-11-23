@@ -100,10 +100,14 @@ class CardsTest {
         val chatItem = DsbotModels.decodeChatPage(obj("""{"sessionId":"s","items":[
             {"kind":"answer","questions":[{"id":"q1","question":"选？","options":[{"label":"A"},{"label":"B"}]}],
              "answers":[]}]}""")).items.first()
+        // 0.3.10：带 answers 的 answer 条目是用户回复记录（dsbot-pending-dock），只读呈现而非待答卡
         val fromChat = assertNotNull(Cards.fromChatItem(chatItem))
-        val q = assertIs<Cards.Card.Question>(fromChat)
-        assertEquals("q1", q.callId)
-        assertEquals(2, q.options.size)
+        val ro = assertIs<Cards.Card.ReadOnly>(fromChat)
+        assertEquals("已回答：选？", ro.title)
+        val answered = DsbotModels.decodeChatPage(obj("""{"sessionId":"s","items":[
+            {"kind":"answer","questions":[{"id":"q1","question":"选？","options":[{"label":"A"},{"label":"B"}]}],
+             "answers":[{"id":"q1","selected":["B"],"custom":"补充"}]}]}""")).items.first()
+        assertEquals("B、补充", assertIs<Cards.Card.ReadOnly>(Cards.fromChatItem(answered)).body)
 
         val stateEntry = Cards.fromStateEntry(obj("""{"kind":"approval","callId":"ap1","title":"审批"}"""))
         assertIs<Cards.Card.Approval>(stateEntry)
@@ -153,5 +157,26 @@ class CardsTest {
             {"kind":"answer","questions":[{"id":"q1","question":"首","options":[{"label":"A"}]},{"id":"q2","question":"次"}]}]}""")) as Json.Value.Object).items.first()
         val note = kotlin.test.assertNotNull(Cards.fromChatItem(multi))
         kotlin.test.assertTrue((note as Cards.Card.ReadOnly).title!!.contains("2"))  // 2 个问题
+    }
+
+    @Test
+    fun `真实 0_3_10 夹具里的 answer 条目是只读回复记录`() {
+        // dsbot-pending-dock：chat-page.json 的 kind=answer 带 answers，是用户已给出的回复，不是待答卡
+        val text = CardsTest::class.java.getResource("/dsbot/chat-page.json")!!.readText()
+        val root = Json.parse(text) as Json.Value.Object
+        val page = DsbotModels.decodeChatPage(root.members["value"] ?: root)
+        val answers = page.items.filter { it.kind == "answer" }
+        assertTrue(answers.isNotEmpty())
+        for (a in answers) assertIs<Cards.Card.ReadOnly>(Cards.fromChatItem(a))
+    }
+
+    @Test
+    fun `聊天流卡片一律只读`() {
+        val ro = assertIs<Cards.Card.ReadOnly>(Cards.asReadOnly(Cards.Card.Approval("a", "部署", null)))
+        assertEquals("部署", ro.title)
+        assertEquals(Cards.READ_ONLY_HINT, ro.body)
+        assertIs<Cards.Card.ReadOnly>(Cards.asReadOnly(Cards.Card.Question("q", null, emptyList())))
+        val html = Cards.Card.SandboxHtml("h", "t", "<p/>")
+        assertEquals(html, Cards.asReadOnly(html))
     }
 }

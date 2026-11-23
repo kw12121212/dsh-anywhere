@@ -207,16 +207,16 @@ class UpdateManager(
                 }
             } catch (e: TunnelNotReady) {
                 tunnelRetryPending = true
-                val text = "检查更新失败：隧道未就绪（tailnet 更新源需先连上 Tailscale，连上后自动重试）"
-                if (!restoreReady()) fail(text)
-                reportFailure(text)
+                // 诊断上报固定中文（诊断报告不随界面语言变；dsbot-phone-prefs），界面提示按语言显示
+                val report = "检查更新失败：隧道未就绪（tailnet 更新源需先连上 Tailscale，连上后自动重试）"
+                if (!restoreReady()) fail(tr(report, "Update check failed: tunnel not ready (a tailnet update source needs Tailscale; it will retry once connected)"))
+                reportFailure(report)
             } catch (e: Exception) {
                 // IllegalStateException("HTTP <状态码>") 等的 message 才是可定位的原因，
                 // 只显示异常类名会丢掉它（1.8.0 的「IllegalStateException」即此坑）。
                 val cause = e.message?.trim()?.takeIf { it.isNotEmpty() } ?: e.javaClass.simpleName
-                val text = "检查更新失败：$cause"
-                if (!restoreReady()) fail(text)
-                reportFailure(text)
+                if (!restoreReady()) fail(tr("检查更新失败：$cause", "Update check failed: $cause"))
+                reportFailure("检查更新失败：$cause")
             }
         }.start()
     }
@@ -283,7 +283,7 @@ class UpdateManager(
         if (base != null) {
             val host = runCatching { java.net.URI(base).host }.getOrNull()
             if (host != null && SocksTls.isTailnet(host) && SocksTls.factory(appContext) == null) {
-                fail("隧道未就绪，稍后再试（tailnet 更新源需先连上 Tailscale）")
+                fail(tr("隧道未就绪，稍后再试（tailnet 更新源需先连上 Tailscale）", "Tunnel not ready, try again later (a tailnet update source needs Tailscale)"))
                 return
             }
         }
@@ -301,9 +301,9 @@ class UpdateManager(
                     if (appInForeground) promptInstall() else notifyReady()
                 }
             } catch (_: UpdateDownloader.VerificationFailed) {
-                fail("校验失败：已删除下载文件，未安装")
+                fail(tr("校验失败：已删除下载文件，未安装", "Verification failed: the download was deleted and not installed"))
             } catch (e: Exception) {
-                fail("下载失败（${e.javaClass.simpleName}）")
+                fail(tr("下载失败（${e.javaClass.simpleName}）", "Download failed (${e.javaClass.simpleName})"))
             }
         }.start()
     }
@@ -359,17 +359,17 @@ class UpdateManager(
     private fun notifyReady() {
         val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "更新", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, tr("更新", "Updates"), NotificationManager.IMPORTANCE_DEFAULT))
         }
         val pi = PendingIntent.getActivity(
             appContext, 0,
             Intent(appContext, MainActivity::class.java).apply { action = ACTION_INSTALL_READY },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = "新版本 ${availableVersion ?: ""} 已就绪，点击安装"
+        val text = tr("新版本 ${availableVersion ?: ""} 已就绪，点击安装", "New version ${availableVersion ?: ""} is ready, tap to install")
         val notification = androidx.core.app.NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("DSH Anywhere 更新")
+            .setContentTitle(tr("DSH Anywhere 更新", "DSH Anywhere update"))
             .setContentText(text)
             .setContentIntent(pi)
             .setAutoCancel(true)

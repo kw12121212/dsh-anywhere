@@ -1,0 +1,53 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    new-messages-jump:
+      strength: MUST
+      statement: 在私聊与群聊中离最新消息较远（约 600dp 以上）时，消息列表右下显示「回到最新」按钮；此期间有新消息到达时按钮显示「N 条新消息」（N 为离开底部后新到的条数）；点按后滚动到最新并清零；停在底部附近时不显示按钮，新消息照常显示。
+      scenarios:
+        count-new-while-away:
+          - GIVEN: 在私聊中向上翻看到较早的消息
+          - WHEN: Bot 连续发来 2 条新消息
+          - THEN: 右下按钮显示「2 条新消息」，点按后滚到最新且按钮消失
+    last-chat-prefetch:
+      strength: SHOULD
+      statement: App 记住上次打开的聊天（只保存聊天标识，不保存内容）；下次启动连接成功后在后台预先读取该聊天首页，启动仍停在团队页、不自动跳转，进入该聊天时立即显示预取内容并在后台刷新。
+      scenarios:
+        prefetch-on-launch:
+          - GIVEN: 上次退出前最后打开的是 Bot A 的私聊
+          - WHEN: 重新启动 App 并连接成功后进入 A
+          - THEN: 启动停在团队页；进入 A 时立即显示内容，无加载空白
+    foreground-fallback-poll:
+      strength: MUST
+      statement: App 在前台且已连接时每 15 秒兜底同步一次团队状态并刷新当前打开的聊天（流式输出进行中只同步状态），以补齐实时推送遗漏的变化；兜底同步的网络失败不改变连接状态、不提示错误（会话失效仍按 dsh 会话规则提示重新认证）；App 进入后台后不再发起兜底同步，回到前台时先重新探测连接再补齐。
+      scenarios:
+        poll-fills-gap:
+          - GIVEN: 前台停在某私聊，实时推送漏掉了一条新消息
+          - WHEN: 等待不超过 15 秒
+          - THEN: 该消息出现在聊天中，期间无错误提示
+    chat-cache-fast-switch:
+      strength: MUST
+      statement: 进入最近打开过的私聊或群聊（最近 16 个，包括刚离开又回到同一个聊天）时立即显示上次离开时的内容与滚动位置，同时在后台刷新：刷新结果没有变化时列表保持不动，有变化时更新列表且未变的消息不闪动；已加载的更早记录在刷新与新消息到达后仍保留，只有新的最新一页与当前列表无法衔接时才重置为最新一页（需要时重新上翻）；刷新期间不清空正在流式输出的回复；同一聊天的重复刷新不并发；一个聊天的慢读取不阻塞进入其他聊天时的缓存显示，离开后才到达的旧读取结果不会覆盖当前聊天；会话确认前发送提示稍候，不会发到可能已过期的会话；切换分段后该 Bot 的缓存失效、旧分段的在途读取作废并按新分段重新加载（新分段为空时显示为空）；聊天内容只保存在内存，按返回键退出 App 界面或进程结束后不保留（下次启动只预取上次打开的聊天）；首次进入（无缓存）时加载完成后显示最新消息。
+      scenarios:
+        switch-back-instant:
+          - GIVEN: 先后打开过 Bot A 与 Bot B 的私聊，在 A 中滚动到中间位置后切到 B
+          - WHEN: 从 B 返回团队页再进入 A
+          - THEN: A 立即显示上次内容并停在离开时的位置，无加载空白；后台刷新到新消息时列表更新
+        stale-result-dropped:
+          - GIVEN: 进入 A 后网络很慢，A 的读取尚未返回
+          - WHEN: 立即切换到有缓存的 B
+          - THEN: B 立即显示自己的缓存内容，A 的读取返回后不会覆盖 B 的列表
+        earlier-kept-after-new-message:
+          - GIVEN: 在私聊中已加载两页更早记录并停在其中阅读
+          - WHEN: Bot 发来新消息且之后发生后台刷新
+          - THEN: 已加载的更早记录仍在，阅读位置不跳走
+        empty-new-part:
+          - GIVEN: 私聊显示着当前分段的消息
+          - WHEN: 新开一个分段（新分段尚无消息）
+          - THEN: 列表变为空，不再显示旧分段的消息
+  MODIFIED: {}
+  REMOVED: {}

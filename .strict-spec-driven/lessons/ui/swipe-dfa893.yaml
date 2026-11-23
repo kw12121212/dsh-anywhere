@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: swipe-dfa893
+  title: 嵌套长按手势：内层旁路长按未命中也消费事件会让外层长按失效，模拟器同点 swipe 测不出
+category: ui
+status: active
+created_at: '2026-11-23T13:14:35.869Z'
+updated_at: '2026-11-23T13:14:35.869Z'
+context: dsbot-reader-files：聊天气泡加 combinedClickable 长按菜单，气泡里的 MarkdownText 已有链接长按（Initial pass 旁路计时 350ms）
+observation: MarkdownText 的 linkLongPress 到点后不论是否命中链接都消费该指针此后的全部事件；外层 combinedClickable 的长按（约 400ms）在等待期间看到已消费事件即取消。真机按住时手指微抖持续产生 MOVE，于是带链接段落里长按非链接处时菜单不出；反过来手指完全不动时外层计时不被打断，长按链接会选择器与菜单同时弹出。模拟器用 adb input swipe 同点长按不产生 MOVE，设备验收显示一切正常，是独立评审读代码指出的。
+takeaway: 内层旁路手势只在命中自己的目标时才接管（消费后续事件），未命中立即放手；内外两层都可能触发时，用内层触发时设置的短时标记让外层回调跳过，而不是依赖事件消费去取消外层计时。验收用 adb input swipe x y x+6 y+4 1100 这类带微小位移的长按模拟手指抖动，并分别验证「长按链接只出选择器」「长按非链接处出菜单」。
+applies_when: Compose 里给已有内部手势（链接长按、选择、拖动）的组件外层再加 combinedClickable/pointerInput 长按或点击时
+occurrences:
+  - origin: dsbot-reader-files
+    date: '2026-11-23'
+    evidence: MarkdownText.kt linkLongPress 与 LinkLongPress 标记；修复后 adb input swipe 80 1535 87 1539 1100 出菜单，swipe 178 1535 178 1535 1100 只启动 android.intent.action.CHOOSER

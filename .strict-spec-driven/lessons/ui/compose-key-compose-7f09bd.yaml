@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: compose-key-compose-7f09bd
+  title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态
+category: ui
+status: active
+created_at: '2026-11-23T08:55:52.804Z'
+updated_at: '2026-11-23T08:55:52.804Z'
+context: dsbot-phone-prefs：Android 客户端加入即时切换的界面语言，core（纯 JVM）与 App 文案经 tr(中文, English) 输出
+observation: 最初为让 core 的 I18n.tr（读普通 @Volatile 变量、不被 Compose 观察）在切换后刷新，把 ShellScaffold、设置页与首次设置页包进 key(lang)。设备上看不出问题，独立审查才指出：key 变化会丢弃子树全部 remember 状态——聊天输入草稿、列表滚动、停靠区乐观「已作答」记录（已答项重现、可能重复作答）、设置页滚动与未保存输入都被重置；同时在 executor 上预先组装、存在连接对象里的文本（团队页缺省分组名）不在子树内，key 也刷新不到。
+takeaway: 让 core 的语言读取经 App 注入的来源（I18n.source = { lang }，lang 为 mutableStateOf）：组合期间任何调用 core 文案的地方都会读到快照状态而自动订阅，切换时只重组调用处、不丢 remember 状态；以文案为结果的 remember 计算把语言加入键；在后台预组装并缓存的文本另需在语言变化时显式重算（LaunchedEffect(lang) 触发 relocalize）。诊断上报等不该随界面语言变化的文本单独保持固定语言。
+applies_when: Compose 界面里某个全局设置（语言、单位、格式等）由非 Compose 代码（纯 JVM 模块、单例、后台线程）读取，需要切换后界面即时刷新，正考虑用 key(setting) 或 recreate 强制重建时
+occurrences:
+  - origin: dsbot-phone-prefs
+    date: '2026-11-23'
+    evidence: android/core/src/main/kotlin/work/keepwriting/core/I18n.kt（source 注入）；PhonePrefsStore.kt（I18n.source = { lang }）；NativeShell.kt（去掉 key(graph.phone.lang)，LaunchedEffect(lang){ connection.relocalize() }）；设备验收：私聊输入 keepdraft 后在设置页切语言，返回草稿仍在、设置页不回顶、不重连

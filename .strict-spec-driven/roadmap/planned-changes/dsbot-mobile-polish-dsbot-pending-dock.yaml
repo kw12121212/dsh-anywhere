@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-pending-dock
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 待处理卡片停靠区：输入框上方以手风琴汇集当前聊天待处理的学习审批、工具审批、提问、密钥请求、连接器请求、浏览器交接、show_view 卡片与 btw 卡，一次只展开第一张需要处理的；学习审批显示逐行差异；「需要你」页按类型分节
 details: 参考上游 screens/chat/dock.tsx 与 nav/pending.ts。core：统一的 Pending 模型从 state 与聊天条目汇集待处理项（工具审批只计 answerable 不为 false 的），供团队页计数、需要你页分节与停靠区共用；停靠区排序 学习/审批 → 提问 → 密钥/连接器 → 交接 → 卡片 → btw，展开项为第一张需要操作的；学习审批逐行差异（lineDiff）超过 8 行折叠；JUnit 覆盖汇集、排序、展开选择与差异折叠。App：停靠区高度不超过窗口约 52%，作答后自动展开下一张；单选提问选中即提交，多选与自由输入用提交按钮；连接器请求卡支持取消（connector-request-cancel），连接动作在连接器页上线前提示到网页端处理；作答成功与警告分别给触感反馈；需要你页按 提问、审批、密钥请求、连接器、浏览器交接、卡片 分节，空时显示「没有需要你处理的事」。现有内联卡片的渲染与作答逻辑复用，不改作答语义。验收：同时存在审批、提问与卡片时只展开一张，作答后展开下一张，网页端同步。
 depends_on:

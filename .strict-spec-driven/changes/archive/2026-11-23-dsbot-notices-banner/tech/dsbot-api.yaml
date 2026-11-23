@@ -1,0 +1,26 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    notices-fields-0310:
+      strength: MUST
+      statement: 应用内提醒的数据来源（DS-Bot 0.3.10）：feed notice 事件与 POST /api/bot notices {boot, since} 应答的条目形态 {seq,time,botId,name,kind,sessionId?,roomId?,title?,text}，应答外层 {boot,seq,reset,notices[]}（实测，夹具 notices.json、notices-reset.json、feed-stream-0310.sse，样本均为 kind=message）。按上游 mobile.js 源码核对、待实测：kind=group 与 done 来自群日志（roomLineAdded），带 roomId 与 title=群名，group 的 text 为消息正文、done 的 text 为空；kind=approval 的 text 为工具名，群内审批同样带 roomId 与 title=群名；kind=question/view 来自私聊卡片（cardShown），不带 title。客户端只显示 question/approval/message/group/done，title 只作来源（群名）、摘要一律取 text；(boot, seq) 游标去重，reset 或 boot 变化时重取整体状态而不补弹
+      rationale: dsbot-baseline-0310 只取到 kind=message 的真实提醒，群类提醒需要群活动才产生；首个消费方把 title 误当摘要的评审实证说明字段语义必须登记，否则群消息会显示成群名而丢掉正文
+      enforcement:
+        method: test
+        detail: core JUnit（NoticesTest）以真实夹具覆盖解码与 reset，并以源码核对形态的内联样本覆盖群消息/群任务完成/群内审批的横幅文案（群名作来源、摘要取 text）、pickBanner 跳过当前聊天、游标首次不补弹/同 boot 补齐/boot 变化重置/补齐与实时交错
+  MODIFIED:
+    endpoint-inventory-0310:
+      strength: MUST
+      statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
+      rationale: 这些是上游为手机端新增的内部接口，可能继续漂移；经 dsh 的 HTTP/SSE 路径与上游手机加密链路不同，只有真实实测能确定哪些可用；本次服务器缺少部分样本（无文件附件、窗口内无群活动），必须把实测债务显式交给消费方
+      enforcement:
+        method: review
+        detail: 实测（DS-Bot 0.3.10 / dsh 0.2.2-rc.3）：hello、notices、feed hello 与 notice、image（preview）、avatar、usage-summary、room-chat 取到成功应答；各写端点与 file-download/file-text/markdown-image 取到错误应答（新增错误码 bot/forbidden、bot/unavailable，经 reasonOf 缺省归 REFUSED）；未知端点回 bot/not-found；聊天条目图片引用为 imageRefs[]={attachmentId,mime,name}。仅源码核对、待首个消费变更实测补夹具：feed room 事件形态、file-download 成功分块（512 KiB、offset/version/nextOffset）、file-text 与 markdown-image 成功应答、state avatars:ref 下的 imageRef（本服务器头像均为 shape）。评审核对新端点的解码实现引用了 0.3.10 夹具与 FINDINGS 登记、源码核对项已先补实测；未实测可用的能力必须经 hello-capabilities 门控
+      exceptions:
+        - chat-bars-fields-0310 登记的聊天条字段：真实服务暂时无法产生样本（无任务/阻塞/群目标、电脑操作关闭、无零成本可撤销的触发途径）时，消费方可先按源码核对形态实现，前提是缺失或畸形一律降级为不显示、源码核对位置与取样尝试登记在 FINDINGS 第 13 节，并在服务器出现样本时实测替换
+        - notices-fields-0310 登记的群类提醒形态（kind=group/done 与群内 approval 的 roomId、title=群名）：真实服务需群里有成员发言或完成任务才产生、取证会触发真实模型运行，消费方可先按源码核对形态实现，前提是 title 只作来源、摘要取 text，缺失字段降级为私聊形态，并在 FINDINGS 第 14 节登记待实测
+  REMOVED: {}

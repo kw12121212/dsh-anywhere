@@ -49,15 +49,21 @@ object RoomChat {
     fun renderRoom(page: RoomPage): List<ChatRender.Item> {
         val out = mutableListOf<ChatRender.Item>()
         for (raw in page.items) {
-            val item = ChatRender.renderItem(raw) ?: continue // 不可见 kind 与私聊同源跳过
+            val item = ChatRender.renderItem(raw)
+            if (item == null) { // 不可见 kind 与私聊同源跳过（附带的交付文件/图片仍显示）
+                out.addAll(ChatRender.extras(raw))
+                continue
+            }
             if (item is ChatRender.Item.Message && !item.fromUser) {
                 val sp = speakerOf(raw)
                 if (sp?.name != null) {
                     out.add(item.copy(speakerName = sp.name, speakerColor = sp.color))
+                    out.addAll(ChatRender.extras(raw))
                     continue
                 }
             }
             out.add(item)
+            out.addAll(ChatRender.extras(raw))
         }
         return out
     }

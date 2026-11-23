@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-notices-banner
+  status: proposed
+summary:
+  what:
+    - 接入 DS-Bot 0.3.10 的提醒：feed 的 notice 事件实时到达、断线重连后经 notices {boot, since} 补齐；core 以 (boot, seq) 游标去重，乱序或重复的提醒丢弃，远端重启（boot 变化）或服务端回 reset 时不补弹旧提醒、改为重取整体状态
+    - 非当前打开聊天的提问、审批、回复、群消息与任务结束显示约 8 秒的应用内横幅（「来源 · 类型：摘要」），点按进入对应 Bot 或群聊天，多条到来时只显示最新一条
+    - 设置页新增「应用内提醒」开关（本机偏好持久化，默认开），关闭后不再显示横幅
+  why:
+    - 停在一个聊天里时，其他 Bot 的提问、审批或回复毫无提示，用户要回团队页逐个查看才发现有人在等，处理延迟；上游手机端已有应用内横幅
+    - 里程碑 dsbot-mobile-polish 完成标准第二条：停在 A 聊天时 B 发起提问或回复出现约 8 秒横幅并可进入 B；dsh 重启后重连不重复弹出已显示过的横幅；设置中关闭后不再出现
+scope:
+  in:
+    - core：Notices（notice 条目与 notices 批量应答解码、kind 白名单 question/approval/message/group/done、横幅文案与目标聊天）与 NoticeCursor（hello 游标初始化、实时去重、重连补齐/重置判定、批量应答处理）；JUnit 覆盖乱序、重复、boot 变化、reset、未知 kind 与真实 0.3.10 夹具
+    - App：NativeShellConnection 处理 feed notice 事件与 feed hello 的游标判定，经 IO 线程请求 notices 补齐，reset/boot 变化时重取全量 state；NativeShell 顶部横幅（8 秒自动收起、点按进入聊天、当前聊天不弹）；设置页「应用内提醒」开关（独立 SharedPreferences 文件）
+    - android-dsbot 规格新增应用内提醒横幅与开关要求
+    - 修复 dsbot-chat-cache 引入的闪退（验收中发现）：ChatScrollSupport 在协程里经 derivedStateOf 遍历控制器 rows，与 executor 线程对同一 SnapshotStateList 的修改并发而 ConcurrentModificationException；改为页面在组合期间（快照隔离）读出不可变的 key 列表与末行归属再传入
+  out:
+    - 系统通知、推送、FCM、桌面角标与常驻后台服务（里程碑 scope.out）
+    - 本机已读与未读点（dsbot-read-state 承接）；show_view 卡片类提醒（kind=view 不在本变更白名单）
+unchanged_behavior:
+  - 团队页「需要你」行内提示、聊天页内容与 feed 的 revision/live/message/stream 处理不变；远端不支持 notices（hello 未声明或 0.3.6）时不显示横幅，其余功能照常
+  - 横幅与提醒文本不写入日志与诊断上报；dsh-auth cookie 与带 token 地址不进日志
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-notices-banner

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: lesson-c10c2a
+  title: 设计里承诺对真实服务实测服务端事件字段前，先确认存在零成本可撤销的触发途径
+category: api
+status: active
+created_at: '2026-11-22T16:46:41.010Z'
+updated_at: '2026-11-22T16:46:41.010Z'
+context: dsbot-chat-bars-0310 的 design 原计划在设备验收时用可删除的临时 Bot 触发缺 key 阻塞（bots[].blocked）与后台任务，实测字段形态并替换源码核对样本。
+observation: 实施时 create-bot 会按模型目录校验，指定未配置服务商的模型直接回 bot/refused（不创建对象）；模型目录里没有 needsKey 条目，所有本地 Agent 都已安装，没有零成本触发阻塞的办法；后台任务与群目标依赖真实模型运行；电脑操作在 Linux 宿主上关闭。实测计划落空，design、tasks、questions 都要回头改，评审还据此判出与 endpoint-inventory-0310/fixtures-sanitized 的冲突。
+takeaway: 写 design 前先只读核对触发路径：create-bot 等写端点的前置校验、模型目录 needsKey、本地 Agent 安装状态、computer.enabled；没有可撤销的零成本路径就直接按源码核对设计，并在 delta-tech 里对实测类 MUST 写明限定例外，用 mock 注入做界面验收。
+applies_when: 消费 DS-Bot 只在特定服务端状态下出现的字段（阻塞、后台任务、群目标、电脑操作、审批等），并打算在验收中对真实 dsh 实测其形态时
+occurrences:
+  - origin: dsbot-chat-bars-0310
+    date: '2026-11-22'
+    evidence: create-bot {model:deepseek-official/deepseek-chat} → bot/refused Model ... is not available；local-agents 全部已安装；state.json 无 tasks/blocked/goal；computer.enabled=false

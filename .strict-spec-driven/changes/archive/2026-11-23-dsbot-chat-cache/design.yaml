@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-chat-cache
+approach:
+  - core 新增纯 JVM 组件（work.keepwriting.core.ChatCache.kt）：ChatCache<T>（LinkedHashMap accessOrder 实现的 16 项 LRU；Entry 含 items、cursor、sessionId、firstPageSize；key(host, kind, id) 构造「主机:bot|room:id」键；invalidate(key) 用于分段切换）；ScrollMemory（50 项 LRU，值为首个可见项下标与偏移）；ReadFlight（单飞：begin(id) 返回 Start(gen)/Queued/Ignored——同 id 在途时第一次再触发记为排队、之后忽略，换 id 立即以新代号开始；finish(gen) 返回 stale（代号已被取代）与 rerun（有排队且仍是当前 id））；RowIdentity.match(old, new) 按内容（equals）贪心复用旧列表中未被占用的相同条目下标，返回新列表每项对应的旧下标或 -1；JumpButton 状态（away、newCount）：distanceBelow 大于阈值为 away，away 期间新增 n 条累加 newCount，回到底部清零；ScrollDistance.belowPx 用最后可见项底部超出视口的像素加其后项数乘平均项高估算离底距离。
+  - NativeShellConnection：在线且前台时在 scheduler 上每 15 秒向 executor 投递一次兜底轮询——以静默方式取 state 增量（失败不触发重连），并在当前聊天没有流式输出时 refreshIfOpen；onBackground 取消轮询，onForeground 由既有 beginConnect 探测重连后恢复。openChat 时把聊天 id 与类型写入独立的 SharedPreferences 文件 chat（键 lastChatId/lastChatKind）；连接首次进入在线时若有记录，调用对应控制器的 prefetch(id) 只取首页写入缓存、不改当前显示与导航。
+  - App：ChatController/RoomChatController 在 open(id) 换目标时先把当前 rows、cursor、sessionId（群为公告，存于 Entry.extra）写入缓存，再查目标缓存：命中则立即以缓存重建 rows（行 key 新分配）并恢复 canLoadEarlier；页面进入（restore）时按 ScrollMemory 发出带聊天 id 的 restoreSignal（同一聊天重进也恢复），无记忆则 jumpSignal 滚到最新；会话 id 只在读取确认后设置，读取完成前发送提示稍候。然后按 ReadFlight 发起首页读取：读取经注入的 readApi 在独立 IO 线程执行网络、结果投回状态 executor 回调，所以缓存上屏不被其他聊天的慢读取阻塞。应答：代号过期丢弃；由 core 的 ChatRefresh.merge 决定合并——新首页开头在当前列表中有连续重叠时保留重叠点之前的更早记录与原游标、尾部换成新首页，找不到重叠、新首页为空或强制重置时整体替换并改用新游标；列表变化时以 RowIdentity 复用旧行 key；无内容时首次读取完成后滚到最新。同目标在途时排队至多一次，排队时一并记下完成回调与 jump，换目标时清空；后台轮询不清空流式气泡，重连补取与页面进入则清除（群聊的「成员正在输入」提示同理，避免断线丢 end 帧后卡住）。新分段/打开旧分段成功后失效该 Bot 缓存与滚动记忆、ReadFlight.reset() 作废在途读取，并强制下一次读取整体替换。页面以 DisposableEffect 离开时保存首个可见项与偏移；ChatScrollSupport 以 snapshotFlow 采集离底距离喂给页面持有的 JumpButton，末尾新增在离底较远且不是自己发出的消息时计数，否则跟随到最新；流式输出的自动跟随也只在不处于离底状态时进行。
+decisions:
+  cache-in-controller:
+    decision: 缓存、滚动记忆与单飞放在各自控制器内（私聊、群聊各一份 ChatCache），纯逻辑在 core 以泛型实现并 JUnit 覆盖；只把上次打开的聊天 id 落盘到独立 SharedPreferences 文件。
+    rationale: 控制器已是聊天状态的唯一持有者且运行在单线程 executor 上，缓存跟随它可以免锁；聊天内容含私人对话，按里程碑约定只留内存；上次聊天 id 是指针而非内容，按 state-persistence 的 separate-state-files 用独立文件，SharedPreferences 提交本身是原子替换。
+  poll-skip-streaming:
+    decision: 15 秒兜底轮询在流式输出进行时跳过聊天刷新，只补 state；轮询的 state 补取遇网络失败静默放弃、不当作 feed 断线（会话失效仍按既有规则进入重新认证）；进入后台以前台标志拦截轮询 tick（定时器空转、不发请求），回前台在重新探测上线后才恢复。
+    rationale: 现有流式气泡在整页重取时会被重置，流式期间刷新会让逐字输出闪断；兜底轮询只是补漏，偶发网络失败不应打断在线的 feed 或触发退避重连，但会话失效是用户必须处理的状态，不能吞掉。
+  existing-resume-probe:
+    decision: 「回前台先短超时探测再补齐」沿用既有流程（onForeground → beginConnect 以 DialProbe 探测 → 重连 feed → refreshIfOpen），本变更不重写，只新增前台轮询的启停。
+    rationale: 代码核对：DsbotConnection.onForeground 已在前台恢复时重新探测并订阅，订阅成功后 NativeShellConnection 调用两个控制器的 refreshIfOpen；重复实现会产生两套补齐路径。
+  overlap-merge:
+    decision: 后台刷新（含 15 秒轮询）由 core 的 ChatRefresh.merge 合并：在当前列表中寻找新首页开头的重叠点——从该点起连续一致至少 3 条（新首页本身不足 3 条时须全部一致到末尾）才合格，多个合格点取连续一致最长的、相同取靠后；有重叠则保留其前的更早记录与原游标、尾部换成新首页；找不到重叠、新首页为空或分段切换后强制重置时整体替换并改用新首页游标。被替换的尾部中本地尚未落到服务端的条目（乐观发送、流式定格的无序号消息）若新首页里没有对应，则追加回末尾（强制重置除外）。
+    rationale: 首页是最新 N 条的窗口，新消息会让窗口前移；只比较「首页是否相等」会让每次新消息后的轮询都清掉用户已翻出的更早记录（首轮评审实证）。按内容找重叠点能证明无缺口而无需依赖并非所有条目都有的 seq；取连续最长并拒绝末尾的短匹配，避免相同工具卡等重复条目造成伪重叠而重复或静默漏掉消息（复审实证）；读取改到 IO 线程后可能与发送并发，快照未含的乐观消息必须保留，否则会暂时消失。
+  read-off-executor:
+    decision: 聊天首页读取、启动预取与兜底轮询的 state 请求经独立 IO 线程（2 线程池）执行网络，回调投回状态 executor；状态仍只由单线程 executor 读写；兜底轮询以 AtomicBoolean 保证上一轮处理完才发起下一轮。
+    rationale: 所有网络调用原本同步占用唯一的状态 executor，慢网络下进入 B 的缓存上屏要排在其他读取之后；把读取与轮询的网络移出后，打开与上屏只等待毫秒级的状态操作；scheduleWithFixedDelay 只负责投递 tick，网络半通时若不加在途标志 tick 会在队列里无界堆积。写操作、feed 触发的 state 同步与发送仍在 executor 上，属于既有行为。
+alternatives:
+  - option: 刷新时把旧的更早记录与新首页按 seq 拼接
+    reason: 群聊与私聊条目并非都带 seq（流式定格条目 seq 为空），无法可靠判断是否连续，拼接可能静默漏掉消息
+  - option: 缓存写入磁盘以便进程重启后秒开
+    reason: 聊天内容是私人对话，里程碑约定缓存只在内存；落盘还需加密与清理策略，超出本变更范围
+risks:
+  - 15 秒轮询增加流量与服务端负载：只在前台且在线时运行，state 补取带 since/live 多数情况只回三键
+  - 行 key 复用依赖条目 equals，内容相同的不同条目可能互换 key：只影响动画与重组，不影响显示内容
+  - 聊天缓存挂在连接对象上，连接对象随 NativeShell 组合创建：旋转屏幕已由 configChanges 处理、不会丢；按返回键退出到桌面后 Activity 销毁，下次打开缓存从空开始，只预取上次打开的聊天（规格已写明），把连接提升到进程级属于更大的架构调整，不在本变更范围
+  - 读取改到 IO 线程后，NativeSession 的 cookie 列表可能在 IO 线程迭代时被 executor 上的会话重建修改：异常被 postBot 捕获为一次「加载聊天失败（网络）」，概率极低（只在重新认证瞬间），下一次刷新即恢复

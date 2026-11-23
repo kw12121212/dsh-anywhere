@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: lesson-aeb47a
+  title: 后台刷新只比较「首页是否相等」会在每条新消息后清掉已翻出的历史
+category: coding
+status: active
+created_at: '2026-11-23T03:15:03.683Z'
+updated_at: '2026-11-23T03:15:03.683Z'
+context: dsbot-chat-cache 的后台刷新（重进、重连、15 秒轮询）需要把服务端最新一页并回当前列表（更早记录 + 首页 + 实时追加）。
+observation: 初版按「新首页 == 缓存首页」保留更早记录、否则整体替换：服务端首页是最新 N 条的滑动窗口，任何一条新消息都让窗口前移，下一次轮询必然判为变化并清掉用户翻出的历史；空的新分段被当作「未变化」继续显示旧分段。改为按新首页开头在当前列表中的重叠点合并后，复审又发现「从后往前取第一个合格点」会被重复的工具卡（无 seq、equals 相等）骗出伪重叠，造成消息重复或静默缺口。
+takeaway: 合并滑动窗口分页要按内容找重叠点：要求连续多条一致（新首页本身很短时才接受到末尾为止的短匹配），多个合格点取连续最长的；新首页为空必须视为变化；快照未含的本地乐观条目合并后补回。决策逻辑放 core 并用重复条目、窗口越过、空页、并发发送等样本做 JUnit。
+applies_when: 实现聊天、消息流或任何「最新一页 + 已加载更早页」列表的刷新/轮询合并，尤其条目没有全局唯一序号时
+occurrences:
+  - origin: dsbot-chat-cache
+    date: '2026-11-23'
+    evidence: 评审 MUST 1、MUST 3 与复审 MUST 1；ChatCacheTest 的 mergePicksLongestRunWithRepeatedToolCards、mergeEmptyFreshMeansNewEmptyPart、mergeKeepsLocalUnsentItems；模拟器加载更早一页后推 2 条新消息并经过一次轮询，更早记录保留

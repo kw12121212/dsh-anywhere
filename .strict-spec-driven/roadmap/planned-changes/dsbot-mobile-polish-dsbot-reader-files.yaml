@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-reader-files
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 查看增强：长按消息弹出复制与「选择文字」（进入全屏可选阅读器），长消息「阅读全文」经 file-text 取回；服务器文件经 file-download 分块下载到缓存后交系统分享面板；图片查看器可左右滑动，先显示预览再加载原图
 details: 参考上游 items.tsx 长按菜单、file-download.ts 与图片查看器。core：分块下载拼接器（512 KiB、offset/version/nextOffset，版本变化即中止并报告），文件名清洗防路径穿越；JUnit 覆盖拼接、版本变化与文件名清洗。App：长按消息出底部菜单（复制整条、选择文字），选择文字进入全屏可选阅读器；被截断的长消息与文件条目可「阅读全文」（file-text）；文件下载写入 App 缓存目录的随机子目录后经系统分享面板发出，现有「服务器文件链接交系统应用打开」路径改为复用分块下载；图片查看器支持多图左右滑动，先显示 preview 再加载原图（内存最多保留少量原图）；下载与图片内容不写入日志与诊断上报。验收：长消息可在阅读器中选择复制；服务器上的大文件可下载并分享；多图可滑动查看。
 depends_on:

@@ -1,0 +1,26 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-rich-render
+approach:
+  - core ViewFormula：tokenize/parse（三元、|| && 比较 加减 乘除余、一元、调用、括号，嵌套 64 层）→ Node；函数 min/max/abs/floor/ceil/sqrt/pow/round/clamp/fixed/format/percent；scope(inputs, lets) 按需求值 let、检测自引用；show() 12 位有效数字去浮点噪声。值为 Double/String/Boolean，+ 遇字符串拼接，== 严格相等，与 JS 一致。
+  - core ViewCard：decode(sessionId, state.views 项) → Ok(Blueprint)/Invalid(原因)；validate 移植 checkNode（组件与属性白名单、8 层/64 组件/16 子节点/文字 2000/单元格 200/8 列 50 行/8 选项/6 字段、图表 categories 与每个 series 等长且数值有限、donut 单序列、slider 需 min<max、sources 只认 http(s)、公式只读已知名字且以初始输入可求值且类型对）并加客户端上限（序列 ≤ 8、点数 ≤ 50、整卡 64 000 字符）；scope/resolve/text/chart/progressPercent/tableCsv/summary；reply(bp, action, Answer, inputs) 组 view-reply {sessionId, viewId, action, values{inputs?, selected|confirmed|fields|canceled}}。
+  - 'App ViewCardView：递归绘制组件，输入值为 Compose 状态、变更即重算公式；图表用 Canvas：bar/hbar 分组柱、line/area 折线与面积（填充 0.25 透明度）、donut 圆环，图例与坐标标签；表格横向滚动 + 复制 CSV；作答组件经停靠区 answer(view-reply, …) 提交，提交后由 state 移除；Invalid 显示标题、原因摘要与关闭。MarkdownText：Table 包 horizontalScroll，操作行「复制 TSV / 展开」（全屏 Dialog 双向滚动）；Task 以复选框图标显示；Image 交 MarkdownImages 加载：data: base64 解码，https 经 HttpSocket(split-dial) GET（不带 cookie、≤ 8 MB、最多 3 次 https 重定向），本地路径经 markdown-image {sessionId, path, knownRev?}（会话由聊天页经 CompositionLocal 提供），内存 LRU 16 张、5 分钟内直接复用、过期带 knownRev 复验，失败显示可点重试的占位。'
+  - 评审后补充：滑块改为连续拖动、按步长吸附到 min + k·step 并夹在 [min, max]、按步长小数位去浮点噪声（ViewCard.snap），作答不会越界；https 图片经 HttpSocket.request(maxBody) 边读边限 8 MB（Content-Length 超限不分配）、整体 30 秒到点关连接、在独立的取图线程池执行，不占文件下载的 io 线程；Markdown 图片缓存按总字节 32 MB 与 16 张淘汰，同图并发请求合并，本地图片同样限 8 MB，所有回调在后台线程、位图解码不上主线程；markdown-image 请求体与应答解码下沉 core MarkdownImage 并以实测夹具测试；校验补 html height、confirm/submit/form 标签与字段类型、choice 非标量值；text/progress/callout 的 tone 支持公式；公式编译缓存；数字字符串按 JS Number 子集解析（含 0x），show() 对极大极小数用指数形式。
+decisions:
+  port-deep-view:
+    decision: 卡片校验与公式求值按 deep-view 0.1.2 源码逐条移植到 core，而不是只画能识别的部分。
+    rationale: 服务端存储前已按同一套规则校验，客户端照同一规则判定才能与网页端呈现一致；公式在输入变化时需本地重算（网页端同样不调用模型）；移植到纯 JVM core 便于 JUnit 覆盖。
+  render-guard:
+    decision: 「单条渲染异常可重试」以解码阶段的防护实现：卡片与 Markdown 图片在 core 解码/校验，异常或畸形转为只读或占位（图片占位可点重试），不在 Compose 中捕获异常。
+    rationale: Compose 不支持在组合中 try/catch 子树；把会失败的步骤（解析、校验、取图）放在组合之外并输出明确的降级模型，等效且可测。
+  https-images-split-dial:
+    decision: Markdown 的 https 图片经 core HttpSocket + split-dial 直接取回，不带任何 harness cookie，限 8 MB、只跟随 https 重定向。
+    rationale: 遵守 android-client 的 native-network-path（原生网络一律经分流拨号）；不带 cookie 避免向第三方泄露凭据；大小与重定向限制防止滥用。
+alternatives: []
+risks:
+  - 图表、滑块等组件与公式的真实蓝图暂无样本（本机仅有一张 stack/text/choice/submit 卡），形态以 deep-view 0.1.2 源码为准，畸形一律降级
+  - https 图片向第三方主机发起请求（与网页端同样会加载外链图片）
+  - 群聊里成员 Bot 用相对路径或其私有工作目录贴的本地图片：上游 markdown-image 支持以作者 botId 优先解析，本变更未带作者（聊天渲染模型暂无作者 id），这类图片显示占位，可点重试
+  - 停靠区收起再展开卡片时，滑块、单选与表单里未提交的输入会恢复为初始值

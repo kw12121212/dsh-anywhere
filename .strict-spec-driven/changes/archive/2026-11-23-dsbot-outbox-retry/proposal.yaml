@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-outbox-retry
+  status: proposed
+summary:
+  what:
+    - 私聊与群聊的文字消息、带附件消息统一经发送箱：点发送后输入框立即清空，消息以本地行「发送中」出现在聊天末尾；发送失败变为「未发送，点按重试」并提供删除；本地行按聊天保存在内存里，切换聊天再回来仍在
+    - 服务端出现对应的用户行（实时 feed 的用户消息或刷新结果中，seq 大于发送时已知最大值、去空白文本一致，按发送顺序一一匹配）后移除本地行；失败行若其实已送达，同样随服务端行出现而移除，避免重试造成重复；无法判断（无 seq）时保留本地行，绝不自动重发
+    - 重试只在点按时发送一次（发送中不可重复点按）；删除即丢弃；发送成功给一次轻触感反馈；照片附件（JPEG/HEIC/WebP 等）上传前按长边 2048 像素等比缩小、JPEG 质量 82 重新编码（原图不超过 2048 不放大不重编码，PNG/GIF 与非图片文件原样上传），并按 EXIF 方向校正
+  why:
+    - 现在发送失败只提示「发送失败，未自动重试」并把消息从屏幕上撤掉，用户要重新输入；网络抖动时不知道消息到底发没发出去，重发又可能在网页端出现重复消息；手机拍的原图动辄十几 MB，上传慢且容易失败
+    - 里程碑 dsbot-mobile-polish 完成标准第四条：断网发送的消息显示「未发送，点按重试」，切到别的聊天再回来仍在，点按重试只发一次，恢复后网页端不出现重复消息
+scope:
+  in:
+    - core：Outbox（按聊天键的本地行、状态、匹配窗口与先进先出对账、文本规范化）与 ImageSizing（长边上限换算、是否需要缩放）；JUnit 覆盖成功移除、失败保留、快速连发相同内容、窗口外旧行不误配、无 seq 不配、切换聊天互不影响
+    - App：ChatController/RoomChatController 发送改经发送箱（send/session/prompt 传输不变），feed 用户消息实时追加并对账，刷新后对账；BotChatPage/RoomChatPage 渲染本地行（发送中/未发送点按重试/删除）、发送后滚到底、成功触感；附件选取时照片压缩（ImageCompress）
+    - android-dsbot 规格：修改 bot-chat-send-stream（失败不自动重试 → 失败保留可手动重试），新增发送箱与照片压缩要求
+  out:
+    - 自动重发、离线排队到网络恢复后自动发送（只手动重试）；发送箱跨进程持久化（只在内存）
+    - Side chat 的发送（不经发送箱）；附件上传本身的重试（沿用附件栏的单件重试）
+unchanged_behavior:
+  - 发送仍走 send（纯文本私聊）与 session/prompt（附件消息与群聊）同样的请求；Bot 回复的流式与定格、卡片、分段、停止恢复不变
+  - 附件上传失败仍在附件栏显示原因并可单件重试，附件未就绪时不能发送；附件字节与消息文本不写日志
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-outbox-retry

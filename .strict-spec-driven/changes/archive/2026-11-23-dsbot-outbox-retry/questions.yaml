@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-outbox-retry
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：路线图计划变更 dsbot-outbox-retry。
+    answer: 手机网络不稳时发送失败的消息直接从屏幕上撤掉、要重新输入；不知道消息到底发出去没有，重发又可能让网页端出现重复消息；手机原图很大，带图消息上传慢、易失败。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第四条。
+    answer: 断网发送的消息显示「未发送，点按重试」，切到别的聊天再回来仍在，点按重试只发一次，恢复后网页端不出现重复消息；大照片上传前被压缩。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：私聊、群聊与附件发送统一经发送箱（发送中/未发送点按重试/删除、切换聊天不丢），服务端出现对应用户行（去空白文本一致、限定匹配窗口）后移除本地行，判断不了时保留；只手动重试；成功触感；图片按长边 2048、JPEG 约 0.82 压缩，过小不放大、非图片不处理；规格从「失败不自动重试」扩展为可手动重试。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 不自动重发、不离线排队；发送请求的端点与形态不变；Bot 流式回复、卡片、分段、停止恢复不变；附件上传失败的单件重试与未就绪禁发不变；Side chat 不经发送箱。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 里程碑完成标准第四条；依赖的 dsbot-chat-cache 已完成（发送箱要在缓存切换的基础上保持本地行不丢），脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: attachment-count-match
+    question: 计划变更说「去空白文本与附件数一致」才移除本地行，附件数如何比较？
+    context: 影响范围：core 对账与测试。渲染后的聊天条目不携带用户消息的附件数，0.3.x 的用户条目附件形态（imageRefs/文件）也不统一。
+    answer: 以 seq 窗口 + 去空白文本 + 先进先出对账（design 决策 seq-window-match），不比较附件数：seq 窗口已排除旧消息，文本一致即可确认；判断不了（无 seq）时保留本地行，符合「宁可保留不重发」。
+    status: resolved
+    answered_by: roadmap

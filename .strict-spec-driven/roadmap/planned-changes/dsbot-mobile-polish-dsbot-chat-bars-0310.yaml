@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-chat-bars-0310
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 0.3.10 新增的聊天条：后台任务条与逐任务停止、电脑操作请求（拒绝/本次/总是）与停止、模型失败修复卡、群目标阶段进度条，以及按工具显示的工作短语与工作中动效
 details: 参考上游 Chat.tsx 的任务条、computer-use、修复卡与 ui/phrases.ts 的 workPhrase。core：后台任务、电脑操作请求与模型失败原因（MISSING_CREDENTIAL、AUTH、QUOTA 等）的解码；工具名到工作短语的映射（中英文），未知工具回退为通用短语；群目标阶段解码；JUnit 覆盖解码与映射。App：私聊页显示后台任务条，逐任务停止（bot-stop-task）；电脑操作请求卡提供拒绝/本次/总是（computer-app-answer）与停止（computer-stop）；模型失败修复卡给出可读原因与指引（模型服务商页上线前指引到网页端，DeepSeek 额度不足给出充值链接经系统浏览器打开）；群聊顶部群目标条显示阶段进度；工作中行显示工作短语并带轻量动效（遵循系统减少动态效果设置）。能力位未声明的条目不显示。验收：Bot 有后台任务时可逐个停止且网页端同步；电脑操作请求作答与网页端一致；缺 key 失败显示修复卡。
 depends_on:

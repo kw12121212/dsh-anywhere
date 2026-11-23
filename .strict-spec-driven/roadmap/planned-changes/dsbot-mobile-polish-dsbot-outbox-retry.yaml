@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-outbox-retry
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 发送箱：私聊与群聊发送后本地行立即出现为「发送中」，失败显示「未发送，点按重试」与删除，切换聊天不丢；服务端出现对应用户行后移除本地行；只手动重试、不自动重发；图片附件发送前压缩
 details: 参考上游 Chat.tsx 的 outbox 与 team/optimistic.ts。core：Outbox 按聊天键保存本地行（状态 sending/failed、文本、附件引用、发送前已有行键快照），服务端出现新的用户行且去空白文本与附件数一致时移除对应本地行；限定匹配窗口避免快速连发相同内容误判，判断不了时保留本地行而不是重发；JUnit 覆盖成功移除、失败、连发相同内容与切换聊天。App：私聊、群聊与附件发送统一经发送箱；失败行点按重试只发一次，删除即丢弃；发送成功给轻触感反馈；图片附件上传前按长边约 2048 像素、JPEG 质量约 0.82 压缩（原图过小不放大，非图片文件不处理）。与现有 bot-chat-send-stream「失败不自动重试」一致并扩展规格为可手动重试。验收：断网发送显示未发送，切走再回来仍在，恢复后点按重试只发一次，网页端无重复消息。
 depends_on:

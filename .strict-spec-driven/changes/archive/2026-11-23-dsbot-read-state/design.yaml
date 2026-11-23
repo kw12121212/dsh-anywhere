@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-read-state
+approach:
+  - core ReadState：不可变 Map<主机, Map<id, 已读毫秒>>；mark(host,id,at) 只前移（at<=0 或不大于已有值不变）；merge 逐项取大；isUnread(host,id,lastAt,open) = !open && lastAt>0 && lastAt>已读；encode/decode 为 {"v":1,"hosts":{host:{id:ms}}}，解码忽略非正数与非数字、整体非法回空；hostKey(url) 取 scheme://host:port（无端口用默认端口号，去 path/query/token）。
+  - 'core TeamPreview.of(entry 所需字段, state)：按 0.3.10 state 计算——questions/views 以条目当前会话为键（群为群会话与成员群内会话）、work.approvals（answerable!=false；Bot 取无 roomId 的、群取 roomId 匹配的）、secretRequests/connectorRequests 状态 pending、learning 非空、work.bots[id]（WorkPhrase.phrase）、work.rooms 中该 Bot 的条目（群名 · 短语，多于一个时 +n）；Preview(kind, text)，kind ∈ ANSWER/APPROVAL/WORK/GROUP_WORK/SUMMARY/ROLE。cleanPreview：去 [Message from|Reply from|Group chat|Group post from|Bot team setup|Handoff · part|Secret card …] 头；''[Browser handoff] 原因 — 说明 Answer: done|skip'' → 浏览器交接：原因 — 说明（已完成/已跳过）；''[Answer to question card] 问题 Answer: 答'' → 已回答「问题」：答（(skipped)→已跳过）；''[Answer to view card] 标题 Answer: …'' → 已回复卡片「标题」；群预览「名字：正文」只清洗正文。文案经 I18n.tr。'
+  - TeamHome.assemble：排序 Main Bot → 置顶 → lastAt 降序 → 名称；Entry 新增 preview；lastSummary 改存清洗后的摘要（搜索仍用它）；unread 字段删除。
+  - App：ReadStore（filesDir/read-state.json）持有可观察的 ReadState；mark 在主线程更新内存并投递到单线程 IO 执行器写临时文件后原子改名，失败置脏、下次 mark 重写全量；启动时读取。NativeShell 的聊天分支在生命周期 RESUMED 且页面为该聊天时，以 max(条目 lastAt, 控制器 newest(id 匹配时的最新条目时间)) 标记；ChatController/RoomChatController 暴露 newest = (目标 id, 最新时间)，在首屏/重取与实时 message 时前移。TeamPage 用 ReadStore.isUnread 显示未读点（不再显示远端数字），预览按 kind 着色（等你回答/审批用强调色）。
+  - 评审后补充：可见 = 生命周期 RESUMED 且设置页未叠在外壳上（MainActivity 传 covered）；标记效果以 harness 主机为键之一，换地址后不把旧主机的时间记到新主机；readAt 计算下沉 core ReadState.readAt。某主机首次出现团队（该主机无任何记录）时以当前各条目 lastAt 打底（ReadState.seed），升级或换 harness 后不会整页未读，之后的新活动照常显示；无 lastAt 时保持未知、下次再打底。写盘 fsync 后再改名；ReadStore 在 AppGraph.load 时初始化。cleanPreview 在每条回复包装开头处切开逐条清洗并以「；」连接（服务端预览已折叠空白，无空行可切），正文清洗为空时保留原文。
+decisions:
+  local-read-only:
+    decision: 已读只存手机本机（按 harness 主机分开），远端 unread 字段不再作为依据，网页端与手机已读互不同步，规格写明。
+    rationale: 0.3.10 state 不下发未读；网页端已读在浏览器 localStorage；上游手机端同样本机计算。按主机分开避免切换 harness 地址后已读错配。
+  preview-answer-first:
+    decision: 预览优先级按计划变更（上游手机端）：待回答提问或卡片先于待审批，而不是网页端侧栏的审批先于提问。
+    rationale: 计划变更明确对照上游手机端；两者都是「等你处理」，手机上先提示需要回答的内容与上游手机端一致。
+  mark-on-visible:
+    decision: 只在聊天页处于前台可见（生命周期 RESUMED）时标记已读，标记值取 max(state lastAt, 聊天内最新条目时间)。
+    rationale: 后台或锁屏时到达的消息不应被当作已读；取两者较大值覆盖 state 尚未刷新而实时消息已到的情况，且不使用设备时钟，避免与服务端时间偏差。
+  preview-vs-tags:
+    decision: 预览的「等你回答 / 等你审批」按网页端口径归属（排除 answerable=false 与群里的审批，提问只认条目当前会话），与同一行沿用的待办标签（按 botId 或 sessionId 汇总全部待办）口径不同，本变更不改标签。
+    rationale: proposal 的 unchanged_behavior 写明待办行内标签不变；预览口径对齐网页端侧栏与上游手机端，只提示用户在该私聊里能处理的事项。两者不一致只出现在 Bot 有群内审批或旧分段提问时：标签仍提示有待办，预览显示工作或摘要。
+alternatives: []
+risks:
+  - lastAt 由服务端异步填充（chatTail 首次为空），首次进入团队页可能没有 lastAt，此时不显示未读点
+  - 清洗规则依赖服务端英文包装文本格式（0.3.10 parts.js replyText / deep-view viewReplyText），上游改格式后降级为原文显示

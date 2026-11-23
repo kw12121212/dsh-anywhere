@@ -1,6 +1,20 @@
 package work.keepwriting.dshanywhere
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Column
@@ -83,51 +97,139 @@ fun MarkdownText(
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.let { m -> if (onCopyBlock != null) m.clickable(onClick = { onCopyBlock(block.code) }) else m },
                 )
-                is MdBlock.Table -> MdTable(block, onOpenLink)
+                is MdBlock.Table -> MdTable(block, onOpenLink, onCopyBlock)
                 is MdBlock.Paragraph -> InlineText(block.parts, onOpenLink)
+                // 任务列表：勾选框符号表示完成状态（只读；dsbot-rich-render）
+                is MdBlock.Task -> InlineText(
+                    listOf(InlinePart(InlineKind.PLAIN, if (block.checked) "☑ " else "☐ ")) + block.parts,
+                    onOpenLink,
+                )
+                is MdBlock.Image -> MdImage(block)
             }
         }
     }
 }
 
 @Composable
-private fun MdTable(table: MdBlock.Table, onOpenLink: ((String, Boolean) -> Unit)?) {
-    // 列宽按各列最宽单元格的显示宽度配权（CJK 双宽计数、上限截断）：无权重的 Row 子项在
-    // 气泡宽度不足时会被压到极窄、长文本挤成一字一行竖排（fix-bot-chat-table-render）。
-    val weights = remember(table) { columnWeights(table) }
+private fun MdTable(table: MdBlock.Table, onOpenLink: ((String, Boolean) -> Unit)?, onCopy: ((String) -> Unit)?) {
+    // 列宽按各列最宽单元格的显示宽度（CJK 双宽计数、上限截断）换成固定宽度；表格放在横向滚动里，
+    // 列多时可左右滑动看全，不再把列压窄（dsbot-rich-render；原 fix-bot-chat-table-render 的竖排问题同样避免）。
+    val widths = remember(table) { columnWidths(table) }
+    var expanded by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.horizontalScroll(rememberScrollState())) { TableGrid(table, widths, onOpenLink) }
+        Row {
+            if (onCopy != null) {
+                TextButton(onClick = { onCopy(work.keepwriting.core.MarkdownParse.tsv(table)) }) {
+                    Text(tr("复制表格", "Copy table"), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            TextButton(onClick = { expanded = true }) { Text(tr("展开", "Expand"), style = MaterialTheme.typography.labelSmall) }
+        }
+    }
+    if (expanded) {
+        Dialog(onDismissRequest = { expanded = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        if (onCopy != null) TextButton(onClick = { onCopy(work.keepwriting.core.MarkdownParse.tsv(table)) }) { Text(tr("复制表格", "Copy table")) }
+                        TextButton(onClick = { expanded = false }) { Text(tr("关闭", "Close")) }
+                    }
+                    Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(12.dp)) {
+                        TableGrid(table, widths, onOpenLink)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TableGrid(table: MdBlock.Table, widths: List<androidx.compose.ui.unit.Dp>, onOpenLink: ((String, Boolean) -> Unit)?) {
+    Column {
+        Row {
             table.header.forEachIndexed { i, cell ->
                 InlineText(
                     cell,
                     onOpenLink,
                     style = MaterialTheme.typography.labelMedium,
                     outer = SpanStyle(fontWeight = FontWeight.Bold),
-                    modifier = Modifier
-                        .weight(weights.getOrElse(i) { 1f })
-                        .padding(end = 8.dp, bottom = 2.dp),
+                    modifier = Modifier.width(widths.getOrElse(i) { 64.dp }).padding(end = 8.dp, bottom = 2.dp),
                 )
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        HorizontalDivider(modifier = Modifier.width(widths.fold(0.dp) { a, b -> a + b }), color = MaterialTheme.colorScheme.outlineVariant)
         table.rows.forEachIndexed { r, row ->
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row {
                 row.forEachIndexed { i, cell ->
                     InlineText(
                         cell,
                         onOpenLink,
                         style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier
-                            .weight(weights.getOrElse(i) { 1f })
-                            .padding(end = 8.dp, top = 3.dp, bottom = 3.dp),
+                        modifier = Modifier.width(widths.getOrElse(i) { 64.dp }).padding(end = 8.dp, top = 3.dp, bottom = 3.dp),
                     )
                 }
             }
             if (r != table.rows.lastIndex) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                HorizontalDivider(modifier = Modifier.width(widths.fold(0.dp) { a, b -> a + b }), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             }
         }
     }
+}
+
+/** 各列固定宽度：列内最宽单元格的显示宽度（全宽字符按 2 计）× 8.5dp 加内边距，夹在 56..240dp。 */
+private fun columnWidths(table: MdBlock.Table): List<androidx.compose.ui.unit.Dp> =
+    columnWeights(table).map { (it * 8.5f + 12f).coerceIn(56f, 240f).dp }
+
+/** Markdown 图片的取图入口（聊天页提供：data/https/本地路径 → 字节；null 时只显示占位）。 */
+val LocalMarkdownImageLoader = androidx.compose.runtime.staticCompositionLocalOf<((String, (ByteArray?) -> Unit) -> Unit)?> { null }
+
+/** 独占一行的图片：取回后按比例显示（最高 240dp），失败显示可点按重试的占位（dsbot-rich-render）。 */
+@Composable
+private fun MdImage(block: MdBlock.Image) {
+    val loader = LocalMarkdownImageLoader.current
+    var attempt by remember(block.src) { mutableStateOf(0) }
+    var bitmap by remember(block.src) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var failed by remember(block.src) { mutableStateOf(false) }
+    val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    androidx.compose.runtime.LaunchedEffect(block.src, attempt) {
+        failed = false
+        if (loader == null) {
+            failed = true
+            return@LaunchedEffect
+        }
+        loader(block.src) { bytes ->
+            val bmp = bytes?.let { decodeSampled(it, 1080) }
+            main.post { if (bmp != null) bitmap = bmp else failed = true }
+        }
+    }
+    val bmp = bitmap
+    when {
+        bmp != null -> androidx.compose.foundation.Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = block.alt.ifEmpty { tr("图片", "Image") },
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).padding(vertical = 4.dp),
+        )
+        failed && loader == null -> Text("🖼️ ${block.alt.ifEmpty { block.src.substringAfterLast('/') }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        failed -> Text(
+            "🖼️ ${block.alt.ifEmpty { block.src.substringAfterLast('/') }}" + tr("（取不到，点按重试）", " (unavailable, tap to retry)"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.clickable { attempt++ }.padding(vertical = 4.dp),
+        )
+        else -> Text("🖼️ …", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+    }
+}
+
+/** 按目标宽度采样解码，避免大图占满内存。 */
+private fun decodeSampled(bytes: ByteArray, maxSide: Int): android.graphics.Bitmap? {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+    return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
 }
 
 /** 各列配权：列内最宽单元格的显示宽度（CJK 等全宽字符按 2 计），夹在 2..48——
@@ -159,6 +261,20 @@ private val LinkColor = Color(0xFF1E88E5)
  *  longPressTimeout（默认 400ms）——触发后立即消费后续指针事件，抢先于
  *  SelectionContainer 的长按选择，避免长按链接同时弹选择器又进入选择模式。 */
 private const val LINK_LONG_PRESS_MS = 350L
+
+/**
+ * 链接长按刚触发过（dsbot-reader-files）：气泡的长按菜单在此后短时间内跳过，保证长按链接只出
+ * 「选择打开方式」选择器（手指完全不动时外层长按计时不会被消费事件取消）。主线程读写。
+ */
+object LinkLongPress {
+    private var at = 0L
+
+    fun mark() {
+        at = android.os.SystemClock.uptimeMillis()
+    }
+
+    fun recent(): Boolean = android.os.SystemClock.uptimeMillis() - at < 1500
+}
 
 /** 长按命中的额外判定边距（fp 像素）：链接矩形四周放宽，照顾粗手指。 */
 private const val LINK_HIT_SLACK = 8f
@@ -193,8 +309,10 @@ private fun InlineText(
                     val url = linkRects.firstOrNull { it.first.inflate(LINK_HIT_SLACK).contains(pos) }?.second
                     if (url != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        LinkLongPress.mark()
                         onOpenLink(url, true)
                     }
+                    url != null
                 },
             ) else Modifier
             ) then modifier,
@@ -222,7 +340,7 @@ private fun rangeRect(layout: androidx.compose.ui.text.TextLayoutResult, s: Int,
  *  所有指针变化消费掉——既阻断 BasicText 内层的链接点击检测，也取消
  *  SelectionContainer 在 Main pass 的长按选择（其检测器见到已消费事件即中止），
  *  避免长按链接同时弹「选择打开方式」又进入选择模式。 */
-private fun Modifier.linkLongPress(onLongPress: (Offset) -> Unit): Modifier = pointerInput(Unit) {
+private fun Modifier.linkLongPress(onLongPress: (Offset) -> Boolean): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val start = down.position
@@ -234,10 +352,11 @@ private fun Modifier.linkLongPress(onLongPress: (Offset) -> Unit): Modifier = po
                 awaitPointerEvent(PointerEventPass.Initial)
             } else null
             if (event == null) {
-                // 到点仍按住：触发长按，之后消费该指针的一切事件直至抬手
+                // 到点仍按住：命中链接才触发并接管——之后消费该指针的一切事件直至抬手；
+                // 没命中链接就放手不管，外层气泡的长按菜单照常识别（dsbot-reader-files）
                 if (!fired) {
                     fired = true
-                    onLongPress(start)
+                    if (!onLongPress(start)) return@awaitEachGesture
                 }
                 while (true) {
                     val ev = awaitPointerEvent(PointerEventPass.Initial)

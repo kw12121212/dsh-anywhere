@@ -5,4 +5,6 @@
          与文件附件查看的临时文件（cache/attachments/，交系统查看器后系统回收） -->
     <cache-path name="camera" path="camera/" />
     <cache-path name="attachments" path="attachments/" />
+    <!-- dsbot-reader-files：Bot 交付文件分块下载（cache/downloads/<随机目录>/，交分享面板或查看器；启动清理 24 小时前的） -->
+    <cache-path name="downloads" path="downloads/" />
 </paths>

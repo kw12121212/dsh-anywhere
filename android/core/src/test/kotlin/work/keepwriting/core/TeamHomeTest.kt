@@ -160,8 +160,25 @@ class TeamHomeTest {
         assertEquals("b1", entry.name) // 名称缺失降级为 id
         assertNull(entry.color)
         assertNull(entry.lastSummary)
-        assertNull(entry.unread)
+        assertNull(entry.preview) // 无待办、无工作、无摘要、无角色
         assertTrue(!entry.working && !entry.pinned && !entry.isMain)
+    }
+
+    @Test
+    fun `Main Bot 最前，其余置顶优先再按最近活动（dsbot-read-state）`() {
+        val stateJson = """
+            {"revision":1,"mainBotIds":["m"],"bots":[
+              {"id":"m","name":"Main","sessionId":"sm","lastAt":10},
+              {"id":"p","name":"Pinned","sessionId":"sp","pinned":true,"lastAt":20},
+              {"id":"n","name":"New","sessionId":"sn","lastAt":300,"preview":"[Message from Alice] 你好"}],
+             "rooms":[],"sections":[]}
+        """.trimIndent()
+        val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
+        val entries = team.sections.flatMap { it.entries }
+        assertEquals(listOf("Main", "Pinned", "New"), entries.map { it.name })
+        val n = entries.last()
+        assertEquals("你好", n.lastSummary) // 摘要已清洗
+        assertEquals(TeamPreview.Preview(TeamPreview.Kind.SUMMARY, "你好"), n.preview)
     }
 
     @Test

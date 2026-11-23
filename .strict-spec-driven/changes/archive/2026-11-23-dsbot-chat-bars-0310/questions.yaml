@@ -1,0 +1,54 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-chat-bars-0310
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why 与是否值得做。来源：路线图计划变更 dsbot-chat-bars-0310 与里程碑 dsbot-mobile-polish。
+    answer: 用户在手机原生 App 里只看得到 Bot「工作中」或不回话：看不到 Bot 的后台任务、无法逐个停止；Bot 请求操作电脑时手机上没有作答入口，只能回电脑网页端批准；模型因缺 key、鉴权或额度失败时没有原因说明，用户以为 App 或连接坏了；群目标进行到哪个阶段看不到。每次遇到都必须回到电脑上的网页端处理。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收证据。来源：里程碑完成标准第六条与计划变更验收说明。
+    answer: Bot 有后台任务时私聊页显示任务条并可逐个停止，网页端同步显示已停止；电脑操作请求可在手机上选拒绝/本次/总是并与网页端一致；模型因缺 key 失败时私聊页显示修复卡（可读原因与指引）；群聊页显示群目标阶段进度；工作中显示按工具区分的工作短语并遵循系统减少动态效果设置。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: capability-gating
+    question: 计划变更说「能力位未声明的条目不显示」，但 0.3.10 的 hello 能力名单里没有任务、电脑操作、修复卡、群目标对应的能力名，应如何门控？
+    context: 影响范围：实施文件（ChatBars 与两个聊天页）与 spec delta 的可观察要求。选项：A 按能力位门控（这些功能在 0.3.10 上永远隐藏）；B 按远端是否返回对应字段显隐。推荐 B。
+    answer: 按字段存在门控（design 决策 data-presence-gating）：远端返回 tasks、computerLive、blocked、goal、work 字段才显示对应条，字段缺失（含 0.3.6）整块不渲染。依据：上游 mobile.js 的 CAPABILITIES 名单实测 30 项不含这些能力，上游手机端同样按数据显示。
+    status: resolved
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按计划变更 dsbot-chat-bars-0310 的 summary/details 解读：只做 0.3.10 新增的四类聊天条（后台任务条与逐任务停止、电脑操作请求拒绝/本次/总是与停止、模型失败修复卡、群目标阶段进度条）以及按工具显示的工作短语与动效，全部用 Compose 与 core 原生实现、只学上游行为不搬代码；任务追加消息、电脑接管/截图、模型服务商页不在本变更（见 proposal out）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 依里程碑 scope.out 与计划变更：连接层（harness URL、内嵌 Tailscale、dsh 会话 cookie）不变；不引入网页 UI 或移植上游 RN 代码；导航保持团队页为根；不做生物识别；管理与设置页（模型服务商、密钥等）由后续里程碑承接；既有私聊、群聊、卡片、附件、Side chat、停止/恢复/分段与目标草稿对话框行为不变，远端无对应字段时页面与原来一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 依里程碑 dsbot-mobile-polish：用户 dsh 的 ds-bot 已升到 0.3.10（dsbot-baseline-0310 已完成基准升级与能力握手），网页端与上游手机端已有这些聊天条而原生 App 没有；里程碑完成标准第六条把任务条、电脑操作请求与修复卡列为验收条件，本变更是该标准的承接项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: shapes-evidence
+    question: 任务、阻塞、电脑请求、群目标的字段形态没有真实成功样本，依据什么解码？
+    context: 影响范围：core 解码、测试夹具与 tech/dsbot-api 登记。endpoint-inventory-0310 要求不得把源码核对当实测、首个消费方先实测；fixtures-sanitized 要求夹具来自真实响应；spike-write-probes-non-mutating 禁止改动真实团队。
+    answer: 以已安装 DS-Bot 0.3.10 源码核对形态解码，在 tech/dsbot-api 登记为源码核对（design 决策 source-checked-shapes），并以 delta-tech 对 hello-capabilities、endpoint-inventory-0310、fixtures-sanitized 增加限定例外；单元测试样本放在 dsbot-source/ 与真实夹具分开，另用真实 0.3.10 夹具验证无数据时全部派生为空。实施时尝试用临时 Bot 触发阻塞未成功（create-bot 指定未配置模型被拒、未创建对象，无零成本可撤销途径），模拟器验收经 mock-dsh-server --chat-bars 注入；真实下发形态作为残余风险登记在 FINDINGS 第 13 节，服务器出现样本后实测替换。
+    status: resolved
+    answered_by: roadmap

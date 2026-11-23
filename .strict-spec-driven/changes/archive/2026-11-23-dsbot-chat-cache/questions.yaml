@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-chat-cache
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：路线图计划变更 dsbot-chat-cache 与里程碑 dsbot-mobile-polish。
+    answer: 手机原生 App 每次进入聊天都清空列表整页重取：在两个 Bot 聊天之间来回处理事情时，每次切换都要等网络、列表闪白并跳回底部，读到一半的位置丢失；实时推送漏事件时要等断线重连才补齐；翻看历史时新消息到达没有任何提示。流畅度明显落后于上游手机端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第四条与计划变更验收说明。
+    answer: 两个聊天间来回切换时立即显示上次内容与滚动位置并在后台刷新；离底部较远时新消息到来显示「N 条新消息」且计数正确；前台时漏掉的消息 15 秒内补齐；启动后进入上次聊天无加载空白。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围与实现文件。
+    answer: 按计划变更 details：内存 LRU 聊天缓存（16 个）与滚动位置（50 项）、单飞读取与过期丢弃、前台 15 秒兜底轮询与回前台探测、回到最新/N 条新消息按钮、只记住上次聊天用于启动预取（不自动跳转、团队页仍为根）；缓存只在内存不落盘。私聊与群聊都适用。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 依里程碑 scope.out：导航保持团队页为根、不改为聊天页为根加抽屉；连接层不变；不落盘聊天内容；发送箱与已读由后续变更承接；既有发送、流式、分页、卡片、附件、分段与停止恢复行为不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 里程碑 dsbot-mobile-polish 的完成标准第四条要求聊天切换与新消息提示达到上游手机端水平；依赖的 dsbot-baseline-0310 已完成，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: resume-probe-existing
+    question: 计划变更要求「回前台先短超时探测再补齐」，是否需要新实现？
+    context: 影响范围：实现文件与测试。代码核对：DsbotConnection.onForeground 已在回前台时重新走 DialProbe 探测与订阅，订阅成功后 NativeShellConnection 调用两个控制器的 refreshIfOpen。
+    answer: 沿用既有流程，不重写（design 决策 existing-resume-probe）；本变更只新增前台 15 秒兜底轮询的启停，并在规格中把回前台探测补齐作为兜底同步要求的一部分写明。
+    status: resolved
+    answered_by: roadmap

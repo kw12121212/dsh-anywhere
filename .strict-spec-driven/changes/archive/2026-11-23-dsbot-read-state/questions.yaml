@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-read-state
+open: []
+resolved:
+  - id: preview-order
+    question: 团队页预览中「等你回答」与「等你审批」谁优先？
+    context: 网页端侧栏（0.3.10 sidebar.js BotRow）先显示阻塞性审批再显示提问；计划变更按上游手机端写为待回答提问或卡片优先。影响 core TeamPreview 的优先级与 team-preview-priority 规格。
+    answer: 按计划变更（上游手机端）：待回答提问或卡片先于待审批。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 手机端用户在团队页无法知道哪个 Bot/群有新消息：0.3.10 state 不再下发未读数，原未读角标失效；等你回答/审批的 Bot 预览仍显示最后一条消息而不显眼，交接与卡片回复的预览是英文包装文字。每次打开手机查看团队都会遇到。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 有新活动的条目显示未读点，打开聊天后消失且强杀重开保持；待回答的条目预览显示「等你回答」，工作中显示工作短语，交接预览为可读中文；Main Bot 在最前（见 delta spec 场景与设备验收）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: dsbot-mobile-polish 里程碑对照上游手机端打磨；基准升到 0.3.10（dsbot-baseline-0310 已完成）后服务端不提供未读字段，团队页未读失效。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 团队页分组结构、搜索、待办行内标签、聊天页行为与连接流程不变；不做网页端与手机的已读同步，不做未读数字、通知栏或图标角标。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 已读是本机按 harness 主机保存的「最后已读时间」，未读 = 最近活动晚于已读且非当前打开；预览优先级按计划变更所列顺序；排序为 Main Bot → 置顶 → lastAt 新到旧 → 名称，并改写 team-page-list 规格。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: lesson-eb4c09
+  title: 继承上一里程碑的协议实现前，按新基准版本的源码核对一遍数据来源与请求体
+category: api
+status: active
+created_at: '2026-11-23T08:05:12.762Z'
+updated_at: '2026-11-23T08:05:12.762Z'
+context: dsbot-pending-dock 要把聊天中的交互卡片汇集到停靠区，初版沿用 dsbot-native-chat 里程碑（按 DS-Bot 0.3.5 实测）实现的聊天条目卡片解析与 Cards 请求体。
+observation: 独立评审核对 0.3.10 源码发现：聊天条目 kind=answer 已变为用户回复记录（parts.js REPLY_KIND），真正待处理的提问/卡片/审批/密钥请求只在 state 里；answer-question、approval-answer、btw-delete 的参数也都变了（{sessionId, questionId, answer}、{id, choice}、{sessionId, cardId}）。初版停靠区把已回答的提问当待处理、真正的待处理一个都收不到，mock 因按旧形态自造数据而让验收通过。改造后整个待处理来源与作答参数重写，并把聊天里的卡片一律只读。
+takeaway: 基准版本升级后（dsbot-baseline-0310 把基准升到 0.3.10），凡是新变更要复用的旧协议实现（解析哪个字段、调用哪个端点、请求体长什么样），先在新版本源码里按端点逐个核对一遍，并用真实夹具（如 chat-page.json）断言旧解析的语义；mock 必须照新版本形态构造，不能沿用旧实现假设的形态。
+applies_when: 在 DS-Bot 原生客户端里扩展或复用早于当前基准版本实现的卡片、审批、提问、密钥、插话等作答逻辑，或为它们写 mock 数据时
+occurrences:
+  - origin: dsbot-pending-dock
+    date: '2026-11-23'
+    evidence: 评审 MUST 1：parts.js:1941-1943、channel.js:524/675/714、approvals.js answerApproval；改造后模拟器以 0.3.10 state 形态验收 7 类作答参数全部与上游一致；CardsTest 真实夹具断言 answer 条目只读

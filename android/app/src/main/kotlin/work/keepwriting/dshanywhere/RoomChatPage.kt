@@ -3,6 +3,7 @@ package work.keepwriting.dshanywhere
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,8 +62,19 @@ fun RoomChatPage(
     memberNames: List<String> = emptyList(),
     memberIds: List<String> = emptyList(),
     onOpenLink: (String, Boolean) -> Unit = { _, _ -> },
+    /** 最近 state 快照（含 live 字段），派生群目标条、群内电脑操作请求与成员工作短语（dsbot-chat-bars-0310）。 */
+    state: work.keepwriting.core.Json.Value.Object? = null,
+    barInFlight: List<String> = emptyList(),
+    onBarAction: (String, String, String) -> Unit = { _, _, _ -> },
+    /** 文件与图片取回（dsbot-reader-files）。 */
+    media: ChatMedia? = null,
 ) {
     val listState = rememberLazyListState()
+    val jump = rememberJumpButton(roomId)
+    val mediaUi = rememberChatMediaUi()
+    OutboxEffects(listState, controller.sendScrollSignal, controller.sentSignal)
+    // 待处理停靠区已作答的 id（dsbot-pending-dock）：随聊天记忆，只在主线程增删
+    val dockAnswered = remember(roomId) { androidx.compose.runtime.mutableStateListOf<String>() }
     var input by remember { mutableStateOf("") }
     var showMentions by remember { mutableStateOf(false) }
     var showGoalDialog by remember { mutableStateOf(false) }
@@ -86,18 +98,39 @@ fun RoomChatPage(
         if (controller.rows.isNotEmpty()) listState.scrollToItem(controller.rows.size)
     }
 
+    val roomRaw = remember(state, roomId) {
+        (state?.members?.get("rooms") as? work.keepwriting.core.Json.Value.Array)?.items
+            ?.firstOrNull { ((it as? work.keepwriting.core.Json.Value.Object)?.members?.get("id") as? work.keepwriting.core.Json.Value.StringValue)?.value == roomId }
+            as? work.keepwriting.core.Json.Value.Object
+    }
+    val goal = remember(roomRaw) { work.keepwriting.core.ChatBars.goal(roomRaw) }
+    val roomAsks = remember(state, roomId) { work.keepwriting.core.ChatBars.computerAsks(state, roomId = roomId) }
+    val roomWork = remember(state, roomId) { work.keepwriting.core.ChatBars.roomWork(state, roomId) }
+    val idToName = remember(memberIds, members) { memberIds.zip(members).toMap() }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        if (controller.running.isNotEmpty() || members.isNotEmpty()) {
+        // 群目标条（进行中/起草中/已暂停才显示），点按打开既有目标操作对话框
+        if (goal != null) GoalBar(goal) { showGoalDialog = true }
+        // 运行中成员的工作短语（live work.rooms；远端未返回时保留原「工作中」行）
+        if (roomWork.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)) {
+                for ((botId, doing) in roomWork.take(3)) {
+                    WorkPhraseLine(tr("${idToName[botId] ?: botId}：${work.keepwriting.core.WorkPhrase.phrase(doing)}", "${idToName[botId] ?: botId}: ${work.keepwriting.core.WorkPhrase.phrase(doing)}"))
+                }
+                if (roomWork.size > 3) {
+                    Text(tr("另有 ${roomWork.size - 3} 位成员工作中", "${roomWork.size - 3} more members working"), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        } else if (controller.running.isNotEmpty() || members.isNotEmpty()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (controller.running.isNotEmpty()) {
                     // running 是 bot id：经名册映射为成员名（无映射时保留 id）
-                    val idToName = memberIds.zip(members).toMap()
                     val names = controller.running.map { idToName[it] ?: it }
                     Text(
-                        "工作中：${names.joinToString("、").take(24)}",
+                        tr("工作中：${names.joinToString("、").take(24)}", "Working: ${names.joinToString(", ").take(24)}"),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.align(Alignment.CenterVertically),
@@ -107,21 +140,21 @@ fun RoomChatPage(
         }
         controller.announcement?.let {
             Text(
-                "公告：$it",
+                tr("公告：$it", "Notice: $it"),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
         Box(modifier = Modifier.weight(1f)) {
-            if (controller.rows.isEmpty()) {
-                Text("群聊还没有消息", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.Center))
+            if (controller.rows.isEmpty() && controller.outbox.isEmpty()) {
+                Text(tr("群聊还没有消息", "No messages in this group yet"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.Center))
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     if (controller.canLoadEarlier) {
                         item(key = "load-earlier") {
                             TextButton(onClick = { controller.loadEarlier() }, modifier = Modifier.fillMaxWidth()) {
-                                Text("更早的消息")
+                                Text(tr("更早的消息", "Earlier messages"))
                             }
                         }
                     }
@@ -133,11 +166,20 @@ fun RoomChatPage(
                                 speakerName = item.speakerName,
                                 speakerColorKey = item.speakerColor,
                                 onCopy = { clipboard.setText(AnnotatedString(item.markdown)) },
+                                onLongPress = { mediaUi.menuFor = item },
                                 onCopyBlock = { clipboard.setText(AnnotatedString(it)) },
                                 onOpenLink = onOpenLink,
+                                // 群里被截断的长帖：「阅读全文」经 file-text（dsbot-reader-files）
+                                onReadFull = if (item.wholeFileJson != null && media != null) ({ mediaUi.menuFor = null; mediaUi.readFull(media, item.wholeFileJson!!) { controller.postNotice(it) } }) else null,
+                            )
+                            is ChatRender.Item.PresentedFile -> PresentedFileRow(
+                                item = item,
+                                progress = media?.progress?.takeIf { it.key == media.keyOf(item) },
+                                onClick = { if (media != null) mediaUi.fileSheet = item },
+                                onCancel = { media?.cancel() },
                             )
                             is ChatRender.Item.ToolCard -> Text(
-                                "工具调用：${item.name ?: "未知"}",
+                                tr("工具调用：${item.name ?: "未知"}", "Tool call: ${item.name ?: "unknown"}"),
                                 style = MaterialTheme.typography.labelMedium,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
                             )
@@ -150,7 +192,7 @@ fun RoomChatPage(
                                             if (bytes != null) {
                                                 val name = item.name ?: "attachment"
                                                 if (!AttachmentOpen.openWith(context, name, bytes)) {
-                                                    controller.postNotice("没有应用能打开 $name")
+                                                    controller.postNotice(tr("没有应用能打开 $name", "No app can open $name"))
                                                 }
                                             }
                                         }
@@ -158,17 +200,15 @@ fun RoomChatPage(
                                     .padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("📎 ${item.name ?: "附件"}", style = MaterialTheme.typography.bodyMedium)
+                                Text(tr("📎 ${item.name ?: "附件"}", "📎 ${item.name ?: "Attachment"}"), style = MaterialTheme.typography.bodyMedium)
                             }
                             is ChatRender.Item.InteractiveCard -> {
-                                var dismissed by remember(row.key) { mutableStateOf(false) }
-                                if (!dismissed) {
-                                    CardView(
-                                        card = item.card,
-                                        onAnswer = { ep, pj -> controller.answerCard(ep, pj) { ok -> if (ok) dismissed = true } },
-                                        onNotice = { controller.postNotice(it) },
-                                    )
-                                }
+                                // 0.3.10 聊天里的卡片条目是回复记录（只读）；待处理项在下方停靠区（dsbot-pending-dock）
+                                CardView(
+                                    card = work.keepwriting.core.Cards.asReadOnly(item.card),
+                                    onAnswer = { ep, pj -> controller.answerCard(ep, pj) { } },
+                                    onNotice = { controller.postNotice(it) },
+                                )
                             }
                             is ChatRender.Item.Btw -> Text(
                                 "💬 " + item.text,
@@ -182,23 +222,67 @@ fun RoomChatPage(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                             )
                             is ChatRender.Item.Image -> Text(
-                                "🖼️ ${item.name ?: "图片"}",
+                                tr("🖼️ ${item.name ?: "图片"}", "🖼️ ${item.name ?: "Image"}"),
                                 style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                                modifier = Modifier
+                                    .clickable(enabled = item.attachmentRefJson != null && media != null) {
+                                        mediaUi.gallery = ChatRender.gallery(controller.rows.map { it.item }, item)
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 2.dp),
                             )
                         }
                     }
+                    // 发送箱本地行（发送中 / 未发送点按重试 / 删除；dsbot-outbox-retry）
+                    outboxItems(controller.outbox, onRetry = { controller.retryOutbox(it) }, onDelete = { controller.deleteOutbox(it) })
                 }
             }
+            // 缓存滚动恢复/保存与「回到最新 / N 条新消息」（dsbot-chat-cache）
+            ChatScrollSupport(
+                chatId = roomId,
+                listState = listState,
+                jump = jump,
+                // 组合期间读 rows（快照隔离，executor 线程并发修改不影响）；只在条数或末行变化时重算
+                rowKeys = remember(controller.rows.size, controller.rows.lastOrNull()?.key) { controller.rows.map { it.key } },
+                // 末行是用户消息（本机发出的经 feed/刷新确认后带 seq）时跟随到底
+                lastIsMine = (controller.rows.lastOrNull()?.item as? ChatRender.Item.Message)?.fromUser == true,
+                freezeAway = { controller.streamingText != null },
+                restoreSignal = controller.restoreSignal,
+                restorePosition = { controller.restorePosition },
+                onSave = { i, o -> controller.saveScroll(i, o) },
+            )
+        }
+        ComputerAskCards(asks = roomAsks, inFlight = barInFlight, whoOf = { idToName[it] }) { ask, answer ->
+            onBarAction(
+                "computer:${ask.id}", "computer-app-answer",
+                "{\"id\":${work.keepwriting.core.JsonString.of(ask.id)},\"answer\":\"$answer\"}",
+            )
+        }
+        // 待处理停靠区：群会话与成员群内会话（rooms[].sessionId 与 parts）的提问/卡片，以及 roomId 归属的审批
+        val roomSessions = remember(roomRaw) {
+            val o = roomRaw?.members
+            setOfNotNull((o?.get("sessionId") as? work.keepwriting.core.Json.Value.StringValue)?.value, roomId) +
+                ((o?.get("parts") as? work.keepwriting.core.Json.Value.Array)?.items?.mapNotNull { (it as? work.keepwriting.core.Json.Value.StringValue)?.value } ?: emptyList())
+        }
+        val dockItems = remember(state, roomSessions, dockAnswered.size, work.keepwriting.core.I18n.lang) {
+            work.keepwriting.core.PendingDock.collect(state, roomSessions, botId = null, roomId = roomId, answered = dockAnswered.toSet())
+        }
+        // 按聊天重置停靠区的展开/收起状态
+        androidx.compose.runtime.key(roomId) {
+            DockArea(
+                items = dockItems,
+                onAnswer = { ep, pj, done -> controller.answerCard(ep, pj, done) },
+                onAnswered = { dockAnswered.add(it) },
+                onNotice = { controller.postNotice(it) },
+            )
         }
         if (controller.streamingText != null || controller.busy) {
             ThinkingPill(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = { controller.showProgress() }) { Text("进度") }
-            TextButton(onClick = { controller.showStats(memberIds, members) }, enabled = members.isNotEmpty()) { Text("统计") }
-            TextButton(onClick = { showGoalDialog = true }) { Text("目标") }
-            TextButton(onClick = { showRefPicker = true }, enabled = members.isNotEmpty()) { Text("＋引用") }
+            TextButton(onClick = { controller.showProgress() }) { Text(tr("进度", "Progress")) }
+            TextButton(onClick = { controller.showStats(memberIds, members) }, enabled = members.isNotEmpty()) { Text(tr("统计", "Stats")) }
+            TextButton(onClick = { showGoalDialog = true }) { Text(tr("目标", "Goal")) }
+            TextButton(onClick = { showRefPicker = true }, enabled = members.isNotEmpty()) { Text(tr("＋引用", "+ Quote")) }
         }
         controller.notice?.let {
             Text(
@@ -234,11 +318,11 @@ fun RoomChatPage(
                             when (att.status) {
                                 "uploading" -> Row(verticalAlignment = Alignment.CenterVertically) {
                                     ThinkingPill()
-                                    Text(" 上传中", style = MaterialTheme.typography.labelSmall)
+                                    Text(tr(" 上传中", " Uploading"), style = MaterialTheme.typography.labelSmall)
                                 }
-                                "ready" -> Text("已就绪", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                "ready" -> Text(tr("已就绪", "Ready"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 "failed" -> TextButton(onClick = { controller.retryAttachment(att.id) }) {
-                                    Text("重试（${att.failReason ?: "失败"}）", style = MaterialTheme.typography.labelSmall)
+                                    Text(tr("重试（${att.failReason ?: "失败"}）", "Retry (${att.failReason ?: "failed"})"), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -251,7 +335,7 @@ fun RoomChatPage(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { showAttachMenu = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "添加附件")
+                Icon(Icons.Filled.Add, contentDescription = tr("添加附件", "Add attachment"))
             }
             OutlinedTextField(
                 value = input,
@@ -260,7 +344,7 @@ fun RoomChatPage(
                     // 输入以 @ 结尾触发成员提及弹层
                     showMentions = fresh.isNotEmpty() && fresh.last() == '@'
                 },
-                placeholder = { Text("发消息（@ 提及成员）") },
+                placeholder = { Text(tr("发消息（@ 提及成员）", "Message (@ to mention)")) },
                 // 单行（用户反馈：群聊输入框两行太高，一行足够）；@ 弹层不受影响
                 singleLine = true,
                 modifier = Modifier.weight(1f),
@@ -277,7 +361,7 @@ fun RoomChatPage(
                     enabled = (input.isNotBlank() || controller.attachments.isNotEmpty()) &&
                         controller.attachments.none { it.status == "uploading" || it.status == "failed" },
                 ) {
-                    Icon(Icons.Filled.Send, contentDescription = "发送")
+                    Icon(Icons.Filled.Send, contentDescription = tr("发送", "Send"))
                 }
             }
         }
@@ -287,7 +371,7 @@ fun RoomChatPage(
     controller.statsText?.let { body ->
         AlertDialog(
             onDismissRequest = { controller.dismissStats() },
-            title = { Text("群统计") },
+            title = { Text(tr("群统计", "Group stats")) },
             text = {
                 androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
@@ -299,14 +383,14 @@ fun RoomChatPage(
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text("关闭") } },
+            confirmButton = { TextButton(onClick = { controller.dismissStats() }) { Text(tr("关闭", "Close")) } },
         )
     }
 
     if (showAttachMenu) {
         AlertDialog(
             onDismissRequest = { showAttachMenu = false },
-            title = { Text("添加附件") },
+            title = { Text(tr("添加附件", "Add attachment")) },
             text = {
                 Column {
                     TextButton(onClick = {
@@ -314,15 +398,15 @@ fun RoomChatPage(
                         pickImage.launch(androidx.activity.result.PickVisualMediaRequest(
                             ActivityResultContracts.PickVisualMedia.ImageOnly,
                         ))
-                    }) { Text("从相册选择图片") }
+                    }) { Text(tr("从相册选择图片", "Choose from photos")) }
                     TextButton(onClick = {
                         showAttachMenu = false
                         pickFile.launch("*/*")
-                    }) { Text("选择文件") }
+                    }) { Text(tr("选择文件", "Choose file")) }
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showAttachMenu = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showAttachMenu = false }) { Text(tr("取消", "Cancel")) } },
         )
     }
 
@@ -330,7 +414,7 @@ fun RoomChatPage(
     if (showMentions && members.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showMentions = false },
-            title = { Text("提及成员") },
+            title = { Text(tr("提及成员", "Mention a member")) },
             text = {
                 Column {
                     members.forEach { name ->
@@ -342,7 +426,7 @@ fun RoomChatPage(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showMentions = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showMentions = false }) { Text(tr("取消", "Cancel")) } },
         )
     }
 
@@ -350,26 +434,26 @@ fun RoomChatPage(
     if (showGoalDialog) {
         AlertDialog(
             onDismissRequest = { showGoalDialog = false },
-            title = { Text("群目标") },
+            title = { Text(tr("群目标", "Group goal")) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = goalText,
                         onValueChange = { goalText = it },
-                        placeholder = { Text("写下这个群要达成什么（≤2000 字）") },
+                        placeholder = { Text(tr("写下这个群要达成什么（≤2000 字）", "Write what this group should achieve (≤ 2000 chars)")) },
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     TextButton(onClick = {
                         if (goalText.isNotBlank()) controller.goalDraft(goalText.trim())
                         goalText = ""
-                    }) { Text("生成草稿") }
-                    TextButton(onClick = { controller.goalControl("confirm") }) { Text("确认草稿") }
-                    TextButton(onClick = { controller.goalControl("advance") }) { Text("推进下一阶段") }
+                    }) { Text(tr("生成草稿", "Draft")) }
+                    TextButton(onClick = { controller.goalControl("confirm") }) { Text(tr("确认草稿", "Confirm draft")) }
+                    TextButton(onClick = { controller.goalControl("advance") }) { Text(tr("推进下一阶段", "Next stage")) }
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showGoalDialog = false }) { Text("关闭") } },
+            dismissButton = { TextButton(onClick = { showGoalDialog = false }) { Text(tr("关闭", "Close")) } },
         )
     }
 
@@ -377,19 +461,30 @@ fun RoomChatPage(
     if (showRefPicker && members.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showRefPicker = false },
-            title = { Text("引用一个聊天") },
+            title = { Text(tr("引用一个聊天", "Quote a chat")) },
             text = {
                 Column {
                     members.forEach { name ->
                         TextButton(onClick = {
-                            input = (if (input.isBlank()) "" else input + " ") + "（引用了 $name 的聊天）"
+                            input = (if (input.isBlank()) "" else input + " ") + tr("（引用了 $name 的聊天）", "(Quoted $name's chat)")
                             showRefPicker = false
                         }) { Text(name) }
                     }
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showRefPicker = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showRefPicker = false }) { Text(tr("取消", "Cancel")) } },
+        )
+    }
+
+    // 查看层：长按菜单、阅读器、交付文件菜单、图片查看器（dsbot-reader-files）
+    if (media != null) {
+        ChatMediaOverlays(
+            ui = mediaUi,
+            media = media,
+            sessionId = roomId,
+            onNotice = { controller.postNotice(it) },
+            readAttachment = { ref, cb -> controller.readAttachment(ref, cb) },
         )
     }
 }
@@ -401,8 +496,10 @@ private fun MessageBubble(
     speakerName: String?,
     speakerColorKey: String?,
     onCopy: () -> Unit,
+    onLongPress: () -> Unit,
     onCopyBlock: (String) -> Unit,
     onOpenLink: (String, Boolean) -> Unit,
+    onReadFull: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -411,7 +508,8 @@ private fun MessageBubble(
         Surface(
             color = if (fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.widthIn(max = 320.dp).clickable(onClick = onCopy),
+            // 点按复制整条；长按出菜单（dsbot-reader-files），链接手势由 MarkdownText 先消费
+            modifier = Modifier.widthIn(max = 320.dp).combinedClickable(onClick = onCopy, onLongClick = { if (!LinkLongPress.recent()) onLongPress() }),
         ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 if (!fromUser && speakerName != null) {
@@ -421,10 +519,9 @@ private fun MessageBubble(
                         color = speakerColorKey?.let { speakerColor(it) } ?: MaterialTheme.colorScheme.primary,
                     )
                 }
-                // 长按可选择复制部分文字（fix-android-chat-links-and-copy）；
-                // 点按气泡复制整条与链接点击/长按选择器不受影响
-                SelectionContainer {
-                    MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
+                MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
+                if (onReadFull != null) {
+                    TextButton(onClick = onReadFull) { Text(tr("阅读全文", "Read full text")) }
                 }
             }
         }

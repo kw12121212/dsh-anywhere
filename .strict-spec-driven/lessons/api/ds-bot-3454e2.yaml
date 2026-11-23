@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: ds-bot-3454e2
+  title: 消费只有部分实测样本的 DS-Bot 事件时，要按上游每个生成点核对字段含义，不能凭字段名猜
+category: api
+status: active
+created_at: '2026-11-23T03:37:39.680Z'
+updated_at: '2026-11-23T03:37:39.680Z'
+context: dsbot-notices-banner 消费 0.3.10 的 notice 事件；dsbot-baseline-0310 的真实样本只有 kind=message，FINDINGS 只写了 roomId?、title? 的形态。
+observation: 实现按字段名把 title 当成提醒标题、优先用作横幅摘要，测试也给 question 编了 title。评审核对上游 mobile.js 发现 title 只在群场景出现、值固定为 room.name（roomLineAdded、approvalWaiting），私聊卡片（cardShown）根本不带 title；结果群消息会显示成「群消息：项目群」，正文丢失。mock 也按同样误解构造，设备验收发现不了。
+takeaway: 实测样本只覆盖部分 kind 时，先在上游源码里找出该事件的所有生成点（grep 生产函数，如 botNotice/publishFeed 的调用方），逐个 kind 登记每个字段的来源与含义写进 FINDINGS 与 delta-tech，再写解码、文案、测试样本与 mock；测试样本必须照抄登记的形态，不能自造字段。
+applies_when: 解码或展示 DS-Bot 的 feed 事件、notices、state 字段，而真实夹具只覆盖其中一部分类型/分支时
+occurrences:
+  - origin: dsbot-notices-banner
+    date: '2026-11-23'
+    evidence: 评审 MUST 1：mobile.js:209-222 title=room.name；修复后 banner 为「项目群 · 研究员 · 群消息：正文」，NoticesTest.groupNoticeTitleIsRoomNameNotSummary；模拟器 mock 群提醒显示正确

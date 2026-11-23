@@ -28,7 +28,7 @@ object AttachmentOpen {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             // 选择器包一层：URI 授权留在内层 intent， chooser intent 只补 NEW_TASK
-            val launch = if (chooser) Intent.createChooser(view, "选择打开方式")
+            val launch = if (chooser) Intent.createChooser(view, tr("选择打开方式", "Open with"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) else view
             context.startActivity(launch)
             true

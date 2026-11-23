@@ -5,9 +5,11 @@ import android.webkit.CookieManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import work.keepwriting.core.PhonePrefs
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +45,35 @@ class MainActivity : ComponentActivity() {
             handleInstallReady(intent)
         }
         setContent {
-            MaterialTheme {
+            // 手机本机外观与语言（dsbot-phone-prefs）：明暗配色（Android 12+ 动态配色）与按语言本地化的资源
+            val phone = graph.phone
+            val dark = PhonePrefs.isDark(phone.appearance, androidx.compose.foundation.isSystemInDarkTheme())
+            val baseContext = androidx.compose.ui.platform.LocalContext.current
+            val scheme = when {
+                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ->
+                    if (dark) androidx.compose.material3.dynamicDarkColorScheme(baseContext) else androidx.compose.material3.dynamicLightColorScheme(baseContext)
+                dark -> androidx.compose.material3.darkColorScheme()
+                else -> androidx.compose.material3.lightColorScheme()
+            }
+            // 系统栏跟随应用外观（而非主题父类或系统）：图标明暗随之切换，否则浅色页上白图标、深色页上黑图标不可读；
+            // Android 15 以下不强制沉浸，栏底色同步为界面底色（15+ 栏透明、这两项设置无效）
+            val barColor = scheme.background.toArgb()
+            androidx.compose.runtime.SideEffect {
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                    @Suppress("DEPRECATION")
+                    window.statusBarColor = barColor
+                    @Suppress("DEPRECATION")
+                    window.navigationBarColor = barColor
+                }
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
+            val lang = phone.lang
+            val localized = remember(lang, baseContext) { localizedContext(baseContext, lang) }
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides localized) {
+            MaterialTheme(colorScheme = scheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     var screen by remember {
                         mutableStateOf(if (graph.configState == AppGraph.ConfigState.Ready) Screen.Main else Screen.FirstRun)
@@ -55,6 +85,7 @@ class MainActivity : ComponentActivity() {
                             // 状态在设置期间保留，返回即回原骨架页面（settings-entry-reachable）。
                             NativeShell(
                                 graph,
+                                covered = screen == Screen.Settings,
                                 onOpenSettings = { screen = Screen.Settings },
                                 onNeedSetup = { screen = Screen.FirstRun },
                             )
@@ -75,6 +106,17 @@ class MainActivity : ComponentActivity() {
                     BackHandler(enabled = screen == Screen.Settings) { screen = Screen.Main }
                 }
             }
+            }
+        }
+    }
+
+    /** 按界面语言覆盖资源（values / values-en）的 Context：其余行为仍委托给 Activity。 */
+    private fun localizedContext(base: android.content.Context, lang: work.keepwriting.core.ChatBars.Lang): android.content.Context {
+        val config = android.content.res.Configuration(base.resources.configuration)
+        config.setLocale(if (lang == work.keepwriting.core.ChatBars.Lang.EN) java.util.Locale.ENGLISH else java.util.Locale.SIMPLIFIED_CHINESE)
+        val res = base.createConfigurationContext(config).resources
+        return object : android.content.ContextWrapper(base) {
+            override fun getResources(): android.content.res.Resources = res
         }
     }
 
@@ -97,6 +139,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        graph.phone.refreshLang() // 跟随系统时，系统语言可能在后台被改
         // 启动与回到前台不跳转任何权限页：「安装未知应用」只在调起安装器时按需引导，
         // 从授权页返回后由更新管理器决定是否调起（未授权不再跳转）；通知权限在设置页
         // 点击下载时至多请求一次。

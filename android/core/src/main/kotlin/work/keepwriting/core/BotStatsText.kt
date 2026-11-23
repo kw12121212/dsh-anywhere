@@ -18,20 +18,20 @@ object BotStatsText {
         val steps = longOf(session, "steps")
         if (turns != null || steps != null) {
             lines += buildString {
-                append("对话 ")
-                if (turns != null) append("${turns} 轮")
+                append(I18n.tr("对话 ", "Session "))
+                if (turns != null) append(I18n.tr("${turns} 轮", "${turns} turns"))
                 if (turns != null && steps != null) append(" · ")
-                if (steps != null) append("${steps} 步")
+                if (steps != null) append(I18n.tr("${steps} 步", "${steps} steps"))
             }
         }
         val llmMs = longOf(session, "llmMs")
         val toolMs = longOf(session, "toolMs")
         if (llmMs != null || toolMs != null) {
             lines += buildString {
-                append("耗时 ")
-                if (llmMs != null) append("模型 ${duration(llmMs)}")
+                append(I18n.tr("耗时 ", "Time "))
+                if (llmMs != null) append(I18n.tr("模型 ${duration(llmMs)}", "model ${duration(llmMs)}"))
                 if (llmMs != null && toolMs != null) append(" · ")
-                if (toolMs != null) append("工具 ${duration(toolMs)}")
+                if (toolMs != null) append(I18n.tr("工具 ${duration(toolMs)}", "tools ${duration(toolMs)}"))
             }
         }
 
@@ -41,10 +41,10 @@ object BotStatsText {
         val cacheRead = longOf(usage, "cacheReadTokens")
         if (uncached != null || output != null || cacheRead != null) {
             val parts = mutableListOf<String>()
-            if (uncached != null) parts += "输入 ${count(uncached)}"
-            if (output != null) parts += "输出 ${count(output)}"
-            if (cacheRead != null) parts += "缓存读取 ${count(cacheRead)}"
-            lines += "Token：" + parts.joinToString(" · ")
+            if (uncached != null) parts += I18n.tr("输入 ${count(uncached)}", "input ${count(uncached)}")
+            if (output != null) parts += I18n.tr("输出 ${count(output)}", "output ${count(output)}")
+            if (cacheRead != null) parts += I18n.tr("缓存读取 ${count(cacheRead)}", "cache read ${count(cacheRead)}")
+            lines += I18n.tr("Token：", "Tokens: ") + parts.joinToString(" · ")
         }
 
         val pressure = obj.members["contextPressure"] as? Json.Value.Object
@@ -52,7 +52,7 @@ object BotStatsText {
         val window = longOf(pressure, "contextWindow")
         if (used != null && window != null && window > 0) {
             val pct = used * 100 / window
-            lines += "上下文 ${count(used)} / ${count(window)}（${pct}%）"
+            lines += I18n.tr("上下文 ${count(used)} / ${count(window)}（${pct}%）", "Context ${count(used)} / ${count(window)} (${pct}%)")
         }
         return lines.joinToString("\n")
     }
@@ -60,7 +60,7 @@ object BotStatsText {
     /** exchange 应答 → 多行记录；空数组给空态文案；条目抽取常见文本字段，抽不到退回单行 JSON。 */
     fun exchanges(value: Json.Value): String {
         val arr = value as? Json.Value.Array ?: return ""
-        if (arr.items.isEmpty()) return "暂无 Bot 间记录"
+        if (arr.items.isEmpty()) return I18n.tr("暂无 Bot 间记录", "No messages between Bots yet")
         return arr.items.joinToString("\n") { item ->
             val obj = item as? Json.Value.Object
             val text = obj?.let { firstTextOf(it) }
@@ -81,9 +81,9 @@ object BotStatsText {
     internal fun duration(ms: Long): String {
         val s = ms / 1000
         return when {
-            s >= 3600 -> String.format("%.1f 小时", s / 3600.0)
-            s >= 60 -> String.format("%.1f 分钟", s / 60.0)
-            else -> "${s} 秒"
+            s >= 3600 -> String.format(I18n.tr("%.1f 小时", "%.1f h"), s / 3600.0)
+            s >= 60 -> String.format(I18n.tr("%.1f 分钟", "%.1f min"), s / 60.0)
+            else -> I18n.tr("${s} 秒", "${s} s")
         }
     }
 

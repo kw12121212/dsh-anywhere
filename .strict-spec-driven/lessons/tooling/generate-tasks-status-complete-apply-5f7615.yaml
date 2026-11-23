@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: generate-tasks-status-complete-apply-5f7615
+  title: 用 generate tasks --status complete 预置已完成任务后再调 apply，会把下一个待办错标为完成
+category: tooling
+status: active
+created_at: '2026-11-23T14:01:14.065Z'
+updated_at: '2026-11-23T14:01:14.065Z'
+context: dsbot-rich-render：先实现了 core 部分，生成 tasks 时给这几项加了 --status complete，随后按习惯连续调用 strict-spec-cli apply 同步进度
+observation: apply 只会把「下一个 pending 任务」标为完成，不核对它是否真做完；预置的已完成任务被跳过，apply 连带把尚未实现的 app-view-card、app-markdown、mock-rich 标成了 complete。
+takeaway: 任务状态只用一种方式推进：要么生成时全部 pending、做完一项 apply 一项，要么用 generate tasks --task <id> --status complete 精确标记；调用 apply 前看一眼它返回的 taskId 是否就是刚完成的那项，错了立即用 --status pending 改回。
+applies_when: 在 strict 变更里混用 generate tasks 的 --status 与 apply 推进任务状态时
+occurrences:
+  - origin: dsbot-rich-render
+    date: '2026-11-23'
+    evidence: apply 返回 taskId app-view-card/app-markdown/mock-rich（当时均未实现），随后以 generate tasks --implementation --task <id> --status pending 改回

@@ -37,15 +37,15 @@ fun SideChatPanel(controller: SideChatController, onDismiss: () -> Unit) {
     var input by remember { mutableStateOf("") }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            Text("侧问（不打断 Bot 工作）", style = MaterialTheme.typography.titleSmall)
+            Text(tr("侧问（不打断 Bot 工作）", "Side chat (does not interrupt the Bot)"), style = MaterialTheme.typography.titleSmall)
             Text(
-                "旁路提问不运行工具；不支持附件",
+                tr("旁路提问不运行工具；不支持附件", "Side questions do not run tools; attachments are not supported"),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (controller.rows.isEmpty()) {
                 Text(
-                    if (controller.sideId == null) "正在建立旁路会话…" else "提问开始旁路对话",
+                    if (controller.sideId == null) tr("正在建立旁路会话…", "Opening side chat…") else tr("提问开始旁路对话", "Ask to start a side chat"),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(vertical = 12.dp),
                 )
@@ -66,7 +66,7 @@ fun SideChatPanel(controller: SideChatController, onDismiss: () -> Unit) {
                 }
             }
             if (controller.pendingAsk || controller.streamingText != null) {
-                Text("回答中…", style = MaterialTheme.typography.labelSmall)
+                Text(tr("回答中…", "Answering…"), style = MaterialTheme.typography.labelSmall)
             }
             controller.notice?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
@@ -75,7 +75,7 @@ fun SideChatPanel(controller: SideChatController, onDismiss: () -> Unit) {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it },
-                    placeholder = { Text("旁路提问") },
+                    placeholder = { Text(tr("旁路提问", "Side question")) },
                     maxLines = 3,
                     modifier = Modifier.weight(1f),
                 )
@@ -85,11 +85,11 @@ fun SideChatPanel(controller: SideChatController, onDismiss: () -> Unit) {
                         if (text.isNotEmpty() && controller.ask(text)) input = ""
                     },
                     enabled = input.isNotBlank() && !controller.busy && controller.sideId != null,
-                ) { Text("提问") }
+                ) { Text(tr("提问", "Question")) }
             }
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = { controller.cancel() }, enabled = controller.streamingText != null || controller.pendingAsk) { Text("取消回答") }
-                TextButton(onClick = { controller.close(onDismiss) }) { Text("关闭") }
+                TextButton(onClick = { controller.cancel() }, enabled = controller.streamingText != null || controller.pendingAsk) { Text(tr("取消回答", "Cancel answer")) }
+                TextButton(onClick = { controller.close(onDismiss) }) { Text(tr("关闭", "Close")) }
             }
         }
     }
@@ -149,11 +149,11 @@ class SideChatController(
                         if (chatId != null) {
                             activeSideIds.add(chatId) // M1 修复：side-new 的 chatId 也入归属集合
                         } else {
-                            notice = "旁路会话建立失败"
+                            notice = tr("旁路会话建立失败", "Could not open side chat")
                         }
                     }
-                    is DsbotApi.Result.BotError -> notice = "旁路会话失败：${res.code}"
-                    is DsbotApi.Result.Failure -> notice = "旁路会话失败（网络）"
+                    is DsbotApi.Result.BotError -> notice = tr("旁路会话失败：${res.code}", "Side chat failed: ${res.code}")
+                    is DsbotApi.Result.Failure -> notice = tr("旁路会话失败（网络）", "Side chat failed (network)")
                 }
             }
         })
@@ -191,7 +191,7 @@ class SideChatController(
                     }
                     busy = false
                     pendingAsk = false
-                    notice = "旁路提问失败"
+                    notice = tr("旁路提问失败", "Side question failed")
                 }
             }
         }
@@ -216,7 +216,7 @@ class SideChatController(
                         // 末轮仍无回答：收口（避免"回答中"永久卡住）
                         if (isLast && pendingAsk) {
                             pendingAsk = false
-                            notice = "回答未取到（可重试提问）"
+                            notice = tr("回答未取到（可重试提问）", "No answer received (you can ask again)")
                         }
                     })
                 } // executor 已关则静默（生命周期收口）
@@ -337,9 +337,9 @@ class SideChatController(
                 streamingText = null
                 pendingAsk = false
                 cancelPolls()
-                notice = "已取消"
+                notice = tr("已取消", "Canceled")
             } else {
-                notice = "取消失败"
+                notice = tr("取消失败", "Could not cancel")
             }
         }
     }

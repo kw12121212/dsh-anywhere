@@ -14,13 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,8 @@ import work.keepwriting.core.TeamHome
 fun TeamPage(
     team: TeamHome.Team?,
     onOpenChat: (botId: String?) -> Unit,
+    /** 本机计算的未读（dsbot-read-state）；组合期间调用以订阅已读状态。 */
+    isUnread: (TeamHome.Entry) -> Boolean = { false },
 ) {
     var query by remember { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -57,13 +60,13 @@ fun TeamPage(
         when {
             team == null -> CenteredHint(stringResource(R.string.team_loading))
             team.isEmpty -> EmptyTeamGuide()
-            else -> TeamList(TeamHome.search(team, query), onOpenChat)
+            else -> TeamList(TeamHome.search(team, query), onOpenChat, isUnread)
         }
     }
 }
 
 @Composable
-private fun TeamList(team: TeamHome.Team, onOpenChat: (String?) -> Unit) {
+private fun TeamList(team: TeamHome.Team, onOpenChat: (String?) -> Unit, isUnread: (TeamHome.Entry) -> Boolean) {
     val sections = team.sections
     if (sections.all { it.entries.isEmpty() }) {
         CenteredHint(stringResource(R.string.team_search_empty))
@@ -81,14 +84,14 @@ private fun TeamList(team: TeamHome.Team, onOpenChat: (String?) -> Unit) {
                 )
             }
             items(sec.entries, key = { it.id }) { e ->
-                TeamEntryRow(e, onClick = { onOpenChat(e.id) })
+                TeamEntryRow(e, unread = isUnread(e), onClick = { onOpenChat(e.id) })
             }
         }
     }
 }
 
 @Composable
-private fun TeamEntryRow(e: TeamHome.Entry, onClick: () -> Unit) {
+private fun TeamEntryRow(e: TeamHome.Entry, unread: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -134,20 +137,24 @@ private fun TeamEntryRow(e: TeamHome.Entry, onClick: () -> Unit) {
                     )
                 }
             }
-            val summary = e.lastSummary
-            if (!summary.isNullOrEmpty()) {
+            // 预览按优先级（dsbot-read-state）：等你回答/审批用强调色，其余为次要文字
+            e.preview?.let { p ->
                 Text(
-                    summary,
+                    p.text,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    color = if (p.waiting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        e.unread?.let { unread ->
+        if (unread) {
             Spacer(Modifier.size(8.dp))
-            Badge { Text("$unread") }
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+                modifier = Modifier.size(10.dp).semantics { contentDescription = tr("未读", "Unread") },
+            ) {}
         }
     }
 }

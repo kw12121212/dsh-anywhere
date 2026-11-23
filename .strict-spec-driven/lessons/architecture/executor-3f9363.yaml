@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: executor-3f9363
+  title: 单线程状态 executor 上同步发网络请求时，「立即显示缓存」做不到
+category: architecture
+status: active
+created_at: '2026-11-23T03:15:03.416Z'
+updated_at: '2026-11-23T03:15:03.416Z'
+context: dsbot-chat-cache 给私聊/群聊加内存缓存，要求切换聊天时立即显示缓存再后台刷新；NativeShellConnection 的所有网络调用（chat、state、写操作）都在唯一的状态 executor 上同步执行。
+observation: 初版把缓存上屏也放在同一 executor：慢网络下进入 B 时，open(B) 排在 A 的 chat 读取（连接超时 15 秒、读超时 30 秒）之后，页面显示 B 的标题却还是 A 的列表，单飞的过期丢弃形同虚设；15 秒兜底轮询的 state 请求同样阻塞，scheduleWithFixedDelay 只投递 tick，网络半通时 tick 会无界堆积。独立评审两轮才全部指出。
+takeaway: 需要即时 UI 响应的路径（缓存上屏、切换）与慢网络读取不能共用一个同步执行的单线程队列：读取网络放独立 IO 线程，结果投回状态 executor 处理（单线程持有状态的约定不变）；周期任务投递到队列前用 AtomicBoolean 保证上一轮处理完。
+applies_when: 在 :app 的 NativeShellConnection/控制器里新增「先显示本地数据再刷新」的体验，或新增周期性/后台网络任务，而状态又由单线程 executor 持有时
+occurrences:
+  - origin: dsbot-chat-cache
+    date: '2026-11-23'
+    evidence: 评审 MUST 4 与复审 SHOULD 2；修复后模拟器 mock（chat 延迟 1.5s）：进入无缓存的 B 0.6s 后退回进入有缓存的 A，0.3s 截图 A 已上屏且 B 的应答未覆盖

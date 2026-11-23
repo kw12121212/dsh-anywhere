@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: snapshotstatelist-derivedstateof-concurrentmodif-ad9102
+  title: 后台线程直接改 SnapshotStateList 时，协程/derivedStateOf 里遍历它会 ConcurrentModificationException 闪退
+category: coding
+status: active
+created_at: '2026-11-23T03:28:33.894Z'
+updated_at: '2026-11-23T03:28:33.894Z'
+context: dsbot-chat-cache 的 ChatScrollSupport 为了避免每帧分配，把 rows.map { it.key } 改成 lambda，并在 derivedStateOf 与 LaunchedEffect 里调用；控制器在单线程 executor 上（不在 Snapshot 内）对同一 mutableStateListOf 做 clear/addAll。
+observation: dsbot-notices-banner 的模拟器验收中 App 闪退：StateListIterator.validateModification 抛 ConcurrentModificationException，栈在 ChatScrollSupport 的 derivedStateOf→rowKeys()。组合期间的读取有快照隔离所以历来没事，但协程里读取 derivedStateOf/直接遍历走的是全局快照，与 executor 线程的写并发；dsbot-chat-cache 自己的验收和两轮评审都没撞到（时序相关）。
+takeaway: 本项目的控制器从 executor 线程直接写 Compose 状态：凡是要遍历 SnapshotStateList 的地方只放在组合期间（remember/直接读，按 size 与末项 key 重算），把不可变结果传给协程与副作用；LaunchedEffect、derivedStateOf（在协程里读取时）、点击回调里只用已捕获的不可变值或 O(1) 读取。
+applies_when: 在 :app 的 Composable 里新增 LaunchedEffect/snapshotFlow/derivedStateOf/回调，读取 ChatController、RoomChatController、SideChatController 等由 executor 线程写入的 mutableStateListOf（rows、attachments）时
+occurrences:
+  - origin: dsbot-notices-banner
+    date: '2026-11-23'
+    evidence: logcat FATAL EXCEPTION main java.util.ConcurrentModificationException at StateListIterator.validateModification ← ChatScrollSupport derivedStateOf；修复后同一操作序列（进入聊天、推送提醒、切换、断线重连）logcat crash 缓冲 0 条

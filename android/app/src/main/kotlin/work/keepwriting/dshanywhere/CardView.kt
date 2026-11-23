@@ -46,15 +46,15 @@ fun CardView(card: Cards.Card, onAnswer: (endpoint: String, payloadJson: String)
                     Text(card.body, style = MaterialTheme.typography.bodySmall, maxLines = 6)
                 }
                 is Cards.Card.Approval -> {
-                    Text(card.title ?: "审批", style = MaterialTheme.typography.titleSmall)
+                    Text(card.title ?: tr("审批", "Approval"), style = MaterialTheme.typography.titleSmall)
                     card.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { onAnswer("approval-answer", Cards.approvalAnswer(card.callId, true)) }) { Text("同意") }
-                        OutlinedButton(onClick = { onAnswer("approval-answer", Cards.approvalAnswer(card.callId, false)) }) { Text("驳回") }
+                        Button(onClick = { onAnswer("approval-answer", Cards.approvalAnswer(card.callId, true)) }) { Text(tr("同意", "Approve")) }
+                        OutlinedButton(onClick = { onAnswer("approval-answer", Cards.approvalAnswer(card.callId, false)) }) { Text(tr("驳回", "Reject")) }
                     }
                 }
                 is Cards.Card.Question -> {
-                    Text(card.title ?: "提问", style = MaterialTheme.typography.titleSmall)
+                    Text(card.title ?: tr("提问", "Question"), style = MaterialTheme.typography.titleSmall)
                     card.options.forEachIndexed { i, opt ->
                         TextButton(onClick = { onAnswer("answer-question", Cards.answerQuestion(card.callId, i)) }) {
                             Column {
@@ -63,10 +63,10 @@ fun CardView(card: Cards.Card, onAnswer: (endpoint: String, payloadJson: String)
                             }
                         }
                     }
-                    TextButton(onClick = { onAnswer("dismiss-question", Cards.dismiss(card.callId)) }) { Text("忽略") }
+                    TextButton(onClick = { onAnswer("dismiss-question", Cards.dismiss(card.callId)) }) { Text(tr("忽略", "Ignore")) }
                 }
                 is Cards.Card.View -> {
-                    Text(card.title ?: "视图", style = MaterialTheme.typography.titleSmall)
+                    Text(card.title ?: tr("视图", "View"), style = MaterialTheme.typography.titleSmall)
                     val inputs = remember(card.callId) { mutableStateMapOf<String, String>() }
                     card.sections.forEach { section ->
                         when (section) {
@@ -119,39 +119,39 @@ fun CardView(card: Cards.Card, onAnswer: (endpoint: String, payloadJson: String)
                                 work.keepwriting.core.JsonString.of(k) + ":" + work.keepwriting.core.JsonString.of(v)
                             }
                             onAnswer("view-reply", Cards.viewReply(card.callId, values))
-                        }) { Text("提交") }
+                        }) { Text(tr("提交", "Submit")) }
                     }
-                    TextButton(onClick = { onAnswer("dismiss-view", Cards.dismiss(card.callId)) }) { Text("不再显示") }
+                    TextButton(onClick = { onAnswer("dismiss-view", Cards.dismiss(card.callId)) }) { Text(tr("不再显示", "Hide")) }
                 }
                 is Cards.Card.SecretRequest -> {
-                    Text(card.title ?: "密钥请求", style = MaterialTheme.typography.titleSmall)
+                    Text(card.title ?: tr("密钥请求", "Key request"), style = MaterialTheme.typography.titleSmall)
                     card.hint?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
                     var value by remember(card.callId) { mutableStateOf("") }
                     OutlinedTextField(
                         value = value,
                         onValueChange = { value = it },
-                        label = { Text("输入密钥值（不回显）") },
+                        label = { Text(tr("输入密钥值（不回显）", "Enter the key (hidden)")) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { if (value.length >= 4) onAnswer("secret-set", Cards.secretSet(card.callId, value)) else onNotice("密钥至少 4 个字符") }) { Text("提交") }
-                        OutlinedButton(onClick = { onAnswer("secret-allow", Cards.dismiss(card.callId)) }) { Text("允许使用现有") }
-                        TextButton(onClick = { onAnswer("secret-cancel", Cards.dismiss(card.callId)) }) { Text("取消") }
+                        Button(onClick = { if (value.length >= 4) onAnswer("secret-set", Cards.secretSet(card.callId, value)) else onNotice(tr("密钥至少 4 个字符", "The key needs at least 4 characters")) }) { Text(tr("提交", "Submit")) }
+                        OutlinedButton(onClick = { onAnswer("secret-allow", Cards.dismiss(card.callId)) }) { Text(tr("允许使用现有", "Allow the saved key")) }
+                        TextButton(onClick = { onAnswer("secret-cancel", Cards.dismiss(card.callId)) }) { Text(tr("取消", "Cancel")) }
                     }
                 }
                 is Cards.Card.Learning -> {
-                    Text(card.title ?: "学习问答", style = MaterialTheme.typography.titleSmall)
+                    Text(card.title ?: tr("学习问答", "Learning question"), style = MaterialTheme.typography.titleSmall)
                     card.options.forEachIndexed { i, o ->
                         TextButton(onClick = { onAnswer("learning-answer", Cards.learningAnswer(card.callId, i)) }) { Text(o) }
                     }
                 }
                 is Cards.Card.BrowserHandoff -> {
-                    Text(card.title ?: "浏览器交接", style = MaterialTheme.typography.titleSmall)
+                    Text(card.title ?: tr("浏览器交接", "Browser handoff"), style = MaterialTheme.typography.titleSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { onAnswer("browser-give-back", Cards.browserGiveBack(card.callId, "done")) }) { Text("完成") }
-                        OutlinedButton(onClick = { onAnswer("browser-give-back", Cards.browserGiveBack(card.callId, "skip")) }) { Text("跳过") }
+                        Button(onClick = { onAnswer("browser-give-back", Cards.browserGiveBack(card.callId, "done")) }) { Text(tr("完成", "Done")) }
+                        OutlinedButton(onClick = { onAnswer("browser-give-back", Cards.browserGiveBack(card.callId, "skip")) }) { Text(tr("跳过", "Skip")) }
                     }
                 }
                 is Cards.Card.SandboxHtml -> SandboxHtmlCard(card)
@@ -163,7 +163,7 @@ fun CardView(card: Cards.Card, onAnswer: (endpoint: String, payloadJson: String)
 /** 沙箱 HTML 卡：WebView 隔离——禁网络/禁导航/无 JavascriptInterface，loadDataOnly。 */
 @Composable
 private fun SandboxHtmlCard(card: Cards.Card.SandboxHtml) {
-    Text(card.title ?: "HTML 卡片", style = MaterialTheme.typography.titleSmall)
+    Text(card.title ?: tr("HTML 卡片", "HTML card"), style = MaterialTheme.typography.titleSmall)
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {

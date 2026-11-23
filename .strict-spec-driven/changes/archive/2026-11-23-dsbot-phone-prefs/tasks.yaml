@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-phone-prefs
+sections:
+  Implementation:
+    core-prefs-i18n:
+      text: core 新增 PhonePrefs（枚举、解析、按系统语言解析）与 I18n（当前语言、tr）；ChatBars/WorkPhrase 默认语言改为 I18n.lang；Notices、PendingDock、Cards、TeamHome、JumpButton、BotStatsText 的界面文案经 I18n.tr 输出英文
+      status: complete
+    app-prefs-store:
+      text: AppGraph.phone：PhonePrefsStore（SharedPreferences phone）、可观察 appearance/language/lang、设置时同步 I18n.lang；全局 tr()
+      status: complete
+    app-theme-locale:
+      text: MainActivity 按外观选 colorScheme（Android 12+ 动态配色）、系统栏图标明暗跟随外观（15 以下同步栏底色）、提供按语言本地化的 Context；core I18n 经注入来源读取可观察语言状态，切换时局部重组（不用 key 整体重建），连接对象保留；语言变化时连接按新语言重组装团队列表
+      status: complete
+    app-settings-cards:
+      text: 设置页新增外观与语言单选卡片
+      status: complete
+    app-strings-en:
+      text: 新增 res/values-en/strings.xml（全部资源字符串的英文）；App 代码内中文字面量改为 tr(中文, English)
+      status: complete
+    app-haptics:
+      text: Haptics.kt 统一触感封装，发送箱与停靠区改用
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：PhonePrefsTest（解析与回退、按系统语言解析、明暗判定；切换后 core 文案输出英文：聊天条、工作短语、提醒横幅、停靠区标签、只读卡片提示与已回答标题、回到最新按钮、团队页缺省分组名、统计文案；注入的语言来源优先）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock）：切到深色与 English 后团队页、私聊页（含停靠区与聊天条）、设置页即时变化且停留原页面、不重连；强杀重开后保持；切回跟随系统恢复中文
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-phone-prefs
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

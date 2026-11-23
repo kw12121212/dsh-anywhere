@@ -6,6 +6,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -174,6 +177,9 @@ fun SettingsScreen(graph: AppGraph, onSaved: () -> Unit, onCancelled: () -> Unit
             Spacer(Modifier.height(32.dp))
             TunnelCard(tunnel)
             Spacer(Modifier.height(24.dp))
+            AppearanceCard(graph.phone)
+            LanguageCard(graph.phone)
+            NoticeBannerCard(graph.noticePrefs)
             DiagnosticsCard(graph.diagnostics)
             UpdateSourceCard(graph.updates)
             Spacer(Modifier.height(24.dp))
@@ -234,7 +240,7 @@ private fun UpdateCard(updates: UpdateManager) {
                     Text(stringResource(R.string.update_install))
                 }
                 UpdateManager.State.FAILED -> Text(
-                    stringResource(R.string.update_failed) + "：" + updates.failureReason,
+                    stringResource(R.string.update_failed) + tr("：", ": ") + updates.failureReason,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -309,6 +315,88 @@ private fun UpdateSourceCard(updates: UpdateManager) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+        }
+    }
+}
+
+/** 外观（dsbot-phone-prefs）：跟随系统 / 浅色 / 深色，即时生效并本机保存。 */
+@Composable
+private fun AppearanceCard(phone: PhonePrefsStore) {
+    ChoiceCard(
+        title = tr("外观", "Appearance"),
+        options = listOf(
+            work.keepwriting.core.PhonePrefs.Appearance.SYSTEM to tr("跟随系统", "System default"),
+            work.keepwriting.core.PhonePrefs.Appearance.LIGHT to tr("浅色", "Light"),
+            work.keepwriting.core.PhonePrefs.Appearance.DARK to tr("深色", "Dark"),
+        ),
+        selected = phone.appearance,
+        onSelect = { phone.chooseAppearance(it) },
+    )
+}
+
+/** 语言（dsbot-phone-prefs）：跟随系统 / 简体中文 / English，即时生效并本机保存。 */
+@Composable
+private fun LanguageCard(phone: PhonePrefsStore) {
+    ChoiceCard(
+        title = tr("语言", "Language"),
+        options = listOf(
+            work.keepwriting.core.PhonePrefs.Language.SYSTEM to tr("跟随系统", "System default"),
+            work.keepwriting.core.PhonePrefs.Language.ZH to "简体中文",
+            work.keepwriting.core.PhonePrefs.Language.EN to "English",
+        ),
+        selected = phone.language,
+        onSelect = { phone.chooseLanguage(it) },
+    )
+}
+
+@Composable
+private fun <T> ChoiceCard(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            // 整行一个单选目标（读屏只读一次「单选按钮」），圆点本身不另设点击
+            Column(modifier = Modifier.selectableGroup()) {
+            for ((value, label) in options) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().selectable(
+                        selected = value == selected,
+                        role = Role.RadioButton,
+                        onClick = { onSelect(value) },
+                    ).padding(horizontal = 12.dp, vertical = 14.dp),
+                ) {
+                    androidx.compose.material3.RadioButton(selected = value == selected, onClick = null)
+                    Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            }
+        }
+    }
+}
+
+/** 「应用内提醒」开关（dsbot-notices-banner）：本机偏好，默认开，关闭后不再显示提醒横幅。 */
+@Composable
+private fun NoticeBannerCard(prefs: android.content.SharedPreferences) {
+    var enabled by remember { mutableStateOf(prefs.getBoolean(NOTICE_BANNER_KEY, true)) }
+    Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(tr("应用内提醒", "In-app notices"), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    tr("停在一个聊天时，其他 Bot 提问、审批、回复或完成任务会在顶部短暂提示", "While you are in one chat, briefly show at the top when other Bots ask, need approval, reply or finish a task"),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = enabled,
+                onCheckedChange = {
+                    enabled = it
+                    prefs.edit().putBoolean(NOTICE_BANNER_KEY, it).apply()
+                },
+            )
         }
     }
 }

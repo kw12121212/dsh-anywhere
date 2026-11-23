@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-chat-bars-0310
+approach:
+  - core 新增纯 JVM 的 ChatBars（work.keepwriting.core）：输入是连接层已有的 state 全量/合并视图（DsbotModels.State.raw，增量应答的 live 字段经 mergeDelta 合并进 raw，所以 computerLive、work 与 bots/rooms 在同一对象里），按 botId 或 roomId 派生聊天条模型：tasks(state, botId) 取 bots[].tasks 中 status ∈ {running, waiting_work, waiting_approval} 的任务（id、title、status、running）；computerAsks(state, botId?, roomId?) 取 computerLive.asks 的值（id、botId、sessionId、roomId?、appName），私聊按 botId 且无 roomId 过滤、群聊按 roomId 过滤；computerBusy(state, botId) 在 computerLive.bots[botId].state ∈ {bot, waiting} 时为真；repair(state, botId) 把 bots[].blocked {code, provider?, status?} 映射成标题、指引与动作（重试、打开网页端、DeepSeek 充值链接），未知代码给通用文案；goal(roomRaw) 解码 rooms[].goal 的 title、status、stages[{title, status}] 与 current，仅 drafting/active/paused 显示；workOf(state, botId) 与 roomWork(state, roomId) 取 live 的 work.bots / work.rooms。所有解码对缺失、类型不符、超长与超量输入返回空列表/null（标题截断 80 字、阶段最多 20、任务与请求最多 20），不抛异常。
+  - core 新增 WorkPhrase：phrase(doing, lang) 复刻网页端 0.3.10 的 workPhrase 顺序——switching 给切换短语；Bot 自述（said/note，去掉句尾标点）优先；无 tool 给「思考中」；已知工具名（ask_user_question、message_bot、list_bots、记忆类、群操作类）给专属短语，其余按正则表顺序（computer/cua → 使用电脑、web_search → 联网搜索、fetch/browse/web → 阅读网页、shell/bash/exec → 运行命令、read/view/cat → 打开文件、grep/glob/find/search → 查找文件、write/edit/patch → 写入修改、image/photo/draw → 处理图片），都不命中给通用「处理中」；有 target 时附「 · target」。提供 ZH 与 EN 两套文案，App 本变更固定用 ZH。
+  - App：NativeShellConnection 把每次 state 同步后的 lastState 同时写入可观察的 stateSnapshot（mutableStateOf），聊天页用 remember(stateSnapshot, id) 调用 ChatBars 派生。BotChatPage 在消息列表与输入框之间依次显示：修复卡（有 blocked 时）、电脑操作请求卡（每张：应用名 + 拒绝/本次/总是）、后台任务条（可折叠，逐任务显示标题与状态、停止按钮）；工作行把 ThinkingPill 旁加工作短语，电脑控制中时显示「停止操作电脑」。RoomChatPage 顶部显示群目标条（标题 · 状态 · 第 N/M 阶段 当前阶段标题，配进度条），群内电脑操作请求卡，运行中成员行显示各自工作短语。写操作经各控制器既有 api 通道：bot-stop-task {botId, taskId}、computer-app-answer {id, answer}、computer-stop {botId}、resume {botId}；成功后不做本地乐观改写，等 feed 推 revision/live 刷新，失败显示可读提示。动效：工作短语与 ThinkingPill 在系统动画时长缩放为 0 时改为静态。
+decisions:
+  data-presence-gating:
+    decision: 四类聊天条与工作短语按远端是否返回对应字段显隐（tasks、computerLive.asks/bots、blocked、goal、work），不经 hello 能力位门控；字段缺失时整块不渲染。
+    rationale: 0.3.10 的 hello capabilities 名单（mobile.js CAPABILITIES，实测 30 项）没有任务、电脑操作、修复卡或群目标对应的能力名，按能力位门控会让这些功能在 0.3.10 上也永远隐藏；而 0.3.6 及字段缺失的远端不返回这些字段，按字段存在门控天然隐藏，满足能力位未声明的条目不显示与既有页面不变两项要求。
+  source-checked-shapes:
+    decision: tasks、blocked、computerLive、goal、work 的字段形态以已安装的 DS-Bot 0.3.10 源码（channel.js 的 view/live、bot-tasks.js taskViewOf、turns.js blockBot/doingOf/workView/roomWorkView、computer/index.js computerLive/app-answer、goals.js）核对为准，在 tech/dsbot-api 与 FINDINGS 第 13 节登记为源码核对；JUnit 样本放在 resources/dsbot-source/（与真实脱敏夹具 dsbot/ 分开并注明来源）；模拟器验收经 scripts/mock-dsh-server.mjs --chat-bars 注入同一形态；真实服务出现样本后实测并改为 dsbot/ 下的脱敏夹具。
+    rationale: 本机真实团队（12 个 Bot、2 个群）当前没有后台任务、阻塞、群目标样本，电脑操作在服务器上关闭（computer.enabled=false 且宿主为 Linux）；实施时尝试用临时 Bot 触发阻塞：create-bot 指定未配置模型被服务端拒绝（未创建对象），所有本地 Agent 均已安装，没有零成本、可撤销的触发途径。把源码核对显式登记并与真实夹具分目录，符合 endpoint-inventory-0310 与 spike-write-probes-non-mutating 不把源码核对当实测、不改真实团队的要求。
+  no-optimistic-writes:
+    decision: 停止任务、电脑操作作答、停止操作电脑与重试成功后不本地改写条目，而是立即静默补取一次增量 state（since/live），补取失败只放弃本次、不当作 feed 断线触发重连；在途键在主线程点按时登记（按钮立即禁用、同键重复点按直接忽略），请求结束后移除；失败提示经 core 的 ChatBars.actionError 映射为可读文案。
+    rationale: 这些状态由服务端多处来源决定（任务结算、电脑请求解析、阻塞解除），本地猜测可能与网页端不一致；上游 feed 只在 agent/status 与 tool/call 时推 live 事件，电脑请求的变化不一定伴随推送，所以写操作后主动补取一次才能及时上屏；补取是附带动作，失败不应影响在线的 feed。在途键若只在 executor 内登记，排队期间按钮不禁用，弱网连点会重复提交。
+  recharge-link-rule:
+    decision: 充值链接只在 QUOTA 且 provider 为 deepseek-official、或 ACCOUNT_QUOTA 时显示，地址为网页端同款公开地址 https://platform.deepseek.com/top_up，经系统浏览器打开；其他需要配置密钥或换模型的情况指引到网页端设置（模型服务商页由 dsbot-native-integrations 上线）。
+    rationale: 与网页端 turn-error.js 的 fixesFor 规则一致，避免对非 DeepSeek 服务商给出错误的充值入口；该地址是公开页面，不含用户凭据或 harness 地址，不违反禁止硬编码 harness URL 的约束。
+  zh-ui-en-ready:
+    decision: 本变更界面文案用简体中文；WorkPhrase 与修复卡文案在 core 同时提供英文版本，语言选择留给 dsbot-phone-prefs。
+    rationale: App 现有界面全部是简体中文，现在混入英文会不一致；core 预置双语让后续语言设置变更只需切换参数，不必重写映射。
+alternatives:
+  - option: 按 hello 能力位门控聊天条
+    reason: 0.3.10 的能力名单里没有这些能力，门控会让功能在目标版本上完全不可见
+  - option: 等到能在真实服务上取得全部成功样本后再实现
+    reason: 电脑操作在本服务器关闭且宿主为 Linux，后台任务与群目标依赖模型行为，短期无法稳定取样；字段缺失即隐藏的降级保证源码核对偏差不会导致崩溃
+risks:
+  - 源码核对的字段形态可能与实际下发有出入（如 live 合并后 computerLive 的位置）：解码一律容错，设备验收对能取样的部分实测并替换夹具
+  - 电脑操作请求与其余聊天条字段在本项目验收环境无法真实触发：以 JUnit 与 mock 注入的模拟 state 验证渲染与作答请求构造，真实下发形态留作已登记的残余风险（FINDINGS 第 13 节）

@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-notices-banner
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：路线图计划变更 dsbot-notices-banner 与里程碑 dsbot-mobile-polish。
+    answer: 用户在手机上停在一个聊天里时，其他 Bot 的提问、审批请求或回复没有任何提示，必须回团队页逐个看才知道有人在等，导致 Bot 团队被阻塞；上游手机端已有应用内横幅。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 场景与验收。来源：里程碑完成标准第二条。
+    answer: 停在 A 聊天时 B 提问或回复，顶部出现约 8 秒横幅，点按进入 B；dsh 重启后重连不重复弹出已显示过的横幅；设置关闭横幅后不再出现。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：feed notice 事件与 (boot, seq) 游标去重、重连后 notices 补齐、boot 变化或 reset 时重取整体状态；kind 白名单 question/approval/message/group/done；非当前聊天显示 8 秒横幅、点按进入、多条只保留最新；设置页开关默认开、本机持久化；不做系统通知与推送。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 不做系统通知、推送、FCM、角标与后台服务；连接层与导航不变（团队页为根）；聊天页、团队页需要你提示与 feed 其他事件处理不变；横幅文本不进日志与诊断。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 里程碑完成标准第二条要求应用内提醒；依赖的 dsbot-baseline-0310 已完成（hello 与 notices 已实测、夹具就绪），脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: storage-choice
+    question: 计划变更写的「本机 DataStore 持久化」是否必须用 DataStore？
+    context: 影响范围：实现文件与依赖。App 现有偏好均为 SharedPreferences 独立文件，DataStore 需新增依赖。
+    answer: 用独立 SharedPreferences 文件（design 决策 prefs-not-datastore）；可观察行为（本机保存、跨重启保留、默认开）与计划一致。
+    status: resolved
+    answered_by: roadmap

@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-chat-bars-0310
+  status: proposed
+summary:
+  what:
+    - 私聊页显示 Bot 的后台任务条（state 的 bots[].tasks 中运行中/等审批/等交接的任务），每个任务可单独停止（bot-stop-task），停止后与网页端同步
+    - 私聊页与群聊页显示电脑操作请求卡（live 的 computerLive.asks），提供拒绝/本次/总是三个作答（computer-app-answer）；Bot 正在操作电脑时提供停止入口（computer-stop）
+    - Bot 因只有用户能修复的模型失败被阻塞（state 的 bots[].blocked，MISSING_CREDENTIAL/INVALID_CREDENTIAL/AUTH/QUOTA/ACCOUNT_*/LOCAL_AGENT_* 等）时，私聊页显示修复卡：可读原因与指引（模型服务商页上线前指引到网页端设置，DeepSeek 额度不足给出充值链接经系统浏览器打开）与重试（resume）
+    - 群聊页顶部显示群目标条：目标标题、状态与阶段进度（第 N/M 阶段、当前阶段标题），数据来自 state 的 rooms[].goal
+    - Bot 工作中时，私聊页工作行与群聊运行中成员显示按工具区分的工作短语（Bot 自述优先，其次按工具名映射，未知工具回退为通用短语，带目标时附「· 目标」），并带轻量动效；系统关闭动画（动画时长缩放为 0）时改为静态
+  why:
+    - DS-Bot 0.3.10 在网页端与上游手机端已有这些聊天条，原生 App 看不到后台任务、电脑操作请求与模型失败原因：用户在手机上只能看到 Bot「工作中」或无响应，要停掉某个后台任务、批准电脑操作或弄清为什么 Bot 不回话，必须回到电脑上的网页端
+    - 里程碑 dsbot-mobile-polish 完成标准第六条要求：Bot 有后台任务时显示任务条并可逐个停止；电脑操作请求可选拒绝/本次/总是并与网页端同步；模型因缺 key 失败时显示修复卡
+scope:
+  in:
+    - core 新增纯 JVM 解码与映射：后台任务（只取活动状态 running/waiting_work/waiting_approval）、电脑操作请求与 Bot 电脑控制状态、模型失败阻塞原因到可读文案与指引（含充值链接判定）、群目标与阶段进度、工具名到工作短语（中英文两套，按网页端 0.3.10 的规则顺序）；字段缺失或畸形一律返回空/不显示
+    - core JUnit 覆盖上述解码与映射，夹具以 0.3.10 源码核对形态构造并注明来源；对真实服务能取到的部分在设备验收中实测
+    - App：私聊页任务条（逐任务停止）、电脑操作请求卡与停止、修复卡（重试、打开网页端、DeepSeek 充值链接）、工作短语与动效；群聊页群目标条、群内电脑操作请求卡、运行中成员工作短语；连接层暴露最近 state 快照供页面派生
+    - android-dsbot 规格新增 5 条可观察要求；tech/dsbot-api 新增聊天条数据来源规则（登记源码核对的字段形态与门控方式）
+  out:
+    - 后台任务的追加消息（bot-task-send）与任务记录阅读（bot-task-read）、电脑操作的接管/交还/截图（takeover/handback/shot）、模型服务商与密钥管理页本身（dsbot-native-integrations 承接）
+    - 待处理卡片停靠区与审批逐行差异（dsbot-pending-dock 承接）；群目标的编辑与阶段详情视图（沿用既有目标草稿/控制对话框）
+    - 手机端语言切换（dsbot-phone-prefs 承接）：本变更界面文案为简体中文，core 同时提供英文短语供后续语言设置使用
+    - 群聊页的群成员后台任务条（网页端在群页显示带 roomId 的任务）：本变更私聊任务条按网页端规则排除群任务，群页任务条留待后续变更
+unchanged_behavior:
+  - 既有私聊、群聊、交互卡片、附件、Side chat、停止/恢复/分段入口的行为不变；远端未返回 tasks、blocked、computerLive、goal 或 work 字段时（含 0.3.6）页面与现在一致，不出现空白条或错误
+  - 停止整个 Bot 工作仍走 stop-member-work；目标草稿与控制仍走既有 goal-draft/goal-control 对话框
+  - dsh-auth cookie、带 token 地址与密钥不进日志与诊断上报；充值链接是公开地址，不含任何用户凭据或 harness 地址
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-chat-bars-0310

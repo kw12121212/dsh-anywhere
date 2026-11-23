@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-chat-cache
+sections:
+  Implementation:
+    core-chat-cache:
+      text: core 新增 ChatCache.kt：ChatCache<T>（16 项 LRU、key 构造、invalidate）、ScrollMemory（50 项 LRU）、ReadFlight 单飞状态机、RowIdentity.match、JumpButton 状态与 ScrollDistance.belowPx
+      status: complete
+    app-bot-cache:
+      text: ChatController 接入缓存、单飞、行身份复用与 scrollRequest；分段切换后失效该 Bot 缓存；后台刷新不清空流式气泡；新增 prefetch(id)
+      status: complete
+    app-room-cache:
+      text: RoomChatController 同样接入缓存、单飞、行身份复用、scrollRequest 与 prefetch(id)
+      status: complete
+    app-pages-scroll:
+      text: BotChatPage/RoomChatPage：离开时保存滚动位置、收到 scrollRequest 恢复；按离底距离显示「回到最新 / N 条新消息」按钮，点按滚到最新并清零
+      status: complete
+    app-poll-prefetch:
+      text: NativeShellConnection：在线且前台时每 15 秒兜底轮询（静默 state 增量 + 无流式时 refreshIfOpen），后台停止；openChat 记录上次聊天到独立 SharedPreferences 文件 chat，首次在线时预取
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit（ChatCacheTest 一个类覆盖全部组件）：LRU 淘汰与访问顺序、重复 put 刷新新近度、key 构造、invalidate、ScrollMemory 容量与非法位置；ReadFlight 开始/排队一次/忽略、换 id 新代号、完成判过期与重跑、reset 作废在途；ChatRefresh 首页未变保留更早记录、窗口前移有重叠时保留并追加、实时尾部被替换、无重叠重置、空首页视为变化、强制重置、偶然单条匹配不算重叠；RowIdentity 复用与重复条目一一对应；JumpButton 阈值、累加、回底清零、跳转途中不闪回；离底距离估算
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK 确认编译通过（需 Android SDK 与 keystore，不进回归命令）
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下按 wslg-weston 教训以 xvfb-run -a 包裹）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock-dsh-server）：两个聊天来回切换立即显示上次内容与位置；向上翻看时新消息到来按钮计数正确，点按回到最新；前台漏推送的消息 15 秒内补齐；重启后进入上次聊天立即显示
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-chat-cache
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

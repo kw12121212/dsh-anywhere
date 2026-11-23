@@ -49,9 +49,28 @@ class AppGraph private constructor(context: Context) {
     private var pendingRawUrl: String? = null
 
     private val appContext: Context = context.applicationContext
+
+    /** 上次打开的聊天（dsbot-chat-cache 启动预取用，只存 id 与类型，不存聊天内容）：独立偏好文件。 */
+    val chatPrefs: android.content.SharedPreferences by lazy { appContext.getSharedPreferences("chat", Context.MODE_PRIVATE) }
+
+    /** 应用缓存目录（dsbot-reader-files 的交付文件下载落在 cache/downloads/）。 */
+    val cacheDir: File get() = appContext.cacheDir
+
+    /** 本机已读状态（dsbot-read-state）：私有文件 read-state.json，进程内单例。 */
+    val readStore: ReadStore by lazy { ReadStore(appContext.filesDir) }
+
+    /** 手机本机外观与语言（dsbot-phone-prefs）。 */
+    val phone: PhonePrefsStore by lazy { PhonePrefsStore(appContext).also { PhonePrefsStore.current = it } }
+
+    /** 「应用内提醒」开关（dsbot-notices-banner）：独立偏好文件，键 bannerEnabled，默认开。 */
+    val noticePrefs: android.content.SharedPreferences by lazy { appContext.getSharedPreferences("notices", Context.MODE_PRIVATE) }
     private val harnessConfig = HarnessConfig(File(context.filesDir, "config").toPath())
 
     fun load() {
+        phone // 尽早初始化：界面语言在首个文案（含启动时的更新检查失败提示）之前就绪
+        readStore // 已读文件在 onCreate 时读入，而不是首次组合团队页时
+        // 24 小时前的下载目录在后台线程清理（dsbot-reader-files）
+        Thread({ ChatMedia.cleanup(appContext.cacheDir) }, "downloads-cleanup").apply { isDaemon = true }.start()
         diagnostics.start(diagnosticsBuildInfo(appContext))
         nativeSession.load()
         when (val load = harnessConfig.load()) {

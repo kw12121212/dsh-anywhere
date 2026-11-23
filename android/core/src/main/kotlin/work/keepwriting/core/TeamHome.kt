@@ -15,8 +15,8 @@ object TeamHome {
         val isMain: Boolean,
         val isPrivate: Boolean,
         val working: Boolean,
+        /** 清洗后的末条摘要（TeamPreview.clean；搜索用）。 */
         val lastSummary: String?,
-        val unread: Int?,
         val pinned: Boolean,
         val sessionId: String?,
         /** 最近活动时间（state 的 lastAt，epoch 毫秒；0.3.6 起提供，缺失为 null）。 */
@@ -28,6 +28,8 @@ object TeamHome {
         val parts: List<String> = emptyList(),
         /** 房间成员 Bot id 列表（群聊提及/停止成员名册）；Bot 条目为空。 */
         val members: List<String> = emptyList(),
+        /** 团队页第二行的预览（按优先级；dsbot-read-state），无可显示内容为 null。 */
+        val preview: TeamPreview.Preview? = null,
     ) {
         enum class Kind { BOT, ROOM }
     }
@@ -51,15 +53,16 @@ object TeamHome {
     fun assemble(state: DsbotModels.State): Team {
         val workingBots = workingBotIds(state)
         val botEntries = state.bots.map { bot -> botEntry(bot, state, workingBots) }
-        val roomEntries = state.rooms.map { room -> roomEntry(room, workingBots) }
+        val roomEntries = state.rooms.map { room -> roomEntry(room, state, workingBots) }
         val allEntries = applyPending(botEntries + roomEntries, pendingOf(state))
         val grouped = LinkedHashMap<String?, MutableList<Entry>>()
         val sectionsRaw = state.raw.members["sections"] as? Json.Value.Array
         val sectionOf = entrySectionMap(sectionsRaw, allEntries)
-        // 置顶优先 → 最近活动（lastAt）降序（最近有对话的排前面，缺失 lastAt 的排最后）
-        // → 名称稳定兜底。
+        // Main Bot 最前 → 置顶 → 最近活动（lastAt）降序（最近有对话的排前面，缺失 lastAt 的排最后）
+        // → 名称稳定兜底（dsbot-read-state 改写 team-page-list）。
         val sorted = allEntries.sortedWith(
-            compareBy<Entry> { !it.pinned }
+            compareBy<Entry> { !it.isMain }
+                .thenBy { !it.pinned }
                 .thenByDescending { it.lastAt ?: Long.MIN_VALUE }
                 .thenBy { it.name },
         )
@@ -71,7 +74,7 @@ object TeamHome {
             for (sec in sectionsRaw.items) {
                 val obj = sec as? Json.Value.Object ?: continue
                 val id = str(obj, "id") ?: continue
-                val name = str(obj, "name") ?: "未命名分组"
+                val name = str(obj, "name") ?: I18n.tr("未命名分组", "Untitled section")
                 named.add(Section(id, name, grouped.remove(id) ?: emptyList()))
             }
         }
@@ -105,16 +108,16 @@ object TeamHome {
             isMain = state.mainBotIds.contains(bot.id),
             isPrivate = private,
             working = working.contains(bot.id),
-            lastSummary = str(bot.raw, "preview"),
-            unread = int(bot.raw, "unread"),
+            lastSummary = TeamPreview.clean(str(bot.raw, "preview")),
             pinned = bool(bot.raw, "pinned"),
             sessionId = bot.sessionId,
             lastAt = long(bot.raw, "lastAt"),
             parts = bot.parts,
+            preview = TeamPreview.ofBot(bot, state),
         )
     }
 
-    private fun roomEntry(room: DsbotModels.Room, working: Set<String>): Entry = Entry(
+    private fun roomEntry(room: DsbotModels.Room, state: DsbotModels.State, working: Set<String>): Entry = Entry(
         id = room.id,
         kind = Entry.Kind.ROOM,
         name = str(room.raw, "name") ?: room.id,
@@ -125,11 +128,11 @@ object TeamHome {
         isPrivate = false,
         working = room.members.any { working.contains(it) },
         members = room.members,
-        lastSummary = str(room.raw, "preview"),
-        unread = int(room.raw, "unread"),
+        lastSummary = TeamPreview.clean(str(room.raw, "preview")),
         pinned = bool(room.raw, "pinned"),
         sessionId = room.sessionId,
         lastAt = long(room.raw, "lastAt"),
+        preview = TeamPreview.ofRoom(room, state),
     )
 
     private fun entrySectionMap(sections: Json.Value.Array?, entries: List<Entry>): Map<String, String?> {
@@ -147,7 +150,7 @@ object TeamHome {
         return map
     }
 
-    private fun defaultSectionName(id: String?): String = if (id == null) "未分组" else "未命名分组"
+    private fun defaultSectionName(id: String?): String = if (id == null) I18n.tr("未分组", "Ungrouped") else I18n.tr("未命名分组", "Untitled section")
 
     private fun workingBotIds(state: DsbotModels.State): Set<String> {
         val work = state.raw.members["work"] as? Json.Value.Object ?: return emptySet()
@@ -191,7 +194,7 @@ object TeamHome {
                     kind = PendingItem.Kind.APPROVAL,
                     sessionId = str(obj, "sessionId"),
                     botId = str(obj, "botId"),
-                    summary = str(obj, "title") ?: str(obj, "text") ?: "待审批",
+                    summary = str(obj, "title") ?: str(obj, "text") ?: I18n.tr("待审批", "Awaiting approval"),
                 ),
             )
         }
@@ -203,7 +206,7 @@ object TeamHome {
                     kind = PendingItem.Kind.QUESTION,
                     sessionId = sessionId,
                     botId = str(obj, "botId"),
-                    summary = str(obj, "question") ?: "待回答",
+                    summary = str(obj, "question") ?: I18n.tr("待回答", "Awaiting answer"),
                 ),
             )
         }
@@ -215,7 +218,7 @@ object TeamHome {
                     kind = PendingItem.Kind.VIEW,
                     sessionId = sessionId,
                     botId = str(obj, "botId"),
-                    summary = str(obj, "title") ?: "待处理卡片",
+                    summary = str(obj, "title") ?: I18n.tr("待处理卡片", "Pending card"),
                 ),
             )
         }
@@ -224,9 +227,6 @@ object TeamHome {
 
     private fun str(obj: Json.Value.Object, key: String): String? =
         (obj.members[key] as? Json.Value.StringValue)?.value?.takeIf { it.isNotEmpty() }
-
-    private fun int(obj: Json.Value.Object, key: String): Int? =
-        (obj.members[key] as? Json.Value.NumberValue)?.raw?.toIntOrNull()
 
     private fun long(obj: Json.Value.Object, key: String): Long? =
         (obj.members[key] as? Json.Value.NumberValue)?.raw?.toLongOrNull()

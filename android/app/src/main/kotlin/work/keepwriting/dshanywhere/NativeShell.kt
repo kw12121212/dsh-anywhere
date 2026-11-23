@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -22,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +40,8 @@ import work.keepwriting.core.SetupCheck
 import work.keepwriting.core.TeamHome
 import work.keepwriting.core.DsbotConnection
 import work.keepwriting.core.DsbotModels
+import work.keepwriting.core.NoticeCursor
+import work.keepwriting.core.Notices
 import work.keepwriting.core.Capabilities
 import work.keepwriting.core.DsbotHello
 import work.keepwriting.core.DsbotVersions
@@ -57,15 +61,23 @@ import java.util.concurrent.atomic.AtomicLong
  * DsbotConnection（探测/401 重试一次/gate/feed 退避重连/前后台生命周期）。
  */
 @Composable
-fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> Unit) {
+fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> Unit, covered: Boolean = false) {
     val connection = remember { NativeShellConnection(graph) }
+    // 设置页叠在外壳上时聊天页不算可见：不标记已读（dsbot-read-state）
+    SideEffect { connection.covered = covered }
     // 前后台：生命周期事件驱动状态机（后台断 feed、回前台重走连接）
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
-                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> connection.onForeground()
-                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> connection.onBackground()
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    connection.resumed = true
+                    connection.onForeground()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    connection.resumed = false
+                    connection.onBackground()
+                }
                 else -> {}
             }
         }
@@ -76,6 +88,10 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
             connection.stop()
         }
     }
+    // 切换语言（dsbot-phone-prefs）：界面文案在组合期读取可观察的语言状态、调用处自行重组（不整体重建，
+    // 草稿、滚动位置与已作答记录都保留）；连接里预先组装好的团队列表按新语言重组装。
+    val lang = graph.phone.lang
+    LaunchedEffect(lang) { connection.relocalize() }
     ShellScaffold(connection = connection, onOpenSettings = onOpenSettings)
     // 隧道联动（tunnel-gated-tailnet-load）：tailnet 目标在等待面板下、隧道连上后自动继续
     val tunnelState = graph.tunnel.state
@@ -142,6 +158,31 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                 }
             }
         }
+        // 应用内提醒横幅（dsbot-notices-banner）：约 8 秒自动收起，点按进入对应聊天
+        connection.noticeBanner?.let { notice ->
+            androidx.compose.runtime.LaunchedEffect(notice.id) {
+                kotlinx.coroutines.delay(NOTICE_BANNER_MS)
+                connection.dismissNotice(notice.id)
+            }
+            androidx.compose.material3.Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.medium,
+                tonalElevation = 3.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .clickable { connection.openNotice(notice) },
+            ) {
+                Text(
+                    notice.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+        }
         Box(modifier = Modifier.fillMaxSize()) {
             val current: ShellPage = connection.page
             when {
@@ -177,6 +218,20 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     val entry = connection.team?.sections
                         ?.flatMap { it.entries }
                         ?.firstOrNull { it.id == current.targetId }
+                    // 本机已读（dsbot-read-state）：前台可见时以 max(条目 lastAt, 聊天内最新条目时间) 标记；
+                    // 控制器的 newest 只认当前聊天 id，避免切换时把上一个聊天的时间记过来
+                    val newest = if (entry?.kind == TeamHome.Entry.Kind.ROOM) connection.roomChatController.newest else connection.chatController.newest
+                    val readAt = work.keepwriting.core.ReadState.readAt(current.targetId, entry?.lastAt, newest)
+                    val readHost = connection.readHost
+                    val visible = connection.resumed && !connection.covered
+                    LaunchedEffect(readHost, current.targetId, readAt, visible) {
+                        if (visible && readHost != null) connection.markRead(readHost, current.targetId, readAt)
+                    }
+                    // Markdown 图片取图入口（dsbot-rich-render）：本地路径按当前会话经 markdown-image 取回
+                    val imageSession = if (entry?.kind == TeamHome.Entry.Kind.ROOM) current.targetId else connection.chatController.shownSessionId
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        LocalMarkdownImageLoader provides { src: String, cb: (ByteArray?) -> Unit -> connection.media.markdownImage(imageSession, src, cb) },
+                    ) {
                     if (entry?.kind == TeamHome.Entry.Kind.ROOM) {
                         // 成员名册：room.members（bot id）→ 团队 Bot 名映射（提及/停止成员入口）
                         val botNames = connection.team?.sections.orEmpty()
@@ -192,6 +247,12 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             memberNames = roster.map { it.second },
                             memberIds = roster.map { it.first },
                             onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
+                            state = connection.stateSnapshot?.raw,
+                            barInFlight = connection.barInFlight,
+                            onBarAction = { key, endpoint, payload ->
+                                connection.barAction(key, endpoint, payload) { connection.roomChatController.postNotice(it) }
+                            },
+                            media = connection.media,
                         )
                     } else {
                         LaunchedEffect(entry?.working) { connection.chatController.syncWorking(entry?.working ?: false) }
@@ -200,6 +261,13 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             botId = current.targetId,
                             parts = entry?.parts ?: emptyList(),
                             onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
+                            state = connection.stateSnapshot?.raw,
+                            entrySessionId = entry?.sessionId,
+                            barInFlight = connection.barInFlight,
+                            onBarAction = { key, endpoint, payload ->
+                                connection.barAction(key, endpoint, payload) { connection.chatController.postNotice(it) }
+                            },
+                            media = connection.media,
                             onOpenSide = {
                                 val sid = entry?.sessionId
                                 if (sid != null) {
@@ -211,17 +279,29 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                                     connection.sideChatController.open(sid)
                                     showSidePanel = true
                                 } else {
-                                    connection.sideChatController.postNoticeStatic("会话信息不可用，无法侧问")
+                                    connection.sideChatController.postNoticeStatic(tr("会话信息不可用，无法侧问", "Session info unavailable, cannot open side chat"))
                                 }
                             },
                         )
                     }
+                    }
                 }
                 current is ShellPage.Details -> SkeletonPage("details:${current.targetId}")
-                else -> TeamPage(
+                else -> {
+                    // 某主机首次出现团队：以当前最近活动打底，免得整页未读（之后的新活动照常显示）
+                    val team = connection.team
+                    val host = connection.readHost
+                    LaunchedEffect(team, host) {
+                        if (team != null && host != null) {
+                            connection.seedRead(host, team.sections.flatMap { it.entries }.associate { it.id to it.lastAt })
+                        }
+                    }
+                    TeamPage(
                     team = connection.team,
                     onOpenChat = { id -> connection.openChat(id ?: "unknown") },
+                    isUnread = { e -> connection.isUnread(e, open = false) },
                 )
+                }
             }
         }
         if (showSidePanel) {
@@ -376,7 +456,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     android.net.Uri.parse(url),
                 ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(
-                    if (chooser) android.content.Intent.createChooser(view, "选择打开方式")
+                    if (chooser) android.content.Intent.createChooser(view, tr("选择打开方式", "Open with"))
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) else view,
                 )
             }
@@ -386,7 +466,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         executor.execute {
             val clean = graph.cleanUrl
             if (clean == null) {
-                chatController.postNotice("会话信息不可用，无法打开文件")
+                chatController.postNotice(tr("会话信息不可用，无法打开文件", "Session info unavailable, cannot open the file"))
                 return@execute
             }
             var next = work.keepwriting.core.DsbotApi.url(clean, "/api/file") +
@@ -407,12 +487,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             if (res == null || res.status != 200) {
                 val code = res?.status
                 val reason = when (code) {
-                    null -> "网络错误"
-                    401 -> "会话已过期，请重连后重试"
-                    403 -> "服务器拒绝访问该文件"
-                    404 -> "文件不存在或已被移动"
-                    413 -> "文件超过服务器大小限制（50MB）"
-                    else -> "文件获取失败（$code）"
+                    null -> tr("网络错误", "Network error")
+                    401 -> tr("会话已过期，请重连后重试", "Session expired. Reconnect and try again")
+                    403 -> tr("服务器拒绝访问该文件", "The server denied access to this file")
+                    404 -> tr("文件不存在或已被移动", "The file does not exist or was moved")
+                    413 -> tr("文件超过服务器大小限制（50MB）", "The file exceeds the server size limit (50 MB)")
+                    else -> tr("文件获取失败（$code）", "Could not get the file ($code)")
                 }
                 chatController.postNotice(reason)
                 roomChatController.postNotice(reason)
@@ -420,7 +500,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             }
             val name = url.substringAfterLast('/').ifEmpty { "file" }
             val opened = AttachmentOpen.openWith(context, name, res.body, chooser)
-            if (!opened) chatController.postNotice("没有应用能打开 $name")
+            if (!opened) chatController.postNotice(tr("没有应用能打开 $name", "No app can open $name"))
         }
     }
     var status by mutableStateOf(DsbotConnection.Status.CONNECTING)
@@ -446,12 +526,76 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         private set
     val cleanUrlText: String get() = graph.cleanUrl ?: ""
 
+    /** Activity 是否处于前台可见（RESUMED；主线程写）：只在可见时标记已读（dsbot-read-state）。 */
+    var resumed by mutableStateOf(false)
+
+    /** 设置页叠在外壳上（主线程写）：此时聊天页不可见，不标记已读。 */
+    var covered by mutableStateOf(false)
+
+    /** 已读按 harness 主机分开：scheme://host:port（不含 token）。组合期读取即随地址变化重组。 */
+    val readHost: String? get() = work.keepwriting.core.ReadState.hostKey(graph.cleanUrl)
+
+    /** 标记已读（主线程）：只前移，非正数忽略。主机由调用方在组合期取得并作为效果键。 */
+    fun markRead(host: String, id: String, at: Long) = graph.readStore.mark(host, id, at)
+
+    fun seedRead(host: String, lastAts: Map<String, Long?>) = graph.readStore.seed(host, lastAts)
+
+    /** 团队页未读点：组合期间调用即订阅已读状态。 */
+    fun isUnread(e: TeamHome.Entry, open: Boolean): Boolean = graph.readStore.isUnread(readHost, e.id, e.lastAt, open)
+
     /** 最近一次同步的团队视图（团队页渲染输入；feed 事件驱动的刷新经 onStateFetched 流经此处）。 */
     var team by mutableStateOf<TeamHome.Team?>(null)
         private set
 
     /** 最近一次全量/合并 state（增量合并的基底）。 */
     private var lastState: DsbotModels.State? = null
+
+    /** 语言切换后按新语言重组装团队列表（缺省分组名与待办摘要在组装时取文案；dsbot-phone-prefs）。 */
+    fun relocalize() {
+        executor.execute { lastState?.let { team = TeamHome.assemble(it) } }
+    }
+
+    /**
+     * 可观察的最近 state 快照（dsbot-chat-bars-0310）：与 lastState 同步写入，聊天页据此用
+     * core 的 ChatBars 派生任务条、电脑操作请求、修复卡、群目标与工作短语（state 应答含 live 字段）。
+     */
+    var stateSnapshot by mutableStateOf<DsbotModels.State?>(null)
+        private set
+
+    /** 聊天条写操作在途键（防重复点按）：主线程登记（点按即禁用），executor 完成后移除。 */
+    val barInFlight = androidx.compose.runtime.mutableStateListOf<String>()
+
+    /**
+     * 聊天条写操作（bot-stop-task、computer-app-answer、computer-stop、resume），主线程调用：
+     * 同键在途时直接忽略；成功后不本地改写，静默补取一次增量 state 让服务端结论尽快上屏
+     * （电脑操作请求的变化不一定伴随 feed live 事件）；失败经 [onError] 给可读原因。
+     */
+    fun barAction(key: String, endpoint: String, payloadJson: String, onError: (String) -> Unit) {
+        if (key in barInFlight) return
+        barInFlight.add(key)
+        executor.execute {
+            val clean = graph.cleanUrl
+            val result = if (clean == null) {
+                DsbotApi.Result.Failure(null, DsbotApi.Reason.NETWORK)
+            } else {
+                try {
+                    val res = graph.nativeSession.apiRequest(
+                        "POST", DsbotApi.url(clean, "/api/bot"),
+                        "application/json", DsbotApi.buildRequest(endpoint, payloadJson).toByteArray(),
+                    )
+                    DsbotApi.parseResponse(res.status, res.bodyText())
+                } catch (_: Exception) {
+                    DsbotApi.Result.Failure(null, DsbotApi.Reason.NETWORK)
+                }
+            }
+            when (result) {
+                is DsbotApi.Result.Ok -> lastState.let { fetchStateOnce(it?.revision, it?.liveKey, quiet = true) }
+                is DsbotApi.Result.BotError -> onError(work.keepwriting.core.ChatBars.actionError(result.code))
+                is DsbotApi.Result.Failure -> onError(work.keepwriting.core.ChatBars.actionError("network"))
+            }
+            barInFlight.remove(key)
+        }
+    }
 
     /**
      * 聊天控制器（dsbot-bot-chat）：api 闭包投递到 executor 串行执行后回调——
@@ -487,6 +631,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 executor.execute { muxCall(endpoint, requestJson, onResult) }
             },
             onLoadFailure = { code -> graph.diagnostics.recordChatLoadError("bot", code) },
+            hostOf = { cacheHost() },
+            readApi = ::readOffExecutor,
         )
     }
 
@@ -528,7 +674,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     private fun muxCall(endpoint: String, requestJson: String, onResult: (work.keepwriting.core.DshMux.Result) -> Unit) {
         val clean = graph.cleanUrl
         if (clean == null) {
-            onResult(work.keepwriting.core.DshMux.Result.Err("gateway/closed", "未连接"))
+            onResult(work.keepwriting.core.DshMux.Result.Err("gateway/closed", tr("未连接", "Not connected")))
             return
         }
         try {
@@ -539,7 +685,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 "application/json", body.toByteArray(Charsets.UTF_8),
             )
             val parsed = work.keepwriting.core.AttachmentMessages.parseServerResponse(res.bodyText())
-            onResult(parsed ?: work.keepwriting.core.DshMux.Result.Err("gateway/protocol", "server-response 无法解析"))
+            onResult(parsed ?: work.keepwriting.core.DshMux.Result.Err("gateway/protocol", tr("server-response 无法解析", "server-response could not be read")))
         } catch (e: Exception) {
             onResult(work.keepwriting.core.DshMux.Result.Err("gateway/closed", e.javaClass.simpleName))
         }
@@ -575,6 +721,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 executor.execute { uploadAttachment(sessionId, name, mediaType, bytes, onResult) }
             },
             onLoadFailure = { code -> graph.diagnostics.recordChatLoadError("room", code) },
+            hostOf = { cacheHost() },
+            readApi = ::readOffExecutor,
         )
     }
 
@@ -604,8 +752,9 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         )
     }
 
-    /** feed 事件转发给私聊与群聊控制器（各自按 sessionId/botId 过滤）。 */
+    /** feed 事件转发给私聊与群聊控制器（各自按 sessionId/botId 过滤）；notice 交应用内提醒。 */
     private fun forwardChatEvent(event: String, dataJson: String) {
+        if (event == "notice") handleNotice(dataJson)
         if (event == "stream" || event == "message") {
             chatController.onFeedEvent(event, dataJson)
             roomChatController.onFeedEvent(event, dataJson)
@@ -646,16 +795,104 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     }
 
     fun onForeground() {
+        inForeground = true
         executor.execute { machine.onForeground() }
     }
 
     fun onBackground() {
+        inForeground = false // 兜底轮询随之停止（tick 检查）
         feedGeneration.incrementAndGet() // 代际作废：feed 线程靠谓词+读超时自然退出
         executor.execute { machine.onBackground() }
     }
 
     fun openChat(id: String) {
         page = ShellPage.Chat(id)
+        // 记住上次打开的聊天（只存 id 与类型，启动预取用；dsbot-chat-cache）
+        val kind = if (isRoom(id)) "room" else "bot"
+        runCatching { graph.chatPrefs.edit().putString(LAST_CHAT_ID, id).putString(LAST_CHAT_KIND, kind).apply() }
+    }
+
+    // ---- 聊天流畅度（dsbot-chat-cache）：缓存主机、前台兜底轮询、启动预取 ----
+
+    @Volatile private var inForeground = true
+    private var prefetched = false
+    private val pollStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** 聊天读取的 IO 线程（dsbot-chat-cache）：网络不占状态 executor，缓存上屏与切换不被慢读取阻塞。 */
+    private val readExecutor = Executors.newFixedThreadPool(2) { r -> Thread(r, "dsbot-read").apply { isDaemon = true } }
+
+    /** POST /api/bot 同步调用（调用方线程执行）。 */
+    private fun postBot(endpoint: String, payloadJson: String): DsbotApi.Result {
+        val clean = graph.cleanUrl ?: return DsbotApi.Result.Failure(null, DsbotApi.Reason.NETWORK)
+        return try {
+            val res = graph.nativeSession.apiRequest(
+                "POST", DsbotApi.url(clean, "/api/bot"),
+                "application/json", DsbotApi.buildRequest(endpoint, payloadJson).toByteArray(),
+            )
+            DsbotApi.parseResponse(res.status, res.bodyText())
+        } catch (_: Exception) {
+            DsbotApi.Result.Failure(null, DsbotApi.Reason.NETWORK)
+        }
+    }
+
+    /** 读取在 IO 线程执行，结果投回状态 executor 回调（单线程持有状态的约定不变）。 */
+    private fun readOffExecutor(endpoint: String, payloadJson: String, onResult: (DsbotApi.Result) -> Unit) {
+        readExecutor.execute {
+            val result = postBot(endpoint, payloadJson)
+            executor.execute { onResult(result) }
+        }
+    }
+
+    /** 聊天里的文件与图片取回（dsbot-reader-files）：私聊与群聊共用，网络在读线程、状态在 executor。 */
+    val media: ChatMedia by lazy {
+        ChatMedia(::readOffExecutor, executor::execute, graph.cacheDir, { capabilities.has("image-preview") }, { h, p -> graph.nativeDial.dial(h, p) })
+    }
+
+    private fun cacheHost(): String? = graph.cleanUrl?.let { runCatching { java.net.URI(it).authority }.getOrNull() }
+
+    private fun isRoom(id: String): Boolean = team?.sections.orEmpty()
+        .flatMap { it.entries }.firstOrNull { it.id == id }?.kind == TeamHome.Entry.Kind.ROOM
+
+    /** 前台兜底轮询：每 15 秒一次，前台且在线时静默补 state 增量并刷新当前聊天页（executor 线程）。 */
+    private fun startPolling() {
+        if (!pollStarted.compareAndSet(false, true)) return
+        scheduler.scheduleWithFixedDelay(
+            { executor.execute { pollTick() } },
+            POLL_SECONDS, POLL_SECONDS, TimeUnit.SECONDS,
+        )
+    }
+
+    /** 上一个兜底轮询的 state 请求尚未处理完时不再发起新的（网络半通时 tick 不堆积）。 */
+    private val pollBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun pollTick() {
+        if (!inForeground || status != DsbotConnection.Status.ONLINE) return
+        if (!pollBusy.compareAndSet(false, true)) return
+        val base = lastState
+        // state 请求的网络在 IO 线程执行，不占状态 executor；应答投回 executor 合并
+        readExecutor.execute {
+            val parsed = requestState(base?.revision, base?.liveKey)
+            executor.execute {
+                try {
+                    if (status == DsbotConnection.Status.ONLINE && parsed != null) applyStateResult(parsed, quiet = true)
+                    val current = page as? ShellPage.Chat
+                    if (current != null && inForeground && status == DsbotConnection.Status.ONLINE) {
+                        if (isRoom(current.targetId)) roomChatController.pollRefresh() else chatController.pollRefresh()
+                    }
+                } finally {
+                    pollBusy.set(false)
+                }
+            }
+        }
+    }
+
+    /** 首次进入在线时预取上次打开的聊天首页进缓存（不跳转）。 */
+    private fun prefetchLastChat() {
+        if (prefetched) return
+        prefetched = true
+        val prefs = runCatching { graph.chatPrefs }.getOrNull() ?: return
+        val id = prefs.getString(LAST_CHAT_ID, null) ?: return
+        if (prefs.getString(LAST_CHAT_KIND, "bot") == "room") roomChatController.prefetch(id) else chatController.prefetch(id)
     }
 
     fun openDetails(id: String) {
@@ -670,6 +907,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         sideChatController.dispose()
         feedGeneration.incrementAndGet()
         scheduler.shutdownNow()
+        readExecutor.shutdownNow()
         executor.shutdownNow()
     }
 
@@ -709,6 +947,10 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     override fun onStatus(next: DsbotConnection.Status) {
         status = next
+        if (next == DsbotConnection.Status.ONLINE) {
+            startPolling()
+            prefetchLastChat()
+        }
         if (next != DsbotConnection.Status.OFFLINE) errorMessage = null
         if (next == DsbotConnection.Status.OFFLINE) versionBanner = null
     }
@@ -734,7 +976,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     return
                 }
                 NativeSession.EstablishResult.NetworkError -> {
-                    errorMessage = "连接失败"
+                    errorMessage = tr("连接失败", "Connection failed")
                     machine.onUnreachable()
                     return
                 }
@@ -808,8 +1050,16 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         )
     }
 
-    override fun fetchState(localRevision: String?, liveKey: String?) {
-        val clean = graph.cleanUrl ?: return
+    override fun fetchState(localRevision: String?, liveKey: String?) = fetchStateOnce(localRevision, liveKey, quiet = false)
+
+    /** quiet=true（聊天条写操作后的补拉）：网络失败只放弃本次，不当作 feed 断线触发重连。 */
+    private fun fetchStateOnce(localRevision: String?, liveKey: String?, quiet: Boolean) {
+        applyStateResult(requestState(localRevision, liveKey) ?: return, quiet)
+    }
+
+    /** state 请求（调用方线程执行网络）；网络异常返回 null（不动状态，下一轮事件重触发）。 */
+    private fun requestState(localRevision: String?, liveKey: String?): DsbotApi.Result? {
+        val clean = graph.cleanUrl ?: return null
         val fields = buildString {
             if (localRevision != null) append("\"since\":").append(jsonNumberOrString(localRevision))
             if (localRevision != null && liveKey != null) append(",")
@@ -824,9 +1074,14 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 "application/json", DsbotApi.buildRequest("state", payloadJson).toByteArray(),
             )
         } catch (_: Exception) {
-            return // 网络抖动：不动状态，下一轮事件重触发
+            return null // 网络抖动：不动状态，下一轮事件重触发
         }
-        when (val parsed = DsbotApi.parseResponse(res.status, res.bodyText())) {
+        return DsbotApi.parseResponse(res.status, res.bodyText())
+    }
+
+    /** 应用 state 应答（executor 线程）。quiet=true：网络失败只放弃本次，不当作 feed 断线。 */
+    private fun applyStateResult(parsed: DsbotApi.Result, quiet: Boolean) {
+        when (parsed) {
             is DsbotApi.Result.Ok -> {
                 val full = DsbotModels.decodeState(parsed.value)
                 val delta = DsbotModels.decodeStateDelta(parsed.value)
@@ -834,6 +1089,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     full != null -> {
                         machine.onStateFetched(full)
                         lastState = full
+                        stateSnapshot = full
                         team = TeamHome.assemble(full)
                     }
                     delta != null -> {
@@ -843,6 +1099,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                         if (current != null) {
                             val merged = DsbotModels.mergeDelta(current, delta)
                             lastState = merged
+                            stateSnapshot = merged
                             team = TeamHome.assemble(merged)
                         }
                     }
@@ -852,7 +1109,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             is DsbotApi.Result.BotError -> {}
             is DsbotApi.Result.Failure -> when (parsed.reason) {
                 DsbotApi.Reason.AUTH_EXPIRED -> machine.onGate(DsbotConnection.NativeGate.AUTH_EXPIRED)
-                else -> {
+                else -> if (!quiet) {
                     // 取增量失败按断线语义交给退避接管，不落入无提示死态
                     scheduleReconnect(machine.onFeedDisconnected(), feedGeneration.get())
                 }
@@ -893,18 +1150,80 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         versionBanner = DsbotVersions.banner(lastRemoteVersion, capabilities)
     }
 
-    /** feed 首帧 hello：远端重启/换插件（boot 变化或不再带 boot）时整体重读版本与能力集合。 */
+    /** feed 首帧 hello：远端重启/换插件（boot 变化或不再带 boot）时整体重读版本与能力集合；
+     *  再按 (boot, seq) 游标决定提醒补齐或重取整体状态（dsbot-notices-banner）。 */
     override fun onFeedHello(hello: DsbotHello.FeedHello) {
-        if (!capabilities.shouldReread(hello)) return
-        graph.cleanUrl?.let(::checkVersion)
+        if (capabilities.shouldReread(hello)) graph.cleanUrl?.let(::checkVersion)
+        when (val action = noticeCursor.onHello(hello.boot, hello.seq)) {
+            is NoticeCursor.HelloAction.Fill -> if (capabilities.has(NOTICES_CAPABILITY)) fetchNotices(action.boot, action.since)
+            NoticeCursor.HelloAction.Reset -> fetchStateOnce(null, null, quiet = true)
+            NoticeCursor.HelloAction.None -> {}
+        }
+    }
+
+    // ---- 应用内提醒（dsbot-notices-banner；executor 线程读写）----
+
+    /** 横幅：id 每次递增（重新计时 8 秒），text 为「名称 · 类型：摘要」，target 为点按进入的聊天。 */
+    data class NoticeBanner(val id: Long, val text: String, val target: String)
+
+    var noticeBanner by mutableStateOf<NoticeBanner?>(null)
+        private set
+    private val noticeCursor = NoticeCursor()
+    private var noticeId = 0L
+
+    fun dismissNotice(id: Long) {
+        executor.execute { if (noticeBanner?.id == id) noticeBanner = null }
+    }
+
+    /** 点按横幅（主线程）：进入目标聊天。 */
+    fun openNotice(banner: NoticeBanner) {
+        dismissNotice(banner.id)
+        openChat(banner.target)
+    }
+
+    private fun bannerEnabled(): Boolean =
+        runCatching { graph.noticePrefs.getBoolean(NOTICE_BANNER_KEY, true) }.getOrDefault(true)
+
+    private fun handleNotice(dataJson: String) {
+        if (!capabilities.has(NOTICES_CAPABILITY)) return
+        val notice = Notices.decode(work.keepwriting.core.Json.parse(dataJson)) ?: return
+        if (!noticeCursor.accept(notice)) return // 重复或乱序
+        showNotices(listOf(notice))
+    }
+
+    /** 从一批新提醒中经 core 的 pickBanner 选出要显示的一条（白名单内、非当前聊天的最后一条）；
+     *  开关关闭时不显示；新提醒替换旧横幅并重新计时。 */
+    private fun showNotices(fresh: List<Notices.Notice>) {
+        if (!bannerEnabled()) return
+        val notice = Notices.pickBanner(fresh, (page as? ShellPage.Chat)?.targetId) ?: return
+        noticeBanner = NoticeBanner(++noticeId, Notices.banner(notice), Notices.target(notice))
+    }
+
+    /** 同一 boot 断线重连：notices {boot, since} 补齐（IO 线程请求，应答回 executor），只显示最新一条。 */
+    private fun fetchNotices(boot: String, since: Long) {
+        val payload = "{\"boot\":${work.keepwriting.core.JsonString.of(boot)},\"since\":$since}"
+        readExecutor.execute {
+            val result = postBot("notices", payload)
+            executor.execute {
+                // 请求在途期间远端已重启并 Reset 过：旧 boot 的应答作废，免得游标被改回旧 boot
+                if (noticeCursor.boot != boot) return@execute
+                val batch = (result as? DsbotApi.Result.Ok)?.let { Notices.decodeBatch(it.value) } ?: return@execute
+                val outcome = noticeCursor.onBatch(batch)
+                if (outcome.refetch) {
+                    fetchStateOnce(null, null, quiet = true) // 缓冲越界或陌生 boot：重取整体状态，不补弹
+                } else {
+                    showNotices(outcome.fresh)
+                }
+            }
+        }
     }
 
     private fun reasonText(reason: ProbeFailure.Reason): String = when (reason) {
-        ProbeFailure.Reason.DNS -> "无法解析主机名"
-        ProbeFailure.Reason.REFUSED -> "连接被拒绝"
-        ProbeFailure.Reason.TIMEOUT -> "连接超时"
-        ProbeFailure.Reason.TLS -> "安全连接（TLS）失败"
-        else -> "连接失败"
+        ProbeFailure.Reason.DNS -> tr("无法解析主机名", "Cannot resolve host")
+        ProbeFailure.Reason.REFUSED -> tr("连接被拒绝", "Connection refused")
+        ProbeFailure.Reason.TIMEOUT -> tr("连接超时", "Connection timed out")
+        ProbeFailure.Reason.TLS -> tr("安全连接（TLS）失败", "Secure connection (TLS) failed")
+        else -> tr("连接失败", "Connection failed")
     }
 }
 
@@ -917,3 +1236,13 @@ private fun originOf(url: String): String = try {
 } catch (_: Exception) {
     url
 }
+
+// dsbot-chat-cache：上次打开的聊天偏好键与兜底轮询间隔
+private const val LAST_CHAT_ID = "lastChatId"
+private const val LAST_CHAT_KIND = "lastChatKind"
+private const val POLL_SECONDS = 15L
+
+// dsbot-notices-banner：能力名与「应用内提醒」开关键
+private const val NOTICES_CAPABILITY = "notices"
+const val NOTICE_BANNER_KEY = "bannerEnabled"
+private const val NOTICE_BANNER_MS = 8_000L

@@ -180,3 +180,115 @@ file-text 与 markdown-image 成功应答、`state {avatars:"ref"}` 下的 `imag
 **客户端落地**：core `DsbotHello`/`Capabilities`（未声明即不可用；无 hello → LEGACY；无共同
 api → INCOMPATIBLE 并提示版本不一致；feed hello 的 boot 变化或不再带 boot → 重读），`DsbotVersions` 基准 0.3.10 / 0.2.2-rc.3；其余端点的
 解码随首个消费它的计划变更以本节与夹具为准实现。
+
+## 13. 0.3.10 聊天条字段（2026-11-23，dsbot-chat-bars-0310，源码核对）
+
+后台任务、电脑操作、模型失败阻塞、群目标与工作详情不在 hello capabilities 名单内，客户端按
+字段存在显隐（core `ChatBars`/`WorkPhrase`）。形态按本机已装 DS-Bot 0.3.10 源码核对——**未实测**：
+
+| 字段 | 位置 | 形态（源码核对） |
+|---|---|---|
+| `bots[].tasks[]` | state（channel.js view → bot-tasks.js taskViewOf） | `{id,title,status,sessionId,roomId?,origin?,parts?,startedAt,updatedAt,endedAt?,workDir?,summary?,error?,running}`；活动态 running/waiting_work/waiting_approval（threads.js） |
+| `bots[].blocked` | state（turns.js blockBot） | `{code,status?,requestId?,provider?,at}`；code ∈ BLOCKING_CODES；重试 `resume {botId}` |
+| `computerLive` | state 应答合并 live（`{...view(), liveKey, ...live}`） | `{bots:{id→{state,app?,waitingFor?,lastShot?,steps}},leases[],cursors[],asks:{id→{id,botId,sessionId,appName,at,roomId?,icon?,callId?}},holds}`；作答 `computer-app-answer {id,answer:always\|once\|deny}`（无此请求 → value:false），停止 `computer-stop {botId}` |
+| `rooms[].goal` | state（goals.js） | `{id,revision,status:drafting\|active\|paused\|complete\|stopped,title,stages[{id,title,acceptance,status:pending\|active\|passed,tasks[],reworks}],current,…}` |
+| `work.bots` / `work.rooms` | live（turns.js workView/roomWorkView/doingOf） | bots `{id→{since,tool?,said?,note?,target?,roomId?}}`；rooms `{roomId→[{botId,since,tool?,said?,note?,target?,speaking?}]}` |
+
+真实服务取样尝试（2026-11-23）：本机团队 12 个 Bot、2 个群当前无任务/阻塞/群目标；
+`create-bot` 指定未配置服务商的模型被拒（bot/refused，未创建对象）；所有本地 Agent 已安装，
+无零成本触发阻塞的途径；电脑操作 `computer.enabled=false` 且宿主为 Linux。因此单元测试样本放在
+`android/core/src/test/resources/dsbot-source/`（明确标注为源码核对，非真实夹具），模拟器验收用
+`node scripts/mock-dsh-server.mjs --chat-bars` 注入同一形态。**残余风险**：电脑操作请求与上述字段
+的真实下发形态待服务器出现样本后实测，取到即改为 `dsbot/` 下的脱敏夹具。
+
+## 14. 应用内提醒的字段语义（2026-11-23，dsbot-notices-banner）
+
+实测（第 12 节夹具）只有 `kind=message`：`{seq,time,botId,name,kind:"message",sessionId,text}`。其余形态按
+ds-bot 0.3.10 `src/host/mobile.js` 源码核对、**待实测**：
+
+| kind | 来源 | 字段 |
+|---|---|---|
+| group | rt.roomLineAdded（群日志的成员消息） | roomId、**title = room.name（群名）**、text = 消息正文 |
+| done | rt.roomLineAdded（群日志 kind=done） | roomId、title = 群名、text = ""（空） |
+| approval | rt.approvalWaiting | sessionId、text = 工具名；群内审批另带 roomId、title = 群名 |
+| question / view | rt.cardShown（私聊卡片） | sessionId、text；不带 title |
+| message | session/event assistant/message | sessionId、text（实测） |
+
+客户端（core `Notices`）：title 只作来源（「群名 · 名称」），摘要一律取 text；只显示
+question/approval/message/group/done。群类提醒的真实样本需要群活动（会触发真实模型），取得后补
+`dsbot/` 脱敏夹具。
+
+## 15. 发送箱对账依据实测（2026-11-23，dsbot-outbox-retry，只读）
+
+对真实 dsh（DS-Bot 0.3.10）只读调用 state / chat / room-chat 取条目形态（只看键与类型，不取内容）：
+
+- 私聊 chat 的用户条目：`{kind:"user", text, time, seq, turn}`；带图片的用户条目另有 `images:<数量>, imageRefs:[…]`，**text 仍在、seq 仍在**。
+- 群聊 room-chat 的用户条目：`{id:"<短字符串>", kind:"user", text, time}`——**没有 seq**；成员条目 `{id, kind:"bot", botId, name, text, time, duration?, sessionId}`。
+- 群聊的 feed 只推 `room` 信号（第 12 节，源码核对），不推群内用户 message 事件。
+
+客户端（core `Outbox`）据此：私聊以 seq 为顺序值对账，群聊以服务端 `time` 为顺序值（窗口取发送时群页最大 time，
+与手机时钟无关），群消息发送成功后立即重读群页确认；对不上的本地行停在「已发送，等待确认」并可删除。
+
+## 16. 停靠区数据（2026-11-23，dsbot-pending-dock，源码核对）
+
+DS-Bot 0.3.10 的待处理项都在 state（含 live 字段）里；聊天条目中的 `kind:"answer"`（带 `answers`/`handoff`/`views`）
+是**用户已经给出的回复记录**（parts.js REPLY_KIND），不是待答卡——真实夹具 chat-page.json 即此形态。
+
+| 类型 | 来源 | 作答 |
+|---|---|---|
+| 提问 | `questions{会话id→{id, question, detail?, options[{label, description?}], multiSelect, allowCustom?}}` | `answer-question {sessionId, questionId, answer:{selected:[选项文字], custom?}}`；`dismiss-question {sessionId}` |
+| 卡片 | `views{会话id→{id, title, view}}` | `view-reply {sessionId, viewId, action, values}`（富渲染承接）；`dismiss-view {sessionId}` |
+| 工具审批 | live `work.approvals[{id, sessionId, botId, roomId?, taskTitle?, tool, reason, answerable}]` | `approval-answer {id, choice:allow\|reject}` |
+| 密钥请求 | `secretRequests{botId→[{id, sessionId, name, purpose, kind:fill\|allow, status}]}` | `secret-set {requestId, value}` / `secret-allow {requestId}` / `secret-cancel {requestId}` |
+| 连接器请求 | `connectorRequests{botId→[{id, sessionId, connectorId, name, purpose, status}]}` | `connector-request-cancel {requestId}` |
+| 学习审批 | live `learning{botId→[skill{…previous?} \| agents{path, edits[{op, old, text, why}]}]}` | `learning-answer {id, approve}` |
+| 浏览器交接 | live `browserHolds{botId→{by, reason, note, callId?}}` | `browser-give-back {botId, outcome:done\|skip}` |
+| 插话删除 | `btwCards{botId→[…]}`（聊天内联） | `btw-delete {sessionId, cardId}` |
+
+0.3.5 时期内联卡片使用的参数（审批 `{callId, approved}`、插话删除 `{id}` 等）在 0.3.10 上会被拒绝。本机真实服务当前
+无上述待处理样本，成功形态待实测；客户端缺字段降级只显示标题。
+
+## 17. 交付文件分块下载与全文（2026-11-23，dsbot-reader-files）
+
+**实测（只读，DS-Bot 0.3.10 / dsh 0.2.2-rc.3）**：本机 12 个 Bot 的聊天里 49 条 bot 条目带 `files`，
+形态 `files:[{name, sessionId, seq, index}]`——Bot 交付的文件（deliverables/presented）；`seq` 是交付
+事件所在会话的序号（早于消息自己的 seq），`file-download` 必须用这组定位符，用消息的 seq 回 bot/not-found。
+
+| 请求 | 应答（实测） |
+|---|---|
+| `file-download {sessionId, seq, index, offset:0}` | `{name, mime, bytes:base64, size, version, nextOffset, done}`；name 与 files[] 列出的一致；mime 按扩展名（md→text/markdown、pdf、zip、mp4、png；html/docx/xlsx→application/octet-stream） |
+| 续块 `{…, offset:nextOffset, version}` | 每块 524288 字节（512 KiB），version 不变；1.6 MB PDF、101 MB 视频均可逐块取回 |
+| 版本不符 `{…, version:"stale"}` | `bot/not-found`「This file is no longer available」（文件变更或已删除同此） |
+| 未知会话 | `bot/not-found`「Unknown session」 |
+
+夹具（脱敏：名称、会话、version 数字与内容均为合成，形态与数值格式为实测）：
+`file-download-chunk-small.json`（单块完结）、`file-download-chunk-large-first.json`（首块 nextOffset=524288、
+done=false，bytes 为占位）、`file-download-version-changed.json`、`chat-item-files.json`。
+
+**待实测（源码核对，tech/dsbot-api endpoint-inventory-0310 例外）**：`file-text {file:{attachmentId}}` 的成功应答
+`{text, whole}` 与 room-chat bot 条目的 `whole:{length, file}`——本机无带 attachmentId 的文件附件或被截断的长群帖，
+取样需用户上传附件或 Bot 在群里发超长帖（触发真实模型运行）。客户端只在条目带 whole.file（含 attachmentId）时显示
+「阅读全文」，失败给可读提示。交付文件本身没有 attachmentId，其「阅读全文」走上面实测的分块下载后按 UTF-8 解码。
+
+## 18. show_view 蓝图与 Markdown 本地图片（2026-11-23，dsbot-rich-render）
+
+**实测（只读）**：
+
+| 请求 / 字段 | 应答（实测） |
+|---|---|
+| `markdown-image {sessionId, path}`（工作区内） | `{mime, bytes:base64, size, rev}`，rev 形如 `<字节数>:<16 位十六进制>` |
+| 同上带 `knownRev`（未变） | `{mime, unchanged:true, size, rev}`（不再回传 bytes） |
+| 工作区外路径 | `bot/forbidden`「Image outside workspace」（本机 45 处 Markdown 图片引用中 13 处属此类，`/tmp/…` 截图常见） |
+| Markdown 图片写法 | `![alt](/abs/path.png)` 与 `![alt](</path with space.png>)` 两种都出现 |
+| 聊天 answer 条目的 `views[]` | `{id, title, view}`，view 为 deep-view 组件树；本机唯一样本为 stack/text/choice×4/submit |
+
+夹具（脱敏：图片内容换成 1×1 PNG、rev 合成，卡片文字与选项值合成）：`markdown-image-ok.json`、
+`markdown-image-unchanged.json`、`view-blueprint-choice.json`。
+
+**源码核对（deep-view 0.1.2 core/views.js、formula.js、reply.js；tech/dsbot-api endpoint-inventory-0310 例外）**：
+组件 stack/row（let 只在最外层）、text/metric/table/chart（bar/hbar/line/area/donut）/progress/callout/sources/html、
+slider/number/choice/toggle、options/confirm/form/submit；上限 8 层、64 组件、16 子节点、文字 2000、单元格 200、
+8 列 50 行、8 选项、6 字段、蓝图 8192 字节；公式 `{"=": "…"}` 的语法与函数集；作答 `view-reply {sessionId, viewId,
+action, values}`，values 为 `{inputs?}` 加 options→`selected[]`、confirm→`confirmed`、form→`fields{}`/`canceled:true`，
+submit 只带 inputs；服务端以 validateViewAnswer 校验，视图已关闭回 bot/stale。客户端（core ViewCard）逐条移植上述校验，
+另加序列 ≤ 8、点数 ≤ 50 的绘制上限，不通过即降级只读摘要。

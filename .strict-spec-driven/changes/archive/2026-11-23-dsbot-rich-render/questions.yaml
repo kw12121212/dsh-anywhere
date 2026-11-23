@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-rich-render
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 需求问题（路线图回放）
+    answer: 手机端用户收到 Bot 的 show_view 卡片时只看到「请在电脑网页端填写」，图表与表单无法在手机上查看和作答；聊天里的宽表格挤压、无法复制，任务列表与本地截图只显示 Markdown 原文。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 验收标准（路线图回放）
+    answer: 含图表的卡片按数据绘制、畸形数据降级不崩溃；宽表格可横向滚动并复制为 TSV；Markdown 本地图片可显示（计划变更验收原文），见 delta spec 场景与设备验收。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 触发（路线图回放）
+    answer: dsbot-mobile-polish 里程碑最后一项；0.3.10 基准后停靠区已汇集 show_view 卡片但只能引导到网页端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 非目标（路线图回放）
+    answer: 停靠区其他类型与关闭行为、聊天 Markdown 现有渲染与长按行为不变；不做 html 组件沙箱渲染与聊天记录里 view 回复的原生绘制。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 解读（路线图回放）
+    answer: 「show_view 卡片原生绘制」指停靠区里待作答的卡片（state.views），按 deep-view 组件树与公式规则绘制并作答；「单个条目渲染异常显示可重试占位」以解码阶段降级实现（卡片只读摘要、图片占位可点重试）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

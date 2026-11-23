@@ -1,0 +1,53 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    photo-compress:
+      strength: SHOULD
+      statement: 选择或拍摄的照片作为附件上传前，长边超过 2048 像素时等比缩小并以适中质量重新压缩，方向按照片的拍摄方向校正；长边不超过 2048 的照片、PNG 截图与 GIF 动图以及非图片文件原样上传。
+      scenarios:
+        large-photo-shrinks:
+          - GIVEN: 选择一张 4000×3000 的相机照片
+          - WHEN: 加入附件并上传
+          - THEN: 上传的图片长边为 2048、方向正确，体积明显小于原图
+    chat-outbox:
+      strength: MUST
+      statement: 私聊与群聊（含带附件的消息）发送后输入框立即清空，消息以「发送中」出现在聊天末尾；服务端出现对应的用户消息后该本地行由正式消息取代、不重复显示；请求已成功但服务端消息尚未对上时显示「已发送，等待确认」并可删除；发送失败的消息显示「未发送，点按重试」与「删除」，点按重试只重新发送一次（重试进行中不能再次点按），删除即丢弃；未送达与等待确认的消息按聊天保留，切换到其他聊天再回来仍在；失败的消息若实际已送达，服务端消息出现后本地行同样消失，不会因重试产生重复；聊天里早前已有的相同文字不会被误当成新消息的确认；App 从不自动重发；网页端等其他设备在私聊中发出的消息也实时出现；发送成功时给一次轻触感反馈。
+      scenarios:
+        offline-retry-once:
+          - GIVEN: 断网后在私聊发送一条消息
+          - WHEN: 消息显示「未发送，点按重试」后切到别的聊天再回来，恢复网络后点按重试
+          - THEN: 该消息仍在，重试只发出一次，网页端同一会话只出现一条该消息，本地行随服务端消息出现而消失
+        delete-failed:
+          - GIVEN: 一条消息显示「未发送，点按重试」
+          - WHEN: 点按删除
+          - THEN: 该消息从聊天中消失且不会被发送
+        same-text-twice:
+          - GIVEN: 聊天中早前已有一条「好的」
+          - WHEN: 快速连续发送两条「好的」
+          - THEN: 两条都先显示发送中，服务端两条消息出现后两条本地行各被取代一次，不多不少
+        group-confirm:
+          - GIVEN: 群聊里早前已有一条「开工」
+          - WHEN: 在群里再发一条「开工」
+          - THEN: 本地行在服务端新消息出现后消失，不会被早前那条误当成确认
+        unconfirmed-delete:
+          - GIVEN: 消息已发出但服务端消息迟迟没有对上
+          - WHEN: 查看该消息
+          - THEN: 显示「已发送，等待确认」并可删除，App 不自动重发
+  MODIFIED:
+    bot-chat-send-stream:
+      strength: MUST
+      statement: 私聊底部输入框发送文字消息（send 端点，纯文本；Enter 行为遵循团队偏好）：Bot 回复经 feed 的 stream 事件逐字追加到正在写的气泡，stream end 后由 message 事件定格为完整条目，与 DS-Bot 网页端同一会话显示的内容一致；发送失败不自动重试（不重复发送），消息保留为「未发送，点按重试」，由用户手动重试或删除（见 chat-outbox）。
+      scenarios:
+        send-streams-reply:
+          - GIVEN: 私聊页已打开、Bot 空闲
+          - WHEN: 输入文字并发送
+          - THEN: 用户消息立即出现，Bot 回复逐字流式追加并定格，内容与网页端一致
+        send-fail-no-auto-retry:
+          - GIVEN: 网络中断
+          - WHEN: 发送消息失败
+          - THEN: 消息显示「未发送，点按重试」，App 不自动重试、不重复发送
+  REMOVED: {}

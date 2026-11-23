@@ -55,7 +55,7 @@ risks:
   - 发送箱的去重依据（新出现的用户行与本地行文本和附件数一致）在用户快速连发相同内容时可能误判；须限定匹配窗口并在 core 中以 JUnit 覆盖边界，宁可保留本地行也不重复发送
   - 图表与富渲染吃的是 Bot 产生的不可信数据：须沿用 Cards 的深度、条目数与大小上限，原生绘制不执行脚本、不访问网络，超限降级为只读文本
   - 本机已读状态与远端未读字段可能不一致（网页端已读不会同步到手机）：以本机为准并在规格中写明，避免用户误以为是同步故障
-status: proposed
+status: complete
 notes:
   - 参考来源：上游 mobile/src/team/seen.ts（本机已读）、notices.ts（游标与补齐）、chat-cache.ts（LRU 缓存）、optimistic.ts 与 Chat.tsx 发送箱、nav/pending.ts（需要你统一模型）、screens/chat/dock.tsx（停靠区）、view.tsx（图表卡片）、markdown.tsx（表格与图片）、ui/i18n.ts 与 tokens.ts（语言与外观）；只学行为与边界，不搬代码
   - 2026-11-22 用户确认：本项目 Android 是 Kotlin/Compose 原生代码而非网页包装，本里程碑是学习增强；导航保留团队页为根；高权限操作维持不做生物识别；本里程碑排在 dsbot-native-manage 之前

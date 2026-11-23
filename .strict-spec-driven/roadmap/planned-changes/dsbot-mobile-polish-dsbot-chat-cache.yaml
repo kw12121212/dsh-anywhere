@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-chat-cache
   milestone: dsbot-mobile-polish
-status: planned
+status: complete
 summary: 聊天流畅度：内存 LRU 聊天缓存与滚动位置恢复，切回聊天立即显示上次内容再后台刷新；单飞读取丢弃过期结果；前台 15 秒兜底轮询与回前台探测；离底部较远时显示「回到最新 / N 条新消息」按钮；启动时预取上次打开的聊天
 details: 参考上游 team/chat-cache.ts 与 Chat.tsx 读取逻辑。core：ChatCache 为 16 个聊天的 LRU（键 主机:类型:id，存首页、已加载的更早条目与游标），未变化条目保持对象身份以减少重组；分段（part）切换时重置分页历史；滚动位置为 50 项 LRU；读取单飞（同时只跑一次，最多排队一次）并以代号丢弃已离开聊天的结果；JUnit 覆盖淘汰、身份保持、分段重置与过期丢弃。App：BotChatPage/RoomChatPage 进入时先显示缓存与滚动位置，再刷新；离底部超过约 600 dp 时显示回到最新按钮，有新消息时变为「N 条新消息」；App 在前台时以 15 秒兜底轮询补 feed 漏事件，回前台先短超时探测再补齐，进入后台停止；保留团队页为根，只记住上次打开的聊天用于启动预取（不自动跳转）。缓存只在内存，不落盘。验收：两个聊天间来回切换立即显示上次内容与位置；新消息到来时按钮计数正确。
 depends_on:

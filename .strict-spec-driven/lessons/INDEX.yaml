@@ -9,6 +9,26 @@ categories:
       status: active
       occurrences: 2
       path: .strict-spec-driven/lessons/api/spike-bd9881.yaml
+    lesson-c10c2a:
+      title: 设计里承诺对真实服务实测服务端事件字段前，先确认存在零成本可撤销的触发途径
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/lesson-c10c2a.yaml
+    ds-bot-3454e2:
+      title: 消费只有部分实测样本的 DS-Bot 事件时，要按上游每个生成点核对字段含义，不能凭字段名猜
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/ds-bot-3454e2.yaml
+    chat-room-chat-933df3:
+      title: 按某个端点的实测样本设计对账/去重键前，先确认同类端点（私聊 chat 与群聊 room-chat）条目形态一致
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/chat-room-chat-933df3.yaml
+    lesson-eb4c09:
+      title: 继承上一里程碑的协议实现前，按新基准版本的源码核对一遍数据来源与请求体
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/lesson-eb4c09.yaml
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
@@ -25,6 +45,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/architecture/activity-6a9786.yaml
+    executor-3f9363:
+      title: 单线程状态 executor 上同步发网络请求时，「立即显示缓存」做不到
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/architecture/executor-3f9363.yaml
   coding:
     post-ec9ab1:
       title: 心跳式看门狗的检查点与阈值间隔不得恰好相等:post 前后观察值比较才是正确语义
@@ -51,6 +76,21 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/coding/android-jvm-core-minsdk-jdk-nosuchmethoderror-10ca32.yaml
+    executor-8e31a8:
+      title: 单线程 executor 里登记的在途键防不住重复点按
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/executor-8e31a8.yaml
+    lesson-aeb47a:
+      title: 后台刷新只比较「首页是否相等」会在每条新消息后清掉已翻出的历史
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/lesson-aeb47a.yaml
+    snapshotstatelist-derivedstateof-concurrentmodif-ad9102:
+      title: 后台线程直接改 SnapshotStateList 时，协程/derivedStateOf 里遍历它会 ConcurrentModificationException 闪退
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/snapshotstatelist-derivedstateof-concurrentmodif-ad9102.yaml
   performance:
     http-chunked-27be03:
       title: 手写 HTTP 客户端的 chunked 正文必须批量搬运
@@ -148,7 +188,7 @@ categories:
     wslg-weston-7217b7:
       title: WSLg 的 Weston 不支持窗口最小化，不能用它验证最小化/恢复
       status: active
-      occurrences: 3
+      occurrences: 4
       path: .strict-spec-driven/lessons/tooling/wslg-weston-7217b7.yaml
     wails3-update-build-assets-build-ios-plist-72a1b8:
       title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
@@ -245,3 +285,29 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/wsl-worktree-android-tailnet-keystore-aar-90484d.yaml
+    mock-dsh-server-mock-393a7d:
+      title: 改了 mock-dsh-server 要重启进程再验收，且 mock 各接口的数据要互相一致
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/mock-dsh-server-mock-393a7d.yaml
+    pkill-f-shell-144-9e23d5:
+      title: pkill -f 的模式会匹配到执行它的那条 shell 命令自身，命令以 144 退出且后续步骤静默没跑
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/pkill-f-shell-144-9e23d5.yaml
+    generate-tasks-status-complete-apply-5f7615:
+      title: 用 generate tasks --status complete 预置已完成任务后再调 apply，会把下一个待办错标为完成
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/generate-tasks-status-complete-apply-5f7615.yaml
+  ui:
+    compose-key-compose-7f09bd:
+      title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/ui/compose-key-compose-7f09bd.yaml
+    swipe-dfa893:
+      title: 嵌套长按手势：内层旁路长按未命中也消费事件会让外层长按失效，模拟器同点 swipe 测不出
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/ui/swipe-dfa893.yaml

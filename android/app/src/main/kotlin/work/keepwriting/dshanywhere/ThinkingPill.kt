@@ -30,6 +30,24 @@ import kotlin.math.sin
  */
 @Composable
 fun ThinkingPill(modifier: Modifier = Modifier) {
+    // 系统关闭动画（动画时长缩放为 0）时静态显示（dsbot-chat-bars-0310 的 work-phrase）
+    if (rememberReducedMotion()) {
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 14.dp, height = 5.dp)
+                        .alpha(0.7f)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)),
+                )
+            }
+        }
+        return
+    }
     val transition = rememberInfiniteTransition(label = "thinking")
     val phase by transition.animateFloat(
         initialValue = 0f,

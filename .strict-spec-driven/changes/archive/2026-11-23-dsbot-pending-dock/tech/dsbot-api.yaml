@@ -1,0 +1,27 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    dock-fields-0310:
+      strength: MUST
+      statement: 待处理停靠区的数据来源与作答参数（DS-Bot 0.3.10，源码核对，待实测）：提问 state.questions{会话id→{id, callId?, question, detail?, options[{label, description?}], multiSelect, allowCustom?, askedAt}}，作答 answer-question {sessionId, questionId, answer:{selected:[选项文字], custom?}}，忽略 dismiss-question {sessionId}；卡片 state.views{会话id→{id, callId?, title, view, askedAt}}，关闭 dismiss-view {sessionId}（view-reply {sessionId, viewId, action, values} 留给富渲染）；工具审批 live work.approvals[{id, sessionId, botId, roomId?, taskId?, taskTitle?, tool, reason, detail, at, answerable}]，作答 approval-answer {id, choice:allow|reject}；密钥请求 state.secretRequests{botId→[{id, callId?, sessionId, name, purpose, kind:fill|allow, status, askedAt}]}，作答 secret-set {requestId, value} / secret-allow {requestId} / secret-cancel {requestId}；连接器请求 state.connectorRequests{botId→[{id, callId?, sessionId, connectorId, name, purpose, status, askedAt}]}，取消 connector-request-cancel {requestId}；学习审批 live learning{botId→[skill {id, action, name, description, content, why, previous?{content}} | agents {id, path, edits[{op, old, text, why}]}]}，作答 learning-answer {id, approve}；浏览器交接 live browserHolds{botId→{by, reason, note, callId?, sessionId?}}（带 callId 才是 Bot 发起），交还 browser-give-back {botId, outcome:done|skip}；插话删除 btw-delete {sessionId, cardId}。聊天条目 kind=answer（带 answers/handoff/views）是用户回复记录（parts.js REPLY_KIND），客户端只读呈现。缺字段降级只显示标题
+      rationale: 0.3.5 时期的内联卡片按聊天条目与旧参数实现，0.3.10 已把待处理项移到 state、参数也已改变（评审核对 channel.js/approvals.js/secrets.js/parts.js 实证）；本机真实服务当前没有这些待处理项的成功样本，必须登记源码核对位置与形态，避免把源码核对当实测并为后续实测替换留出对照
+      enforcement:
+        method: test
+        detail: core JUnit（PendingDockTest）以源码核对形态的 state 样本覆盖各来源的汇集、会话/归属过滤、answerable=false 排除、排序与作答请求体字面值；CardsTest 以真实夹具同构的 answer 条目断言只读「已回答」。源码核对位置：ds-bot 0.3.10 src/host/channel.js（view/live、answer-question、view-reply、dismiss-*、approval-answer、btw-delete、browser-give-back、answerQuestion、answerView）、approvals.js（approvalsView、answerApproval、OUTCOMES）、secrets.js（requestsOf、secret-set/allow/cancel）、tools.js（state.questions/views 写入）、learning.js、connectors/index.js、browser.js（setHold）、parts.js（REPLY_KIND 回复记录、questionReply）
+  MODIFIED:
+    endpoint-inventory-0310:
+      strength: MUST
+      statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
+      rationale: 这些是上游为手机端新增的内部接口，可能继续漂移；经 dsh 的 HTTP/SSE 路径与上游手机加密链路不同，只有真实实测能确定哪些可用；本次服务器缺少部分样本（无文件附件、窗口内无群活动），必须把实测债务显式交给消费方
+      enforcement:
+        method: review
+        detail: 实测（DS-Bot 0.3.10 / dsh 0.2.2-rc.3）：hello、notices、feed hello 与 notice、image（preview）、avatar、usage-summary、room-chat 取到成功应答；各写端点与 file-download/file-text/markdown-image 取到错误应答（新增错误码 bot/forbidden、bot/unavailable，经 reasonOf 缺省归 REFUSED）；未知端点回 bot/not-found；聊天条目图片引用为 imageRefs[]={attachmentId,mime,name}。仅源码核对、待首个消费变更实测补夹具：feed room 事件形态、file-download 成功分块（512 KiB、offset/version/nextOffset）、file-text 与 markdown-image 成功应答、state avatars:ref 下的 imageRef（本服务器头像均为 shape）。评审核对新端点的解码实现引用了 0.3.10 夹具与 FINDINGS 登记、源码核对项已先补实测；未实测可用的能力必须经 hello-capabilities 门控
+      exceptions:
+        - chat-bars-fields-0310 登记的聊天条字段：真实服务暂时无法产生样本（无任务/阻塞/群目标、电脑操作关闭、无零成本可撤销的触发途径）时，消费方可先按源码核对形态实现，前提是缺失或畸形一律降级为不显示、源码核对位置与取样尝试登记在 FINDINGS 第 13 节，并在服务器出现样本时实测替换
+        - notices-fields-0310 登记的群类提醒形态（kind=group/done 与群内 approval 的 roomId、title=群名）：真实服务需群里有成员发言或完成任务才产生、取证会触发真实模型运行，消费方可先按源码核对形态实现，前提是 title 只作来源、摘要取 text，缺失字段降级为私聊形态，并在 FINDINGS 第 14 节登记待实测
+        - dock-fields-0310 登记的停靠区数据（live learning 提案与 state connectorRequests）：真实服务需 Bot 产生学习提案或请求连接器才会出现，本机当前无样本，消费方可先按源码核对形态实现，前提是缺字段时只显示标题、作答端点错误时给可读提示，并在 FINDINGS 第 16 节登记待实测
+  REMOVED: {}

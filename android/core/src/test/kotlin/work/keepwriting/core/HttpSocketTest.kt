@@ -54,6 +54,35 @@ class HttpSocketTest {
     }
 
     @Test
+    fun `maxBody 超限即中止：大 Content-Length 不分配、读到 EOF 与 chunked 边读边限`() {
+        val big = serve { client ->
+            readHead(client)
+            client.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 999999999\r\nConnection: close\r\n\r\n".toByteArray())
+        }
+        assertFailsWith<HttpException> { HttpSocket(::dialLocal).request("GET", "http://img.test:$big/", maxBody = 1024) }
+        val eof = serve { client ->
+            readHead(client)
+            val out = client.getOutputStream()
+            out.write("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n".toByteArray())
+            out.write(ByteArray(4096))
+        }
+        assertFailsWith<HttpException> { HttpSocket(::dialLocal).request("GET", "http://img.test:$eof/", maxBody = 1024) }
+        val chunked = serve { client ->
+            readHead(client)
+            val out = client.getOutputStream()
+            out.write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n".toByteArray())
+            repeat(4) { out.write("400\r\n".toByteArray()); out.write(ByteArray(1024)); out.write("\r\n".toByteArray()) }
+            out.write("0\r\n\r\n".toByteArray())
+        }
+        assertFailsWith<HttpException> { HttpSocket(::dialLocal).request("GET", "http://img.test:$chunked/", maxBody = 2048) }
+        val ok = serve { client ->
+            readHead(client)
+            client.getOutputStream().write("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nhello".toByteArray())
+        }
+        assertEquals("hello", HttpSocket(::dialLocal).request("GET", "http://img.test:$ok/", maxBody = 5).bodyText())
+    }
+
+    @Test
     fun `重复 Set-Cookie 头全部保留`() {
         val port = serve { client ->
             readHead(client)

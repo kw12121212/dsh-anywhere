@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-chat-cache
+  status: proposed
+summary:
+  what:
+    - 私聊与群聊切换时先显示内存缓存的上次内容与滚动位置，再在后台刷新：缓存为最近 16 个聊天的 LRU（键为主机+类型+id，存当前已显示的条目、更早记录游标与会话 id），滚动位置为 50 项 LRU；刷新结果与缓存相同则不改动列表，不同则按内容复用未变条目的行身份（减少重组与跳动）；切换分段（新分段/打开旧分段）时丢弃该 Bot 的缓存与分页历史
+    - 聊天读取单飞：同一聊天同时只跑一次读取，期间再触发的刷新最多排队一次；离开该聊天后到达的旧结果按代号丢弃
+    - 离底部较远（约 600dp）时在消息列表右下显示「回到最新」按钮，期间有新消息到达时变为「N 条新消息」，点按滚到最新并清零；在底部时新消息照常跟随
+    - App 在前台且在线时每 15 秒兜底轮询一次（state 增量补齐 + 当前聊天刷新，流式输出进行中跳过聊天刷新），进入后台停止；回前台仍沿用既有的探测、重连与补齐流程
+    - 记住上次打开的聊天（只存 id 与类型），连接成功后预取其首页进缓存，不自动跳转，团队页仍为根
+  why:
+    - 现在每次进入聊天都清空列表再整页重取：在两个聊天间来回切换时每次都要等网络往返、列表闪白并跳回底部，阅读到一半的位置丢失；feed 漏事件时只能等断线重连才补齐，离底部翻看历史时新消息到来也毫无提示
+    - 里程碑 dsbot-mobile-polish 完成标准第四条：在两个聊天间来回切换时立即显示上次内容与滚动位置并在后台刷新；离底部较远时有新消息显示「N 条新消息」按钮
+scope:
+  in:
+    - core：ChatCache（16 项 LRU，键构造、存取、淘汰、按 Bot 失效）、ScrollMemory（50 项 LRU）、ReadFlight 单飞状态机（开始/排队/忽略、完成时判过期与是否重跑）、RowIdentity（新旧条目按内容复用旧下标）、JumpButton（按离底距离与新增条数给出按钮状态）与离底距离估算；JUnit 覆盖
+    - App：ChatController 与 RoomChatController 接入缓存、单飞与行身份复用；BotChatPage/RoomChatPage 恢复与保存滚动位置、显示回到最新/N 条新消息按钮；NativeShellConnection 前台 15 秒兜底轮询与启动预取；上次打开的聊天经独立 SharedPreferences 文件保存
+    - android-dsbot 规格新增 4 条可观察要求（缓存快速切换、回到最新按钮、前台兜底轮询、启动预取）
+  out:
+    - 缓存落盘或跨进程保留（缓存只在内存，进程被杀即清空）；启动时自动跳转到上次聊天（团队页仍为根）
+    - 发送箱、离线重试与发送失败保留（dsbot-outbox-retry 承接）；本机已读与未读点（dsbot-read-state 承接）
+    - Side chat 面板与需要你汇总页的缓存
+unchanged_behavior:
+  - 进入聊天、分页加载更早记录、发送、流式回复、停止/恢复/分段、卡片作答与附件的既有行为不变；首次进入（无缓存）时仍在加载完成后滚到最新
+  - feed 重连后补取当前聊天、回前台重新探测与重连的既有流程不变
+  - dsh-auth cookie、带 token 地址不进日志；聊天内容不写入任何持久化存储
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-chat-cache

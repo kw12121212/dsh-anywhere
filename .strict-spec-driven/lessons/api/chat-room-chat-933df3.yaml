@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: chat-room-chat-933df3
+  title: 按某个端点的实测样本设计对账/去重键前，先确认同类端点（私聊 chat 与群聊 room-chat）条目形态一致
+category: api
+status: active
+created_at: '2026-11-23T04:10:23.083Z'
+updated_at: '2026-11-23T04:10:23.083Z'
+context: dsbot-outbox-retry 设计发送箱对账时以 seq 为匹配窗口，依据是私聊 chat 夹具与 feed 用户消息都带 seq。
+observation: 独立评审指出群聊没有 room-chat 真实夹具；只读实测后发现群聊用户条目是 {id, kind:user, text, time}，没有 seq，群 feed 也不推群内用户 message 事件——按 seq 对账会让群聊本地行永远停在「发送中」。最终改为群聊以服务端 time 为顺序值、发送成功后立即重读群页，并给请求成功但未对上的行加「已发送，等待确认 + 删除」的退出路径。
+takeaway: 设计依赖条目字段（seq、id、time）的匹配/去重/窗口逻辑前，对每个会产生这类条目的端点（chat、room-chat、feed message、notices）各取一份只读真实样本核对字段是否齐备；缺字段时换用该端点自有的单调字段（服务端 time），并且任何「等待服务端确认」的本地状态都必须有用户可操作的退出路径。
+applies_when: 在 DS-Bot 原生客户端里新增依赖服务端条目字段的对账、去重、窗口或游标逻辑（发送箱、已读、缓存合并、提醒去重等），且只看过其中一个端点的夹具时
+occurrences:
+  - origin: dsbot-outbox-retry
+    date: '2026-11-23'
+    evidence: 评审 M1；只读探针：room-chat 用户条目键为 id/kind/text/time，chat 用户条目键含 seq/turn/images/imageRefs；FINDINGS 第 15 节；修复后模拟器群聊同文本旧行不误配、重试只发一次

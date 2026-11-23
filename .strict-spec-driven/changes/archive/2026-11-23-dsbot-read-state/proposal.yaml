@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-read-state
+  status: proposed
+summary:
+  what:
+    - 手机本机保存每个 harness 主机下各 Bot/群的最后已读时间，团队页未读点由本机计算并跨重启保留；团队页条目预览按「等你回答 / 等你审批 / 工作短语 / 群工作 / 摘要 / 角色」优先级显示，交接与卡片回复的英文包装文字转为可读文本；Main Bot 排在最前。
+  why:
+    - '0.3.10 的 state 不再下发未读数（网页端已读记在浏览器本地），手机团队页的未读角标因此失效；预览只显示服务端末条文本，等你处理的 Bot 不显眼，交接/卡片回复的预览是「[Browser handoff] … Answer: done」这类包装文字。对照上游手机端，已读在本机计算、预览按待办与工作状态优先。'
+scope:
+  in:
+    - core ReadState（主机 → 条目 → 已读毫秒；合并只前移、忽略 0 与非法值；isUnread；JSON 序列化；主机标识取 harness 地址的 scheme://host:port）
+    - core TeamPreview：条目预览优先级（Bot：待回答提问或卡片 → 待审批 → 工作短语 → 群里工作 → 清洗后的摘要 → 角色；群：待回答 → 待审批 → 成员工作 → 摘要）与 cleanPreview（去 [Message from …] 等头、浏览器交接/提问卡/卡片回复包装转可读文本、折叠空白）
+    - TeamHome：Main Bot 最前，其余置顶优先、lastAt 新到旧、名称兜底；Entry 带预览；远端 unread 字段不再作为未读依据
+    - App：ReadStore（私有文件、写入串行化、失败下次标记重试）；聊天页在前台可见时以 max(条目 lastAt, 聊天内最新条目时间) 标记已读，收到当前聊天的实时消息同步标记；团队页显示本机计算的未读点与按优先级的预览
+    - mock-dsh-server --read-state 模式与设备验收
+  out:
+    - 网页端与手机之间的已读同步（网页端已读记在浏览器本地，不经服务端）
+    - 未读计数数字（只显示未读点）；通知栏未读与应用图标角标
+unchanged_behavior:
+  - 团队页分组结构、搜索、待办行内标签、聊天页行为与连接流程不变
+roadmap:
+  milestone: dsbot-mobile-polish
+  planned_change: dsbot-read-state
