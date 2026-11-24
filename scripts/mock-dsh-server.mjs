@@ -1141,6 +1141,27 @@ data: {"revision":8}
     res.end('version ' + readerVersion)
     return
   }
+  if (manage && url.startsWith('/mock/browser-stats')) {
+    const b = manage.browser
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      mode: b.mode,
+      openBots: Object.keys(b.openBots),
+      holds: b.holds,
+      frameCalls: b.frameCalls,
+      frameSeq: b.frameSeq,
+      stopCalls: b.stopCalls,
+      lastGiveBack: b.lastGiveBack,
+    }))
+    return
+  }
+  if (manage && url.startsWith('/mock/browser')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    const state = manage.setBrowser(q)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(state))
+    return
+  }
   if (readStateMode && url.startsWith('/mock/bump')) {
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     const id = q.get('id') ?? 'bot-4'

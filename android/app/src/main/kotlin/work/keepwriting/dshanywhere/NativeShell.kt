@@ -144,6 +144,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class AvatarLibrary(val botId: String) : ShellPage
         /** 工作文件夹选择（dsbot-folders）。 */
         data class FolderPick(val target: FolderTarget) : ShellPage
+        /** Bot 浏览器页（dsbot-bot-browser）。 */
+        data class BotBrowser(val botId: String) : ShellPage
     }
 
 @Composable
@@ -289,6 +291,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             },
                             media = connection.media,
                             onOpenDetails = { connection.openDetails(current.targetId) },
+                            onOpenBrowser = { bid -> connection.openBotBrowser(bid) },
                             onOpenSide = {
                                 val sid = entry?.sessionId
                                 if (sid != null) {
@@ -341,6 +344,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                                 val name = work.keepwriting.core.BotManage.profileOf(snapshot, current.targetId)?.name ?: ""
                                 connection.openMemory(work.keepwriting.core.MemoryPanel.Owner.Bot(current.targetId), tr("记忆：", "Memory: ") + name)
                             },
+                            onOpenBrowser = { connection.openBotBrowser(current.targetId) },
                         )
                     }
                 }
@@ -405,6 +409,15 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     api = connection.manageApi,
                     // 设好照片后回到详情页（只在仍停留在头像库页时）
                     onDone = { if (connection.page == current) connection.goBack() },
+                )
+                current is ShellPage.BotBrowser -> BotBrowserPage(
+                    botId = current.botId,
+                    botName = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.name ?: current.botId,
+                    state = connection.stateSnapshot?.raw,
+                    resumed = connection.resumed,
+                    covered = connection.covered,
+                    online = connection.status == DsbotConnection.Status.ONLINE,
+                    api = connection.manageApi,
                 )
                 else -> {
                     // 某主机首次出现团队：以当前最近活动打底，免得整页未读（之后的新活动照常显示）
@@ -1119,6 +1132,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     fun openFolderPick(target: FolderTarget) = push(ShellPage.FolderPick(target))
 
+    fun openBotBrowser(botId: String) = push(ShellPage.BotBrowser(botId))
+
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)
 
@@ -1141,6 +1156,17 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
      * 失败回调可读原因（服务端 message 优先）。回调都投回主线程。
      */
     fun manageAction(key: String, endpoint: String, payloadJson: String, onOk: (work.keepwriting.core.Json.Value) -> Unit, onError: (String) -> Unit) {
+        manageActionRaw(key, endpoint, payloadJson) { result ->
+            when (result) {
+                is DsbotApi.Result.Ok -> onOk(result.value)
+                is DsbotApi.Result.BotError -> onError(work.keepwriting.core.BotManage.errorText(result.code, result.message))
+                is DsbotApi.Result.Failure -> onError(work.keepwriting.core.BotManage.errorText(null, null))
+            }
+        }
+    }
+
+    /** 写操作原始应答版本：同 manageAction 的在途去重、读线程发出与成功补拉 state，把原始 DsbotApi.Result 交回主线程。 */
+    fun manageActionRaw(key: String, endpoint: String, payloadJson: String, onResult: (DsbotApi.Result) -> Unit) {
         if (key in manageInFlight) return
         manageInFlight.add(key)
         // 写请求在读线程发出（create/duplicate 可能耗时数秒，不占状态 executor）；补取 state 回到状态 executor
@@ -1148,11 +1174,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             if (result is DsbotApi.Result.Ok) lastState.let { fetchStateOnce(it?.revision, it?.liveKey, quiet = true) }
             mainHandler.post {
                 manageInFlight.remove(key)
-                when (result) {
-                    is DsbotApi.Result.Ok -> onOk(result.value)
-                    is DsbotApi.Result.BotError -> onError(work.keepwriting.core.BotManage.errorText(result.code, result.message))
-                    is DsbotApi.Result.Failure -> onError(work.keepwriting.core.BotManage.errorText(null, null))
-                }
+                onResult(result)
             }
         }
     }
@@ -1177,6 +1199,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     mainHandler.post { cb(r) }
                 }
             },
+            actionRaw = ::manageActionRaw,
         )
     }
 

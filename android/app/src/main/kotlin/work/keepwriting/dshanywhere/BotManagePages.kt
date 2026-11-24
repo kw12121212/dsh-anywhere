@@ -56,6 +56,10 @@ class ManageApi(
     val efforts: (ref: String, cb: (BotManage.Efforts) -> Unit) -> Unit,
     /** 只读端点（读线程发出，结果回到主线程）；dsbot-avatars 起用于头像库等列表。 */
     val read: (endpoint: String, payload: String, cb: (work.keepwriting.core.DsbotApi.Result) -> Unit) -> Unit,
+    /** 写操作原始应答入口（保留主线程在途去重与成功补拉 state，交调用方区分错误码；dsbot-bot-browser）。 */
+    val actionRaw: (key: String, endpoint: String, payload: String, onResult: (work.keepwriting.core.DsbotApi.Result) -> Unit) -> Unit = { key, ep, body, onResult ->
+        action(key, ep, body, { onResult(work.keepwriting.core.DsbotApi.Result.Ok(it)) }, { onResult(work.keepwriting.core.DsbotApi.Result.BotError("bot/refused", it)) })
+    },
 )
 
 /** 写操作返回的对象 id（create-bot/duplicate-bot 的新 Bot）。 */
@@ -260,6 +264,8 @@ fun BotDetailsPage(
     onDismissFlash: () -> Unit = {},
     /** 打开该 Bot 的记忆页（dsbot-memory）。 */
     onOpenMemory: () -> Unit = {},
+    /** 打开该 Bot 的浏览器页（dsbot-bot-browser）。 */
+    onOpenBrowser: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -369,6 +375,9 @@ fun BotDetailsPage(
             SectionTitle(tr("记忆", "Memory"))
             ValueRow(tr("记忆", "Memory"), "›", hint = tr("它自己的记忆与团队共享记忆", "Its own memory and the team memory"), onClick = onOpenMemory)
         }
+
+        SectionTitle(tr("浏览器", "Browser"))
+        ValueRow(tr("Bot 浏览器", "Bot browser"), "›", hint = tr("查看当前网页画面与持有状态", "View live snapshots and control state"), onClick = onOpenBrowser)
 
         SectionTitle(tr("隐私", "Privacy"))
         SwitchRow(tr("私有", "Private"), BotManage.privateHint(profile), profile.isPrivate, BotManage.canTogglePrivate(profile) && !busy("private")) {

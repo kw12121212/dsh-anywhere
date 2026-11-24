@@ -187,3 +187,10 @@ rules:
     enforcement:
       method: review
       detail: core JUnit（TeamSectionsTest、TeamHomeTest）覆盖解码、顺序、名称校验与请求体；源码核对位置：ds-bot 0.3.10 src/host/roster.js 的 saveSection/reorderSections/deleteSection/setFlags/cleanSectionName/freshSectionName、src/host/constants.js 的 SECTION_COLORS 与 SECTION_NAME_MAX、client.js Sidebar 的分组渲染顺序；FINDINGS 第 26 节
+  browser-endpoints-0310:
+    strength: MUST
+    statement: Bot 浏览器端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权）：state.browser 布尔值表示宿主是否具备桌面浏览器通道（rt.browserEnabled；dsh Web 宿主为 false，桌面宿主为 true）；live browserHolds{botId→{by:bot|user, reason, note, callId?, sessionId?}} 表示持有状态（无条目=Bot 使用中；by=bot=等待用户交接；by=user 且 reason=stopped=已停止；其余 by=user=用户已接管）。browser-frame {botId}（属 READS 白名单）→ {mime:"image/jpeg", data:base64, url, title}；未启用插件也无桌面通道回 bot/browser-off，Bot 未打开浏览器回 bot/not-found。browser-takeover {botId} → true（无桌面通道回 bot/browser-off，未知 Bot 回 bot/not-found）。browser-give-back {botId}（面板交还不带 outcome/callId；停靠区交接卡带 callId 与 outcome:done|skip）→ true（无桌面通道回 bot/browser-off，未持有回 bot/forbidden，过期交接回 bot/stale）。browser-stop {botId} → true（不依赖桌面通道，取消私聊回合与群成员工作，有桌面通道时写入 stopped 持有）。手机端不得调用 browser-wait 与 browser-result。browser-frame 返回的图像与页面标题/URL 不得写入日志、诊断上报与磁盘缓存。实测与源码核对界定：本机 dsh Web 宿主只读实测 state.browser=false、browserHolds={} 及 browser-frame/takeover/give-back/stop 的错误码；browser-frame 成功应答形态与桌面通道下的 takeover/give-back/stop 写入行为为源码核对，未改动用户真实团队
+    rationale: Bot 浏览器在 dsh Web 宿主与桌面宿主上能力不对称（browser-frame 随 browserPlugin 可用、browser-stop 始终可用、takeover/give-back 依赖 rt.browserChannel），登记完整端点形态、实测边界与错误码映射避免客户端误报错或误充当桌面宿主
+    enforcement:
+      method: review
+      detail: core JUnit（BotBrowserTest）覆盖 state.browser/browserHolds 持有状态派生、browser-frame 解码与错误码映射、PollController 前台/可见/单飞/过期丢弃与请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/channel.js（state.browser、live.browserHolds、browser-frame/takeover/give-back/stop）、browser.js（install、createBrowserChannel）、browser-plugins.js（rt.browserFrame）、browser/mount.js（api.frame）、browser/session.js（frame()）；FINDINGS 第 27 节登记本机真实服务只读探针结果

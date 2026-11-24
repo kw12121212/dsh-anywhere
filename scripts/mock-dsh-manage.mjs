@@ -3,6 +3,7 @@
 // 并经 feed 推 revision 事件；拒绝时回 {ok:false, error:{code:'bot/refused', message}}（上游 channel.js errorCode 对普通 Error 的映射）。
 // 日志只记端点与参数键，不打印正文。
 import { createHash } from 'node:crypto'
+import { deflateSync } from 'node:zlib'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -43,8 +44,28 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
   const library = []
   const agentTimers = {}
-  // live 键随 Agent 工作状态变化（上游 liveAnswer 按 live 内容生成键）
-  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',')
+  // Bot 浏览器（dsbot-bot-browser，ds-bot 0.3.10 channel.js / browser.js / browser/session.js 形态）
+  const browser = {
+    mode: 'desktop', // 'off' | 'web' | 'desktop'
+    openBots: {
+      'bot-1': { url: 'https://example.com/dashboard', title: 'Example Dashboard', rgb: [40, 120, 220] },
+    },
+    holds: {},
+    frameSeq: 0,
+    frameCalls: 0,
+    stopCalls: 0,
+    lastGiveBack: null,
+  }
+  function makeMockPng(w, h, rgb) {
+    const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)) } return ~c >>> 0 }
+    const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]) }
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2
+    const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(w * 3).map((_, i) => rgb[i % 3])])
+    const raw = Buffer.concat(Array.from({ length: h }, () => row))
+    return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
+  }
+  // live 键随 Agent 工作状态与浏览器持有状态变化（上游 liveAnswer 按 live 内容生成键）
+  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds)
   // 工作文件夹（dsbot-folders，ds-bot 0.3.10 folders.js 形态）：内存目录树；/home/user/.dsh 是数据目录（guarded）
   const DIRS = new Set(['/', '/home', '/home/user', '/home/user/projects', '/home/user/projects/alpha', '/home/user/projects/beta',
     '/home/user/notes', '/home/user/.config', '/home/user/.dsh', '/home/user/.dsh/ds-bot', '/home/user/.dsh/ds-bot/workspace',
@@ -162,6 +183,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       permissions: { options: [{ value: 'read-only', name: '只读' }, { value: 'workspace-write', name: '工作区可写' }, { value: 'danger-full-access', name: '完全访问' }], defaultPreset: 'danger-full-access' },
       colors: ['deepseek', 'blue', 'violet', 'orange', 'green', 'magenta', 'cyan', 'red', 'yellow', 'brown', 'gray', 'black', 'aurora'],
       prefs: { ...team.prefs },
+      browser: browser.mode === 'desktop',
+      browserHolds: { ...browser.holds },
       memory: true,
       agents: Object.values(team.agents),
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
@@ -239,8 +262,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     try {
       switch (endpoint) {
         case 'state':
-          // 上游 channel.js：since 命中且 live 键相同只回三键；live 键变了附带 live 字段（work 等）
-          if (p.since === team.revision) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work })
+          // 上游 channel.js：since 命中且 live 键相同只回三键；live 键变了附带 live 字段（work / browserHolds 等）
+          if (p.since === team.revision) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work, browserHolds: view().browserHolds })
           return ok(view())
         // DSH Agent（dsbot-member-agents，ds-bot 0.3.10 agents.js / parts.js agentPage / turns.js stopAgent 形态）
         case 'hello':
@@ -666,6 +689,51 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
           library.splice(at, 1)
           return ok(true)
         }
+        // Bot 浏览器（dsbot-bot-browser，ds-bot 0.3.10 channel.js / browser.js / browser/session.js 形态）
+        case 'browser-frame': {
+          browser.frameCalls += 1
+          if (browser.mode === 'off') return { ok: false, error: { code: 'bot/browser-off', message: 'Bot browsers are off on this host', details: {} } }
+          const page = browser.openBots[String(p.botId ?? '')]
+          if (!page) return { ok: false, error: { code: 'bot/not-found', message: 'This Bot has no open browser', details: {} } }
+          browser.frameSeq += 1
+          const rgb = [(page.rgb[0] + browser.frameSeq * 17) % 256, page.rgb[1], page.rgb[2]]
+          const png = makeMockPng(160, 100, rgb)
+          return ok({ mime: 'image/png', data: png.toString('base64'), url: page.url, title: `${page.title} #${browser.frameSeq}` })
+        }
+        case 'browser-takeover': {
+          if (browser.mode !== 'desktop') return { ok: false, error: { code: 'bot/browser-off', message: 'Bot browsers are off on this host', details: {} } }
+          const botId = String(p.botId ?? '')
+          if (!team.bots[botId]) return { ok: false, error: { code: 'bot/not-found', message: 'Unknown Bot', details: {} } }
+          const asked = browser.holds[botId]
+          browser.holds[botId] = asked?.callId !== undefined
+            ? { by: 'user', reason: asked.reason, note: asked.note, callId: asked.callId, ...(asked.sessionId !== undefined ? { sessionId: asked.sessionId } : {}) }
+            : { by: 'user', reason: 'takeover', note: 'The user is controlling this browser.' }
+          pushLive()
+          return ok(true)
+        }
+        case 'browser-give-back': {
+          if (browser.mode !== 'desktop') return { ok: false, error: { code: 'bot/browser-off', message: 'Bot browsers are off on this host', details: {} } }
+          const botId = String(p.botId ?? '')
+          if (!team.bots[botId]) return { ok: false, error: { code: 'bot/not-found', message: 'Unknown Bot', details: {} } }
+          if (p.outcome !== undefined && !['done', 'skip', 'returned'].includes(p.outcome)) return invalid('Nothing to send')
+          const hold = browser.holds[botId] ?? null
+          if (hold === null) return { ok: false, error: { code: 'bot/forbidden', message: 'This browser is not held', details: {} } }
+          if (p.callId !== undefined && p.callId !== hold.callId) return { ok: false, error: { code: 'bot/stale', message: 'This handoff is no longer open', details: {} } }
+          browser.lastGiveBack = { botId, hasOutcome: p.outcome !== undefined, outcome: p.outcome ?? null, hasCallId: p.callId !== undefined }
+          delete browser.holds[botId]
+          pushLive()
+          return ok(true)
+        }
+        case 'browser-stop': {
+          const botId = String(p.botId ?? '')
+          if (!team.bots[botId]) return { ok: false, error: { code: 'bot/not-found', message: 'Unknown Bot', details: {} } }
+          browser.stopCalls += 1
+          if (browser.mode === 'desktop') {
+            browser.holds[botId] = { by: 'user', reason: 'stopped', note: 'The user is controlling this browser.' }
+          }
+          pushLive()
+          return ok(true)
+        }
         default:
           return null
       }
@@ -674,5 +742,46 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team }
+  function setBrowser(params) {
+    const mode = params.get('mode')
+    if (mode === 'off' || mode === 'web' || mode === 'desktop') {
+      browser.mode = mode
+      if (mode !== 'desktop') browser.holds = {}
+    }
+    const botId = params.get('bot') ?? 'bot-1'
+    const open = params.get('open')
+    if (open === '1') {
+      browser.openBots[botId] = {
+        url: params.get('url') ?? 'https://example.com/dashboard',
+        title: params.get('title') ?? 'Example Dashboard',
+        rgb: [40, 120, 220],
+      }
+    } else if (open === '0') {
+      delete browser.openBots[botId]
+    }
+    const handoff = params.get('handoff')
+    if (handoff === '1') {
+      browser.holds[botId] = { by: 'bot', reason: 'login', note: '请登录测试后台', callId: 'handoff-1', sessionId: 's-' + botId }
+    } else if (handoff === '0') {
+      delete browser.holds[botId]
+    }
+    if (params.get('resetStats') === '1') {
+      browser.frameCalls = 0
+      browser.stopCalls = 0
+      browser.lastGiveBack = null
+    }
+    bump()
+    pushLive()
+    return {
+      mode: browser.mode,
+      openBots: Object.keys(browser.openBots),
+      holds: browser.holds,
+      frameCalls: browser.frameCalls,
+      frameSeq: browser.frameSeq,
+      stopCalls: browser.stopCalls,
+      lastGiveBack: browser.lastGiveBack,
+    }
+  }
+
+  return { handle, team, browser, setBrowser }
 }

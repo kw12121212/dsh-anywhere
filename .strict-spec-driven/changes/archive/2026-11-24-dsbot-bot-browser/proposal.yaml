@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-bot-browser
+  status: proposed
+summary:
+  what:
+    - 在 Bot 详情页新增「浏览器」入口进入 Bot 浏览器页：通过 browser-frame 查看该 Bot 的浏览器画面快照（页面可见且 App 在前台时约每 2 秒单飞刷新，离开页面或进入后台立即停止，丢弃过期结果），支持双指缩放查看；快照仅保存在内存，不写日志、诊断上报与磁盘缓存
+    - 显示持有状态（Bot 使用中、等待用户交接、用户已接管、已停止）并提供接管（browser-takeover）、交还（browser-give-back，面板交还不带 outcome）与停止（browser-stop）控制，按宿主能力降级（未启用插件、未打开浏览器、dsh Web 宿主接管与交还置灰提示而停止仍可用）
+    - 私聊停靠区的浏览器交接卡增加「接管」按钮，点按直达该 Bot 的浏览器页
+  why:
+    - 用户在手机上无法查看 Bot 浏览器当前画面，也无法在需要时从手机停止 Bot 或配合桌面宿主接管/交还浏览器；DS-Bot 0.3.10 已提供 browser-frame 与浏览器控制端点
+scope:
+  in:
+    - core：BotBrowser 模块（state.browser 与 live browserHolds 持有状态派生、browser-frame 解码与错误码降级映射、前台/可见/单飞/过期丢弃轮询调度器、takeover/give-back/stop 请求体）；JUnit（BotBrowserTest）
+    - app：BotBrowserPage（标题/URL、IO 线程采样解码内存快照、双指缩放、持有状态与控制操作、宿主能力降级、前台可见约 2 秒单飞轮询）、NativeShell 路由、BotDetailsPage「浏览器」入口、PendingDockViews 浏览器交接卡「接管」直达本页
+    - mock --manage 浏览器端点与宿主模式切换路由；对本机真实服务只读探针与 FINDINGS 第 27 节；设备验收
+  out:
+    - 在手机上点击、输入、滚动 Bot 浏览器画面与实时视频流（/api/bot 无输入端点）
+    - 手机充当浏览器宿主（不调用 browser-wait 与 browser-result）
+    - 在 App 内修改服务端的 browserPlugin 团队配置；把快照保存到磁盘、相册、日志或诊断上报
+unchanged_behavior:
+  - 私聊停靠区浏览器交接卡原有的「已完成」与「跳过」作答（带 callId 与 outcome=done|skip）不变
+  - Bot 详情页既有资料、模型、权限、外观、文件夹、记忆、隐私、Main Bot、侧栏、复制与删除功能不变
+  - 未打开 Bot 浏览器页时，App 不发起任何 browser-frame 轮询请求
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-bot-browser

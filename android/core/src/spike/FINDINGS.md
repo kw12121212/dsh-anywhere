@@ -417,3 +417,20 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - **`section-delete {id}`**：未知 `id` 拒绝 `Unknown section`；删除分组并清除所有条目上匹配的 `sectionId`，返回整份 `state` 视图。
 - **`set-flags {id, pinned?, hidden?, sectionId?}`**：`sectionId` 为 `null`/空串或主 Bot 时删除归属；否则校验 `id` 存在于 `state.sections`（未知 `Unknown section`）后写入。客户端移动单个条目走 `set-flags`，避免 `section-save` 的 `items` 全量替换覆盖并发改动。
 - **网页端顺序**：先渲染未分组条目，再按 `state.sections` 顺序渲染各分组。模拟器验收用 `node scripts/mock-dsh-server.mjs --manage` 注入同形态实现。
+
+## 27. Bot 浏览器（2026-11-24，dsbot-bot-browser）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，未改动真实团队）**：
+- `state`：`browser: false`（dsh Web 宿主无桌面通道 `rt.browserChannel`），live `browserHolds: {}`。
+- `browser-frame {botId}`（已启用 `browserPlugin`、该 Bot 当前未打开浏览器）：`{ok:false, error:{code:"bot/not-found", message:"This Bot has no open browser", details:{}}}`（证明 `rt.browserFrame` 存在且在 dsh Web 宿主上可用）。
+- `browser-takeover {botId:"__nonexistent__"}`：`{ok:false, error:{code:"bot/browser-off", message:"Bot browsers are off on this host", details:{}}}`。
+- `browser-give-back {botId:"__nonexistent__"}`：`{ok:false, error:{code:"bot/browser-off", message:"Bot browsers are off on this host", details:{}}}`。
+- `browser-stop {botId:"__nonexistent__"}`：`{ok:false, error:{code:"bot/not-found", message:"Unknown Bot", details:{}}}`（不依赖桌面通道，dsh Web 宿主上可用）。
+
+**源码核对（ds-bot 0.3.10 `src/host/channel.js`、`browser.js`、`browser-plugins.js`、`browser/mount.js`、`browser/session.js`）**：
+- **`browser-frame {botId}`**（属 READS 白名单）：`rt.browserFrame` 与 `rt.browserChannel` 均不存在时回 `bot/browser-off`；Bot 无打开页面回 `bot/not-found`；成功返回 `{mime:"image/jpeg", data:base64, url, title}`（`session.js` `frame()`）。
+- **live `browserHolds`**：`{botId → {by:"bot"|"user", reason, note, callId?, sessionId?}}`；无条目=Bot 使用中，`by="bot"`=等待用户交接，`by="user"` 且 `reason="stopped"`=已停止，其余 `by="user"`=用户已接管。
+- **`browser-takeover {botId}`**：需要 `rt.browserChannel`，成功回 `true`（若原有交接带 `callId` 则保留 `reason/note/callId/sessionId` 并将 `by` 改为 `user`，否则写 `{by:"user", reason:"takeover", note}`）。
+- **`browser-give-back {botId, callId?, outcome?}`**：需要 `rt.browserChannel`；面板交还不带 `outcome` 与 `callId`（只清 hold），停靠区交接卡带 `callId` 与 `outcome:"done"|"skip"`；未持有回 `bot/forbidden`，`callId` 过期回 `bot/stale`。
+- **`browser-stop {botId}`**：不依赖 `rt.browserChannel`，取消私聊与群成员工作，若存在 `rt.browserChannel` 则写入 `{by:"user", reason:"stopped"}`；成功回 `true`。
+- 手机端不调用 `browser-wait` / `browser-result`；快照仅存于内存，不写入日志、诊断上报与磁盘缓存。模拟器验收用 `node scripts/mock-dsh-server.mjs --manage` 的 `/mock/browser` 控制路由覆盖全部宿主模式。

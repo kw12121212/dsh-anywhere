@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-bot-browser
+approach:
+  - 纯逻辑下沉至 android/core 的 BotBrowser：解码 state.browser、live browserHolds（Bot 使用中 / 等待用户交接 / 用户已接管 / 已停止）与 browser-frame（mime/data/url/title），映射错误码到降级状态（bot/browser-off → 未启用插件；bot/not-found → 尚未打开浏览器），并以纯状态机 PollController 封装前台/可见、单飞、代际过期丢弃与 host-off 停轮询逻辑，由 JUnit（BotBrowserTest）全覆盖。
+  - app 侧新增 BotBrowserPage 与 ShellPage.BotBrowser(botId)：轮询经 NativeShellConnection.manageApi.read 在读线程发 browser-frame（不占状态 executor），base64 图片在后台线程先读边界再按最大边长 2048 采样解码为内存 Bitmap，离开页面即清空释放、不写磁盘/日志/诊断；支持双指缩放与平移、双击复位；browser-takeover/give-back/stop 经 manageAction 发出，遇 bot/browser-off 时转入桌面应用提示态而不报错。
+  - BotDetailsPage 新增「浏览器」入口进入 ShellPage.BotBrowser(botId)；PendingDockViews 的浏览器交接卡新增「接管」按钮，经 BotChatPage 与 NativeShell 直达 ShellPage.BotBrowser(botId)。
+decisions:
+  pure-poller-in-core:
+    decision: 将前台/可见、单飞请求、代际过期丢弃与 host-off 停轮询状态机下沉为 core 的 BotBrowser.PollController，Compose 侧仅负责 2000ms 定时节拍与驱动状态机
+    rationale: 遵守 android-client/pure-logic-in-core，并将轮询并发与过期结果丢弃的边界条件转化为确定性纯 JVM JUnit 回归覆盖
+  web-host-degrade-dual-guard:
+    decision: dsh Web 宿主降级采用双重判定：state.browser 明确为 false 时即置灰接管/交还并显示「需在桌面应用中接管或交还」，同时 takeover/give-back 实际返回 bot/browser-off 时也切入该降级态而非显示错误；browser-stop 始终保持可用
+    rationale: 源码核对 ds-bot 0.3.10 channel.js 与 browser.js：dsh Web 宿主上 rt.browserEnabled 为 false 且 rt.browserChannel 为 undefined，takeover/give-back 必返回 bot/browser-off 而 browser-stop 不依赖 browserChannel；双重判定兼顾即时提示与对 state.browser 缺失宿主的兜底
+  panel-give-back-no-outcome:
+    decision: '浏览器页的「交还」只发送 browser-give-back {botId}（不带 outcome 与 callId），与停靠区交接卡的 {botId, callId, outcome: done|skip} 区分'
+    rationale: 对齐 ds-bot 0.3.10 channel.js 第 784–797 行注释与 planned-change details：面板交还只表示把控制权还给 Bot，不带结果枚举
+  snapshot-io-sampled-memory-only:
+    decision: browser-frame 快照在后台线程采样解码（最大边长 2048）并仅存于页面内存状态，退出页面即释放，禁止写入磁盘缓存、日志与诊断上报
+    rationale: 遵守 android-client/server-image-handling 避免主线程卡顿和大图 OOM，同时防止含登录态的网页截图泄露到持久存储或日志
+alternatives:
+  - option: 使用 WebView 或临时缓存文件展示 browser-frame 画面
+    reason: 违反敏感快照不得写磁盘缓存的约束，且会增加不必要的渲染开销与依赖
+risks:
+  - dsh Web 宿主上 browser-stop 因缺少 rt.browserChannel 不会写入 browserHolds：写成功回调需给出明确提示「已停止 Bot 工作」，并在有桌面宿主时由 state.browserHolds 同步反映已停止态
+  - 本机真实服务是否启用 browserPlugin 由用户在服务端决定（不改动用户服务端配置）：对本机真实服务仅做只读探针记录实际应答，完整多模式验收在 mock --manage 上覆盖

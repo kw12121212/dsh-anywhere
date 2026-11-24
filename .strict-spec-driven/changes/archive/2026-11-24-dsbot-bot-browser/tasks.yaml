@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-bot-browser
+sections:
+  Implementation:
+    core-bot-browser:
+      text: core：BotBrowser（state.browser 与 live browserHolds 持有状态派生、browser-frame 应答与错误码降级解码、PollController 前台/可见/单飞/过期丢弃状态机、browser-takeover/give-back/stop 请求体构造）；JUnit（BotBrowserTest）
+      status: complete
+    app-browser-page:
+      text: app：BotBrowserPage（标题与 URL、IO 线程采样解码内存快照、双指缩放与双击复位、持有状态展示、接管/交还/停止操作与宿主能力降级、前台可见约 2 秒单飞轮询与离开/后台停止）及 NativeShell 路由 ShellPage.BotBrowser
+      status: complete
+    app-entries:
+      text: app：BotDetailsPage 新增「浏览器」入口，PendingDockViews 浏览器交接卡新增「接管」按钮直达 Bot 浏览器页（经 BotChatPage 与 NativeShell 接线）
+      status: complete
+    mock-browser:
+      text: mock --manage：实现 browser-frame、browser-takeover、browser-give-back、browser-stop、state.browser 与 live browserHolds，提供 /mock/browser 切换宿主与打开状态以供模拟器验收
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（不改动真实团队），登记 FINDINGS 第 27 节（Bot 浏览器端点实测只读 + 源码核对）
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：覆盖未启用插件提示、未打开浏览器提示、dsh Web 宿主画面约 2 秒刷新与接管/交还置灰提示+停止生效、桌面宿主接管/交还/停止同步、停靠区交接卡「接管」直达、离开页面/后台停止轮询
+      status: complete
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-bot-browser
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

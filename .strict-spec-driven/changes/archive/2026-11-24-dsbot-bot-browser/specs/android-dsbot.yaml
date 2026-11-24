@@ -1,0 +1,29 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    bot-browser:
+      strength: MUST
+      statement: Bot 详情页提供「浏览器」入口进入 Bot 浏览器页，私聊待处理停靠区的浏览器交接卡提供「接管」按钮直达本页：页面在可见且 App 处于前台时经 browser-frame 约每 2 秒单飞刷新该 Bot 的浏览器画面快照并显示页面标题与地址，离开页面或进入后台立即停止刷新并丢弃过期结果，支持双指缩放查看，画面快照只保存在内存、不写入日志、诊断上报与磁盘缓存；页面显示持有状态（Bot 使用中、等待用户交接、用户已接管、已停止）并提供接管（browser-takeover）、交还（browser-give-back，面板交还不带 outcome）与停止（browser-stop）控制；按宿主能力降级：宿主未启用 Bot 浏览器（bot/browser-off）时显示「此宿主未启用 Bot 浏览器」并说明需在服务端团队配置启用浏览器插件，Bot 尚未打开浏览器（bot/not-found）时显示「这个 Bot 还没有打开浏览器」，dsh Web 宿主上接管与交还置灰并显示「需在桌面应用中接管或交还」而非报错、停止仍可用，有桌面宿主时接管、交还与停止在两端一致；手机不提供点击输入与视频流、不修改服务端 browserPlugin 配置、不调用 browser-wait/browser-result 充当浏览器宿主。
+      scenarios:
+        snapshot-polls-and-stops:
+          - GIVEN: 宿主已启用浏览器插件且 Bot 正在浏览网页
+          - WHEN: 从 Bot 详情页打开浏览器页停留观察并双指缩放，随后返回离开页面或切到后台
+          - THEN: 页面显示该 Bot 的浏览器画面快照并约每 2 秒随操作刷新、可双指缩放；离开页面或切到后台后立即停止轮询，不再发出 browser-frame 请求，快照不落磁盘缓存、日志与诊断上报
+        web-host-degrade:
+          - GIVEN: 连接的是启用了 browserPlugin 的 dsh Web 宿主（无桌面浏览器通道），Bot 已打开网页
+          - WHEN: 打开该 Bot 的浏览器页并执行停止
+          - THEN: 页面正常显示并刷新画面快照；接管与交还按钮置灰并提示「需在桌面应用中接管或交还」而非报错；点击停止后 Bot 停止工作且两端一致
+        plugin-off-and-no-page:
+          - GIVEN: 宿主未启用浏览器插件，或已启用但该 Bot 尚未打开浏览器
+          - WHEN: 打开该 Bot 的浏览器页
+          - THEN: 未启用插件时显示「此宿主未启用 Bot 浏览器」并说明需在服务端团队配置启用浏览器插件；Bot 尚未打开浏览器时显示「这个 Bot 还没有打开浏览器」
+        desktop-takeover-giveback-and-handoff:
+          - GIVEN: 连接的是支持桌面浏览器通道的宿主，且私聊待处理停靠区有一条该 Bot 的浏览器交接卡
+          - WHEN: 点按交接卡的「接管」进入浏览器页，依次执行接管、交还与停止
+          - THEN: 交接卡的「接管」直达该 Bot 浏览器页并显示「等待用户交接」；接管后显示「用户已接管」；交还（不带 outcome）后回到「Bot 使用中」；停止后 Bot 停止工作并显示「已停止」，状态与网页端一致
+  MODIFIED: {}
+  REMOVED: {}

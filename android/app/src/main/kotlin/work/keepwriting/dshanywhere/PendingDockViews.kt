@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
@@ -48,6 +50,7 @@ fun DockArea(
     onAnswer: (endpoint: String, payloadJson: String, onDone: (Boolean) -> Unit) -> Unit,
     onAnswered: (String) -> Unit,
     onNotice: (String) -> Unit,
+    onOpenBrowser: ((String) -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
     val view = LocalView.current
@@ -117,7 +120,7 @@ fun DockArea(
                         Text(item.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text(if (expanded) tr("收起", "Collapse") else tr("展开", "Expand"), style = MaterialTheme.typography.labelSmall)
                     }
-                    if (expanded) DockBody(item, onNotice) { endpoint, payload -> answer(item.id, endpoint, payload) }
+                    if (expanded) DockBody(item, onNotice, onOpenBrowser) { endpoint, payload -> answer(item.id, endpoint, payload) }
                 }
             }
         }
@@ -125,8 +128,9 @@ fun DockArea(
 }
 
 /** 展开项的内容：按类型渲染并以 0.3.10 的请求体作答（PendingDock.Requests）。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DockBody(item: PendingDock.Item, onNotice: (String) -> Unit, answer: (String, String) -> Unit) {
+private fun DockBody(item: PendingDock.Item, onNotice: (String) -> Unit, onOpenBrowser: ((String) -> Unit)?, answer: (String, String) -> Unit) {
     val R = PendingDock.Requests
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         when (val p = item.payload) {
@@ -155,7 +159,10 @@ private fun DockBody(item: PendingDock.Item, onNotice: (String) -> Unit, answer:
             }
             is PendingDock.Payload.Handoff -> {
                 Text(p.note ?: tr("Bot 请你在浏览器里完成一步操作", "The Bot asks you to finish a step in the browser"), style = MaterialTheme.typography.bodyMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (onOpenBrowser != null) {
+                        OutlinedButton(onClick = { onOpenBrowser(p.botId) }) { Text(tr("接管", "Take over")) }
+                    }
                     OutlinedButton(onClick = { answer("browser-give-back", R.giveBack(p.botId, p.callId, true)) }) { Text(tr("已完成", "Done")) }
                     TextButton(onClick = { answer("browser-give-back", R.giveBack(p.botId, p.callId, false)) }) { Text(tr("跳过", "Skip")) }
                 }

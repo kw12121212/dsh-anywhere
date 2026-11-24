@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-bot-browser
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-bot-browser 与里程碑 dsbot-native-integrations。
+    answer: 用户在手机上无法查看 Bot 浏览器当前打开的网页画面，也无法查看持有状态或停止/配合桌面宿主接管与交还浏览器。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria 与计划变更 details。
+    answer: Bot 详情页可进入 Bot 浏览器页并在前台约 2 秒刷新画面快照（可双指缩放）、离开或后台即停止；dsh Web 宿主上接管与交还置灰提示需在桌面应用操作而停止仍可用；未启用插件提示此宿主未启用；未打开浏览器提示尚未打开；有桌面宿主时接管、交还（无 outcome）与停止在两端一致；停靠区交接卡「接管」直达本页。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：里程碑 intake 问题 bot-browser-mobile（2026-11-22 已确认）与计划变更 details。
+    answer: 启用浏览器快照查看与持有状态控制并按宿主能力降级；不提供手机点击输入与视频流，手机不当浏览器宿主（不调用 browser-wait/browser-result），不在 App 内修改服务端 browserPlugin 配置，快照只存内存不写日志/诊断/磁盘缓存。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 停靠区浏览器交接卡原有的「已完成」「跳过」作答不变；Bot 详情页既有管理项不变；未打开浏览器页时不发 browser-frame 轮询。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-interactive-cards 已完成，dsbot-native-manage 里程碑已完成，脚本推荐的 dsbot-native-integrations 首个可执行计划变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

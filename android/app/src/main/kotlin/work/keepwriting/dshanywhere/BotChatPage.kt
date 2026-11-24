@@ -91,6 +91,8 @@ fun BotChatPage(
     onBarAction: (String, String, String) -> Unit = { _, _, _ -> },
     /** 文件与图片取回（dsbot-reader-files）；null 时不显示交付文件操作与图片查看器（旧行为）。 */
     media: ChatMedia? = null,
+    /** 打开该 Bot 的浏览器页（停靠区浏览器交接卡「接管」直达；dsbot-bot-browser）。 */
+    onOpenBrowser: ((String) -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(botId)
@@ -393,6 +395,7 @@ fun BotChatPage(
                 onAnswer = { ep, pj, done -> controller.answerCard(ep, pj, done) },
                 onAnswered = { dockAnswered.add(it) },
                 onNotice = { controller.postNotice(it) },
+                onOpenBrowser = onOpenBrowser,
             )
         }
         if (controller.working || controller.busy || controller.streamingText != null) {
