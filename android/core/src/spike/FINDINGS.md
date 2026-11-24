@@ -451,3 +451,17 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `capabilityStatuses`：只为常驻挂载（`bot.capabilities`）生成；单项为该 Bot 各会话中最严重者（error > needs-approval > connecting > ready），能力包取子项最严重者。
 - 网页端 Shared capabilities 列表按名称排序、行内 Allow/Edit/Delete（再点一次删除）；表单参数每行一项、环境变量与请求头为 JSON 对象文本（占位 `{"API_KEY": "$DSH_SECRET_MY_KEY"}`）；Bot 能力卡为 Always on / In catalog / Off 三段、能力包在前，显示「经由某包常驻/按需」、挂载后才提示待批准、只对常驻项显示状态——均复刻进 core `CapabilityLibrary`（`CapabilityLibraryTest`）。
 - 模拟器验收用 `node scripts/mock-dsh-server.mjs --manage`：内置能力包、出错的 HTTP MCP 与 Bot 提议的未批准 stdio MCP 样本；`/mock/capabilities?library=0|1` 切换 state 是否带能力库，返回能力库、挂载与调用记录。
+
+## 29. 连接器与邮箱（2026-11-24，dsbot-connectors-mail）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesConnectors` 探针组，未改动真实连接器、邮箱与规则）**：
+- `state` 顶层含 live `connectors`（对象，键 `connectors`、`mail`）、`connectorRequests` 与 `mailRequests`（均为 `{botId → []}` 对象，本机当前为空）；hello `capabilities` 名单不含连接器能力名——客户端以 `state.connectors` 字段存在门控入口。
+- `connectors.connectors=[38]`：全部 `state:"off"`；`auth.kind` oauth=31、none=6、key=1；类别 dev=6、docs=7、work=11、commerce=3、data=4、design=5、search=2；无自加连接器、无 `pending`；未连接行键集 `{id, name, category, about, auth, state, account, offFor, tools}`（`account` 为 null，`readOnly` 只在已连接的远程服务出现——与 `rowFor` 一致）。GitHub 行不在列表中（本机 `rt.config.github === false` 分支）。
+- `connectors.mail` 键 `{accounts, google, allowedRecipients, noDraftFor}`：0 个账号、`google:false`（本机未配置 Google 客户端，手机端不显示「用 Google 登录」）、规则为空；`pending` 只在有 Google 登录进行中时出现。
+- `connector-import-scan {}` → 数组 2 项（来源 cursor），项键 `{source, name, command, args, envNames, headersNames}`（只记数量与键，不记名称与命令）。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/refused"`，均在任何写入前拒绝）：`connector-retry/sign-in-code/set/remove {id:不存在}` → "No such connector"；`connector-add {name:""}` → "Name the connector"；`connector-add` 非 https 地址 → "Connector addresses must start with https://"；`connector-request-cancel {requestId:不存在}` → "This request is gone"；`mail-account-remove {id:不存在}` → "No such account"；`mail-send-answer {requestId:不存在}` → "This card was already answered"；`mail-account-add` 地址无效 → "Enter an email address"；`mail-sign-in-code {input:""}`（无等待中的 Google 登录）→ "No Google sign-in is waiting"。`mail-rule-set` 即使空补丁也会保存，未探。
+
+**源码核对（ds-bot 0.3.10 `src/host/connectors/index.js`、`catalog.js`、`oauth.js`、`mail/index.js`、`mail/presets.js`、`channel.js`，client.js `ConnectorRow`/`MailForm`/`MailSendCard`/`ConnectorsPage`）**：
+- OAuth 浏览器登录的回调为 DS-Bot 所在电脑的 `http://127.0.0.1:<FIXED_CALLBACK_PORT 或随机端口>/callback`；手机上授权后浏览器停在不可达的 127.0.0.1 页面，`connector-sign-in-code {id, input}` 接受整段地址（校验本次 `state`）或纯授权码完成登录；GitHub 走设备码（`pending.kind:"device"`，`userCode`、`verificationUri`），后台轮询完成；Slack 等 `clientSetup` 服务先 `needs-client`，`connector-client {id, clientId, clientSecret?}` 后开始浏览器登录。
+- `mail-account-add` 先 IMAP 登录验证（socketTimeout 60 秒）再存密钥与账号；`mail-send-answer` 同步 SMTP 发送（连接超时最长 120 秒），发送失败也回 `true` 并把卡标记 `failed`、告知 Bot。手机端把这些端点登记为长读超时（`ConnectorSettings.SLOW_ENDPOINTS`），停靠区的邮件作答也改在读线程发出。
+- 写端点成功应答（视图、`{view, created}`、`true`）、登录流程、规则 `applyRules` 与发送卡字段为源码核对，由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-connectors.mjs`）按同一形态覆盖：内置设备码、浏览器登录（粘贴地址校验 state）、needs-client、key、直连、出错与自加连接器样本、QQ 邮箱账号、规则、待发邮件卡与连接器请求卡；`/mock/connectors?enabled=0|1&complete=<id>&google=0|1&mailCard=1&connectorCard=<id>&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。

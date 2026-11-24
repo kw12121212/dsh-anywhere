@@ -154,4 +154,31 @@ class PendingDockTest {
         assertNull(LearningProposal.decode(Json.parse("[1]")))
         assertEquals(1, LearningProposal.decode(obj("""{"id":"p","edits":[1,{"op":"add","text":"t"}]}"""))!!.edits.size)
     }
+
+    /** dsbot-connectors-mail：state.mailRequests 的待发邮件与密钥/连接器同档、只取当前会话与 pending。 */
+    @Test
+    fun mailSendCardsJoinTheSecretTier() {
+        val st = obj(
+            """{
+              "connectorRequests":{"bot-1":[{"id":"cr-1","sessionId":"s-bot-1","connectorId":"mail","name":"Mailbox","status":"pending"}]},
+              "mailRequests":{"bot-1":[
+                {"id":"mr-1","callId":"c1","sessionId":"s-bot-1","account":"m1","to":"a@x.com","cc":"","bcc":"","subject":"周报","body":"见附件","attachments":["r.pdf"],"attachmentDetails":[{"name":"r.pdf","size":2048}],"status":"pending","askedAt":1},
+                {"id":"mr-2","sessionId":"s-bot-1","account":"m1","to":"b@x.com","subject":"旧的","status":"canceled"},
+                {"id":"mr-3","sessionId":"s-old","account":"m1","to":"c@x.com","subject":"别的分段","status":"pending"},
+                {"id":"mr-4","sessionId":"s-bot-1","account":"m1","to":"d@x.com","subject":"","status":"pending"}]},
+              "views":{"s-bot-1":{"id":"v-1","title":"卡","view":{"blocks":[]}}}
+            }""",
+        )
+        val items = PendingDock.collect(st, setOf("s-bot-1"), "bot-1", null, emptySet())
+        assertEquals(listOf("cr-1", "mr-1", "mr-4", "v-1"), items.map { it.id })
+        assertEquals(PendingDock.Kind.MAIL, items[1].kind)
+        assertEquals("周报", items[1].title)
+        assertEquals("邮件", items[2].title)
+        val m = assertIs<PendingDock.Payload.Mail>(items[1].payload).request
+        assertEquals("a@x.com", m.to)
+        assertEquals(listOf(MailSettings.Attachment("r.pdf", 2048)), m.attachments)
+        // 群聊不汇集私聊的邮件卡；已作答的排除
+        assertTrue(PendingDock.collect(st, setOf("s-bot-1"), null, "room-1", emptySet()).none { it.kind == PendingDock.Kind.MAIL })
+        assertTrue(PendingDock.collect(st, setOf("s-bot-1"), "bot-1", null, setOf("mr-1")).none { it.id == "mr-1" })
+    }
 }

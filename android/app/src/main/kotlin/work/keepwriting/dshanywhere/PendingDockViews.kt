@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import work.keepwriting.core.LineDiff
+import work.keepwriting.core.MailSettings
 import work.keepwriting.core.PendingDock
 
 /**
@@ -51,6 +52,10 @@ fun DockArea(
     onAnswered: (String) -> Unit,
     onNotice: (String) -> Unit,
     onOpenBrowser: ((String) -> Unit)? = null,
+    /** 连接器请求卡「去连接」与邮件卡「管理规则」直达（dsbot-connectors-mail）；null 时提示到网页端。 */
+    onOpenConnector: ((String) -> Unit)? = null,
+    /** 当前 state（邮件卡取发件地址）。 */
+    state: work.keepwriting.core.Json.Value.Object? = null,
 ) {
     if (items.isEmpty()) return
     val view = LocalView.current
@@ -73,10 +78,16 @@ fun DockArea(
     androidx.compose.runtime.SideEffect { if (pinned != effective) pinned = effective }
     val expandedId = if (collapsed) null else effective
 
+    // 作答在途的项（主线程登记）：邮件发送等慢作答期间不可重复提交
+    val answering = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+
     /** 作答包装：成功记入已作答并给确认触感，失败给拒绝触感（都投回主线程）。 */
     fun answer(id: String, endpoint: String, payload: String) {
+        if (id in answering) return
+        answering.add(id)
         onAnswer(endpoint, payload) { ok ->
             view.post {
+                answering.remove(id)
                 if (ok) onAnswered(id)
                 haptic(view, ok)
             }
@@ -120,7 +131,7 @@ fun DockArea(
                         Text(item.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text(if (expanded) tr("收起", "Collapse") else tr("展开", "Expand"), style = MaterialTheme.typography.labelSmall)
                     }
-                    if (expanded) DockBody(item, onNotice, onOpenBrowser) { endpoint, payload -> answer(item.id, endpoint, payload) }
+                    if (expanded) DockBody(item, onNotice, onOpenBrowser, onOpenConnector, state, item.id in answering) { endpoint, payload -> answer(item.id, endpoint, payload) }
                 }
             }
         }
@@ -130,7 +141,15 @@ fun DockArea(
 /** 展开项的内容：按类型渲染并以 0.3.10 的请求体作答（PendingDock.Requests）。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DockBody(item: PendingDock.Item, onNotice: (String) -> Unit, onOpenBrowser: ((String) -> Unit)?, answer: (String, String) -> Unit) {
+private fun DockBody(
+    item: PendingDock.Item,
+    onNotice: (String) -> Unit,
+    onOpenBrowser: ((String) -> Unit)?,
+    onOpenConnector: ((String) -> Unit)?,
+    state: work.keepwriting.core.Json.Value.Object?,
+    busy: Boolean,
+    answer: (String, String) -> Unit,
+) {
     val R = PendingDock.Requests
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         when (val p = item.payload) {
@@ -171,7 +190,18 @@ private fun DockBody(item: PendingDock.Item, onNotice: (String) -> Unit, onOpenB
             is PendingDock.Payload.Connector -> ConnectorCardView(
                 p.request,
                 onCancel = { answer("connector-request-cancel", R.connectorCancel(p.request.id)) },
-                onConnect = { onNotice(tr("请在电脑上的网页端完成连接器连接", "Connect the connector in the web app on your computer")) },
+                onConnect = {
+                    val cid = p.request.connectorId
+                    if (onOpenConnector != null && cid != null) onOpenConnector(cid)
+                    else onNotice(tr("请在电脑上的网页端完成连接器连接", "Connect the connector in the web app on your computer"))
+                },
+            )
+            is PendingDock.Payload.Mail -> MailSendCardView(
+                request = p.request,
+                from = work.keepwriting.core.MailSettings.fromAddress(state, p.request),
+                busy = busy,
+                onManageRules = onOpenConnector?.let { open -> { open("mail") } },
+                onAnswer = { payload -> answer("mail-send-answer", payload) },
             )
         }
     }
@@ -290,7 +320,7 @@ fun LearningCardView(proposal: work.keepwriting.core.LearningProposal, onDecide:
     }
 }
 
-/** 连接器请求：名称与用途；取消即拒绝该请求；连接动作提示到网页端（原生连接器页尚未上线）。 */
+/** 连接器请求：名称与用途；取消即拒绝该请求；「去连接」直达该连接器页（远端无连接器视图时提示到网页端）。 */
 @Composable
 fun ConnectorCardView(request: work.keepwriting.core.ConnectorRequest, onCancel: () -> Unit, onConnect: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -299,6 +329,52 @@ fun ConnectorCardView(request: work.keepwriting.core.ConnectorRequest, onCancel:
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onConnect) { Text(tr("去连接", "Connect")) }
             TextButton(onClick = onCancel) { Text(tr("取消", "Cancel")) }
+        }
+    }
+}
+
+/**
+ * 邮件发送确认（网页端 MailSendCard）：发件账号只读，收件人/抄送/密送/主题/正文可编辑，附件名与大小；
+ * 规则（需要审批 / 允许这些收件人 / 允许此 Bot 直接发送）随作答一起发送；发送或放弃，在途时不可重复提交。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MailSendCardView(
+    request: work.keepwriting.core.MailSettings.SendRequest,
+    from: String,
+    busy: Boolean,
+    onManageRules: (() -> Unit)?,
+    onAnswer: (String) -> Unit,
+) {
+    var to by remember(request.id) { mutableStateOf(request.to) }
+    var cc by remember(request.id) { mutableStateOf(request.cc) }
+    var bcc by remember(request.id) { mutableStateOf(request.bcc) }
+    var subject by remember(request.id) { mutableStateOf(request.subject) }
+    var body by remember(request.id) { mutableStateOf(request.body) }
+    var rule by remember(request.id) { mutableStateOf(MailSettings.Rule.REQUIRE_APPROVAL) }
+    val fields = MailSettings.Fields(to, cc, bcc, subject, body)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Text(tr("发件：", "From: ") + from, style = MaterialTheme.typography.bodySmall)
+        androidx.compose.material3.OutlinedTextField(value = to, onValueChange = { to = it }, label = { Text(tr("收件人", "To")) }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+        androidx.compose.material3.OutlinedTextField(value = cc, onValueChange = { cc = it }, label = { Text(tr("抄送", "Cc")) }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+        if (request.bcc.isNotEmpty()) {
+            androidx.compose.material3.OutlinedTextField(value = bcc, onValueChange = { bcc = it }, label = { Text(tr("密送", "Bcc")) }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+        }
+        androidx.compose.material3.OutlinedTextField(value = subject, onValueChange = { subject = it }, label = { Text(tr("主题", "Subject")) }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+        androidx.compose.material3.OutlinedTextField(value = body, onValueChange = { body = it }, label = { Text(tr("正文", "Message")) }, minLines = 3, maxLines = 8, enabled = !busy, modifier = Modifier.fillMaxWidth())
+        MailSettings.attachmentsText(request)?.let { Text(tr("附件：", "Attachments: ") + it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Text(tr("规则", "Rule"), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (r in MailSettings.Rule.entries) {
+                androidx.compose.material3.FilterChip(selected = rule == r, enabled = !busy, onClick = { rule = r }, label = { Text(r.label) })
+            }
+            if (onManageRules != null) TextButton(onClick = onManageRules) { Text(tr("管理规则", "Manage rules")) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { onAnswer(MailSettings.Requests.sendAnswer(request.id, true, fields, rule)) }, enabled = !busy && MailSettings.canSend(fields)) {
+                Text(if (busy) tr("处理中…", "Working…") else tr("发送", "Send"))
+            }
+            TextButton(onClick = { onAnswer(MailSettings.Requests.sendAnswer(request.id, false, null, rule)) }, enabled = !busy) { Text(tr("放弃", "Discard")) }
         }
     }
 }

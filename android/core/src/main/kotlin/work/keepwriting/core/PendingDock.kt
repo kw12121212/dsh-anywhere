@@ -3,17 +3,18 @@ package work.keepwriting.core
 /**
  * 待处理停靠区（dsbot-pending-dock）：把当前聊天等待用户处理的事项汇集成一个有序列表，供输入框上方的
  * 手风琴使用。DS-Bot 0.3.10 的待处理项都在 state 里（源码核对，tech/dsbot-api 的 dock-fields-0310）：
- * questions/views 按会话 id、live work.approvals、secretRequests/connectorRequests 按 botId、live learning、
+ * questions/views 按会话 id、live work.approvals、secretRequests/connectorRequests/mailRequests 按 botId、live learning、
  * live browserHolds。聊天条目里的 kind=answer 是用户已经给出的回复记录，不是待处理项。
  */
 object PendingDock {
-    /** 优先级：学习/审批 → 提问 → 密钥/连接器 → 交接 → 卡片。 */
+    /** 优先级：学习/审批 → 提问 → 密钥/连接器/邮件 → 交接 → 卡片。 */
     enum class Kind(val rank: Int, private val zh: String, private val en: String) {
         LEARNING(0, "学习审批", "Learning"),
         APPROVAL(0, "审批", "Approval"),
         QUESTION(1, "提问", "Question"),
         SECRET(2, "密钥请求", "Key request"),
         CONNECTOR(2, "连接器请求", "Connector"),
+        MAIL(2, "邮件发送", "Mail"),
         HANDOFF(3, "浏览器交接", "Browser handoff"),
         VIEW(4, "卡片", "Card"),
         ;
@@ -42,13 +43,15 @@ object PendingDock {
         data class Handoff(val botId: String, val callId: String, val note: String?) : Payload
         data class Learning(val proposal: LearningProposal) : Payload
         data class Connector(val request: ConnectorRequest) : Payload
+        /** 邮件发送确认（state.mailRequests，dsbot-connectors-mail）。 */
+        data class Mail(val request: MailSettings.SendRequest) : Payload
     }
 
     data class Item(val id: String, val kind: Kind, val title: String, val payload: Payload)
 
     /**
      * 从 state 汇集。[sessionIds]：当前聊天的会话 id（私聊为 Bot 当前分段；群聊为群会话与成员的群内会话，
-     * 即 rooms[].sessionId 与 parts）；[botId] 非空时为私聊（另汇集该 Bot 的密钥/连接器请求、学习审批与浏览器交接），
+     * 即 rooms[].sessionId 与 parts）；[botId] 非空时为私聊（另汇集该 Bot 的密钥/连接器请求、邮件发送卡、学习审批与浏览器交接），
      * [roomId] 非空时为群聊（审批按 roomId 归属）。[answered] 中的 id 一律排除（作答成功、等待 state 刷新的过渡期）。
      */
     fun collect(
@@ -68,6 +71,9 @@ object PendingDock {
         if (botId != null) {
             for (r in secretsOf(state, botId, sessionIds)) out.add(Item(r.id, Kind.SECRET, r.name, r))
             for (c in connectorsOf(state, botId, sessionIds)) out.add(Item(c.id, Kind.CONNECTOR, c.name ?: c.connectorId ?: I18n.tr("连接器", "Connector"), Payload.Connector(c)))
+            for (m in MailSettings.pendingSends(state, botId, sessionIds)) {
+                out.add(Item(m.id, Kind.MAIL, m.subject.takeIf { it.isNotBlank() }?.let { ChatBars.clip(it, ChatBars.TITLE_MAX) } ?: I18n.tr("邮件", "Mail"), Payload.Mail(m)))
+            }
             // 同一聊天可先后发起多次交接：id 含 callId，作答过的那次不会挡住下一次
             handoffOf(state, botId)?.let { out.add(Item("handoff:$botId:${it.callId}", Kind.HANDOFF, it.note ?: I18n.tr("浏览器交接", "Browser handoff"), it)) }
         }

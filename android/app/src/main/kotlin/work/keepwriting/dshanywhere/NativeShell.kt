@@ -67,11 +67,14 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
     SideEffect { connection.covered = covered }
     // 前后台：生命周期事件驱动状态机（后台断 feed、回前台重走连接）
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     connection.resumed = true
+                    // 回到 App：清掉本 App 复制、仍留在剪贴板的设备码与登录链接（dsbot-connectors-mail）
+                    SensitiveClipboard.clearIfOurs(appContext)
                     connection.onForeground()
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
@@ -152,6 +155,14 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class CapabilityEdit(val name: String?) : ShellPage
         /** 单个 Bot 的能力页。 */
         data class BotCapabilities(val botId: String) : ShellPage
+        /** 连接器列表（dsbot-connectors-mail）。 */
+        data object Connectors : ShellPage
+        /** 某个连接器的详情与登录。 */
+        data class ConnectorDetail(val id: String) : ShellPage
+        /** 添加其他 MCP 服务器。 */
+        data object ConnectorAdd : ShellPage
+        /** 邮箱账号与发送规则。 */
+        data object Mailbox : ShellPage
     }
 
 @Composable
@@ -298,6 +309,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             media = connection.media,
                             onOpenDetails = { connection.openDetails(current.targetId) },
                             onOpenBrowser = { bid -> connection.openBotBrowser(bid) },
+                            // 连接器请求卡「去连接」与邮件卡「管理规则」（dsbot-connectors-mail）：远端无连接器视图时为 null，提示到网页端
+                            onOpenConnector = if (work.keepwriting.core.ConnectorSettings.has(connection.stateSnapshot?.raw)) ({ cid -> connection.openConnector(cid) }) else null,
                             onOpenSide = {
                                 val sid = entry?.sessionId
                                 if (sid != null) {
@@ -437,6 +450,24 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     api = connection.manageApi,
                     onGone = { connection.goHome() },
                 )
+                current is ShellPage.Connectors -> ConnectorsPage(
+                    state = connection.stateSnapshot?.raw,
+                    onOpen = { id -> connection.openConnector(id) },
+                    onOpenMailbox = { connection.openMailbox() },
+                    onAdd = { connection.openConnectorAdd() },
+                )
+                current is ShellPage.ConnectorDetail -> ConnectorDetailPage(
+                    state = connection.stateSnapshot?.raw,
+                    id = current.id,
+                    api = connection.manageApi,
+                    onBack = { if (connection.page == current) connection.goBack() },
+                )
+                // 添加成功后返回列表（只在仍停留在添加页时）
+                current is ShellPage.ConnectorAdd -> ConnectorAddPage(
+                    api = connection.manageApi,
+                    onDone = { if (connection.page == current) connection.goBack() },
+                )
+                current is ShellPage.Mailbox -> MailboxPage(connection.stateSnapshot?.raw, connection.manageApi)
                 current is ShellPage.BotBrowser -> BotBrowserPage(
                     botId = current.botId,
                     botName = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.name ?: current.botId,
@@ -474,6 +505,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // 能力库（dsbot-capabilities）：state 含能力库字段时出现
                     showCapabilities = work.keepwriting.core.CapabilityLibrary.hasLibrary(connection.stateSnapshot?.raw),
                     onCapabilities = { connection.openCapabilities() },
+                    // 连接器（dsbot-connectors-mail）：state 含 connectors 时出现
+                    showConnectors = work.keepwriting.core.ConnectorSettings.has(connection.stateSnapshot?.raw),
+                    onConnectors = { connection.openConnectors() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -793,7 +827,9 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     val chatController: ChatController by lazy {
         ChatController(
             api = { endpoint, payloadJson, onResult ->
-                executor.execute {
+                // 停靠区的邮件发送卡等慢端点（SMTP 最长约 2 分钟）：在读线程以长读超时发出，不占状态 executor
+                if (endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS) readOffExecutor(endpoint, payloadJson, onResult)
+                else executor.execute {
                     val clean = graph.cleanUrl
                     val result = if (clean == null) {
                         DsbotApi.Result.Failure(null, DsbotApi.Reason.NETWORK)
@@ -1073,8 +1109,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
             val res = graph.nativeSession.apiRequest(
                 "POST", DsbotApi.url(clean, "/api/bot"),
                 "application/json", DsbotApi.buildRequest(endpoint, payloadJson).toByteArray(),
-                // 同步等模型的端点用长读超时（dsbot-memory）
-                slow = endpoint in work.keepwriting.core.MemoryPanel.SLOW_ENDPOINTS,
+                // 同步等模型的端点（dsbot-memory）与等邮箱/OAuth 验证的端点（dsbot-connectors-mail）用长读超时
+                slow = endpoint in work.keepwriting.core.MemoryPanel.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS,
             )
             DsbotApi.parseResponse(res.status, res.bodyText())
         } catch (_: Exception) {
@@ -1169,6 +1205,15 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openCapabilityEdit(name: String?) = push(ShellPage.CapabilityEdit(name))
 
     fun openBotCapabilities(botId: String) = push(ShellPage.BotCapabilities(botId))
+
+    fun openConnectors() = push(ShellPage.Connectors)
+
+    /** 打开某个连接器（mail 为邮箱页）；停靠区的连接器请求卡经此直达。 */
+    fun openConnector(id: String) = push(if (id == "mail") ShellPage.Mailbox else ShellPage.ConnectorDetail(id))
+
+    fun openConnectorAdd() = push(ShellPage.ConnectorAdd)
+
+    fun openMailbox() = push(ShellPage.Mailbox)
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

@@ -93,6 +93,8 @@ fun BotChatPage(
     media: ChatMedia? = null,
     /** 打开该 Bot 的浏览器页（停靠区浏览器交接卡「接管」直达；dsbot-bot-browser）。 */
     onOpenBrowser: ((String) -> Unit)? = null,
+    /** 打开某个连接器页（mail 为邮箱页；dsbot-connectors-mail）；null 时提示到网页端。 */
+    onOpenConnector: ((String) -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(botId)
@@ -396,6 +398,8 @@ fun BotChatPage(
                 onAnswered = { dockAnswered.add(it) },
                 onNotice = { controller.postNotice(it) },
                 onOpenBrowser = onOpenBrowser,
+                onOpenConnector = onOpenConnector,
+                state = state,
             )
         }
         if (controller.working || controller.busy || controller.streamingText != null) {

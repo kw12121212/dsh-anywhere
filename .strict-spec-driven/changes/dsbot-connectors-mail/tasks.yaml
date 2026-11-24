@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-connectors-mail
+sections:
+  Implementation:
+    core-connectors:
+      text: core：ConnectorSettings（连接器视图解码、状态文案、动作判定、分组与搜索、添加校验、导入扫描解码、connector-* 请求体）与 MailSettings（账号/Google 待登录/规则解码、服务商预设与猜测、开通步骤、添加校验、mailRequests 发送卡解码、mail-* 请求体）；PendingDock 新增 MAIL 类型；JUnit（ConnectorSettingsTest、MailSettingsTest、PendingDockTest 增补）
+      status: complete
+    app-connector-pages:
+      text: app：ConnectorsPage（搜索、已连接与类别分组）、ConnectorDetailPage（按动作渲染、登录面板：粘贴落地地址、复制授权链接、设备码、客户端设置、key/token 表单、只读开关、断开/移除二次确认）、ConnectorAddPage（地址/命令/导入扫描）、MailboxPage（账号、添加表单与服务商步骤、Google 登录粘贴、规则移除、删除二次确认）与 NativeShell 路由、TeamPage「连接器」入口；剪贴板标签清理与密钥表单 FLAG_SECURE
+      status: complete
+    app-dock-and-bot:
+      text: app：停靠区邮件发送卡（可编辑收件人/抄送/密送/主题/正文、附件、规则选择、发送/放弃）与连接器请求卡「去连接」直达；BotDetailsPage「连接器」分组（connector-set offFor）
+      status: complete
+    mock-connectors:
+      text: mock --manage：state.connectors 视图（github 设备码+token、notion OAuth 浏览器、slack needs-client、amap key、exa 直连、sentry 出错、自加连接器）、邮箱账号与规则、mailRequests 与 connectorRequests 样本，以及全部 connector-*、mail-* 端点（登录流程可模拟完成，调用记录不含密钥值），/mock/connectors 切换字段存在与查看调用
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（state.connectors 键与类型、connectorRequests/mailRequests 形态、写端点以不存在的 id 取错误应答、导入扫描只记数量，不改动真实连接器与邮箱），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: pending
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: pending
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：连接器列表分组与状态、直连、key 连接、OAuth 登录粘贴落地地址完成、设备码复制并完成、客户端设置、重试、断开二次确认、只读开关、添加地址与命令及导入、邮箱添加（QQ 预设与其他主机）与移除、规则移除、停靠区邮件卡编辑后发送与放弃、连接器请求卡直达、Bot 连接器开关、无 connectors 字段时入口隐藏
+      status: pending
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: pending
+      command: strict-spec-cli verify dsbot-connectors-mail
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

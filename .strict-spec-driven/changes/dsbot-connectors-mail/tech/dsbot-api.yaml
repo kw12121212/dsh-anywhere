@@ -1,0 +1,27 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    connector-endpoints-0310:
+      strength: MUST
+      statement: '连接器与邮箱端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权）：live connectors（随每次 state 应答下发）为 {connectors[], mail}；连接器行 {id, name, category: dev|docs|work|design|data|commerce|search|custom, about, auth{kind: none|oauth|key|custom, token?, scopes?, client{id, deviceFlow}?, keyUrl?, header?/query?, clientSetup{kind, appUrl}?}, state: off|connecting|ready|error|needs-sign-in|needs-client, error?, account(null 或账号名), readOnly?(仅已连接的远程服务有此键), offFor[botId], tools, custom?:true, pending?{kind:browser, url}|{kind:device, userCode, verificationUri, expiresAt}, redirectUri?}；mail {accounts[{id, address, provider, auth: password|google, state: ready|error, error?}], google(服务端是否配置 Google 客户端), allowedRecipients[], noDraftFor[botId], pending?[{kind:browser, url, address}]}。写端点：connector-connect {id, key?|token?}（none 直连、key 存为密钥、token 校验身份后存为密钥、否则开始 OAuth：GitHub 走设备码，其余发现授权服务器后开始浏览器 PKCE，回调地址为 DS-Bot 所在电脑的 http://127.0.0.1:端口/callback，需要客户端时状态为 needs-client）→ 视图；connector-sign-in-code {id, input(落地地址或授权码；地址须带本次 state)} → 视图；connector-client {id, clientId, clientSecret?} → 视图；connector-cancel/retry/disconnect {id} → 视图；connector-set {id, readOnly?, offFor?} → 视图；connector-add {name, url?(https 或本机 http)|command?, headers?, args?, env?, oauth?} → 视图；connector-remove {id}（仅自加）→ 视图；connector-import-scan {} → [{source: claude|cursor|vscode, name, url?|command+args, envNames[], headersNames[]}]（读取 DS-Bot 所在电脑的配置文件）；connector-import {items[{source,name}]} → {view, created[]}；connector-request-cancel {requestId} → true；state.mailRequests{botId→[{id, callId?, sessionId, account, to, cc, bcc, subject, body, attachments[], attachmentDetails[{name, size?}], replyTo?, status: pending|sent|failed|canceled, error?, askedAt}]}；mail-account-add {address, password, provider: qq|163|126|gmail|icloud|other, imapHost?, smtpHost?} 或 {address?, google:true} → mailView（先登录验证再保存）；mail-account-remove {id} → mailView；mail-rule-set {removeRecipient?|addRecipient?|botId+noDraft?|mode: allow-recipient|require-approval|no-draft + botId + recipients} → mailView；mail-send-answer {requestId, choice: send|cancel, fields?{to, cc, bcc, subject, body}, rule?} → true（发送失败也回 true，状态记为 failed 并告知 Bot）；mail-sign-in-code {address?, input} → mailView。失败均为 {ok:false, error:{code:bot/refused, message}}，按服务端 message 显示。key、token、clientSecret、邮箱授权码只在请求体中出现，不写入日志与诊断上报；视图中不含任何凭据值。实测与源码核对界定：state.connectors 形态、connectorRequests/mailRequests 形态与写端点错误应答为本机真实服务只读实测（FINDINGS 第 29 节）；写端点成功应答与登录流程为源码核对，由 mock --manage 按同一形态覆盖验收，未改动用户真实连接器与邮箱'
+      rationale: 连接器与邮箱端点首次被手机端消费，登录流程依赖电脑本机回调、导入扫描读取电脑文件，登记完整字段、流程边界与实测范围作为单一事实来源，避免后续变更把源码核对误当实测或误以为手机能接收 OAuth 回调
+      enforcement:
+        method: review
+        detail: core JUnit（ConnectorSettingsTest、MailSettingsTest、PendingDockTest）覆盖视图解码、动作判定、状态文案、分组与搜索、添加校验、导入扫描解码、发送卡解码与全部请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/connectors/index.js（rowFor、connectorsView、endpoints、beginSignIn、startBrowserFlow、startDeviceFlow、importScan）、catalog.js（CATALOG、CATEGORIES）、mail/index.js（endpoints、applyRules、mailView、googleCode、mail_send 请求卡）、mail/presets.js、channel.js（live connectors、state connectorRequests/mailRequests、端点分发）、client.js（ConnectorRow、BrowserPanel、DevicePanel、ClientPanel、TokenPanel、MailForm、MailRules、MailSendCard、ConnectorsPage）；FINDINGS 第 29 节登记 runSpike ProbesConnectors 只读实测结果与 mock --manage 覆盖范围
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+  REMOVED: {}

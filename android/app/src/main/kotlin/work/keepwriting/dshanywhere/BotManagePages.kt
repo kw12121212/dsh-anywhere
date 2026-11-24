@@ -383,6 +383,9 @@ fun BotDetailsPage(
             ValueRow(tr("能力", "Capabilities"), "›", hint = work.keepwriting.core.CapabilityLibrary.botSummary(state, botId), onClick = onOpenCapabilities)
         }
 
+        // 连接器（dsbot-connectors-mail）：逐个开关已连接的连接器对该 Bot 是否可用
+        BotConnectorsGroup(state, botId, api) { error = it }
+
         SectionTitle(tr("浏览器", "Browser"))
         ValueRow(tr("Bot 浏览器", "Bot browser"), "›", hint = tr("查看当前网页画面与持有状态", "View live snapshots and control state"), onClick = onOpenBrowser)
 

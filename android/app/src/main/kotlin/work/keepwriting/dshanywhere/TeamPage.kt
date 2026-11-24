@@ -63,6 +63,9 @@ fun TeamPage(
     /** 团队能力库（dsbot-capabilities）：远端 state 含能力库时显示入口。 */
     showCapabilities: Boolean = false,
     onCapabilities: () -> Unit = {},
+    /** 连接器（dsbot-connectors-mail）：远端 state 含 connectors 时显示入口。 */
+    showConnectors: Boolean = false,
+    onConnectors: () -> Unit = {},
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -100,6 +103,9 @@ fun TeamPage(
                 TextButton(onClick = onTeamPrefs) { Text(tr("团队偏好", "Team preferences")) }
                 if (showCapabilities) {
                     TextButton(onClick = onCapabilities) { Text(tr("能力", "Capabilities")) }
+                }
+                if (showConnectors) {
+                    TextButton(onClick = onConnectors) { Text(tr("连接器", "Connectors")) }
                 }
                 if (archivedPrivate > 0) {
                     TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }

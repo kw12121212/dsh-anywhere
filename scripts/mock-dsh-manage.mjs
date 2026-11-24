@@ -4,6 +4,7 @@
 // 日志只记端点与参数键，不打印正文。
 import { createHash } from 'node:crypto'
 import { deflateSync } from 'node:zlib'
+import { createConnectors } from './mock-dsh-connectors.mjs'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -103,7 +104,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
   }
   // live 键随 Agent 工作状态与浏览器持有状态变化（上游 liveAnswer 按 live 内容生成键）
-  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds) + '-' + JSON.stringify(caps.enabled ? capabilityStatuses() : {})
+  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds) + '-' + JSON.stringify(caps.enabled ? capabilityStatuses() : {}) + '-' + conn.liveKey()
   // 工作文件夹（dsbot-folders，ds-bot 0.3.10 folders.js 形态）：内存目录树；/home/user/.dsh 是数据目录（guarded）
   const DIRS = new Set(['/', '/home', '/home/user', '/home/user/projects', '/home/user/projects/alpha', '/home/user/projects/beta',
     '/home/user/notes', '/home/user/.config', '/home/user/.dsh', '/home/user/.dsh/ds-bot', '/home/user/.dsh/ds-bot/workspace',
@@ -205,6 +206,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   // 以 held 开头的名称模拟上游「正在另一处创建中、被保留」的名称（roster.js isHeld）：客户端看不到，只能由服务端拒绝
   const nameTaken = (name, self) => /^held/i.test(String(name).trim()) || Object.values(team.bots).some((b) => b.id !== self && norm(b.name) === norm(name))
   const bump = () => { team.revision += 1; pushRevision(team.revision) }
+  // 连接器与邮箱（dsbot-connectors-mail，见 mock-dsh-connectors.mjs）
+  const conn = createConnectors({ bump, botExists: (id) => Boolean(team.bots[id]) })
 
   function view() {
     return {
@@ -227,6 +230,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       agents: Object.values(team.agents),
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
       ...(caps.enabled ? { capabilities: capLibraryView(), capabilityStatuses: capabilityStatuses() } : {}),
+      ...conn.view(),
     }
   }
 
@@ -298,6 +302,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
+    const connected = conn.handle(endpoint, p, ok, fail)
+    if (connected) return connected
     try {
       switch (endpoint) {
         case 'state':
@@ -899,5 +905,5 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities }
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params) }
 }

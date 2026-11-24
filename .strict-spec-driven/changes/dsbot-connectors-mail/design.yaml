@@ -1,0 +1,37 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-connectors-mail
+approach:
+  - 入口门控按字段存在：state 含 connectors 对象（live connectorsView：{connectors[], mail{accounts, google, allowedRecipients, noDraftFor, pending?}}）时团队页显示「连接器」、Bot 详情在有已连接连接器时显示「连接器」分组；0.3.10 的 hello capabilities 名单不含连接器能力名，沿用 chat-bars-fields-0310 与 capability-endpoints-0310 的数据存在门控。邮件发送卡来自 state.mailRequests[botId]，与 connectorRequests 同为停靠区数据。mock --manage 补连接器与邮箱端点以覆盖模拟器验收，对本机真实服务只做只读探针（state 形态与写端点错误应答），不改动用户真实连接器与邮箱。
+  - 纯逻辑下沉 android/core：ConnectorSettings 解码连接器行（id、name、category、about、auth{kind:none|oauth|key|custom, token?, client{id?, deviceFlow?}, keyUrl?, clientSetup{kind, appUrl}?}、state、error?、account、readOnly?、offFor[]、tools、custom?、pending{kind:browser,url | kind:device,userCode,verificationUri,expiresAt}?、redirectUri?），复刻网页端 ConnectorRow 的动作判定（needs-sign-in→重新登录/断开；error→重试/断开或移除；已开启→断开或移除；off→连接（none 直连、key 填 key、oauth 有 client.id 或不接受 token 时走登录否则填 token）/改用 token/移除；有 pending 或 needs-client 时只显示登录面板）、状态文案、已连接与类别分组、搜索匹配、添加表单校验（名称非空、地址须 https 或本机 http、OAuth 只配地址）、导入扫描解码与全部 connector-* 请求体；MailSettings 解码账号、Google 待登录与规则，服务商预设（同上游 presets.js 与网页端 guessProvider）、开通步骤文案、添加校验（地址格式、授权码非空、其他服务商须填主机）、mailRequests 发送卡与 mail-* 请求体；PendingDock 新增 MAIL 类型（与密钥/连接器同档）。全部由 JUnit 覆盖。
+  - app 侧新增 ShellPage.Connectors、ConnectorDetail(id)、ConnectorAdd、Mailbox：列表页点行进入详情（邮箱进入邮箱页）；详情页按 core 动作渲染按钮与登录面板，写操作经 manageAction 发出、不自动重试，connector-connect 的应答视图中出现 pending 时直接打开系统浏览器（browser 打开授权地址；device 复制用户码后打开验证地址），登录面板常驻「粘贴落地地址完成登录」与「复制授权链接（在电脑上打开）」；断开、移除与删除邮箱账号二次确认；停靠区连接器卡「去连接」经回调打开对应详情页；邮件发送卡在停靠区原生绘制表单，规则随作答一并发送。
+decisions:
+  data-presence-gating:
+    decision: 连接器入口以 state.connectors 对象存在与否门控，不经 capabilities.has 判定；Bot 详情分组另要求至少一个 ready 的连接器
+    rationale: 0.3.10 hello 的 capabilities 名单（mobile.js CAPABILITIES）不含连接器能力名，按 hello 门控入口将永远隐藏；字段存在门控与 dsbot-chat-bars-0310、dsbot-capabilities 的既有决策一致，旧版远端缺字段时自然隐藏
+  paste-back-oauth:
+    decision: OAuth 浏览器登录（连接器与 Gmail）以粘贴落地地址为手机端主路径：打开授权地址后提示「授权完成后浏览器会打开一个无法访问的 127.0.0.1 页面，复制该页地址粘贴回来」，并提供复制授权链接到电脑浏览器完成的备选；App 不内置回环服务也不注册深链
+    rationale: 上游回调地址固定为 DS-Bot 所在电脑的 127.0.0.1（oauth.FIXED_CALLBACK_PORT 或随机端口），授权服务器只接受登记过的回调，手机无法接管；上游已提供 connector-sign-in-code 与 mail-sign-in-code 接收整段地址并校验 state，用它即可在手机上完成且不引入新的攻击面；网页端 MailPending 缺少粘贴入口，手机端补上
+  clipboard-hygiene:
+    decision: 复制的设备码、授权链接与回调地址带 App 专用标签并标记为敏感（API 33+ EXTRA_IS_SENSITIVE），回到 App 时若剪贴板仍是本 App 复制的内容即清除，另在 2 分钟后兜底清除；用户自己从浏览器复制的落地地址在提交成功后不再保留在输入框
+    rationale: 规划变更 details 要求设备码流程复制后清理，里程碑风险要求敏感值不在剪贴板残留；Android 10 起后台读剪贴板受限，前台回到 App 时按标签判断才不会误清用户之后复制的其他内容
+  secure-forms:
+    decision: key/token 表单、Client Secret 表单与邮箱授权码表单显示期间给窗口加 FLAG_SECURE（禁止截屏与最近任务预览），离开表单即恢复；其他连接器页面不加，保证验收截图可用
+    rationale: 里程碑 details 约定敏感输入禁止在截屏预览中显示；全页加 FLAG_SECURE 会让模拟器 screencap 全黑、无法留存验收证据，只在密钥输入可见时生效兼顾两者
+  mail-rule-with-answer:
+    decision: 邮件发送卡的规则选择只保存在卡片本地，随 mail-send-answer 的 rule 字段一起发送（发送与放弃都带），不单独调用 mail-rule-set
+    rationale: 上游 mail-send-answer 收到 rule 时即按 applyRules 生效，网页端选择时立即调 mail-rule-set 再在作答时重复带上，两次写入结果相同；手机端合并为一次请求，避免选择后放弃作答时规则半生效以外的额外差异，也符合单键在途约定
+  mailbox-not-per-bot:
+    decision: Bot 详情的连接器分组只列已连接（ready）的连接器，不列邮箱
+    rationale: 0.3.10 的 mailView 不返回邮箱的 offFor（网页端 BotConnectors 读 data.mail.offFor 恒为空，开关总显示为开），手机端无法如实显示邮箱对某 Bot 的开关状态，宁缺不错
+alternatives:
+  - option: App 内置 127.0.0.1 回环服务接收 OAuth 回调
+    reason: 回调地址由电脑上的 DS-Bot 生成并登记在授权请求里，手机上的回环端口与之不同且授权码交换须由持有 code_verifier 的电脑完成，手机接收后仍要转交，徒增攻击面
+  - option: 按 hello capabilities 门控连接器入口
+    reason: 0.3.10 hello 名单没有连接器能力名，会导致所有远端都看不到入口
+risks:
+  - 本机真实服务的连接器多数未连接、无邮箱账号与待发邮件：真实服务只做只读探针，OAuth、设备码、key、客户端设置、邮箱添加与发送卡的完整验收在 mock --manage 上覆盖，并对照上游源码登记
+  - OAuth 授权页在手机浏览器里可能要求桌面登录或拦截 127.0.0.1 跳转：粘贴落地地址需要用户能看到并复制地址栏；界面同时提供复制授权链接到电脑完成的路径
+  - connector-import-scan 读取的是 DS-Bot 所在电脑上的配置文件，导入时 env 与 headers 的值由服务端存为密钥；手机端只显示名称、来源与地址或命令，不显示值

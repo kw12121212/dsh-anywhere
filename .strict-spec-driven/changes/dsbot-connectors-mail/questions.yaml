@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-connectors-mail
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-connectors-mail 与里程碑 dsbot-native-integrations。
+    answer: 用户在手机上无法连接、重试或重新登录连接器，也无法添加邮箱账号；Bot 请求连接器时只能提示回电脑，Bot 发邮件的确认卡在手机上看不到，只能回电脑网页端处理。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「连接器连接、断开、重试与登录码流程在 App 中可完成」与计划变更 details。
+    answer: 在 App 中完成直接连接、key 连接、OAuth 浏览器登录（粘贴落地地址）、设备码登录、客户端设置、断开与重试，结果与网页端一致；添加与移除邮箱账号、移除发送规则与网页端一致；停靠区的邮件发送卡可编辑后发送或放弃，连接器请求卡直达连接器页。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details（含上游手机端 team/connectors.ts 参考与「需要回调到电脑本机的流程若手机无法完成，界面明确提示在电脑上完成」）。
+    answer: 完整交付 Settings → Connectors 原生页（connector-* 全部端点、导入扫描、自加服务器）与邮箱（账号、规则、Google 登录码、待发邮件确认）；OAuth 回调到电脑本机的流程以粘贴落地地址或复制链接到电脑完成；凭据输入不回显、不入日志；设备码复制后清理。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 团队页与 Bot 详情页既有入口不变；停靠区既有类型的汇集与作答不变；远端无 connectors 字段时不出现连接器入口；密钥设置页、IM 接入与 MCP 外部访问不在本变更内。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-native-shell 已完成，roadmap-recommend 按顺序推荐本项为 dsbot-native-integrations 下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

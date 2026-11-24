@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-connectors-mail
+  status: proposed
+summary:
+  what:
+    - 团队页新增「连接器」入口进入原生连接器页（远端 state 含 connectors 时显示）：顶部搜索，「已连接」分组列出已连接或正在连接的连接器与邮箱，其余按类别（开发、文档、工作、设计、数据、商务、搜索、其他 MCP 服务器）分组；每行显示名称、单一状态文案（已连接为谁与工具数 / 连接中 / 等待登录 / 需要重新登录 / 需要应用客户端 ID / 无法连接及原因 / 未连接时的简介）
+    - 连接器详情页按鉴权类型提供动作（同网页端 ConnectorRow）：无需登录的直接连接；key 与 token 用不回显的输入框连接；OAuth 浏览器登录经系统浏览器打开授权地址，授权后回调落在电脑本机 127.0.0.1，手机上把落地地址粘贴回 App 完成（connector-sign-in-code），也可复制授权链接到电脑浏览器完成；GitHub 设备码流程显示用户码、复制并打开验证地址；需要自带客户端的服务（Slack）显示回调地址并填写 Client ID 与不回显的 Client Secret（connector-client）；等待中可取消（connector-cancel），出错可重试（connector-retry），需要重新登录时可重新登录；断开（connector-disconnect）与移除自加连接器（connector-remove）二次确认；已连接的远程服务可切换只读（connector-set readOnly）
+    - 添加其他 MCP 服务器：按地址（可选 OAuth 登录）或命令添加（connector-add），或扫描电脑上 Claude Desktop、Cursor、VS Code 的 MCP 配置并勾选导入（connector-import-scan/connector-import）
+    - 邮箱页：列出邮箱账号与状态并二次确认后移除（mail-account-remove）；添加账号时选择服务商（QQ、163、126、Gmail、iCloud、其他），显示该服务商开启 IMAP/SMTP 与生成授权码的步骤与链接，填写地址与不回显的授权码或应用密码，其他服务商另填 IMAP 与 SMTP 主机（mail-account-add）；远端支持 Google 登录时提供「用 Google 登录」并以粘贴落地地址完成（mail-sign-in-code）；发送规则（允许的收件人、允许直接发送的 Bot）可逐条移除（mail-rule-set）
+    - 聊天停靠区新增邮件发送确认卡（state.mailRequests）：显示发件账号、可编辑的收件人、抄送、密送、主题与正文、附件名与大小，选择规则（需要审批 / 允许这些收件人 / 允许此 Bot 直接发送）后发送或放弃（mail-send-answer）；连接器请求卡的「去连接」改为直达连接器详情页（邮箱请求直达邮箱页）
+    - Bot 详情页新增「连接器」分组：逐个开关已连接的连接器对该 Bot 是否可用（connector-set offFor）
+  why:
+    - 用户在手机上无法接入或修复连接器与邮箱：Bot 在聊天里请求连接器时只能提示回电脑网页端，Bot 发邮件的确认卡在手机上根本看不到，OAuth 过期需要重新登录、出错需要重试也都要回电脑；DS-Bot 0.3.10 已提供完整的 connector-* 与 mail-* 端点
+scope:
+  in:
+    - core：ConnectorSettings（live connectors 视图解码：连接器行、鉴权类型、状态、待完成登录 browser/device、回调地址、只读与 offFor；状态文案；按鉴权类型与状态派生可用动作；分组与搜索；添加表单校验；导入扫描结果解码；各 connector-* 请求体）与 MailSettings（邮箱账号、Google 待登录、发送规则解码；服务商预设与按地址猜测、开通步骤；添加账号校验；mailRequests 发送卡解码；mail-* 请求体）；PendingDock 新增邮件类型；JUnit（ConnectorSettingsTest、MailSettingsTest、PendingDockTest 增补）
+    - app：ConnectorsPage、ConnectorDetailPage、ConnectorAddPage、MailboxPage 与 NativeShell 路由；TeamPage「连接器」入口；停靠区邮件发送卡与连接器请求卡直达；BotDetailsPage「连接器」分组；复制的设备码与链接带标记并在返回 App 或超时后清除；含密钥输入的表单显示期间禁止截屏与最近任务预览
+    - mock --manage 连接器与邮箱端点及 state（含各鉴权类型样本、出错项、自加连接器、邮箱账号、待发邮件卡与连接器请求卡）供模拟器验收；runSpike 对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记连接器与邮箱端点；设备验收
+  out:
+    - 在手机上充当 OAuth 回调接收端（App 内置回环服务或深链回调）；在手机上读取或编辑电脑上的 MCP 配置文件内容
+    - 密钥设置页本身与密钥存储口令（dsbot-secrets-settings）；能力库与 MCP 外部访问（dsbot-capabilities 已完成、dsbot-mcp-access）；IM 接入（dsbot-im-bridges）
+    - 邮箱账号的逐 Bot 开关（0.3.10 的 mailView 不返回邮箱的 offFor，无法如实显示其状态）；在手机上直接读写邮件
+unchanged_behavior:
+  - 团队页既有入口（新建 Bot、新建群聊、新建分组、DSH Agent、团队工作区、团队偏好、能力、已删除私有 Bot）与 Bot 详情页既有分组不变
+  - 停靠区既有类型（学习审批、工具审批、提问、密钥请求、浏览器交接、卡片）的汇集、排序与作答不变；连接器请求卡的取消作答不变
+  - 远端 state 不含 connectors 字段（旧版 DS-Bot）时不显示连接器入口与 Bot 详情的连接器分组，其余功能照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-connectors-mail
