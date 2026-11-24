@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-sidebar-sections
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-sidebar-sections。
+    answer: 手机上无法新建、重命名、排序、删除团队侧栏分组，也不能把 Bot 与群移入分组，只能回电脑网页端；现有解码按 itemIds 读取归属，0.3.10 的真实分组在 App 中不会显示。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：计划变更 details 的验收。
+    answer: 在 App 中新建分组、重命名、拖动排序、把两个 Bot 移入、删除分组，每一步网页端侧栏一致；断网时拖动排序失败恢复原顺序。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：section-save（新建、重命名、成员归入）、section-order（拖动排序，完整 id 列表一次提交）、section-delete（二次确认，组内条目回到默认位置）；长按条目或分组标题进入编辑；条目长按菜单「移到分组」作为拖动的替代；core 计算并校验新顺序。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 分组内条目排序与搜索行为不变；Main Bot 不可归组；分组颜色与 DSH Agent 归组不在本次范围。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-team-home 已完成，本里程碑最后一个计划变更，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

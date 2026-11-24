@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-sidebar-sections
+approach:
+  - 分组的解码、顺序、名称校验、拖动后顺序计算与请求体都在 core 的 TeamSections（纯逻辑，JUnit 覆盖）；TeamHome.assemble 改为按条目 sectionId 归组（缺失时回退旧 itemIds），未分组在前、命名分组按 state.sections 顺序在后，折叠的分组在不搜索时只出标题与条目数。app 的团队页加「＋ 新建分组」入口、分组标题点按折叠/展开（section-save collapsed）、长按进入分组管理页；分组管理页在普通 Column 中拖动手柄排序，松手时一次提交 section-order 完整 id 列表，本地顺序在提交期间保持、失败恢复为 state 中的顺序并显示原因；条目长按菜单「移到分组」用 PickerDialog 选分组或「不分组」，经 set-flags {id, sectionId} 写入。所有写操作走 NativeShellConnection.manageAction（manage-write-feedback）。
+decisions:
+  sections-after-ungrouped:
+    decision: 团队页顺序与网页端侧栏一致：未分组条目在前，命名分组按 state.sections 顺序在后（原实现把命名分组放在前面）
+    rationale: 验收要求每一步与网页端侧栏一致；网页端 Sidebar 先渲染未分组条目再渲染 SectionBlock
+  manage-page-for-drag:
+    decision: 拖动排序放在单独的分组管理页（长按分组标题或从入口进入），不在团队页 LazyColumn 里直接拖
+    rationale: 团队页 LazyColumn 混排分组标题与条目，直接拖动需要跨 item 的命中计算且与条目点按/长按手势冲突；分组通常只有几个，管理页用普通 Column 固定行高即可可靠计算目标位置，仍满足「长按分组标题进入编辑模式、拖动排序、松手一次提交」
+  move-via-set-flags:
+    decision: 把条目移入或移出分组用 set-flags {id, sectionId}（网页端拖放与菜单同此），不用 section-save 的 items 全量
+    rationale: set-flags 只改一个条目，不会覆盖另一端同时做的归属修改；section-save 的 items 是全量替换
+  collapse-is-shared:
+    decision: 分组折叠状态写回服务端（section-save {id, collapsed}），与网页端共享；搜索时忽略折叠
+    rationale: 折叠是分组的服务端字段，网页端同样写回；不共享会让两端显示不一致
+alternatives:
+  - option: 在团队页 LazyColumn 内直接拖动分组标题（需要第三方 reorderable 库）
+    reason: 引入新依赖且与条目手势冲突，分组数量少不值得
+risks:
+  - 拖动命中按固定行高计算，系统字体放大时行高变化：以测得的实际行高计算，而非常量

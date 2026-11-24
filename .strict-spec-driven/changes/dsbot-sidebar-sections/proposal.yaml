@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-sidebar-sections
+  status: proposed
+summary:
+  what:
+    - 团队页侧栏分组管理：新建分组、重命名、拖动排序、删除（二次确认，组内条目回到未分组），把 Bot 与群移入或移出分组（条目长按菜单「移到分组」），点分组标题折叠/展开；结果与网页端侧栏一致
+    - 修正分组归属的解码：DS-Bot 0.3.10 以条目的 sectionId 表示归属（旧的 sections[].itemIds 仅作兼容回退），团队页按网页端顺序显示：未分组条目（Main Bot 在最前）在前，命名分组按保存的顺序在后，折叠的分组只显示标题与条目数
+  why:
+    - 手机上无法整理团队侧栏，只能回电脑网页端操作；且现有解码读取 itemIds，0.3.10 的真实分组在 App 中不会显示，与网页端不一致
+scope:
+  in:
+    - core：分组解码（id、名称、折叠、颜色）、归属解码（sectionId 优先）、团队页分组顺序、分组名本地校验（去空白、合并空白、至多 32 字、不与其他分组重名）、拖动后新顺序计算与校验（无重复、无遗漏）、各写端点请求体；JUnit
+    - app：团队页「＋ 新建分组」、分组标题点按折叠/展开与长按进入分组管理、分组管理页（重命名、拖动排序松手一次提交、删除二次确认）、条目长按「移到分组」选择器；写操作走 manageAction，失败恢复原顺序并显示服务端原因
+    - mock --manage 的 section-save、section-order、section-delete 与 set-flags sectionId；FINDINGS 第 26 节；设备验收
+  out:
+    - 分组颜色的设置（网页端可设，手机只按已有颜色无变化显示）
+    - DSH Agent 条目的分组（团队页的 Agent 行单独显示在顶部，不参与分组）
+    - 在分组内拖动条目调整条目顺序（网页端条目顺序由置顶与最近活动决定，不可手动排）
+unchanged_behavior:
+  - 条目在分组内的排序（Main Bot 最前、置顶、最近活动）与搜索过滤行为不变；搜索时折叠的分组也显示匹配条目
+  - Main Bot 不能放进分组（服务端忽略），App 不为 Main Bot 提供「移到分组」
+  - 没有分组时团队页显示与现在相同（全部条目在「未分组」下）
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-sidebar-sections

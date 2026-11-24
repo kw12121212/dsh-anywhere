@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    team-sections:
+      strength: MUST
+      statement: 团队页按网页端侧栏的分组显示：分组归属以条目的 sectionId 为准，未分组条目（Main Bot 在最前）在前，命名分组按服务端保存的顺序在后，折叠的分组只显示标题与条目数（搜索时显示匹配条目）。团队页可新建分组、点按分组标题折叠或展开、长按分组标题进入分组管理页；分组管理页可重命名（名称去首尾空白、至多 32 字、不能与其他分组重名，本地先提示）、拖动排序（松手后一次提交，失败时恢复原顺序并显示服务端原因）、删除（二次确认，组内条目回到未分组）；条目长按菜单「移到分组」可把 Bot 或群移入某个分组或移出（Main Bot 不提供）。每次修改后网页端侧栏显示相同的分组、顺序与归属，网页端的修改也随之更新到 App。
+      scenarios:
+        create-rename:
+          - GIVEN: 团队没有分组
+          - WHEN: 在团队页新建分组「研发」，再在分组管理页把它改名为「研发组」
+          - THEN: 团队页出现「研发组」分组（在未分组条目之后），网页端侧栏同样出现；改名为与已有分组同名时本地提示且不提交
+        move-entries:
+          - GIVEN: 有分组「研发组」
+          - WHEN: 长按两个 Bot 分别选择「移到分组 → 研发组」，再把其中一个移回「不分组」
+          - THEN: 两个 Bot 先后出现在「研发组」下，移回的那个回到未分组；网页端侧栏归属相同；Main Bot 的长按菜单没有「移到分组」
+        reorder:
+          - GIVEN: 有分组 A、B、C
+          - WHEN: 在分组管理页把 C 拖到最前并松手
+          - THEN: 只提交一次新顺序 C、A、B，团队页与网页端都按此顺序显示
+        reorder-fails:
+          - GIVEN: 网络断开
+          - WHEN: 拖动改变分组顺序并松手
+          - THEN: 提交失败，分组恢复原顺序并显示失败原因
+        collapse-delete:
+          - GIVEN: 分组「研发组」里有两个 Bot
+          - WHEN: 点按分组标题折叠，再在分组管理页删除该分组并确认
+          - THEN: 折叠后只显示标题与条目数，网页端同样折叠；删除后分组消失，两个 Bot 回到未分组
+  MODIFIED: {}
+  REMOVED: {}

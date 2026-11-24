@@ -62,7 +62,7 @@ class TeamHomeTest {
     }
 
     @Test
-    fun `分组归属按 sections 的 itemIds`() {
+    fun `旧形态 sections 的 itemIds 仍可归组（未分组在前）`() {
         val stateJson = """
             {"revision":1,"bots":[
               {"id":"b1","name":"A","sessionId":"s1"},
@@ -70,10 +70,35 @@ class TeamHomeTest {
              "rooms":[],"sections":[{"id":"sec1","name":"工作","itemIds":["b1"]}]}
         """.trimIndent()
         val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
-        assertEquals(2, team.sections.size)
-        assertEquals("工作", team.sections[0].name)
-        assertEquals(listOf("A"), team.sections[0].entries.map { it.name })
-        assertEquals(listOf("B"), team.sections[1].entries.map { it.name })
+        assertEquals(listOf(null, "sec1"), team.sections.map { it.id })
+        assertEquals(listOf("B"), team.sections[0].entries.map { it.name })
+        assertEquals("工作", team.sections[1].name)
+        assertEquals(listOf("A"), team.sections[1].entries.map { it.name })
+    }
+
+    @Test
+    fun `0_3_10 按条目 sectionId 归组，顺序同网页端侧栏`() {
+        // Main Bot 带了 sectionId 也归未分组；指向不存在分组的条目归未分组；空分组照样列出；折叠状态保留
+        val stateJson = """
+            {"revision":1,"mainBotIds":["m"],"bots":[
+              {"id":"m","name":"Main","sessionId":"s0","sectionId":"secB"},
+              {"id":"b1","name":"A","sessionId":"s1","sectionId":"secB"},
+              {"id":"b2","name":"B","sessionId":"s2","sectionId":"gone"},
+              {"id":"b3","name":"C","sessionId":"s3","sectionId":"secA"}],
+             "rooms":[{"id":"r1","name":"R","members":["b1","b2"],"sessionId":"r1","sectionId":"secB"}],
+             "sections":[{"id":"secB","name":"后端","collapsed":true},{"id":"secA","name":"前端"},{"id":"secE","name":"空"}]}
+        """.trimIndent()
+        val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
+        assertEquals(listOf(null, "secB", "secA", "secE"), team.sections.map { it.id })
+        assertEquals(listOf("Main", "B"), team.sections[0].entries.map { it.name })
+        assertEquals(listOf(null, null), team.sections[0].entries.map { it.sectionId })
+        assertEquals(setOf("A", "R"), team.sections[1].entries.map { it.name }.toSet())
+        assertTrue(team.sections[1].collapsed)
+        assertEquals(listOf("C"), team.sections[2].entries.map { it.name })
+        assertEquals("secA", team.sections[2].entries.single().sectionId)
+        assertTrue(team.sections[3].entries.isEmpty())
+        // 搜索时去掉没有匹配的分组
+        assertEquals(listOf("secA"), TeamHome.search(team, "C").sections.map { it.id })
     }
 
     @Test

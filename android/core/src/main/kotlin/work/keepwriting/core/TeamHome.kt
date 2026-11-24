@@ -26,6 +26,8 @@ object TeamHome {
         val pendingKinds: List<PendingItem.Kind> = emptyList(),
         /** Bot 的分段 id 列表（旧分段切换入口用）；房间为空。 */
         val parts: List<String> = emptyList(),
+        /** 所在分组 id（state 的 sectionId；组装后只保留存在的分组，Main Bot 恒为 null）。 */
+        val sectionId: String? = null,
         /** 房间成员 Bot id 列表（群聊提及/停止成员名册）；Bot 条目为空。 */
         val members: List<String> = emptyList(),
         /** 团队页第二行的预览（按优先级；dsbot-read-state），无可显示内容为 null。 */
@@ -34,7 +36,8 @@ object TeamHome {
         enum class Kind { BOT, ROOM }
     }
 
-    data class Section(val id: String?, val name: String, val entries: List<Entry>)
+    /** 分组：id 为 null 是「未分组」；collapsed 为服务端折叠状态（dsbot-sidebar-sections）。 */
+    data class Section(val id: String?, val name: String, val entries: List<Entry>, val collapsed: Boolean = false)
 
     data class PendingItem(
         val kind: Kind,
@@ -55,9 +58,11 @@ object TeamHome {
         val botEntries = state.bots.map { bot -> botEntry(bot, state, workingBots) }
         val roomEntries = state.rooms.map { room -> roomEntry(room, state, workingBots) }
         val allEntries = applyPending(botEntries + roomEntries, pendingOf(state))
-        val grouped = LinkedHashMap<String?, MutableList<Entry>>()
-        val sectionsRaw = state.raw.members["sections"] as? Json.Value.Array
-        val sectionOf = entrySectionMap(sectionsRaw, allEntries)
+        // 分组（dsbot-sidebar-sections）：归属以条目的 sectionId 为准（0.3.10），缺失时回退旧的 sections[].itemIds；
+        // 指向不存在分组的条目与 Main Bot 一律归未分组。顺序同网页端侧栏：未分组在前，命名分组按 state.sections 顺序在后
+        val defined = TeamSections.decode(state.raw)
+        val definedIds = defined.map { it.id }.toSet()
+        val legacy = legacySectionMap(state.raw.members["sections"] as? Json.Value.Array)
         // Main Bot 最前 → 置顶 → 最近活动（lastAt）降序（最近有对话的排前面，缺失 lastAt 的排最后）
         // → 名称稳定兜底（dsbot-read-state 改写 team-page-list）。
         val sorted = allEntries.sortedWith(
@@ -66,20 +71,14 @@ object TeamHome {
                 .thenByDescending { it.lastAt ?: Long.MIN_VALUE }
                 .thenBy { it.name },
         )
+        val grouped = LinkedHashMap<String?, MutableList<Entry>>()
         for (e in sorted) {
-            grouped.getOrPut(sectionOf[e.id]) { mutableListOf() }.add(e)
+            val sec = if (e.isMain) null else (e.sectionId ?: legacy[e.id])?.takeIf { it in definedIds }
+            grouped.getOrPut(sec) { mutableListOf() }.add(e.copy(sectionId = sec))
         }
-        val named = mutableListOf<Section>()
-        if (sectionsRaw != null) {
-            for (sec in sectionsRaw.items) {
-                val obj = sec as? Json.Value.Object ?: continue
-                val id = str(obj, "id") ?: continue
-                val name = str(obj, "name") ?: I18n.tr("未命名分组", "Untitled section")
-                named.add(Section(id, name, grouped.remove(id) ?: emptyList()))
-            }
-        }
-        val rest = grouped.entries.map { (id, list) -> Section(id, defaultSectionName(id), list) }
-        return Team(named + rest, allEntries.isEmpty())
+        val ungrouped = grouped[null]?.let { listOf(Section(null, defaultSectionName(null), it)) } ?: emptyList()
+        val named = defined.map { Section(it.id, it.name, grouped[it.id] ?: emptyList(), it.collapsed) }
+        return Team(ungrouped + named, allEntries.isEmpty())
     }
 
     fun search(team: Team, query: String): Team {
@@ -114,6 +113,7 @@ object TeamHome {
             lastAt = long(bot.raw, "lastAt"),
             parts = bot.parts,
             preview = TeamPreview.ofBot(bot, state),
+            sectionId = str(bot.raw, "sectionId"),
         )
     }
 
@@ -133,11 +133,12 @@ object TeamHome {
         sessionId = room.sessionId,
         lastAt = long(room.raw, "lastAt"),
         preview = TeamPreview.ofRoom(room, state),
+        sectionId = str(room.raw, "sectionId"),
     )
 
-    private fun entrySectionMap(sections: Json.Value.Array?, entries: List<Entry>): Map<String, String?> {
-        val map = LinkedHashMap<String, String?>()
-        for (e in entries) map[e.id] = null
+    /** 旧形态 sections[].itemIds 的归属（0.3.10 之前的兼容回退）。 */
+    private fun legacySectionMap(sections: Json.Value.Array?): Map<String, String> {
+        val map = LinkedHashMap<String, String>()
         sections?.items?.forEach { sec ->
             val obj = sec as? Json.Value.Object ?: return@forEach
             val id = str(obj, "id") ?: return@forEach
