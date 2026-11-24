@@ -15,8 +15,8 @@ decisions:
     decision: OAuth 浏览器登录（连接器与 Gmail）以粘贴落地地址为手机端主路径：打开授权地址后提示「授权完成后浏览器会打开一个无法访问的 127.0.0.1 页面，复制该页地址粘贴回来」，并提供复制授权链接到电脑浏览器完成的备选；App 不内置回环服务也不注册深链
     rationale: 上游回调地址固定为 DS-Bot 所在电脑的 127.0.0.1（oauth.FIXED_CALLBACK_PORT 或随机端口），授权服务器只接受登记过的回调，手机无法接管；上游已提供 connector-sign-in-code 与 mail-sign-in-code 接收整段地址并校验 state，用它即可在手机上完成且不引入新的攻击面；网页端 MailPending 缺少粘贴入口，手机端补上
   clipboard-hygiene:
-    decision: 复制的设备码、授权链接与回调地址带 App 专用标签并标记为敏感（API 33+ EXTRA_IS_SENSITIVE），回到 App 时若剪贴板仍是本 App 复制的内容即清除，另在 2 分钟后兜底清除；用户自己从浏览器复制的落地地址在提交成功后不再保留在输入框
-    rationale: 规划变更 details 要求设备码流程复制后清理，里程碑风险要求敏感值不在剪贴板残留；Android 10 起后台读剪贴板受限，前台回到 App 时按标签判断才不会误清用户之后复制的其他内容
+    decision: 复制的设备码、授权链接与回调地址标记为敏感（API 33+ EXTRA_IS_SENSITIVE），App 在内存中只记其 SHA-256 摘要；Activity 窗口取得焦点（回到 App）时若剪贴板文本摘要与之相同即清除，另在 2 分钟后兜底尝试清除（后台读不到剪贴板时跳过，留待回到前台）；用户自己从浏览器复制的落地地址在提交成功后不再保留在输入框
+    rationale: 规划变更 details 要求设备码流程复制后清理，里程碑风险要求敏感值不在剪贴板残留；Android 10 起无焦点时读剪贴板会被拒（模拟器验收实测 ON_RESUME 时被拒），所以在 onWindowFocusChanged 时判断；按内容摘要而非剪贴板标签判断，是因为系统或模拟器的剪贴板同步会把标签改写为 host clipboard（实测），只认标签会漏清，摘要又不会误清用户之后复制的其他内容
   secure-forms:
     decision: key/token 表单、Client Secret 表单与邮箱授权码表单显示期间给窗口加 FLAG_SECURE（禁止截屏与最近任务预览），离开表单即恢复；其他连接器页面不加，保证验收截图可用
     rationale: 里程碑 details 约定敏感输入禁止在截屏预览中显示；全页加 FLAG_SECURE 会让模拟器 screencap 全黑、无法留存验收证据，只在密钥输入可见时生效兼顾两者

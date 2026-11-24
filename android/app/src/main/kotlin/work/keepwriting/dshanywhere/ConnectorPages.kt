@@ -67,13 +67,18 @@ import work.keepwriting.core.MailSettings
 private const val GITHUB_TOKEN_URL = "https://github.com/settings/personal-access-tokens/new"
 
 /**
- * App 复制的设备码、授权链接与回调地址：带专用标签并标记敏感；回到 App 时若剪贴板仍是本 App 复制的即清除，
- * 另在约 2 分钟后兜底清除（后台读不到剪贴板时跳过，等回到前台再清）。
+ * App 复制的设备码、授权链接与回调地址：标记敏感；回到 App（窗口取得焦点）时若剪贴板仍是本 App 最近复制的内容即清除，
+ * 另在约 2 分钟后兜底清除（后台读不到剪贴板时跳过，等回到前台再清）。按内容摘要判断而非标签：
+ * 系统或模拟器的剪贴板同步会改写标签；摘要只在内存里，不保存内容本身。
  */
 object SensitiveClipboard {
     private const val LABEL = "dsh-anywhere-connector"
     private const val CLEAR_AFTER_MS = 120_000L
     private val handler = Handler(Looper.getMainLooper())
+    @Volatile private var copiedDigest: String? = null
+
+    private fun digest(text: CharSequence): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(text.toString().toByteArray()).joinToString("") { "%02x".format(it) }
 
     fun copy(context: Context, text: String) {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
@@ -82,17 +87,27 @@ object SensitiveClipboard {
             clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
         }
         runCatching { cm.setPrimaryClip(clip) }
+        copiedDigest = digest(text)
         val app = context.applicationContext
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({ clearIfOurs(app) }, CLEAR_AFTER_MS)
     }
 
-    /** 剪贴板仍是本 App 复制的内容时清除（只看标签，不读内容）。 */
+    /** 剪贴板仍是本 App 最近复制的内容时清除；读不到（后台）时保留待下次。 */
     fun clearIfOurs(context: Context) {
+        val want = copiedDigest ?: return
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         runCatching {
-            if (cm.primaryClipDescription?.label?.toString() != LABEL) return
-            if (Build.VERSION.SDK_INT >= 28) cm.clearPrimaryClip() else cm.setPrimaryClip(ClipData.newPlainText("", ""))
+            val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text
+            if (text == null) {
+                // 剪贴板已空则不必再等；读不到（无焦点时为 null）则留待回到前台
+                if (!cm.hasPrimaryClip()) copiedDigest = null
+                return
+            }
+            if (digest(text) == want) {
+                if (Build.VERSION.SDK_INT >= 28) cm.clearPrimaryClip() else cm.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
+            copiedDigest = null
         }
     }
 }
@@ -362,7 +377,8 @@ fun ConnectorDetailPage(state: Json.Value.Object?, id: String, api: ManageApi, o
             else tr("会删除保存的登录凭据，所有 Bot 都不能再使用它，需要时重新连接。", "Its saved sign-in is deleted and no Bot can use it until you connect again."),
             confirm = if (remove) tr("移除", "Remove") else tr("断开", "Disconnect"),
             onConfirm = {
-                if (remove) act("remove", "connector-remove", R.remove(id)) else act("disconnect", "connector-disconnect", R.disconnect(id))
+                // 移除后连接器不复存在：回到列表（只在仍停留在本页时，由 onBack 判断）
+                if (remove) act("remove", "connector-remove", R.remove(id)) { onBack() } else act("disconnect", "connector-disconnect", R.disconnect(id))
             },
             onDismiss = { confirm = null },
         )

@@ -67,14 +67,11 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
     SideEffect { connection.covered = covered }
     // 前后台：生命周期事件驱动状态机（后台断 feed、回前台重走连接）
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     connection.resumed = true
-                    // 回到 App：清掉本 App 复制、仍留在剪贴板的设备码与登录链接（dsbot-connectors-mail）
-                    SensitiveClipboard.clearIfOurs(appContext)
                     connection.onForeground()
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {

@@ -152,6 +152,13 @@ class MainActivity : ComponentActivity() {
         graph.updates.onResumed()
     }
 
+    /** 窗口取得焦点（回到 App）：清掉本 App 复制、仍留在剪贴板的设备码与登录链接（dsbot-connectors-mail）。
+     * 须在取得焦点后读剪贴板：ON_RESUME 时尚无焦点，Android 10+ 会拒绝访问。 */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) SensitiveClipboard.clearIfOurs(this)
+    }
+
     override fun onPause() {
         super.onPause()
         // 会话 cookie 持久化双保险：进入后台即落盘，强杀后 cookie 仍在
