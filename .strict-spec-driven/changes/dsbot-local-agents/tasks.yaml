@@ -20,11 +20,11 @@ sections:
   Testing:
     core-junit:
       text: core JUnit
-      status: pending
+      status: complete
       command: android/gradlew -p android/core test
     app-build:
       text: 构建 :app 调试 APK
-      status: pending
+      status: complete
       command: android/gradlew -p android assembleDebug
     full-regression:
       text: 完整回归
@@ -32,8 +32,8 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
-      text: 设备验收（模拟器 + mock --manage）：本地 Agent 页检测列表与登录状态、刷新、复制登录命令、展开可用模型、新增自定义 Agent（无效命令本地提示、找不到程序显示服务端原因）、修改、删除二次确认、远端不支持时的说明
-      status: pending
+      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：本地 Agent 页检测到的 Claude Code（2.1.3 · 已登录）与 Codex（0.48.0 · 未登录，显示登录命令）及路径；刷新期间按钮显示正在检测…（截图）；复制登录命令后显示已复制；展开 Claude Code 可用模型显示询问中再列出 Claude Sonnet、Claude Opus；新增自定义 Agent：含空格命令本地提示且保存不可用、nope 显示服务端原因 No program named nope was found、qwen --acp 新增后列表重读；编辑参数为 --acp --debug 后服务端一致；删除二次确认后列表重读；local-agents 回 bot/not-found 时显示此远端不支持本地 Agent，available=false 时显示这个 DSH 无法注册本地 Agent
+      status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过
       status: pending
