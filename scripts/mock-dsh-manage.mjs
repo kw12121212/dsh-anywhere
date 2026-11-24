@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { deflateSync } from 'node:zlib'
 import { createConnectors } from './mock-dsh-connectors.mjs'
 import { createIm } from './mock-dsh-im.mjs'
+import { createLocalAgents } from './mock-dsh-local-agents.mjs'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -210,6 +211,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   // 连接器与邮箱（dsbot-connectors-mail，见 mock-dsh-connectors.mjs）
   const conn = createConnectors({ bump, botExists: (id) => Boolean(team.bots[id]) })
   // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
+  // 本地 Agent（dsbot-local-agents，见 mock-dsh-local-agents.mjs）：不在 state 中
+  const localAgents = createLocalAgents()
   const im = createIm({ bump, botExists: (id) => Boolean(team.bots[id]), roomExists: (id) => Boolean(team.rooms[id]) })
 
   function view() {
@@ -306,7 +309,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
-    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail)
+    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail)
     if (connected) return connected
     try {
       switch (endpoint) {
@@ -909,5 +912,5 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params) }
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params) }
 }

@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-local-agents
+  status: proposed
+summary:
+  what:
+    - 团队页新增「本地 Agent」入口进入原生本地 Agent 页（local-agents）：「检测到的 Agent」列出电脑上找到的 Agent CLI（名称、简短版本、路径、已登录/未登录），可刷新重新检测（local-agent-refresh，进行中可见）；未登录的显示登录命令并可复制，提示在电脑终端运行；「自定义 Agent」列出按命令添加的 ACP Agent（名称、命令与参数、是否可用）
+    - 自定义 Agent 的新增与修改（local-agent-add / local-agent-update）：填写名称、命令（程序名、绝对路径或 ~/ 路径）与参数（空格分隔），按服务端同规则本地预校验，服务端拒绝（如电脑上找不到该程序）时显示原因；删除（local-agent-remove）二次确认
+    - 每个检测到或自定义的 Agent 可展开查看其可用模型（local-agent-models，首次会在电脑上启动该 CLI 询问）；模型在 Bot 详情的模型选择中选用（既有功能）
+  why:
+    - 用户在手机上看不到电脑上有哪些本地 Agent、是否已登录，也无法添加或修改自定义 ACP Agent，只能回电脑网页端；DS-Bot 0.3.10 已提供 local-agents 系列端点
+scope:
+  in:
+    - core：LocalAgents（local-agents 应答解码：available、detected、custom；简短版本；登录状态文案；可用模型应答解码；自定义 Agent 表单校验与参数切分（同上游 validateCustom）；local-agent-* 请求体；慢端点登记）；JUnit（LocalAgentsTest）
+    - app：LocalAgentsPage（检测与刷新、登录命令复制、自定义 Agent 列表、展开可用模型、新增/修改表单、删除二次确认）与 NativeShell 路由、TeamPage「本地 Agent」入口；列表与刷新经只读通道、增改删经写通道，慢端点长读超时
+    - mock --manage 本地 Agent 端点（检测到已登录与未登录的 CLI、自定义 Agent、可用模型、找不到程序的拒绝）供模拟器验收；runSpike 对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记本地 Agent 端点；设备验收
+  out:
+    - 在手机上运行本地 Agent CLI、执行登录命令或修改电脑上的 CLI 安装；为本地 Agent 设定固定的「当前模型」（上游没有此概念，模型由各 Bot 选择）
+    - Bot 模型选择与批量切换（dsbot-models-providers）
+unchanged_behavior:
+  - 团队页既有入口、Bot 详情与模型选择不变
+  - 远端不支持本地 Agent（local-agents 回 bot/not-found 或 available=false）时页面给出说明，其余功能照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-local-agents

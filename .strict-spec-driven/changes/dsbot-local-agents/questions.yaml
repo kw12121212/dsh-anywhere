@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-local-agents
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-local-agents。
+    answer: 用户在手机上看不到电脑上的本地 Agent 及登录状态，也无法添加、修改或删除自定义 ACP Agent，只能回电脑网页端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：计划变更 details 验收「在 App 中刷新检测、新增一个本地 Agent 并选模型、修改后删除，每一步网页端一致」与里程碑 done_criteria。
+    answer: 在 App 中刷新检测、查看可用模型、新增自定义 Agent、修改后二次确认删除，每一步网页端本地 Agent 页一致；为 Bot 选用本地 Agent 模型经既有的 Bot 模型选择完成。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details 与上游 local-agents 实现核对。
+    answer: 交付 Settings → Local agents 原生页与 local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove；上游没有本地 Agent 的「当前模型」，「选择其模型」落为按需查看可用模型并在 Bot 模型选择中选用；本地 Agent 运行在电脑上，手机只做配置。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 团队页既有入口、Bot 详情与模型选择不变；不在手机上执行登录命令或改动电脑上的 CLI。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-native-shell 已完成，roadmap-recommend 按顺序推荐本项为 dsbot-native-integrations 下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

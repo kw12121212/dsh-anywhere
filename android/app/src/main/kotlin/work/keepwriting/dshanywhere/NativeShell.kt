@@ -166,6 +166,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class ImAdd(val platform: String) : ShellPage
         /** 某个 IM 机器人的详情。 */
         data class ImDetail(val id: String) : ShellPage
+        /** 本地 Agent（dsbot-local-agents）。 */
+        data object LocalAgents : ShellPage
     }
 
 @Composable
@@ -484,6 +486,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     api = connection.manageApi,
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
+                current is ShellPage.LocalAgents -> LocalAgentsPage(connection.manageApi)
                 current is ShellPage.ImDetail -> ImDetailPage(
                     state = connection.stateSnapshot?.raw,
                     id = current.id,
@@ -533,6 +536,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // IM 接入（dsbot-im-bridges）：state 含 im 时出现
                     showIm = work.keepwriting.core.ImBridges.has(connection.stateSnapshot?.raw),
                     onIm = { connection.openIm() },
+                    // 本地 Agent（dsbot-local-agents）：0.3.6 已有端点，不门控，页面按应答说明不支持
+                    onLocalAgents = { connection.openLocalAgents() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -1133,9 +1138,10 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
      */
     private val slowExecutor = Executors.newCachedThreadPool { r -> Thread(r, "dsbot-slow").apply { isDaemon = true } }
 
-    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入。 */
+    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入、本地 Agent。 */
     private fun isSlowEndpoint(endpoint: String) =
-        endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ImBridges.SLOW_ENDPOINTS
+        endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ImBridges.SLOW_ENDPOINTS ||
+            endpoint in work.keepwriting.core.LocalAgents.SLOW_ENDPOINTS
 
     private fun executorFor(endpoint: String) =
         if (isSlowEndpoint(endpoint)) slowExecutor else readExecutor
@@ -1258,6 +1264,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openImAdd(platform: String) = push(ShellPage.ImAdd(platform))
 
     fun openImDetail(id: String) = push(ShellPage.ImDetail(id))
+
+    fun openLocalAgents() = push(ShellPage.LocalAgents)
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

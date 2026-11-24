@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-local-agents
+approach:
+  - 本地 Agent 不在 state 中，由 local-agents 端点按需读取（上游 scan 电脑上的 CLI 并限时探测版本与登录状态）。local-agents 不属于 0.3.10 新增端点（endpoint-inventory-0310 清单之外，0.3.6 已有），入口不门控；页面以应答判定：bot/not-found 显示此远端不支持，available=false 显示此 DSH 无法注册本地 Agent 路由。
+  - 纯逻辑下沉 core LocalAgents：解码 {available, detected[{route, name, path, version, signIn, signedIn}], custom[{id, name, command, args[], route, available}]}，简短版本（同网页端 shortVersion），登录状态文案，模型应答 [{provider, id, name, reasoning?}]，自定义表单校验（同上游 validateCustom：名称必填 ≤40、命令为程序名/绝对路径/~/路径且无空白、参数不得含换行）与参数按空白切分，全部请求体，由 JUnit 覆盖。
+  - app 侧 ShellPage.LocalAgents：列表与刷新经 ManageApi.read（慢端点独立线程、长读超时），刷新进行中显示提示；增改删经 manageAction，成功后重新读取列表（网页端同样在写后重读 local-agents）；删除二次确认；登录命令以普通剪贴板复制（命令本身不含凭据）并提示在电脑终端运行；各 Agent 可展开读取 local-agent-models 并缓存在页面内。
+decisions:
+  no-gating:
+    decision: 本地 Agent 入口不做 hello 或字段门控，以 local-agents 应答决定页面内容
+    rationale: local-agents 在 0.3.6 已存在、不在 0.3.10 新增端点清单内，hello-capabilities 规则只门控 0.3.10 新能力；state 中也没有本地 Agent 字段可供门控；旧版或不支持的远端以 bot/not-found 或 available=false 在页面内说明
+  models-on-demand:
+    decision: 可用模型按需展开读取（local-agent-models），不显示「当前模型」；为 Bot 选用本地 Agent 模型沿用 Bot 详情的模型选择
+    rationale: 上游本地 Agent 没有自身的当前模型，模型属于选用它的 Bot；local-agent-models 首次会在电脑上启动 CLI，只在用户展开时才请求，避免进页面就拉起多个 CLI
+  reread-after-write:
+    decision: 增改删成功后重新读取 local-agents（与网页端一致），不本地拼接列表
+    rationale: local-agent-add/update 只返回单个条目、remove 只返回自定义列表，而 detected 与 available 由服务端扫描决定；重读一次保证与网页端显示一致
+  slow-local-agents:
+    decision: local-agents、local-agent-refresh、local-agent-models、local-agent-add 登记为慢端点
+    rationale: 上游会扫描电脑并逐个运行 CLI 探测版本与登录（各自限时）、local-agent-models 首次会启动 CLI、add 会刷新搜索路径，最坏耗时可能超过默认 30 秒读超时（slow-endpoints-executor）
+alternatives: []
+risks:
+  - 本机真实服务上的检测结果取决于电脑安装的 CLI：真实服务只做只读探针（local-agents 列表与写端点错误应答），新增/修改/删除与可用模型在 mock --manage 上覆盖；local-agent-models 会启动 CLI，不对真实服务探测

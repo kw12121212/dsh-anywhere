@@ -479,3 +479,14 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 平台目录只在客户端共享代码里（字段、选项、密钥标记、`login:'qr'`），state 只下发可用平台 id；手机端内置同一目录（core `ImBridges.PLATFORMS`）并按 `im.platforms` 过滤。
 - `im-add` 先向平台校验账号（`checkAccount`）再保存，扫码平台拒绝；`im-login-start` 返回 `{loginId, qr, expiresAt, botId}`（`qr` 为编码进二维码的文本），`im-login-wait` 对微信 `get_qrcode_status` 长轮询（`POLL_TIMEOUT_MS=35_000`），返回 waiting/scanned/expired，确认后创建连接并返回 `{status:"done", id}`。手机端把 `im-add/update/retry/login-start/login-wait` 登记为慢端点。
 - 写端点成功应答与扫码流程由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-im.mjs`）按同一形态覆盖：Telegram 已连接（待允许请求、已配对账号、私聊、已绑定与未绑定群聊）、飞书出错（重试成功）、微信扫码；`/mock/im?enabled=0|1&scan=1&confirm=1&expire=1&request=<名字>&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键与字段名）。
+
+## 31. 本地 Agent（2026-11-24，dsbot-local-agents）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesLocalAgents` 探针组，未改动真实本地 Agent，未调用会启动 CLI 的 local-agent-models）**：
+- `local-agents {}` → `{available:true, detected[7], custom[]}`；detected 项键 `{route, name, path, version, signIn, signedIn}`，route 为 `local-claude-code`、`local-codex-cli`、`local-copilot-cli`、`local-antigravity`、`local-opencode`、`local-kimi-cli`、`local-qoder`；`signedIn` 分布 true=2、null=5（无登录探测的 CLI 为 null）。本地 Agent 不在 state 中。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/refused"`，均在写入前拒绝）：`local-agent-update/remove {id:不存在}` → "Unknown agent"；`local-agent-add` 命令含空白 → "Command must be a program name, an absolute path, or a ~/path"。
+
+**源码核对（ds-bot 0.3.10 `src/host/local-agents/index.js`、`engines.js`、`adapter.js`，client.js `LocalAgentsPage`/`AgentSignInRow`/`AgentForm`/`shortVersion`）**：
+- 自定义 Agent 路由为 `local-acp-<id>`（`CUSTOM_PREFIX`），custom 项 `{id, name, command, args[], route, available}`；`local-agent-add` 经 `validateCustom` 校验并在电脑上找不到程序名时拒绝，返回条目+route；`local-agent-update` 返回条目+route；`local-agent-remove` 返回 custom 视图；网页端写后重读 `local-agents`。
+- `local-agent-refresh` 清模型缓存与登录探测后重扫并刷新模型目录；`local-agent-models {route}` → `[{provider, id, name, reasoning?}]`，首次会在电脑上启动该 CLI。手机端把 local-agents、refresh、models、add 登记为慢端点。
+- 写端点成功应答、可用模型与「此远端不支持」（未知端点 bot/not-found、available=false）由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-local-agents.mjs`）按同一形态覆盖；`/mock/local-agents?enabled=0|1&available=0|1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。

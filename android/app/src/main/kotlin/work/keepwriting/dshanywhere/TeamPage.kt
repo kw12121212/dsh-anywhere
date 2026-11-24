@@ -69,6 +69,8 @@ fun TeamPage(
     /** IM 接入（dsbot-im-bridges）：远端 state 含 im 时显示入口。 */
     showIm: Boolean = false,
     onIm: () -> Unit = {},
+    /** 本地 Agent（dsbot-local-agents）；为 null 时不显示入口。 */
+    onLocalAgents: (() -> Unit)? = null,
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -112,6 +114,9 @@ fun TeamPage(
                 }
                 if (showIm) {
                     TextButton(onClick = onIm) { Text(tr("IM 接入", "IM")) }
+                }
+                if (onLocalAgents != null) {
+                    TextButton(onClick = onLocalAgents) { Text(tr("本地 Agent", "Local agents")) }
                 }
                 if (archivedPrivate > 0) {
                     TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }

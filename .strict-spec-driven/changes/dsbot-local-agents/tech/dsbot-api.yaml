@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    local-agent-endpoints:
+      strength: MUST
+      statement: '本地 Agent 端点（DS-Bot 0.3.6 起已有，0.3.10 核对；经 dsh 的 POST /api/bot）：local-agents {} → {available: boolean（DSH 能否注册 LLM adapter）, detected[{route（如 local-claude-code、local-codex-cli）, name, path, version|null, signIn(登录命令文本), signedIn: true|false|null}], custom[{id, name, command, args[], route: ''local-acp-<id>'', available}]}（服务端扫描电脑上的 CLI 并限时探测版本与登录）；local-agent-refresh {} → 同上（清模型缓存与登录探测后重扫）；local-agent-models {route} → [{provider, id, name, reasoning?}]（首次会在电脑上启动该 CLI，未注册路由回 []）；local-agent-add {name, command, args[]} → 条目+route（validateCustom：名称必填截 40、命令为程序名/绝对路径/~/路径/盘符路径且无空白、参数不含换行；电脑上找不到程序名时拒绝）；local-agent-update {id, name?, command?, args?} → 条目+route；local-agent-remove {id} → custom 视图。失败为 {ok:false, error:{code:bot/refused, message}}。local-agents 不属于 0.3.10 新增端点，入口不经 hello 门控；local-agents、local-agent-refresh、local-agent-models、local-agent-add 属慢端点。实测与源码核对界定：local-agents 应答与写端点错误应答为本机真实服务只读实测（FINDINGS 第 31 节）；local-agent-models 与写端点成功应答为源码核对，由 mock --manage 覆盖，未改动用户真实本地 Agent'
+      rationale: 本地 Agent 端点首次被手机端消费，应答不在 state 中、会在电脑上运行 CLI，登记字段、门控方式、慢端点与取证边界作为单一事实来源，避免后续变更误按 hello 门控或在取证时启动 CLI
+      enforcement:
+        method: review
+        detail: core JUnit（LocalAgentsTest）覆盖应答解码、简短版本、登录状态、模型解码、表单校验与参数切分、请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/local-agents/index.js（localAgentsEndpoint、detected、customView、freshList）、engines.js（validateCustom）、adapter.js（probeModels）、channel.js（端点分发）、client.js（LocalAgentsPage、AgentSignInRow、AgentForm、shortVersion）
+  MODIFIED: {}
+  REMOVED: {}

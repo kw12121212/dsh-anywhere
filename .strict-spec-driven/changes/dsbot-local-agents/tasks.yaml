@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-local-agents
+sections:
+  Implementation:
+    core-local-agents:
+      text: core：LocalAgents（local-agents 应答、简短版本、登录状态、可用模型解码；自定义表单校验与参数切分；local-agent-* 请求体；慢端点）；JUnit（LocalAgentsTest）
+      status: complete
+    app-local-agents:
+      text: app：LocalAgentsPage（检测与刷新、登录命令复制与电脑终端提示、自定义 Agent 列表与可用状态、展开可用模型、新增/修改表单与本地校验、删除二次确认、远端不支持时的说明）、NativeShell 路由与慢端点、TeamPage「本地 Agent」入口
+      status: complete
+    mock-local-agents:
+      text: mock --manage：local-agents（已登录与未登录的检测 CLI、自定义 Agent）、local-agent-refresh、local-agent-models、local-agent-add/update/remove（找不到程序与无效命令的拒绝），调用记录只记参数键
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（local-agents 应答键与计数，local-agent-update/remove 不存在的 id、local-agent-add 无效命令取错误应答；不调用会启动 CLI 的 local-agent-models），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: pending
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: pending
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：本地 Agent 页检测列表与登录状态、刷新、复制登录命令、展开可用模型、新增自定义 Agent（无效命令本地提示、找不到程序显示服务端原因）、修改、删除二次确认、远端不支持时的说明
+      status: pending
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: pending
+      command: strict-spec-cli verify dsbot-local-agents
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit
