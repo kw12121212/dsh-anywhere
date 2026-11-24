@@ -134,6 +134,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         /** 记忆页与记忆历史（dsbot-memory）。 */
         data class Memory(val owner: work.keepwriting.core.MemoryPanel.Owner, val title: String) : ShellPage
         data class MemoryHistory(val owner: work.keepwriting.core.MemoryPanel.Owner) : ShellPage
+        /** 团队偏好（dsbot-prefs-theme）。 */
+        data object TeamPrefs : ShellPage
         /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
         data object PrivateArchives : ShellPage
         /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
@@ -347,6 +349,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onOpenHistory = { connection.openMemoryHistory(current.owner) },
                 )
                 current is ShellPage.MemoryHistory -> MemoryHistoryPage(current.owner, connection.manageApi)
+                current is ShellPage.TeamPrefs -> TeamPrefsPage(connection.stateSnapshot?.raw, connection.manageApi)
                 current is ShellPage.FolderPick -> {
                     val snapshot = connection.stateSnapshot?.raw
                     val target = current.target
@@ -420,6 +423,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     archivedPrivate = work.keepwriting.core.BotManage.privateArchives(connection.stateSnapshot?.raw).size,
                     onOpenArchived = { connection.openPrivateArchives() },
                     onTeamWorkspace = { connection.openFolderPick(FolderTarget.Team) },
+                    onTeamPrefs = { connection.openTeamPrefs() },
                 )
                 }
             }
@@ -1083,6 +1087,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     fun openNewRoom() = push(ShellPage.NewRoom)
 
+    fun openTeamPrefs() = push(ShellPage.TeamPrefs)
+
     fun openMemory(owner: work.keepwriting.core.MemoryPanel.Owner, title: String) = push(ShellPage.Memory(owner, title))
 
     fun openMemoryHistory(owner: work.keepwriting.core.MemoryPanel.Owner) = push(ShellPage.MemoryHistory(owner))
@@ -1356,6 +1362,9 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                     }
                     else -> return // 未知形态：降级不崩溃，等下一轮事件
                 }
+                // 团队偏好（dsbot-prefs-theme）：供配色与聊天布局使用；只在变化时写，避免无谓重组
+                val prefs = work.keepwriting.core.TeamPrefs.decode(stateSnapshot?.raw)
+                if (prefs != graph.teamPrefs) graph.teamPrefs = prefs
                 refreshAgentChat(quiet)
             }
             is DsbotApi.Result.BotError -> {}

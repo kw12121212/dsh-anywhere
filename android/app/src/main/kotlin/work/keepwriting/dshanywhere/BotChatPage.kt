@@ -417,22 +417,31 @@ fun BotChatPage(
                     Icon(Icons.Filled.Add, contentDescription = tr("添加附件", "Add attachment"))
                 }
             }
+            val attachmentsReady = controller.attachments.all { it.status == "ready" }
+            // 回车发送（团队偏好 Enter 键发送）：与发送按钮同条件——工作中、待恢复、发送中或附件未就绪时不发
+            val enterToSend = LocalTeamPrefs.current.enterToSend
+            val sendFromKey = {
+                val text = input.trim()
+                val idle = !controller.working && !(controller.interrupted && !agentMode) && !controller.busy
+                if (idle && attachmentsReady && (text.isNotEmpty() || controller.attachments.isNotEmpty()) && controller.sendOrAttach(text)) input = ""
+            }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
                 placeholder = { Text(if (agentMode) tr("发送消息给 DSH Agent", "Message the DSH Agent") else tr("发送消息给 Bot", "Message the Bot")) },
                 maxLines = 4,
-                modifier = Modifier.weight(1f),
+                keyboardOptions = enterImeOptions(enterToSend),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { sendFromKey() }),
+                modifier = Modifier.weight(1f).enterSends(enterToSend) { sendFromKey() },
             )
             Spacer(Modifier.size(8.dp))
-            val attachmentsReady = controller.attachments.all { it.status == "ready" }
             when {
                 controller.working -> FilledIconButton(onClick = { controller.stop() }) {
                     // 方形停止符（icons-core 无 Stop，自绘 18dp 圆角方块）
                     Box(
                         modifier = Modifier
                             .size(16.dp)
-                            .background(MaterialTheme.colorScheme.onPrimaryContainer, RoundedCornerShape(4.dp)),
+                            .background(androidx.compose.material3.LocalContentColor.current, RoundedCornerShape(4.dp)),
                     )
                 }
                 controller.interrupted && !agentMode -> FilledIconButton(onClick = { controller.resume() }) {
@@ -599,18 +608,25 @@ private fun MessageBubble(
     onCopyBlock: (String) -> Unit,
     onOpenLink: (String, Boolean) -> Unit,
 ) {
+    // 平铺布局（团队偏好，dsbot-prefs-theme）：不画气泡、整宽靠左，自己的消息以「你」标注
+    val flat = LocalTeamPrefs.current.flat
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
+        horizontalArrangement = if (fromUser && !flat) Arrangement.End else Arrangement.Start,
     ) {
         Surface(
-            color = if (fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            color = when {
+                flat -> androidx.compose.ui.graphics.Color.Transparent
+                fromUser -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
             shape = MaterialTheme.shapes.medium,
             // 点按复制整条；长按出「复制整条 / 选择文字」菜单，部分选择在全屏阅读器里做（dsbot-reader-files）。
             // 链接自身的点击与长按选择器由 MarkdownText 先消费，不触发气泡手势。
-            modifier = Modifier.widthIn(max = 320.dp).combinedClickable(onClick = onCopy, onLongClick = { if (!LinkLongPress.recent()) onLongPress() }),
+            modifier = (if (flat) Modifier.fillMaxWidth() else Modifier.widthIn(max = 320.dp)).combinedClickable(onClick = onCopy, onLongClick = { if (!LinkLongPress.recent()) onLongPress() }),
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(if (flat) 4.dp else 10.dp)) {
+                if (flat && fromUser) Text(tr("你", "You"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 MarkdownText(markdown, onCopyBlock = onCopyBlock, onOpenLink = onOpenLink)
             }
         }

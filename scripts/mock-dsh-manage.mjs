@@ -38,6 +38,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     agentChats: {},
     agentTitles: {},
     agentRunning: {},
+    // 团队偏好（dsbot-prefs-theme）：初始主题 Paper、网页端设过消息宽度 90%（手机改其他项时必须保留）
+    prefs: { theme: 'paper', width: 90 },
   }
   const library = []
   const agentTimers = {}
@@ -136,6 +138,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
   const fail = (message) => ({ ok: false, error: { code: 'bot/refused', message, details: {} } })
   const ok = (value) => ({ ok: true, value })
+  // 上游 invalid()（参数不合法，如 set-prefs 的取值校验）
+  const invalid = (message) => ({ ok: false, error: { code: 'bot/invalid', message, details: {} } })
   const norm = (s) => String(s ?? '').trim().toLowerCase()
   const engine = (ref) => (!ref ? 'model' : String(ref).split('/')[0].startsWith('local-') ? String(ref).split('/')[0] : 'model')
   const inGroup = (id) => Object.values(team.rooms).some((r) => r.members.includes(id))
@@ -157,7 +161,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       defaultModel: 'deepseek/v4',
       permissions: { options: [{ value: 'read-only', name: '只读' }, { value: 'workspace-write', name: '工作区可写' }, { value: 'danger-full-access', name: '完全访问' }], defaultPreset: 'danger-full-access' },
       colors: ['deepseek', 'blue', 'violet', 'orange', 'green', 'magenta', 'cyan', 'red', 'yellow', 'brown', 'gray', 'black', 'aurora'],
-      prefs: {},
+      prefs: { ...team.prefs },
       memory: true,
       agents: Object.values(team.agents),
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
@@ -381,6 +385,25 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
               resolve(fail(error.message))
             }
           }, 3000))
+        }
+        case 'set-prefs': {
+          // 按上游 channel.js setPrefs 校验（只实现手机会发的项）；收到的参数打印出来供验收核对「只含改动项」
+          console.log('[mock] set-prefs ' + JSON.stringify(p))
+          const pr = team.prefs
+          if (p.theme !== undefined) { if (typeof p.theme !== 'string' || !/^[a-z][\w-]{0,31}$/.test(p.theme)) return invalid('Unknown theme'); pr.theme = p.theme }
+          if (p.accent !== undefined) { if (p.accent === null || p.accent === '') delete pr.accent; else if (/^#[0-9a-f]{6}$/i.test(p.accent)) pr.accent = p.accent; else return invalid('Accent must be a #rrggbb color') }
+          if (p.motion !== undefined) { if (p.motion === null || p.motion === 'normal') delete pr.motion; else if (p.motion === 'quiet' || p.motion === 'lively') pr.motion = p.motion; else return invalid('Motion must be quiet, normal or lively') }
+          if (p.layout !== undefined) { if (p.layout === null || p.layout === 'bubble') delete pr.layout; else if (p.layout === 'flat') pr.layout = p.layout; else return invalid('Layout must be bubble or flat') }
+          if (p.width !== undefined) { if (p.width === null || p.width === 80) delete pr.width; else if (Number.isInteger(p.width) && p.width >= 50 && p.width <= 100) pr.width = p.width; else return invalid('Width must be a whole percent from 50 to 100') }
+          if (p.defaultBotModel !== undefined) {
+            if (p.defaultBotModel === null || p.defaultBotModel === '') delete pr.defaultBotModel
+            else if (engine(p.defaultBotModel) !== 'model') return invalid('A local agent cannot be the default model: a new Bot chooses to run on one when it is created')
+            else if (!MODELS.some((m) => m.ref === p.defaultBotModel)) return invalid('Unknown model')
+            else pr.defaultBotModel = p.defaultBotModel
+          }
+          if (p.enterToSend !== undefined) { if (p.enterToSend === false) pr.enterToSend = false; else if (p.enterToSend === true || p.enterToSend === null) delete pr.enterToSend }
+          bump()
+          return ok({ ...pr })
         }
         case 'efforts':
           return ok(EFFORTS[p.ref] ?? { efforts: [] })

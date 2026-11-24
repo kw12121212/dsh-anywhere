@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    team-prefs:
+      strength: MUST
+      statement: 团队页提供「团队偏好」：可修改主题（DeepSeek、Mono、Paper、Moonlight）、强调色（或主题默认）、消息布局（气泡或平铺）、头像动画等级（安静、普通、活泼）、Enter 键发送或换行与新 Bot 默认模型，保存后网页端显示相同偏好；消息宽度不在手机上提供，手机修改其他偏好时服务端已存的宽度不变。App 按团队偏好显示：界面配色取团队主题与强调色（明暗仍按本机外观，未知主题使用默认配色），私聊与群聊按布局显示气泡或平铺，动画等级为安静时工作中指示不做动画，Enter 键发送开启时输入法回车即发送；网页端改了偏好后 App 随之更新。
+      scenarios:
+        theme-accent:
+          - GIVEN: 团队主题为 Paper、本机外观为浅色
+          - WHEN: 在团队偏好页改为 Moonlight 并选一个强调色
+          - THEN: App 立即换成 Moonlight 浅色配色与所选强调色，网页端同步；把本机外观改为深色后显示 Moonlight 深色配色，团队偏好不变
+        layout:
+          - GIVEN: 消息布局为气泡
+          - WHEN: 改为平铺
+          - THEN: 私聊与群聊的消息不再画气泡、整宽显示；网页端同样为平铺
+        motion:
+          - GIVEN: 动画等级为普通，某个 Bot 正在工作
+          - WHEN: 改为安静
+          - THEN: 该 Bot 私聊里的工作中指示不再动画；网页端同步为安静
+        enter:
+          - GIVEN: Enter 键发送开启
+          - WHEN: 关闭后在私聊输入框按回车
+          - THEN: 回车换行而不发送；重新开启后回车即发送
+        width-kept:
+          - GIVEN: 网页端把消息宽度设为 90%
+          - WHEN: 在手机上修改主题
+          - THEN: 服务端的消息宽度仍为 90%；手机上不显示宽度设置
+  MODIFIED: {}
+  REMOVED: {}

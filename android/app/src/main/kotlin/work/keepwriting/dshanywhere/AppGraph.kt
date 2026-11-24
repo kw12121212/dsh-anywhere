@@ -117,8 +117,15 @@ class AppGraph private constructor(context: Context) {
     var reloadTick by mutableStateOf(0)
         private set
 
+    /**
+     * 当前连接的团队偏好（dsbot-prefs-theme）：连接层每次应用 state 时写入，MainActivity 据此生成配色、聊天页据此选布局；
+     * 不在本机持久保存。启动后首个 state 之前与保存设置重新连接时为 null（用默认配色），不沿用上一个地址的团队偏好。
+     */
+    var teamPrefs by mutableStateOf<work.keepwriting.core.TeamPrefs.Prefs?>(null)
+
     /** 重读配置并请求原生外壳重新连接；配置失效时调用方应回到首次设置页。 */
     fun requestReload() {
+        teamPrefs = null
         load()
         reloadTick++
     }

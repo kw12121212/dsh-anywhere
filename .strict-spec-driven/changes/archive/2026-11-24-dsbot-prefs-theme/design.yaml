@@ -1,0 +1,25 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-prefs-theme
+approach:
+  - core TeamPrefs.kt：decode(state) → {theme(缺省 deepseek，未知保留原值), accent(#rrggbb 或 null), layout(bubble|flat，缺省 bubble), motion(quiet|normal|lively，缺省 normal), enterToSend(缺省 true), defaultBotModel?}；THEMES 为网页端 themes.js 的 4 套 light/dark 配色（bg、bubble、card、text、user、userText、accent）；palette(theme, dark, accent) 返回配色，未知主题回退 deepseek，深色下强调色按网页端 darkAccent 映射（ACCENT_INKS 的第二色）；ACCENTS 为网页端 ACCENT_INKS 的 7 个首色；Requests.theme/accent(null 清除)/layout/motion/enterToSend/defaultBotModel(null 清除)。
+  - App：AppGraph.teamPrefs（可观察）由连接层在每次应用 state 时写入；MainActivity 有团队偏好时以 palette 生成 Material3 配色（primary=强调色、background/surface=bg、surfaceVariant=bubble、primaryContainer=user、onPrimaryContainer=userText、onSurface=text），否则保持原动态配色；LocalChatPrefs（CompositionLocal）向私聊/群聊传递 layout、motion、enterToSend：平铺时消息不画气泡、整宽显示；安静时 ThinkingPill 静止；Enter 发送时输入框 imeAction=Send。TeamPrefsPage（ShellPage.TeamPrefs）经 manage-write-feedback 通道逐项 set-prefs。
+decisions:
+  entry-on-team-page:
+    decision: 团队偏好页从团队页进入，而不是 App 的设置页。
+    rationale: App 设置页叠在原生外壳之上、不持有连接与写通道，且管理的是本机配置（地址、隧道、明暗、语言）；团队偏好属于远端团队数据，与 Bot、群、团队工作区等管理入口放在一起，写操作沿用同一通道。
+  local-dark-wins:
+    decision: 明暗只由本机外观决定，团队主题只决定配色；强调色在深色下按网页端 darkAccent 映射。
+    rationale: 计划变更 details 明确团队偏好不覆盖本机明暗选择；网页端 themes.js 每套主题都有 light/dark 两组配色，按本机明暗取对应一组即与网页端在同明暗下一致。
+  motion-maps-to-indicator:
+    decision: App 不显示动画头像，动画等级在 App 内映射为工作中指示：安静时不做动画，普通与活泼保持现有动画。
+    rationale: 网页端 motion 控制头像形象的动画；App 未渲染头像形象，最接近的动画元素是工作中指示，安静等级的意图（减少动效）在 App 内由此体现；偏好本身在两端一致保存。
+  write-changed-key-only:
+    decision: 每次只发送被修改的那一项（set-prefs 对未出现的键保持不变），不发送 width/flatWidth。
+    rationale: 源码核对 setPrefs：每个字段 undefined 时不改；只发改动项即可保证手机不提供的宽度等偏好原样保留，也避免两端同时修改不同项时互相覆盖。
+alternatives: []
+risks:
+  - 配色表复刻自网页端 themes.js（0.3.10），上游新增主题时 App 回退 DeepSeek 配色并原样显示主题标识
+  - 团队偏好不在本机持久保存：启动到首次同步前使用默认配色

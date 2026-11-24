@@ -56,6 +56,8 @@ fun TeamPage(
     onOpenArchived: () -> Unit = {},
     /** 团队工作区（dsbot-folders）。 */
     onTeamWorkspace: () -> Unit = {},
+    /** 团队偏好（dsbot-prefs-theme）。 */
+    onTeamPrefs: () -> Unit = {},
     /** 团队的 DSH Agent（dsbot-member-agents；远端未声明 agents 能力时为空）。 */
     agents: List<work.keepwriting.core.DshAgents.Agent> = emptyList(),
     agentRunning: (String) -> Boolean = { false },
@@ -76,6 +78,7 @@ fun TeamPage(
                     androidx.compose.material3.TextButton(onClick = { agentError = null; onAddAgent { agentError = it } }) { Text(tr("＋ DSH Agent", "+ DSH Agent")) }
                 }
                 androidx.compose.material3.TextButton(onClick = onTeamWorkspace) { Text(tr("团队工作区", "Team workspace")) }
+                androidx.compose.material3.TextButton(onClick = onTeamPrefs) { Text(tr("团队偏好", "Team preferences")) }
                 if (archivedPrivate > 0) {
                     androidx.compose.material3.TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }
                 }

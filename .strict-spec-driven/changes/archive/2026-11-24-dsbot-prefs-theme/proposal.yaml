@@ -1,0 +1,26 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-prefs-theme
+  status: proposed
+summary:
+  what:
+    - 团队页新增「团队偏好」页：读写 DS-Bot 团队偏好（set-prefs）——主题（DeepSeek、Mono、Paper、Moonlight，未知主题标识原样显示并保留）、强调色（7 种或主题默认）、消息布局（气泡/平铺）、头像动画等级（安静/普通/活泼）、Enter 键发送或换行、新 Bot 默认模型（或跟随 DSH 默认）；网页端的消息宽度不在手机上提供，App 只写被修改的那一项，服务端已存的宽度原样保留
+    - App 按团队偏好渲染：界面配色取团队主题的配色与强调色，明暗仍由本机外观决定（本机跟随系统时按系统明暗），未知主题回退 DeepSeek 配色；聊天（私聊与群聊）按消息布局显示气泡或平铺；动画等级为「安静」时工作中指示不做动画；Enter 键发送开启时输入法回车键为发送；偏好变化经 feed/state 同步到 App 与网页端
+  why:
+    - 里程碑 dsbot-native-manage 完成标准第五条：修改主题、强调色、消息布局与头像动画等级后，App 与网页端均按新偏好显示
+    - 团队偏好目前只能在电脑网页端设置，App 也不按团队偏好显示
+scope:
+  in:
+    - android-dsbot 规格新增 team-prefs 要求（并写明宽度不在手机上提供）；tech/dsbot-api 登记 set-prefs 与 state.prefs 形态
+    - core：TeamPrefs（prefs 解码与缺省、主题配色表与强调色深色映射、各字段请求体）与 JUnit
+    - App：团队偏好页与团队页入口；AppGraph 保存当前团队偏好供 MainActivity 生成配色；私聊/群聊平铺布局、Enter 发送、工作指示动画按偏好；mock --manage 增加 set-prefs
+  out:
+    - 消息宽度与平铺宽度（width/flatWidth）、特效等级（effects）、思考显示（thinking）、后台等待、记忆自动回忆与容量等其余偏好；App 内头像动画（App 不显示动画头像）；在本机持久保存团队偏好
+unchanged_behavior:
+  - 本机外观（明暗）与语言设置的语义与存储不变；团队偏好不覆盖本机明暗选择；未连接时使用默认配色
+roadmap:
+  milestone: dsbot-native-manage
+  planned_change: dsbot-prefs-theme

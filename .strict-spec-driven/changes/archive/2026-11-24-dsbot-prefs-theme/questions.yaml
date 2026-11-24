@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-prefs-theme
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-prefs-theme。
+    answer: 团队偏好（主题、强调色、布局、动画、Enter 行为、默认模型）只能在电脑网页端改，App 也不按团队偏好显示。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑完成标准第五条。
+    answer: 修改主题、强调色、消息布局与头像动画等级后，App 与网页端均按新偏好显示。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。
+    answer: 按计划变更 details：经 set-prefs 读写主题、强调色、消息布局、头像动画等级、Enter 键发送或换行、新 Bot 默认模型；手机不提供宽度并原样保留；Compose 主题、聊天布局与动画按偏好渲染；明暗由本机外观决定；未知主题回退默认配色。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 本机明暗与语言设置不变，团队偏好不覆盖本机明暗；宽度不在手机上提供。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖已完成，脚本推荐的下一个可做变更即本项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

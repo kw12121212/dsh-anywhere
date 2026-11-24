@@ -43,14 +43,15 @@ import work.keepwriting.core.ChatBars
  * 写操作在途时（inFlight 含对应键）按钮禁用防重复点按。
  */
 
-/** 系统「动画时长缩放」为 0（关闭动画/减少动态效果）时为 true。 */
+/** 系统「动画时长缩放」为 0（关闭动画/减少动态效果）或团队头像动画等级为「安静」（dsbot-prefs-theme）时为 true。 */
 @Composable
 fun rememberReducedMotion(): Boolean {
     val resolver = LocalContext.current.contentResolver
-    return remember(resolver) {
+    val system = remember(resolver) {
         runCatching { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }
             .getOrDefault(1f) == 0f
     }
+    return system || LocalTeamPrefs.current.quiet
 }
 
 @Composable

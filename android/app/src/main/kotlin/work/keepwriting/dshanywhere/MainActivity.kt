@@ -49,7 +49,10 @@ class MainActivity : ComponentActivity() {
             val phone = graph.phone
             val dark = PhonePrefs.isDark(phone.appearance, androidx.compose.foundation.isSystemInDarkTheme())
             val baseContext = androidx.compose.ui.platform.LocalContext.current
+            // 团队偏好（dsbot-prefs-theme）：有团队主题时配色取主题与强调色，明暗仍按本机外观
+            val team = graph.teamPrefs
             val scheme = when {
+                team != null -> teamColorScheme(work.keepwriting.core.TeamPrefs.palette(team, dark), dark)
                 android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ->
                     if (dark) androidx.compose.material3.dynamicDarkColorScheme(baseContext) else androidx.compose.material3.dynamicLightColorScheme(baseContext)
                 dark -> androidx.compose.material3.darkColorScheme()
@@ -74,6 +77,8 @@ class MainActivity : ComponentActivity() {
             val localized = remember(lang, baseContext) { localizedContext(baseContext, lang) }
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides localized) {
             MaterialTheme(colorScheme = scheme) {
+                // 聊天布局、动画与 Enter 行为按团队偏好（dsbot-prefs-theme）；未连接时为缺省
+                androidx.compose.runtime.CompositionLocalProvider(LocalTeamPrefs provides (team ?: work.keepwriting.core.TeamPrefs.DEFAULT)) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     var screen by remember {
                         mutableStateOf(if (graph.configState == AppGraph.ConfigState.Ready) Screen.Main else Screen.FirstRun)
@@ -104,6 +109,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     BackHandler(enabled = screen == Screen.Settings) { screen = Screen.Main }
+                }
                 }
             }
             }

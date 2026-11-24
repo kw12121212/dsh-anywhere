@@ -342,6 +342,17 @@ fun RoomChatPage(
             IconButton(onClick = { showAttachMenu = true }) {
                 Icon(Icons.Filled.Add, contentDescription = tr("添加附件", "Add attachment"))
             }
+            // 回车发送（团队偏好 Enter 键发送）：与发送按钮同条件
+            val enterToSend = LocalTeamPrefs.current.enterToSend
+            // 切回单行时草稿里的换行折成空格（单行框只显示首行，避免看不见的换行被发出去）
+            androidx.compose.runtime.LaunchedEffect(enterToSend) {
+                if (enterToSend && input.contains('\n')) input = input.replace('\n', ' ')
+            }
+            val sendFromKey = {
+                val text = input.trim()
+                val ready = controller.attachments.none { it.status == "uploading" || it.status == "failed" }
+                if (!controller.busy && ready && (text.isNotEmpty() || controller.attachments.isNotEmpty()) && controller.sendOrAttach(text)) input = ""
+            }
             OutlinedTextField(
                 value = input,
                 onValueChange = { fresh ->
@@ -350,9 +361,13 @@ fun RoomChatPage(
                     showMentions = fresh.isNotEmpty() && fresh.last() == '@'
                 },
                 placeholder = { Text(tr("发消息（@ 提及成员）", "Message (@ to mention)")) },
-                // 单行（用户反馈：群聊输入框两行太高，一行足够）；@ 弹层不受影响
-                singleLine = true,
-                modifier = Modifier.weight(1f),
+                // 单行（用户反馈：群聊输入框两行太高，一行足够）；@ 弹层不受影响。
+                // 团队偏好关闭 Enter 发送时回车换行，输入框随换行长高（至多 4 行）
+                singleLine = enterToSend,
+                maxLines = if (enterToSend) 1 else 4,
+                keyboardOptions = enterImeOptions(enterToSend),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { sendFromKey() }),
+                modifier = Modifier.weight(1f).enterSends(enterToSend) { sendFromKey() },
             )
             Spacer(Modifier.size(8.dp))
             if (controller.busy) {
@@ -506,17 +521,24 @@ private fun MessageBubble(
     onOpenLink: (String, Boolean) -> Unit,
     onReadFull: (() -> Unit)? = null,
 ) {
+    // 平铺布局（团队偏好，dsbot-prefs-theme）：不画气泡、整宽靠左，自己的消息以「你」标注
+    val flat = LocalTeamPrefs.current.flat
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
+        horizontalArrangement = if (fromUser && !flat) Arrangement.End else Arrangement.Start,
     ) {
         Surface(
-            color = if (fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            color = when {
+                flat -> androidx.compose.ui.graphics.Color.Transparent
+                fromUser -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
             shape = MaterialTheme.shapes.medium,
             // 点按复制整条；长按出菜单（dsbot-reader-files），链接手势由 MarkdownText 先消费
-            modifier = Modifier.widthIn(max = 320.dp).combinedClickable(onClick = onCopy, onLongClick = { if (!LinkLongPress.recent()) onLongPress() }),
+            modifier = (if (flat) Modifier.fillMaxWidth() else Modifier.widthIn(max = 320.dp)).combinedClickable(onClick = onCopy, onLongClick = { if (!LinkLongPress.recent()) onLongPress() }),
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(if (flat) 4.dp else 10.dp)) {
+                if (flat && fromUser) Text(tr("你", "You"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 if (!fromUser && speakerName != null) {
                     Text(
                         speakerName,

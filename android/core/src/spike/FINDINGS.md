@@ -394,3 +394,14 @@ memory-move 的 to 为 places[].key 或 team。memory-ask 同步等模型写完�
 本地 Agent 路线通常更久），客户端对它使用 5 分钟读超时，失败时重读视图并提示可能已在服务端完成。只读主机（另一处持有团队）的 READS
 含 memory-view 但不含 memory-history，此时历史页显示「团队当前只读」。整理条目的 op 为 merged/moved/retired。条目 id 只在同一记忆范围内
 唯一（无 meta.id 时为正文 sha256 前 4 位），同页并列多组时列表键须带范围。
+
+## 25. 团队偏好（2026-11-24，dsbot-prefs-theme）
+
+**实测（只读）**：`state.prefs` 为对象，本机团队为 `{theme:"paper", width:90, defaultBotModel:"<ref>"}`——缺省值不落盘（accent、layout、motion、
+enterToSend 缺省时键不存在），网页端设过的消息宽度 90% 正是手机修改其他项时必须原样保留的值。
+
+**源码核对、未对真实团队写入**（改偏好会改变用户网页端外观；set-prefs 不在 endpoint-inventory-0310 的清单内，形态登记于 tech/dsbot-api team-prefs-0310）：经 dsh 的 `POST /api/bot {endpoint:"set-prefs", payload}`、鉴权同其他管理端点（会话 cookie），不合法取值回 `bot/invalid`。`set-prefs` 按键逐项合并（channel.js setPrefs），
+未出现的键不动，返回整份 `state.prefs`。theme 为 `^[a-z][\w-]{0,31}$`（未知 id 也接受，客户端按默认主题显示）；accent 为 `#rrggbb`，null/空串
+删除（回到主题默认）；motion quiet|normal|lively（normal 删除键）；layout bubble|flat（bubble 删除键）；width 50–100 整数（80 删除键）；
+defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent cannot be the default model…」、null/空串删除；enterToSend 只存 false。
+手机每次只发改动的一项、从不发 width/flatWidth/effects/thinking。网页端改偏好后经 revision 刷新 state，App 随之换配色与聊天布局。

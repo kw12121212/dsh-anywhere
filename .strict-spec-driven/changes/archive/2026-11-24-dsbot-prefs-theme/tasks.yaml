@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-prefs-theme
+sections:
+  Implementation:
+    core-team-prefs:
+      text: core 新增 TeamPrefs.kt（prefs 解码与缺省、4 套主题配色、强调色与深色映射、请求体）
+      status: complete
+    app-prefs-page:
+      text: 团队偏好页（主题、强调色、布局、动画等级、Enter 发送、新 Bot 默认模型）与团队页入口；NativeShell 路由
+      status: complete
+    app-render:
+      text: AppGraph.teamPrefs 由连接层写入；MainActivity 按团队主题生成配色；私聊/群聊平铺布局、安静时工作指示静止、Enter 发送
+      status: complete
+    mock-prefs:
+      text: mock --manage 增加 set-prefs（按上游 setPrefs 校验与清除语义，写后推 revision）并在 state 带 prefs
+      status: complete
+    findings:
+      text: FINDINGS 第 25 节登记团队偏好（state.prefs 实测，set-prefs 源码核对）
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit：TeamPrefsTest（真实 state prefs 解码与缺省、未知主题回退、深色强调色映射、请求体字面值）
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行项目完整回归命令（WSLg 下以 xvfb-run -a 包裹，看日志末尾 EXIT）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（GAMEPC 模拟器 + mock --manage）：改主题与强调色后 App 配色随之变化且本机明暗不变；改为平铺后私聊与群聊消息无气泡；动画等级改为安静后工作指示静止；关闭 Enter 发送后回车换行；设新 Bot 默认模型；mock 收到的参数只含改动项、width 保留
+      status: complete
+    strict-ready-verify:
+      text: 运行 strict-spec-cli ready 与 verify
+      status: complete
+      command: strict-spec-cli verify dsbot-prefs-theme
+testing_gates:
+  validation_task: full-regression
+  unit_test_task: core-junit

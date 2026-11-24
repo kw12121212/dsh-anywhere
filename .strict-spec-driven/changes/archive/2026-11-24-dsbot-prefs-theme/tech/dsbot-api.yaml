@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    team-prefs-0310:
+      strength: MUST
+      statement: '团队偏好（DS-Bot 0.3.10）：state.prefs 只含与默认不同的键（实测样本含 theme=paper、width=90、defaultBotModel），缺省为 theme=deepseek、accent=主题默认、layout=bubble、motion=normal、effects=full、width=80、flatWidth=100、enterToSend=true、thinking=false；set-prefs（经 dsh 的 POST /api/bot，endpoint 为 set-prefs，鉴权同其他管理端点：会话 cookie）以「键: 值」只处理出现的键并返回最新 prefs，取值不合法时回 bot/invalid：theme 须为小写字母开头、至多 32 位的标识；accent 为 #rrggbb，null 或空串清除；layout 为 bubble 或 flat（bubble 或 null 删除）；motion 为 quiet、normal 或 lively（normal 或 null 删除）；enterToSend 为 false 时保存、true 或 null 删除；defaultBotModel 经模型解析，null 或空串清除，本地 Agent 拒绝。网页端主题配色见 client 的 themes.js（deepseek、mono、paper、moonlight，各有 light 与 dark），强调色候选为 ACCENT_INKS 的首色、深色下用第二色。客户端只发送被修改的键（不发 width 与 flatWidth）。set-prefs 为源码核对，未改用户真实团队'
+      rationale: 团队偏好端点与形态此前未登记；客户端按偏好渲染需要与网页端同一套缺省与配色；只发改动键是保留手机不提供的偏好的唯一方式
+      enforcement:
+        method: review
+        detail: core JUnit（TeamPrefsTest）以真实 state-full 夹具的 prefs 覆盖解码与缺省，并逐值锁定四套主题配色、ACCENT_INKS 与 accentInk 判定；源码核对位置：ds-bot 0.3.10 src/host/channel.js 的 setPrefs、client.js 的 themes.js（THEMES、themeVars、darkAccent）与 inks.js（ACCENT_INKS、INKS）；FINDINGS 第 25 节
+  MODIFIED: {}
+  REMOVED: {}
