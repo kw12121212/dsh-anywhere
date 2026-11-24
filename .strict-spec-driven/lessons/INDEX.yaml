@@ -207,7 +207,7 @@ categories:
     electron-e2e-window-open-execution-context-was-d-cc60b5:
       title: Electron e2e「window.open 不弹出新窗口」偶发 Execution context was destroyed，与被测改动无关时整体重跑一次
       status: active
-      occurrences: 4
+      occurrences: 5
       path: .strict-spec-driven/lessons/testing/electron-e2e-window-open-execution-context-was-d-cc60b5.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
@@ -335,6 +335,16 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/windows-adb-adb-devices-device-adb-shell-kill-se-bc6520.yaml
+    runspike-401-dsh-web-https-dsh-url-http-fe7536:
+      title: runSpike 全部 401 时先查 dsh-web 打印的地址协议：改为 https 后 dsh-url 仍返回旧的 http 地址
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/runspike-401-dsh-web-https-dsh-url-http-fe7536.yaml
+    uiautomator-17642d:
+      title: 模拟器验收剪贴板：uiautomator 树里没有文本选择工具栏，要实际粘贴后读输入框判断
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/uiautomator-17642d.yaml
   ui:
     compose-key-compose-7f09bd:
       title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态

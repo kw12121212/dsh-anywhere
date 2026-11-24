@@ -32,7 +32,7 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
-      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：IM 页「等你允许」「我的 IM 机器人」「添加 IM 机器人」分组与状态（已连接、无法连接及原因、对话 Bot、待允许数）；允许 Bob 请求后移入已连接账号；群聊绑定到项目群再解除绑定；二次确认移除账号 Bob 与聊天 Bob；启用开关关/开（已停用/已连接）、更换对话 Bot；飞书出错后重试变已连接；二次确认移除飞书机器人后返回 IM 页；添加 Telegram：页面截图为黑屏（FLAG_SECURE）、token 掩码、无效 token 显示服务端原因、有效 token 添加后返回列表，token 未进 mock 日志；微信扫码：手机显示二维码（截图经 ZXing 解码即 mock 下发的登录链接）、模拟扫码后显示已扫码请在手机上确认、确认后自动返回并出现微信机器人；过期后显示二维码已过期并换一个二维码成功；离开页面后 im-login-wait 不再发出；enabled=0 时 IM 接入入口隐藏
+      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：IM 页「等你允许」「我的 IM 机器人」「添加 IM 机器人」分组与状态（已连接、无法连接及原因、对话 Bot、待允许数）；允许 Bob 请求后移入已连接账号；群聊绑定到项目群再解除绑定；二次确认移除账号 Bob 与聊天 Bob；启用开关关/开（已停用/已连接）、更换对话 Bot；飞书出错后重试变已连接；二次确认移除飞书机器人后返回 IM 页；添加 Telegram：页面截图为黑屏（FLAG_SECURE）、token 掩码、无效 token 显示服务端原因、有效 token 添加后返回列表，token 未进 mock 日志；微信扫码：手机显示二维码（截图经 ZXing 解码即 mock 下发的登录链接）、模拟扫码后显示已扫码请在手机上确认、确认后自动返回并出现微信机器人；过期后显示二维码已过期并换一个二维码成功；离开页面后 im-login-wait 不再发出；enabled=0 时 IM 接入入口隐藏。评审修复后复验：打开微信页、立即返回再打开（旧长轮询在途）后扫码与确认仍正常完成，机器人名称显示为「微信」
       status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过

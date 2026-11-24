@@ -204,19 +204,25 @@ object ImBridges {
         else -> I18n.tr("连接中…", "Connecting…")
     }
 
-    /** IM 机器人的显示名：账号名，否则平台名。 */
-    fun title(conn: Conn): String = conn.accountName ?: platformOf(conn.platform).name
+    /** IM 机器人的显示名：账号名，否则平台名；账号名就是平台英文名（如微信的 "WeChat"）时按界面语言显示平台名。 */
+    fun title(conn: Conn): String {
+        val platform = platformOf(conn.platform)
+        return conn.accountName?.takeIf { it != platform.en } ?: platform.name
+    }
+
+    /** 扫码链接可在其他应用中打开（http/https）；否则只能复制或扫码。 */
+    fun openable(qr: String): Boolean = qr.startsWith("https://", ignoreCase = true) || qr.startsWith("http://", ignoreCase = true)
 
     /** 聊天名称（网页端 chatName）：标题 → 已配对账号名 → 「私聊」。 */
     fun chatName(conn: Conn, chat: Chat): String =
         chat.title ?: conn.paired.firstOrNull { it.id == chat.key }?.name ?: I18n.tr("私聊", "Direct message")
 
-    /** 可添加的平台：远端声明的 id，按目录顺序，目录外的排在最后。 */
-    fun addablePlatforms(view: View): List<Platform> {
-        val known = PLATFORMS.filter { it.id in view.platforms }
-        val unknown = view.platforms.filter { id -> PLATFORMS.none { it.id == id } }.map(::platformOf)
-        return known + unknown
-    }
+    /** 可添加的平台：远端声明且本 App 内置了表单定义的，按远端列出的顺序（同网页端）。 */
+    fun addablePlatforms(view: View): List<Platform> =
+        view.platforms.mapNotNull { id -> PLATFORMS.firstOrNull { it.id == id } }
+
+    /** 远端声明、但本 App 没有表单定义的平台 id（只显示、不可添加，需更新 App）。 */
+    fun unknownPlatforms(view: View): List<String> = view.platforms.filter { id -> PLATFORMS.none { it.id == id } }
 
     /** 等待允许的请求（全部 IM 机器人）：(连接, 请求)。 */
     fun waiting(view: View): List<Pair<Conn, Request>> = view.connections.flatMap { c -> c.requests.map { c to it } }

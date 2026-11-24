@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: uiautomator-17642d
+  title: 模拟器验收剪贴板：uiautomator 树里没有文本选择工具栏，要实际粘贴后读输入框判断
+category: tooling
+status: active
+created_at: '2026-11-24T11:41:24.758Z'
+updated_at: '2026-11-24T11:41:24.758Z'
+context: dsbot-connectors-mail 验证设备码复制与回到 App 后的清理
+observation: 长按输入框后截图可见「粘贴」工具栏，但 uiautomator dump 不含该弹出窗口，按 dump 找「粘贴」的脚本一律判为没有粘贴选项，得出了剪贴板已清空的错误结论；Gboard 建议条与工具栏是否出现也不能代表系统剪贴板内容
+takeaway: 验收剪贴板时长按空输入框后按截图确定的固定坐标点「粘贴」，再 dump 输入框文本：有内容即剪贴板仍在，空即已清；每次检查后清空输入框
+applies_when: 在模拟器上验证复制、清理剪贴板或任何依赖文本选择工具栏的行为时
+occurrences:
+  - origin: dsbot-connectors-mail
+    date: '2026-11-24'
+    evidence: 2026-11-24 pastecheck 初版两次报 no paste option，截图 pc1 显示工具栏存在；改为固定坐标粘贴后读到 MOCK-1162（未离开）与空（离开后回来）

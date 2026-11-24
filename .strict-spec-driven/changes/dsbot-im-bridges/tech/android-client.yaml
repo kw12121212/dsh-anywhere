@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: android-client
+operations:
+  ADDED:
+    core-runtime-deps:
+      strength: SHOULD
+      statement: android/core 的运行时依赖只允许纯 JVM、无 android.* 引用、无传递依赖的库，版本以精确坐标钉在 android/core/build.gradle.kts（mavenCentral，经 FAIL_ON_PROJECT_REPOS 锁定来源）；每个依赖须在引入它的变更 design.yaml 中说明为何不手写，并由 core JUnit 以真实往返（如二维码编码后解码回读）覆盖其用法；能用 Kotlin 标准库与既有代码完成的逻辑不引入依赖
+      rationale: core 在 dsbot-im-bridges 之前没有任何运行时依赖，这是「core 测试只需 JDK 17」与 App 体积可控的前提；ZXing core（二维码）是第一个例外——手写纠错与掩码风险高、只能靠解码回读验证，纯 Java 且无传递依赖；登记条件避免后续变更随手引入带 Android 或大量传递依赖的库
+      enforcement:
+        method: review
+        detail: 评审检查 android/core/build.gradle.kts 新增的 implementation 坐标是否精确钉版本、gradlew -p android/core dependencies --configuration runtimeClasspath 是否只多出该库本身、设计文件是否说明理由、JUnit 是否有往返测试；当前登记：com.google.zxing:core:3.5.3（QrMatrix / QrMatrixTest）
+  MODIFIED: {}
+  REMOVED: {}

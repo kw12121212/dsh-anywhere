@@ -30,6 +30,15 @@ class QrMatrixTest {
     }
 
     @Test
+    fun `ascii link has no ECI header`() {
+        val text = "https://liteapp.weixin.qq.com/q/abc?qrcode=1"
+        val plain = com.google.zxing.qrcode.encoder.Encoder.encode(text, com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M).matrix
+        val m = QrMatrix.encode(text)!!
+        assertEquals(plain.width, m.size)
+        for (y in 0 until m.size) for (x in 0 until m.size) assertEquals(plain.get(x, y).toInt() == 1, m.isDark(x, y))
+    }
+
+    @Test
     fun `utf8 content round-trips`() {
         assertEquals("扫码登录 DS Bot", decode(QrMatrix.encode("扫码登录 DS Bot")!!))
     }

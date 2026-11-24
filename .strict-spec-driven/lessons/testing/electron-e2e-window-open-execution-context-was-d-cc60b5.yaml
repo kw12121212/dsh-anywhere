@@ -8,7 +8,7 @@ lesson:
 category: testing
 status: active
 created_at: '2026-11-23T18:26:44.548Z'
-updated_at: '2026-11-24T02:55:38.630Z'
+updated_at: '2026-11-24T11:42:12.069Z'
 context: dsbot-avatars 完整回归（xvfb-run -a）
 observation: 'e2e/main-window.spec.ts:401 的 remote.evaluate(window.open…) 偶发报 page.evaluate: Execution context was destroyed（远程页在 evaluate 期间发生导航）；同一提交前三次与紧接着的一次重跑都通过，本变更只改 Android 代码'
 takeaway: 完整回归必须看日志末尾的 EXIT=，不能看外层 shell 的退出码（echo 会吞掉失败）；该用例单次失败且报错是导航中的上下文销毁时，先原样重跑完整回归命令确认是否偶发，偶发则记录而不改测试；连续失败才排查桌面代码
@@ -26,3 +26,6 @@ occurrences:
   - origin: dsbot-sidebar-sections
     date: '2026-11-24'
     evidence: 2026-11-24 完整回归第1次执行 e2e/main-window.spec.ts:372 报 page.evaluate Execution context was destroyed（1 failed, 41 passed）；原样重跑第2次 42 passed, 2 skipped EXIT=0
+  - origin: dsbot-im-bridges
+    date: '2026-11-24'
+    evidence: 2026-11-24 xvfb 下完整回归 e2e/main-window.spec.ts:401 window.open 一例 Execution context was destroyed（41 通过 1 失败），本变更未改 src/ 与 e2e/，整体重跑同一命令

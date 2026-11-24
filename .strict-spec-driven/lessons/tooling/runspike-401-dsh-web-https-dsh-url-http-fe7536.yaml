@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: runspike-401-dsh-web-https-dsh-url-http-fe7536
+  title: runSpike 全部 401 时先查 dsh-web 打印的地址协议：改为 https 后 dsh-url 仍返回旧的 http 地址
+category: tooling
+status: active
+created_at: '2026-11-24T11:41:24.497Z'
+updated_at: '2026-11-24T11:41:24.497Z'
+context: dsbot-im-bridges 对真实 dsh 跑 runSpike 只读探针
+observation: auth-token-session 终态 401、所有探针 401：dsh-web 于当日重启后日志打印 https://127.0.0.1:13080/?token=…，而 dsh-url 只 grep http://，返回的是重启前的旧地址与已失效 token
+takeaway: runSpike 401 时先看 journalctl --user -u dsh-web 最后一条启动地址的协议与时间（输出前把 token 替换为 ***）；在命令内取最后一条 https?:// 行并把 127.0.0.1:13080 换成 tailnet 主机名作为 DSH_SPIKE_TARGET，不打印、不落盘
+applies_when: 对本机真实 dsh 运行 runSpike 或任何依赖 dsh-url 输出的取证，出现 401 或会话 cookie 数为 0 时
+occurrences:
+  - origin: dsbot-im-bridges
+    date: '2026-11-24'
+    evidence: 2026-11-24 19:32 runSpike FAIL=13（auth-token-session 401）；journal 19:09:51 打印 https 地址；改用该行后 FAIL=0

@@ -83,6 +83,9 @@ class ImBridgesTest {
         val a = v.connections[0]
         assertEquals("@ds_bot", ImBridges.title(a))
         assertEquals("飞书 / Lark", ImBridges.title(v.connections[1]))
+        assertEquals("微信", ImBridges.title(ImBridges.Conn("w", "weixin", "WeChat", null, emptyMap(), true, emptyList(), emptyList(), emptyList())))
+        assertTrue(ImBridges.openable("https://liteapp.weixin.qq.com/q/x"))
+        assertFalse(ImBridges.openable("0f1e2d3c"))
         assertEquals("Alice", ImBridges.chatName(a, a.chats.first { it.key == "u1" })) // 空标题 → 配对名
         assertEquals("运维群", ImBridges.chatName(a, a.chats.first { it.key == "g9" }))
         assertEquals("私聊", ImBridges.chatName(a, ImBridges.Chat("zz", "direct", null, null)))
@@ -98,7 +101,10 @@ class ImBridgesTest {
     @Test
     fun `addable platforms follow remote list in catalog order`() {
         val v = ImBridges.view(state)!!
-        assertEquals(listOf("telegram", "weixin", "feishu", "future-im"), ImBridges.addablePlatforms(v).map { it.id })
+        // 远端顺序；未内置表单的平台不可添加（评审发现：此前会给出空表单并发送 im-add {fields:{}}）
+        assertEquals(listOf("telegram", "weixin", "feishu"), ImBridges.addablePlatforms(v).map { it.id })
+        assertEquals(listOf("future-im"), ImBridges.unknownPlatforms(v))
+        assertEquals(listOf("weixin", "telegram"), ImBridges.addablePlatforms(v.copy(platforms = listOf("weixin", "telegram"))).map { it.id })
         val unknown = ImBridges.platformOf("future-im")
         assertEquals("future-im", unknown.name)
         assertTrue(unknown.fields.isEmpty())

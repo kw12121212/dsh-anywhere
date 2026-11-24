@@ -12,17 +12,20 @@ decisions:
     decision: IM 入口以 state.im 对象存在与否门控，不经 capabilities.has 判定
     rationale: 0.3.10 hello capabilities（mobile.js CAPABILITIES）不含 IM 能力名，按 hello 门控入口将永远隐藏；与 dsbot-capabilities、dsbot-connectors-mail 的既有决策一致
   bundled-platform-catalog:
-    decision: IM 平台目录随 App 内置（core ImBridges.PLATFORMS，对照 0.3.10 im-platforms.js 与 client.js GUIDES），只对 state.im.platforms 声明可用的平台提供添加
-    rationale: state 只下发平台 id，字段定义只在上游客户端代码里；内置目录与网页端同源，并以远端声明的可用列表过滤，远端新增未知平台时不会给出错误表单
+    decision: IM 平台目录随 App 内置（core ImBridges.PLATFORMS，对照 0.3.10 im-platforms.js 与 client.js GUIDES），按 state.im.platforms 的顺序只对内置了表单定义的平台提供添加；远端声明但未内置的平台只列出并提示需更新 App
+    rationale: state 只下发平台 id，字段定义只在上游客户端代码里；未知平台给出空表单会发送 im-add {fields:{}}（评审发现），只列出不可添加更安全；顺序与网页端一致
   qr-via-zxing:
     decision: 微信扫码登录的二维码在 core 以 ZXing core（com.google.zxing:core，纯 Java、无传递依赖）编码为点阵，Compose Canvas 绘制；同时提供复制链接与在其他应用中打开
     rationale: 里程碑 done_criteria 要求二维码显示在手机上供另一台设备扫描或给出可复制链接；手写二维码编码器（纠错码、掩码选择）出错风险高且难验证，ZXing core 为纯 JVM、可放进 core 由 JUnit 覆盖（解码回读校验）；用户只有一台手机时可复制或直接打开链接
   login-poll-loop:
-    decision: im-login-wait 与 im-add、im-update 登记为慢端点（长读超时、独立线程）；扫码等待在页面可见期间循环调用，done 后返回列表、expired 时停止并提供换一个二维码，失败显示原因并可重试，离开页面即停止循环
-    rationale: 上游 weixin loginWait 单次长轮询最长 35 秒，超过默认 30 秒读超时；im-add/im-update 会实时向平台校验账号；按 slow-endpoints-executor 规则走慢端点通道，避免误报失败与占用聊天读取池
+    decision: im-login-start/im-login-wait 经只读通道（ManageApi.read：慢端点长读超时与独立线程、不做在途去重、不在每轮后补拉 state）在页面可见且 App 在前台期间循环调用；两轮之间至少约 1.5 秒；done 后返回列表（新连接由 feed revision 刷新）、expired 时停止并提供换一个二维码，失败显示原因并可换码重试，离开页面即停止；im-add、im-update 登记为慢端点走写通道
+    rationale: 上游 weixin loginWait 单次长轮询最长 35 秒，超过默认 30 秒读超时，且主机取状态失败时会立即回 waiting；评审发现走写通道时旧的长轮询仍在途会让同 key 的新请求被丢弃、协程永不恢复，且每轮都补拉 state；改走只读通道并加最小间隔后两者都消除
   web-parity-detail:
     decision: 详情页与网页端 DetailView 一致：只提供启用开关与对话的 Bot，不提供修改凭据字段
     rationale: 网页端不提供凭据修改（需移除后重新添加），手机端同样不提供，避免两端行为不一致与在手机上重新输入凭据
+  qr-secure-no-eci:
+    decision: 二维码面板显示期间加 FLAG_SECURE；Latin-1 可表示的内容不加 UTF-8 ECI 头
+    rationale: 上游扫码确认即把扫码人配对为主人、不经审核，二维码等同凭据，不应出现在截屏与最近任务缩略图中；网页端 qrcode-generator 不加 ECI，登录链接为 ASCII，去掉 ECI 避免个别扫码器兼容问题（评审发现）
 alternatives:
   - option: 按 hello capabilities 门控 IM 入口
     reason: 0.3.10 hello 名单没有 IM 能力名，会导致所有远端都看不到入口

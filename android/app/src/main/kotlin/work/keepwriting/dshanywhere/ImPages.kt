@@ -106,6 +106,10 @@ fun ImPage(state: Json.Value.Object?, api: ManageApi, onOpen: (String) -> Unit, 
             val count = view.connections.count { it.platform == p.id }
             ValueRow(p.name, tr("连接", "Connect"), hint = if (count > 0) tr("已添加 $count 个", "$count added") else null) { onAdd(p.id) }
         }
+        // 远端新增、本 App 没有表单定义的平台：只列出，不提供添加
+        for (id in ImBridges.unknownPlatforms(view)) {
+            ValueRow(id, "", hint = tr("需更新 App 后才能在手机上添加", "Update the app to add it on the phone"), enabled = false, onClick = null)
+        }
     }
 }
 
@@ -164,6 +168,8 @@ fun ImAddPage(state: Json.Value.Object?, platformId: String, api: ManageApi, onD
     val platform = ImBridges.platformOf(platformId)
     val bots = remember(state) { ImBridges.bots(state) }
     var botId by remember { mutableStateOf(bots.firstOrNull()?.first) }
+    // state 晚到时补上默认的 Bot
+    LaunchedEffect(bots) { if (botId == null) botId = bots.firstOrNull()?.first }
     var typed by remember { mutableStateOf(mapOf<String, String>()) }
     var picking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -229,11 +235,11 @@ fun ImAddPage(state: Json.Value.Object?, platformId: String, api: ManageApi, onD
 }
 
 /**
- * 一次写操作的挂起包装（经 ManageApi 原始应答通道：在途去重、慢端点长读超时）。
- * 同一 [key] 已在途时请求被丢弃、本挂起不会恢复：调用方须保证 key 不与仍在途的请求相同（扫码按轮次区分）。
+ * 扫码登录请求的挂起包装：走 ManageApi.read（慢端点长读超时与独立线程；不做在途去重、不在每轮后补拉 state）。
+ * 评审发现：走写通道时同 key 的旧长轮询仍在途会让新请求被丢弃、本挂起永不恢复；完成后的连接由 feed revision 刷新。
  */
-private suspend fun ManageApi.call(key: String, endpoint: String, payload: String): DsbotApi.Result =
-    suspendCancellableCoroutine { cont -> actionRaw(key, endpoint, payload) { if (cont.isActive) cont.resume(it) } }
+private suspend fun ManageApi.call(endpoint: String, payload: String): DsbotApi.Result =
+    suspendCancellableCoroutine { cont -> read(endpoint, payload) { if (cont.isActive) cont.resume(it) } }
 
 private fun resultError(r: DsbotApi.Result): String? = when (r) {
     is DsbotApi.Result.Ok -> null
@@ -253,23 +259,32 @@ private fun QrLogin(platform: String, botId: String, api: ManageApi, onDone: () 
     var login by remember { mutableStateOf<ImBridges.LoginStart?>(null) }
     var status by remember { mutableStateOf("waiting") }
     var error by remember { mutableStateOf<String?>(null) }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(botId, round) {
         login = null
         status = "waiting"
         error = null
-        val started = api.call("im:login:start:$round", "im-login-start", ImBridges.Requests.loginStart(platform, botId))
+        val started = api.call("im-login-start", ImBridges.Requests.loginStart(platform, botId))
         resultError(started)?.let { error = it; return@LaunchedEffect }
         val l = ImBridges.loginStart((started as DsbotApi.Result.Ok).value) ?: run { error = BotManage.errorText(null, null); return@LaunchedEffect }
         login = l
         while (true) {
-            val r = api.call("im:login:wait:$round", "im-login-wait", ImBridges.Requests.loginWait(platform, botId, l.loginId))
+            // 只在 App 处于前台时等待（页面可见期间）；回到前台继续
+            while (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) kotlinx.coroutines.delay(1_000)
+            val began = System.currentTimeMillis()
+            val r = api.call("im-login-wait", ImBridges.Requests.loginWait(platform, botId, l.loginId))
             resultError(r)?.let { error = it; return@LaunchedEffect }
             val s = ImBridges.loginStatus((r as DsbotApi.Result.Ok).value)
             if (s == "done") { onDone(); return@LaunchedEffect }
             status = s
             if (s == "expired") return@LaunchedEffect
+            // 服务端取状态失败时会立刻回 waiting：两轮之间至少间隔约 1.5 秒，免得连发
+            val spent = System.currentTimeMillis() - began
+            if (spent < 1_500) kotlinx.coroutines.delay(1_500 - spent)
         }
     }
+    // 扫码即绑定为主人（上游 im-login-wait done 不经审核）：二维码等同凭据，显示期间禁止截屏与最近任务预览
+    SecureWhileShown()
     val ended = status == "expired" || error != null
     val code = login
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -291,7 +306,7 @@ private fun QrLogin(platform: String, botId: String, api: ManageApi, onDone: () 
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { SensitiveClipboard.copy(context, code.qr) }) { Text(tr("复制链接", "Copy link")) }
-                TextButton(onClick = { openExternal(context, code.qr) }) { Text(tr("在其他应用中打开", "Open in another app")) }
+                if (ImBridges.openable(code.qr)) TextButton(onClick = { openExternal(context, code.qr) }) { Text(tr("在其他应用中打开", "Open in another app")) }
             }
         }
         if (ended) OutlinedButton(onClick = { round++ }) { Text(tr("换一个二维码", "Get a new code")) }
@@ -319,7 +334,7 @@ fun ImDetailPage(state: Json.Value.Object?, id: String, api: ManageApi, onBack: 
     val conn = remember(state, id) { ImBridges.conn(state, id) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
-    var picking by remember { mutableStateOf<String?>(null) } // "bot" 或聊天 key
+    var picking by remember { mutableStateOf<Picking?>(null) }
     if (conn == null) {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Text(tr("这个 IM 机器人已不存在。", "This IM bot no longer exists."), style = MaterialTheme.typography.bodyLarge)
@@ -346,7 +361,7 @@ fun ImDetailPage(state: Json.Value.Object?, id: String, api: ManageApi, onBack: 
         ErrorLine(error) { error = null }
         if (st == "error") TextButton(onClick = { act("retry", "im-retry", R.retry(id)) }, enabled = !busy("retry"), modifier = Modifier.padding(horizontal = 8.dp)) { Text(tr("重试", "Try again")) }
         SwitchRow(tr("启用", "Enabled"), null, conn.enabled, !busy("enabled")) { act("enabled", "im-update", R.setEnabled(id, it)) }
-        ValueRow(tr("对话对象", "Talks to"), conn.botId?.let { b -> ImBridges.bots(state).firstOrNull { it.first == b }?.second } ?: tr("未选择", "None"), enabled = !busy("bot")) { picking = "bot" }
+        ValueRow(tr("对话对象", "Talks to"), conn.botId?.let { b -> ImBridges.bots(state).firstOrNull { it.first == b }?.second } ?: tr("未选择", "None"), enabled = !busy("bot")) { picking = Picking.Bot }
 
         if (conn.requests.isNotEmpty()) {
             SectionTitle(tr("等你允许", "Waiting for approval"))
@@ -381,7 +396,7 @@ fun ImDetailPage(state: Json.Value.Object?, id: String, api: ManageApi, onBack: 
                         }, enabled = !busy("chat:${chat.key}")) { Text(tr("移除", "Remove"), color = MaterialTheme.colorScheme.error) }
                     }
                     if (group) {
-                        TextButton(onClick = { picking = chat.key }, enabled = !busy("chat:${chat.key}")) {
+                        TextButton(onClick = { picking = Picking.Chat(chat.key) }, enabled = !busy("chat:${chat.key}")) {
                             Text(tr("绑定到：", "Bound to: ") + (ImBridges.targetName(state, chat.target) ?: tr("未绑定", "Not bound")))
                         }
                     }
@@ -401,14 +416,21 @@ fun ImDetailPage(state: Json.Value.Object?, id: String, api: ManageApi, onBack: 
     confirm?.let { (title, run) ->
         ConfirmDialog(title, tr("移除后不能恢复。", "This cannot be undone."), tr("移除", "Remove"), onConfirm = run, onDismiss = { confirm = null })
     }
-    picking?.let { which ->
-        if (which == "bot") {
-            TargetPicker(state, tr("对话对象", "Talks to"), rooms = false, selected = conn.botId?.let { ImBridges.Target(it, null) },
-                onPick = { t -> t?.botId?.let { b -> act("bot", "im-update", R.setBot(id, b)) } }, onDismiss = { picking = null })
-        } else {
-            val chat = conn.chats.firstOrNull { it.key == which }
+    when (val which = picking) {
+        null -> Unit
+        Picking.Bot -> TargetPicker(state, tr("对话对象", "Talks to"), rooms = false, selected = conn.botId?.let { ImBridges.Target(it, null) },
+            onPick = { t -> t?.botId?.let { b -> act("bot", "im-update", R.setBot(id, b)) } }, onDismiss = { picking = null })
+        is Picking.Chat -> {
+            val key = which.key
+            val chat = conn.chats.firstOrNull { it.key == key }
             TargetPicker(state, tr("绑定到", "Bound to"), rooms = true, selected = chat?.target,
-                onPick = { t -> act("chat:$which", "im-chat", R.bindChat(id, which, t)) }, onDismiss = { picking = null })
+                onPick = { t -> act("chat:$key", "im-chat", R.bindChat(id, key, t)) }, onDismiss = { picking = null })
         }
     }
+}
+
+/** 详情页打开的选择器：对话的 Bot，或某个聊天的绑定目标。 */
+private sealed interface Picking {
+    data object Bot : Picking
+    data class Chat(val key: String) : Picking
 }
