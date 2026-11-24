@@ -12,6 +12,13 @@ operations:
       enforcement:
         method: review
         detail: core JUnit（ConnectorSettingsTest、MailSettingsTest、PendingDockTest）覆盖视图解码、动作判定、状态文案、分组与搜索、添加校验、导入扫描解码、发送卡解码与全部请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/connectors/index.js（rowFor、connectorsView、endpoints、beginSignIn、startBrowserFlow、startDeviceFlow、importScan）、catalog.js（CATALOG、CATEGORIES）、mail/index.js（endpoints、applyRules、mailView、googleCode、mail_send 请求卡）、mail/presets.js、channel.js（live connectors、state connectorRequests/mailRequests、端点分发）、client.js（ConnectorRow、BrowserPanel、DevicePanel、ClientPanel、TokenPanel、MailForm、MailRules、MailSendCard、ConnectorsPage）；FINDINGS 第 29 节登记 runSpike ProbesConnectors 只读实测结果与 mock --manage 覆盖范围
+    slow-endpoints-executor:
+      strength: SHOULD
+      statement: 会在服务端等待外部服务（模型调用、IMAP/SMTP 登录与发信、OAuth 发现与令牌校验、导入等）才应答的 /api/bot 端点登记到 core 的慢端点集合（MemoryPanel.SLOW_ENDPOINTS、ConnectorSettings.SLOW_ENDPOINTS 等），由连接层以长读超时（300 秒）在独立的按需线程池发出；不得放在状态 executor 上同步执行，也不得占用 2 线程的聊天读取池；停靠区等经聊天控制器作答的慢端点同样改道；失败后不自动重试，按 manage-write-feedback 显示原因
+      rationale: dsbot-memory 发现默认 30 秒读超时会误报失败而服务端照样执行；dsbot-connectors-mail 评审发现 SMTP 发信与 IMAP 验证最长约 2 分钟，两个同时在途会占满读取池、卡住聊天历史与媒体，放在状态 executor 上则卡住 feed 合并；同里程碑 IM 登录等待、更新安装等端点也会遇到
+      enforcement:
+        method: review
+        detail: 评审检查新消费的端点是否核对上游最坏耗时，慢端点是否登记进 core 慢端点集合，NativeShellConnection.postBot 的 slow 判断与 executorFor 是否覆盖该集合；mock 按真实耗时延迟一次
   MODIFIED:
     hello-capabilities:
       strength: MUST
