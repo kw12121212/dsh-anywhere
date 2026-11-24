@@ -209,6 +209,11 @@ categories:
       status: active
       occurrences: 5
       path: .strict-spec-driven/lessons/testing/electron-e2e-window-open-execution-context-was-d-cc60b5.yaml
+    mock-revision-revision-764395:
+      title: mock 的刷新信号要照搬上游：写入后顺手推进 revision 会掩盖「只换目录签名不推进 revision」的真实语义
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/mock-revision-revision-764395.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

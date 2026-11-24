@@ -78,6 +78,7 @@ rules:
       - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
       - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
       - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+      - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
@@ -233,3 +234,22 @@ rules:
     enforcement:
       method: review
       detail: core JUnit（LocalAgentsTest）覆盖应答解码、简短版本、登录状态、模型解码、表单校验与参数切分、请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/local-agents/index.js（localAgentsEndpoint、detected、customView、freshList）、engines.js（validateCustom）、adapter.js（probeModels）、channel.js（端点分发）、client.js（LocalAgentsPage、AgentSignInRow、AgentForm、shortVersion）
+  provider-endpoints:
+    strength: MUST
+    statement: '模型服务商端点（DS-Bot 0.3.10 源码核对，经 dsh 的 POST /api/bot）：providers {} → {available:false} 或 {available:true, providers[{id, name, models[{id, ref, name}], declaredModels[{id, ref, name}], refreshable, key: null | {configured, writable}, removable, custom, error?}], addable[{id, name}], protocols[], revision}（内置的在前、自加的在后；key 为 null 表示该路由不用 API key）；provider-key {provider, value: string|null}（null 移除；写入前 checkKey：非空、不是 NAME=value、无引号、仅可见 ASCII；路由不用 key 或 key 在外部设置时拒绝）→ providersView；provider-add {provider, key?} 或 {custom:true, provider（^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$）, name?(≤80), baseURL(http/https), api(protocols 之一), key?, models[≥1, 每项 {id, name?…}，id 不重复，≤500]} → providersView；provider-models {provider} 或 {baseURL, api?, key?}（key 只随本次请求发送、不保存）→ [{id, name?, contextWindow?, maxTokens?, inputModalities?}]；provider-models-save {provider, models[≥1], revision?}（仅可编辑且可列出模型的服务商；revision 不一致回 bot/stale）→ providersView；provider-remove {provider}（仅自加；随之移除其专属 key）→ providersView；models {} → {modelsKey}（刷新模型目录）；服务商与 key 的写入只换模型目录（dropCatalog）、不推进团队 state.revision，state 应答带 modelsKey（目录签名），客户端 state 请求须带 models: 上次的 modelsKey，否则 since 命中即回 unchanged、模型目录永不刷新（网页端同样携带）；efforts {ref} → {efforts[{id, name}], defaultEffort?}。校验失败为 {ok:false, error:{code:bot/invalid, message}}，并发修改为 bot/stale；providers、provider-models、models、efforts 在上游 READS 内。0.3.10 hello capabilities 不含服务商能力名、state 无对应字段，入口不门控，页面以应答降级。provider-models、provider-add、provider-models-save 属慢端点。实测与源码核对界定：providers 应答形态与写端点错误应答为本机真实服务只读实测（FINDINGS 第 32 节；providers 读取会触发上游 repairRoutes 为自定义路由补 compat，属上游读取行为）；写端点成功应答为源码核对，由 mock --manage 覆盖，未改动用户真实服务商与 key'
+    rationale: 服务商端点首次被手机端消费，涉及 API key 写入、并发修改检测与自定义路由校验，登记完整字段、错误码、门控方式与取证边界作为单一事实来源，避免后续变更把源码核对误当实测或在取证时改动用户的模型配置
+    enforcement:
+      method: review
+      detail: core JUnit（ModelProvidersTest、BotModelBatchTest、DsbotStatePayloadTest）覆盖 providers 解码、key 状态与使用者、模型草稿与受影响 Bot、key 与自定义服务商校验、批量计划与汇总、本地路由判定（同 client.js badgeOf）、state 请求的 modelsKey、全部请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/providers.js（providersView、checkKey、addProvider、customProfile、discoverModels、saveProviderModels、removeProvider）、channel.js（端点分发与 READS）、client.js（ProvidersPage、ProviderRow、ModelDraft、KeyEditor、AddProvider、KnownForm、CustomForm、draftFrom、draftSummary、fallbacksFor、BotModelsPage、planModelChange、runModelChange、summarizeModelChange）
+  on-demand-page-degrade:
+    strength: SHOULD
+    statement: 数据不在 state 中、按需由端点读取的原生设置页（如 local-agents、providers），若 0.3.10 hello capabilities 不声明对应能力名，入口不做门控，页面按首次读取的应答降级：未知端点（bot/not-found）显示「此远端不支持…」，应答声明 available:false 时显示该 DSH 无法提供的说明，其他失败显示原因并可重试；同时在 hello-capabilities 规则登记该端点组的例外；列表读取不可取消且可能乱序，须以代次号只采用最新一次应答，写端点若返回新视图则直接采用并使旧读取失效
+    rationale: dsbot-local-agents 与 dsbot-models-providers 先后遇到同样的情形：hello 不声明、state 无字段，按 hello 门控会让入口永远隐藏，按版本论证又缺证据；按应答降级对旧远端安全、对其他功能无影响；两次评审都指出乱序读取会让旧应答覆盖新结果。同里程碑的日程、用量、系统页等后续变更会复用
+    enforcement:
+      method: review
+      detail: 评审检查新增的按需设置页：首次读取失败时区分 bot/not-found 与其他错误、处理 available:false、读取带代次号、写端点返回视图时直接采用；hello-capabilities 例外已登记
+    examples:
+      good:
+        - LocalAgentsPage / ModelProvidersPage 的 LaLoad/PvLoad 与 gen 计数
+      bad:
+        - 按 capabilities.has 隐藏入口导致永远不可见；或读取回调直接写页面状态，旧应答后到覆盖新结果
