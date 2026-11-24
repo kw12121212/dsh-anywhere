@@ -8,6 +8,24 @@ package work.keepwriting.core
  */
 object DsbotModels {
     /** state 全量视图。revision 是同步的锚点；raw 保留完整原始对象。 */
+    /** state 应答里的 modelsKey（模型目录签名；dsbot-models-providers）。 */
+    fun modelsKey(raw: Json.Value.Object?): String? = (raw?.members?.get("modelsKey") as? Json.Value.StringValue)?.value
+
+    /**
+     * state 请求的参数：since（revision，数字原样）、live（live 键）、models（上次的 modelsKey）。
+     * 上游 channel.js 只在 since 命中且 models 未给或与当前目录签名相同时回 unchanged；服务商与 key 的写入只换模型目录、
+     * 不推进团队 revision——不带 models 时手机端的模型目录永远不会刷新（网页端同样携带 known.modelsKey）。
+     * 没有任何参数时为 "{}"（全量取）。
+     */
+    fun statePayload(since: String?, live: String?, models: String?): String {
+        val parts = buildList {
+            if (since != null) add("\"since\":" + (if (since.isNotEmpty() && since.all { it.isDigit() || it == '-' }) since else JsonString.of(since)))
+            if (live != null) add("\"live\":" + JsonString.of(live))
+            if (since != null && models != null) add("\"models\":" + JsonString.of(models))
+        }
+        return "{" + parts.joinToString(",") + "}"
+    }
+
     data class State(
         val revision: String,
         val liveKey: String?,

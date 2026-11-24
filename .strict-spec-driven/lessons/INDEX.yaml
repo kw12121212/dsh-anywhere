@@ -318,7 +318,7 @@ categories:
     mock-dsh-server-mock-393a7d:
       title: 改了 mock-dsh-server 要重启进程再验收，且 mock 各接口的数据要互相一致
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/tooling/mock-dsh-server-mock-393a7d.yaml
     pkill-f-shell-144-9e23d5:
       title: pkill -f 的模式会匹配到执行它的那条 shell 命令自身，命令以 144 退出且后续步骤静默没跑

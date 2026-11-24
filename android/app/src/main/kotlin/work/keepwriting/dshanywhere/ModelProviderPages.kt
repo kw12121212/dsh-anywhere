@@ -84,7 +84,6 @@ fun ModelProvidersPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> U
     var round by remember { mutableIntStateOf(0) }
     var open by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var catalogBusy by remember { mutableStateOf(false) }
     val gen = remember { intArrayOf(0) }
     val bots = remember(state) { ModelProviders.bots(state) }
     LaunchedEffect(round) {
@@ -115,22 +114,20 @@ fun ModelProvidersPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> U
                 FlowRow(modifier = Modifier.padding(horizontal = 8.dp)) {
                     TextButton(onClick = onAdd) { Text(tr("＋ 新增服务商", "+ Add a provider")) }
                     TextButton(onClick = onBotModels) { Text(tr("批量切换 Bot 模型", "Change several Bots")) }
-                    TextButton(enabled = !catalogBusy, onClick = {
-                        catalogBusy = true
+                    // 经写通道：成功后补拉 state（带 modelsKey），Bot 的模型选择随之更新；再重读服务商
+                    TextButton(enabled = "pv:catalog" !in api.inFlight, onClick = {
                         error = null
-                        api.read("models", ModelProviders.Requests.refreshCatalog()) { r ->
-                            catalogBusy = false
-                            errorOf(r)?.let { error = it } ?: round++
-                        }
-                    }) { Text(if (catalogBusy) tr("刷新中…", "Refreshing…") else tr("刷新模型目录", "Refresh catalog")) }
+                        api.action("pv:catalog", "models", ModelProviders.Requests.refreshCatalog(), { round++ }) { error = it }
+                    }) { Text(if ("pv:catalog" in api.inFlight) tr("刷新中…", "Refreshing…") else tr("刷新模型目录", "Refresh catalog")) }
                 }
                 ErrorLine(error) { error = null }
                 SectionTitle(tr("模型服务商 · ${view.providers.size}", "Model providers · ${view.providers.size}"))
-                for (p in view.providers) {
+                for (p in view.providers) androidx.compose.runtime.key(p.id) {
                     ProviderRow(
                         p = p, view = view, bots = bots, api = api, open = open == p.id,
                         onToggle = { open = if (open == p.id) null else p.id },
                         onView = applyView,
+                        pageRevision = view.revision,
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
@@ -149,6 +146,7 @@ private fun ProviderRow(
     open: Boolean,
     onToggle: () -> Unit,
     onView: (Json.Value) -> Unit,
+    pageRevision: String?,
 ) {
     val users = ModelProviders.users(p, bots)
     var error by remember(p.id) { mutableStateOf<String?>(null) }
@@ -162,6 +160,7 @@ private fun ProviderRow(
         api.action("pv:${p.id}:$op", endpoint, payload, { v -> onView(v); onOk() }) { error = it }
     }
     LaunchedEffect(open) { if (!open) { draft = null; error = null } }
+    val openState = androidx.compose.runtime.rememberUpdatedState(open)
 
     Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -211,6 +210,7 @@ private fun ProviderRow(
                 // 先取最新视图（带 revision），再请端点列出模型，组成草稿
                 api.read("providers", ModelProviders.Requests.list()) { r1 ->
                     val fresh = (r1 as? DsbotApi.Result.Ok)?.let { ModelProviders.decode(it.value) }
+                    if (fresh != null) onView((r1 as DsbotApi.Result.Ok).value) // 同网页端：刷新时先采用最新视图
                     val fp = fresh?.providers?.firstOrNull { it.id == p.id }
                     if (fp == null) {
                         refreshing = false
@@ -220,7 +220,8 @@ private fun ProviderRow(
                     api.read("provider-models", ModelProviders.Requests.discoverStored(p.id)) { r2 ->
                         refreshing = false
                         errorOf(r2)?.let { error = it; return@read }
-                        draft = ModelProviders.draftFrom(fp, ModelProviders.discovered((r2 as DsbotApi.Result.Ok).value), fresh.revision)
+                        if (!openState.value) return@read // 刷新期间已收起：丢弃结果
+                        draft = ModelProviders.draftFrom(fp, ModelProviders.discovered((r2 as DsbotApi.Result.Ok).value), fresh.revision ?: pageRevision)
                     }
                 }
             }) { Text(if (refreshing) tr("刷新中…", "Refreshing…") else tr("刷新模型", "Refresh models")) }
@@ -355,7 +356,7 @@ private fun AddForms(view: ModelProviders.View, api: ManageApi, onDone: () -> Un
         }
         SecretField(key, { key = it }, tr("API key（可选）", "API key (optional)"), enabled = !busy)
         SectionTitle(tr("模型", "Models"))
-        TextButton(enabled = !asking && ModelProviders.endpointOk(baseURL), modifier = Modifier.padding(horizontal = 8.dp), onClick = {
+        TextButton(enabled = !asking && ModelProviders.endpointOk(baseURL) && (key.isBlank() || ModelProviders.keyProblem(key) == null), modifier = Modifier.padding(horizontal = 8.dp), onClick = {
             asking = true
             error = null
             api.read("provider-models", ModelProviders.Requests.discoverEndpoint(baseURL, proto, key)) { r ->
@@ -442,7 +443,8 @@ fun BotModelsPage(state: Json.Value.Object?, api: ManageApi) {
             val served = groups.flatMap { g -> g.models.map { it.ref } }.toSet()
             busy = true
             val r = ++round
-            scope.launch {
+            // 离开页面也跑完（同网页端 runModelChange 不中断）：避免一部分 Bot 已切、其余没切且没有汇总
+            scope.launch(kotlinx.coroutines.NonCancellable) {
                 val out = mutableListOf<BotModelBatch.Result>()
                 for (step in BotModelBatch.plan(chosen, ref, served)) {
                     val b = step.bot

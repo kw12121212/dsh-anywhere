@@ -496,6 +496,7 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 
 **实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesProviders` 探针组，未改动真实服务商、模型与 key，未调用会请求外部端点的 provider-models）**：
 - `providers {}` → `{available:true, providers[1], addable[42], protocols[openai-completions, openai-responses, anthropic-messages, google-generative-ai], revision:<数字>}`；provider 项键 `{id, name, models, declaredModels, refreshable, key, removable, custom}`（`error` 只在出错时出现），本机唯一的服务商为自加、可刷新、可删除，`key:{configured:true, writable:true}`，models 与 declaredModels 各 2 个。视图不含任何 key 值。服务商不在 state 中，hello 不含相应能力名。
+- `providers` 读取本身会运行上游 `repairRoutes()`（为自定义路由补齐 compat 默认值），属上游读取行为，探针未做任何写入。服务商写入只 `dropCatalog()`、不推进团队 `state.revision`：state 应答带 `modelsKey`，客户端须在 state 请求中带 `models:<上次 modelsKey>`，否则模型目录不会刷新（评审发现，手机端已改为携带）。
 - 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/invalid"`，均在写入前拒绝）：`provider-key` 带引号的 key → "Paste the key without quotes"（checkKey 先于路由检查）；`provider-key {provider:不存在}` → "… takes no API key here"；`provider-add {provider:不存在}` → "DSH offers no provider …"；`provider-models-save {provider:不存在}` → "No editable provider …"；`provider-remove {provider:不存在}` → "… is not set up"。
 
 **源码核对（ds-bot 0.3.10 `src/host/providers.js`、`channel.js`，client.js `ProvidersPage`/`ProviderRow`/`ModelDraft`/`KeyEditor`/`AddProvider`/`BotModelsPage`/`bot-model-batch`）**：

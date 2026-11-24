@@ -6,8 +6,6 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import work.keepwriting.core.BotModelBatch.Action
-import work.keepwriting.core.BotModelBatch.Status
 
 class ModelProvidersTest {
     @BeforeEach
@@ -55,13 +53,24 @@ class ModelProvidersTest {
         assertTrue(view.available)
         assertEquals(listOf("deepseek", "env-route", "my-gw", "oauth-route"), view.providers.map { it.id })
         assertEquals(listOf("Groq", "Z.ai"), view.addable.map { it.name }) // 按名称排序
-        assertEquals("7", view.revision)
+        assertEquals("7", view.revision) // 原样 JSON 文本：数字
+        assertEquals("\"12\"", ModelProviders.decode(Json.parse("""{"available":true,"providers":[],"revision":"12"}"""))!!.revision) // 字符串保持字符串
         assertEquals(3, view.protocols.size)
         assertNull(p("oauth-route").key)
         assertFalse(p("env-route").key!!.writable)
         assertTrue(p("my-gw").refreshable && p("my-gw").removable)
         assertFalse(ModelProviders.decode(Json.parse("""{"available":false}"""))!!.available)
         assertNull(ModelProviders.decode(Json.parse("[]")))
+    }
+
+    @Test
+    fun `local routes follow upstream badgeOf`() {
+        assertTrue(ModelProviders.isLocal("local-claude-code/sonnet"))
+        assertTrue(ModelProviders.isLocal("local-codex-cli/gpt-5"))
+        assertTrue(ModelProviders.isLocal("local-acp-agent-m1/default"))
+        assertFalse(ModelProviders.isLocal("local-ollama/llama3")) // 自定义服务商 id 恰好以 local- 开头
+        assertFalse(ModelProviders.isLocal("deepseek/v4"))
+        assertFalse(ModelProviders.isLocal(null))
     }
 
     @Test
@@ -91,7 +100,11 @@ class ModelProvidersTest {
         val d2 = d.toggle("b")
         assertEquals(1, d2.removed)
         val bots = ModelProviders.bots(state) + ModelProviders.BotRef("b5", "戊", "local-x/y", "my-gw/b")
-        assertEquals(listOf("b1"), ModelProviders.affected(p("my-gw"), d2, bots).map { it.id }) // 本地 Agent 上的不算
+        assertEquals(listOf("b1"), ModelProviders.affected(p("my-gw"), d2, bots).map { it.id })
+        // 当前模型保留、只有已应用模型被移除的不算（评审发现）；当前模型在本地 Agent 上的不算
+        val keptCurrent = ModelProviders.BotRef("b6", "己", "deepseek/v4", "my-gw/b")
+        val localCurrent = ModelProviders.BotRef("b7", "庚", "local-claude-code/sonnet", "my-gw/b")
+        assertTrue(ModelProviders.affected(p("my-gw"), d2, listOf(keptCurrent, localCurrent)).isEmpty())
         assertTrue(ModelProviders.affected(p("my-gw"), d, bots).isEmpty())
     }
 
@@ -108,14 +121,17 @@ class ModelProvidersTest {
     @Test
     fun `custom provider validation and models`() {
         val P = listOf("openai-completions", "anthropic-messages")
-        assertEquals("服务商 id 为小写字母、数字与连字符，以字母开头", ModelProviders.customProblem("My-GW", "https://x/v1", "openai-completions", P, "", listOf("m")))
-        assertEquals("服务商 id 为小写字母、数字与连字符，以字母开头", ModelProviders.customProblem("1gw", "https://x/v1", "openai-completions", P, "", listOf("m")))
+        assertEquals("服务商 id 为小写字母、数字与连字符，以字母开头，连字符不能连续或结尾", ModelProviders.customProblem("My-GW", "https://x/v1", "openai-completions", P, "", listOf("m")))
+        assertEquals("服务商 id 为小写字母、数字与连字符，以字母开头，连字符不能连续或结尾", ModelProviders.customProblem("1gw", "https://x/v1", "openai-completions", P, "", listOf("m")))
         assertEquals("端点须为 http 或 https 地址", ModelProviders.customProblem("gw", "ftp://x", "openai-completions", P, "", listOf("m")))
         assertEquals("端点须为 http 或 https 地址", ModelProviders.customProblem("gw", "not a url", "openai-completions", P, "", listOf("m")))
         assertEquals("选择协议", ModelProviders.customProblem("gw", "https://x/v1", "nope", P, "", listOf("m")))
         assertEquals("粘贴 key 时不要带引号", ModelProviders.customProblem("gw", "https://x/v1", "openai-completions", P, "'k'", listOf("m")))
         assertEquals("至少添加一个模型", ModelProviders.customProblem("gw", "https://x/v1", "openai-completions", P, "", emptyList()))
         assertNull(ModelProviders.customProblem("my-gw2", "http://localhost:8080/v1", "openai-completions", P, "", listOf("m")))
+        // 上游 ROUTE_ID：连字符不能连续或结尾（评审发现）
+        for (bad in listOf("gw-", "a--b", "-gw")) assertTrue(ModelProviders.customProblem(bad, "https://x/v1", "openai-completions", P, "", listOf("m"))!!.startsWith("服务商 id"), bad)
+        assertNull(ModelProviders.customProblem("a-b-c1", "http://my_gw:8080/v1", "openai-completions", P, "", listOf("m"))) // 主机名带下划线可以
         val found = ModelProviders.discovered(Json.parse("""[{"id":"a"},{"id":"b"}]"""))
         assertEquals(listOf("b", "x", "y"), ModelProviders.customModels(found, setOf("b"), " x, y  b "))
         assertEquals(listOf("x", "y"), ModelProviders.typedIds("x,,y\n"))
@@ -140,24 +156,8 @@ class ModelProvidersTest {
         val found = ModelProviders.discovered(Json.parse("""[{"id":"c","name":"C"}]"""))
         val d = ModelProviders.draftFrom(p("my-gw"), found, "7").toggle("a")
         assertEquals("""{"provider":"my-gw","models":[{"id":"c","name":"C"},{"id":"b"}],"revision":7}""", R.saveModels("my-gw", d))
-        assertEquals("""{"provider":"my-gw","models":[{"id":"b"}],"revision":"r-x"}""", R.saveModels("my-gw", ModelProviders.draftFrom(p("my-gw"), emptyList(), "r-x").toggle("a")))
+        assertEquals("""{"provider":"my-gw","models":[{"id":"b"}],"revision":"12"}""", R.saveModels("my-gw", ModelProviders.draftFrom(p("my-gw"), emptyList(), "\"12\"").toggle("a"))) // 字符串 revision 原样回传
+        assertEquals("""{"provider":"my-gw","models":[{"id":"b"}]}""", R.saveModels("my-gw", ModelProviders.draftFrom(p("my-gw"), emptyList(), null).toggle("a")))
         assertTrue("provider-models" in ModelProviders.SLOW_ENDPOINTS)
-    }
-
-    @Test
-    fun `batch plan and summary follow web bot-model-batch`() {
-        val bots = ModelProviders.bots(state)
-        val plan = BotModelBatch.plan(bots, "deepseek/v4", setOf("deepseek/v4", "my-gw/a"))
-        assertEquals(listOf(Action.CHANGE, Action.CHANGE, Action.KEEP, Action.SKIP_LOCAL), plan.map { it.action })
-        assertTrue(BotModelBatch.plan(bots.take(1), "gone/x", setOf("deepseek/v4")).all { it.action == Action.SKIP_UNAVAILABLE })
-        val results = listOf(
-            BotModelBatch.Result("b1", "甲", Status.UPDATED), BotModelBatch.Result("b2", "乙", Status.FAILED, "Unknown Bot"),
-            BotModelBatch.Result("b3", "丙", Status.UNCHANGED), BotModelBatch.Result("b4", "丁", Status.SKIPPED),
-        )
-        val s = BotModelBatch.summarize(results)
-        assertEquals(BotModelBatch.Summary(4, 1, 1, 1, 1), s)
-        assertEquals("已更新 1 · 未变 1 · 跳过 1 · 失败 1", BotModelBatch.summaryText(s))
-        assertEquals("失败：Unknown Bot", BotModelBatch.statusText(results[1]))
-        assertEquals("""{"id":"b1","model":"deepseek/v4"}""", BotModelBatch.request("b1", "deepseek/v4"))
     }
 }

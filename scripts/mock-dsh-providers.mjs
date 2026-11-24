@@ -3,7 +3,7 @@
 // 用内存数据模拟，并作为 state.models 目录的来源。调用记录只记端点与参数键，不记 key。
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages']
-const ROUTE_ID = /^[a-z][a-z0-9-]*$/
+const ROUTE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const KNOWN = {
   zai: { name: 'Z.ai', models: [{ id: 'glm-4.6', name: 'GLM 4.6' }] },
   groq: { name: 'Groq', models: [{ id: 'llama-3.3-70b', name: 'Llama 3.3 70B' }] },
@@ -66,13 +66,12 @@ export function createProviders() {
     async providers() { return view() },
     async models() { await sleep(400); return { modelsKey: 'mk-' + revision } },
     async 'provider-key'(p) {
+      if (p.value !== null) checkKey(p.value) // 上游 setProviderKey 先 checkKey 再找路由
       const pr = find(p.provider)
       if (!pr || !pr.key) throw invalid(`${p.provider} takes no API key here`)
       if (!pr.key.writable) throw invalid(`The API key for ${pr.id} is set outside DS Bot and cannot be changed here`)
-      if (p.value === null) pr.key = { ...pr.key, configured: false }
-      else { checkKey(p.value); pr.key = { ...pr.key, configured: true } }
-      revision += 1
-      return view()
+      pr.key = { ...pr.key, configured: p.value !== null }
+      return view() // 凭据写入不改设置 revision
     },
     async 'provider-add'(p) {
       await sleep(600)
@@ -133,12 +132,13 @@ export function createProviders() {
   }
 
   /** 本模块负责的端点：返回 Promise；其他端点返回 null。enabled=false 模拟旧版远端（bot/not-found）。 */
-  function handle(endpoint, p, ok, fail, bump) {
+  function handle(endpoint, p, ok, fail) {
     const fn = endpoints[endpoint]
     if (!fn) return null
     calls.push({ endpoint, keys: Object.keys(p ?? {}).sort(), at: Date.now() })
     if (!enabled) return Promise.resolve({ ok: false, error: { code: 'bot/not-found', message: `Unknown endpoint ${endpoint}`, details: {} } })
-    return fn(p ?? {}).then((value) => { if (endpoint !== 'providers' && endpoint !== 'provider-models') bump(); return ok(value) },
+    // 上游服务商写入只 dropCatalog、不推进团队 revision：客户端靠 state 请求里的 models（modelsKey）发现目录变化
+    return fn(p ?? {}).then((value) => ok(value),
       (error) => (error.code ? { ok: false, error: { code: error.code, message: error.message, details: {} } } : fail(error.message)))
   }
 
@@ -154,5 +154,7 @@ export function createProviders() {
     return { enabled, available, revision, providers, calls }
   }
 
-  return { handle, set, catalog }
+  // 同上游 channel.js modelsKey：目录 ref（缺 key 加 !）与默认模型
+  const modelsKey = () => `${catalog().map((m) => `${m.ref}${m.needsKey ? '!' : ''}`).join(',')}|deepseek/v4`
+  return { handle, set, catalog, modelsKey }
 }

@@ -32,7 +32,7 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
-      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：服务商列表（DeepSeek key 已设置与使用者、GLM 需要 API key、OpenAI(env) key 在外部设置、My Gateway）；GLM key：NAME=value 本地提示、有效 key 掩码保存后输入框清空并显示已设置（表单期间截图黑屏，key 未进 mock 日志）、二次确认移除 key 后回到需要 API key；DeepSeek V4 思考强度 Low、High、Max；批量切换：选研究主管与运维值班切到 Gateway B，汇总已更新 2、各 Bot 标已切换；My Gateway 刷新模型草稿（端点返回 gw-a/gw-c/gw-d、未返回 gw-b），取消 gw-b 后保存弹出确认并列出研究主管、运维值班；别处改动（revision）时显示服务端原因，取消后重新刷新保存成功；新增内置 Z.ai 带 key；自定义 API：带引号 key 本地提示、从端点查找并勾选 m-large 后添加；二次确认删除自定义服务商；研究主管缺 key 的修复卡显示「去模型与服务商」并直达本页；providers 回 bot/not-found 与 available=false 时页面说明
+      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：服务商列表（DeepSeek key 已设置与使用者、GLM 需要 API key、OpenAI(env) key 在外部设置、My Gateway）；GLM key：NAME=value 本地提示、有效 key 掩码保存后输入框清空并显示已设置（表单期间截图黑屏，key 未进 mock 日志）、二次确认移除 key 后回到需要 API key；DeepSeek V4 思考强度 Low、High、Max；批量切换：选研究主管与运维值班切到 Gateway B，汇总已更新 2、各 Bot 标已切换；My Gateway 刷新模型草稿（端点返回 gw-a/gw-c/gw-d、未返回 gw-b），取消 gw-b 后保存弹出确认并列出研究主管、运维值班；别处改动（revision）时显示服务端原因，取消后重新刷新保存成功；新增内置 Z.ai 带 key；自定义 API：带引号 key 本地提示、从端点查找并勾选 m-large 后添加；二次确认删除自定义服务商；研究主管缺 key 的修复卡显示「去模型与服务商」并直达本页；providers 回 bot/not-found 与 available=false 时页面说明。评审修复后复验（mock 已改为与上游一致：服务商写入不推进团队 revision、state 按 modelsKey 判定 unchanged）：新增内置 Groq 后进入批量切换，模型选择里立即出现 Llama 3.3 70B · Groq
       status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过

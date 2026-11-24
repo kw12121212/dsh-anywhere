@@ -229,6 +229,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       sections: team.sections,
       privateArchives: team.privateArchives,
       models: providers.catalog(),
+      modelsKey: providers.modelsKey(),
       defaultModel: 'deepseek/v4',
       permissions: { options: [{ value: 'read-only', name: '只读' }, { value: 'workspace-write', name: '工作区可写' }, { value: 'danger-full-access', name: '完全访问' }], defaultPreset: 'danger-full-access' },
       colors: ['deepseek', 'blue', 'violet', 'orange', 'green', 'magenta', 'cyan', 'red', 'yellow', 'brown', 'gray', 'black', 'aurora'],
@@ -312,13 +313,14 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
-    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail, bump)
+    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail)
     if (connected) return connected
     try {
       switch (endpoint) {
         case 'state':
           // 上游 channel.js：since 命中且 live 键相同只回三键；live 键变了附带 live 字段（work / browserHolds 等）
-          if (p.since === team.revision) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work, browserHolds: view().browserHolds, ...(caps.enabled ? { capabilityStatuses: capabilityStatuses() } : {}) })
+          // 上游：since 命中且 models 未给或与当前目录签名相同才回 unchanged
+          if (p.since === team.revision && (p.models === undefined || p.models === providers.modelsKey())) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work, browserHolds: view().browserHolds, ...(caps.enabled ? { capabilityStatuses: capabilityStatuses() } : {}) })
           return ok(view())
         // DSH Agent（dsbot-member-agents，ds-bot 0.3.10 agents.js / parts.js agentPage / turns.js stopAgent 形态）
         case 'hello':

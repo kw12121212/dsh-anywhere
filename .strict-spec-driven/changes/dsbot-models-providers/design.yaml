@@ -18,14 +18,17 @@ decisions:
     decision: 保存模型前只列出正在用将被移除模型的非本地 Agent Bot，提示它们下一轮会改用其他可用模型（没有可用模型时会失败），不推算具体回退到哪个模型
     rationale: 网页端 fallbacksFor 依赖 nextModel 的回退顺序与目录推算，逻辑复杂且属服务端行为；手机端如实提示影响范围并要求确认，避免在客户端复制一套可能与服务端不一致的回退算法
   batch-sequential:
-    decision: 批量切换按选中顺序逐个调用 update-bot {id, model}，跳过本地 Agent 上的 Bot 与目录中没有的模型，已是该模型的标为未变，失败的记录原因继续下一个，最后汇总
-    rationale: 与网页端 runModelChange 一致；update-bot 一次只改一个 Bot，顺序执行避免并发写同一团队、结果可逐个对应；目标模型都是 DS Bot 自身模型，不涉及引擎切换确认
+    decision: 批量切换按选中顺序逐个调用 update-bot {id, model}，跳过本地 Agent 上的 Bot（路由判定同 client.js badgeOf：local-acp- 或已知 CLI）与目录中没有的模型，已是该模型的标为未变，失败记录原因继续下一个，最后汇总；离开页面也跑完
+    rationale: 与网页端 runModelChange 一致；update-bot 一次只改一个 Bot，顺序执行避免并发写同一团队、结果可逐个对应；评审发现只看 local- 前缀会把自定义服务商（如 local-ollama）误当本地 Agent、离开页面中断会留下部分切换且无汇总
   repair-direct:
     decision: 模型失败修复卡只对 MISSING_CREDENTIAL、INVALID_CREDENTIAL、AUTH 显示「去模型与服务商」直达本页，指引文案改为在该页填写或更换 key（或在 Bot 详情改用其他模型）；额度不足、DeepSeek 账号登录、本地 Agent 与未知代码的指引不变
     rationale: 规划变更要求本页上线后修复卡改为直达；只有 key 类失败的修复手段在本页可完成，额度不足需到服务商充值、换模型在 Bot 详情，直达本页没有帮助
   slow-providers:
     decision: provider-models、provider-add、provider-models-save 登记为慢端点
     rationale: provider-models 请求外部端点列出模型，provider-add 自定义服务商会读取已知模型目录、保存模型会重算目录，最坏耗时可能超过默认 30 秒（slow-endpoints-executor）
+  state-models-key:
+    decision: state 请求携带上次应答的 modelsKey（models 参数），由 core DsbotModels.statePayload 组装；「刷新模型目录」经写通道发出 models，成功后补拉 state
+    rationale: 评审发现：上游服务商与 key 写入只换模型目录、不推进团队 revision，since 命中且不带 models 时回 unchanged，手机端模型选择永不更新；网页端同样携带 known.modelsKey。mock 原先在写入后推进 revision 掩盖了问题，已改为与上游一致
 alternatives: []
 risks:
   - 本机真实 DSH 的服务商设置是用户在用的配置：真实服务只做只读探针（providers 应答形态、写端点以不存在的服务商或无效 key 取错误应答，不写入），key、新增、模型保存与删除在 mock --manage 上覆盖

@@ -1519,14 +1519,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     /** state 请求（调用方线程执行网络）；网络异常返回 null（不动状态，下一轮事件重触发）。 */
     private fun requestState(localRevision: String?, liveKey: String?): DsbotApi.Result? {
         val clean = graph.cleanUrl ?: return null
-        val fields = buildString {
-            if (localRevision != null) append("\"since\":").append(jsonNumberOrString(localRevision))
-            if (localRevision != null && liveKey != null) append(",")
-            if (liveKey != null) append("\"live\":").append(work.keepwriting.core.JsonString.of(liveKey))
-        }
-        // 空参数是 "{}"（全量取），有参数才包对象——把 "{}" 再包一层会得到非法 JSON "{{}}"，
-        // 服务端整体解析失败回 bot/not-found（真实 0.3.5 实测；mock 以正则提 endpoint 掩盖过）
-        val payloadJson = if (fields.isEmpty()) "{}" else "{$fields}"
+        // 带上次的 modelsKey：服务商/key 写入只换模型目录、不推进 revision，不带则目录永不刷新（dsbot-models-providers）
+        val payloadJson = DsbotModels.statePayload(localRevision, liveKey, DsbotModels.modelsKey(lastState?.raw))
         val res = try {
             graph.nativeSession.apiRequest(
                 "POST", DsbotApi.url(clean, "/api/bot"),
@@ -1689,9 +1683,6 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         else -> tr("连接失败", "Connection failed")
     }
 }
-
-private fun jsonNumberOrString(v: String): String =
-    if (v.isNotEmpty() && v.all { it.isDigit() || it == '-' }) v else work.keepwriting.core.JsonString.of(v)
 
 private fun originOf(url: String): String = try {
     val u = java.net.URI(url)

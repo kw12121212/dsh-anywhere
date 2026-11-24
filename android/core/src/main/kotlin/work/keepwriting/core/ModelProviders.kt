@@ -8,7 +8,7 @@ package work.keepwriting.core
  */
 object ModelProviders {
     /** 会请求外部端点或重算模型目录的端点：长读超时、独立线程。 */
-    val SLOW_ENDPOINTS: Set<String> = setOf("provider-models", "provider-add", "provider-models-save")
+    val SLOW_ENDPOINTS: Set<String> = setOf("providers", "models", "provider-models", "provider-add", "provider-models-save")
 
     const val MAX_MODELS = 500
     const val NAME_MAX = 80
@@ -31,6 +31,7 @@ object ModelProviders {
 
     data class Addable(val id: String, val name: String)
 
+    /** [revision]：设置的 revision 原样 JSON 文本（数字或字符串，保存模型时原样回传；上游以 !== 比较）。 */
     data class View(val available: Boolean, val providers: List<Provider>, val addable: List<Addable>, val protocols: List<String>, val revision: String?)
 
     private fun Json.Value.Object.str(k: String) = (members[k] as? Json.Value.StringValue)?.value
@@ -60,8 +61,7 @@ object ModelProviders {
         val addable = o.objects("addable").mapNotNull { a -> a.str("id")?.let { Addable(it, a.str("name") ?: it) } }.sortedBy { it.name.lowercase() }
         val protocols = ((o.members["protocols"] as? Json.Value.Array)?.items ?: emptyList()).mapNotNull { (it as? Json.Value.StringValue)?.value }
         val revision = when (val r = o.members["revision"]) {
-            is Json.Value.StringValue -> r.value
-            is Json.Value.NumberValue -> r.raw
+            is Json.Value.StringValue, is Json.Value.NumberValue -> Json.encode(r)
             else -> null
         }
         return View(true, providers, addable, protocols, revision)
@@ -98,8 +98,22 @@ object ModelProviders {
             BotRef(id, b.str("name") ?: id, b.str("model"), b.str("appliedModel"))
         }
 
-    /** 是否本地 Agent 上的 Bot（路由以 local- 开头，同 BotManage.engineOf）。 */
-    fun isLocal(ref: String?): Boolean = ref?.substringBefore('/')?.startsWith("local-") == true
+    /** 上游已知的本地 Agent CLI（client.js AGENT_BADGES 的键，路由为 local-<键>）。 */
+    private val AGENT_CLIS = setOf(
+        "devin-cli", "claude-code", "codex-cli", "cursor-cli", "copilot-cli", "gemini-cli", "antigravity", "opencode", "cline", "kilo",
+        "goose", "grok-cli", "kimi-cli", "qwen-code", "codebuddy", "qoder", "minimax-code", "glm-cli", "kiro-cli", "factory-droid",
+        "auggie", "mistral-vibe", "junie", "iflow",
+    )
+
+    /**
+     * 是否本地 Agent 的路由（上游 isLocalRoute/badgeOf）：local-acp-<id> 的自定义 ACP Agent，或 local-<已知 CLI>。
+     * 评审发现：只看 local- 前缀会把自定义服务商（如 local-ollama）的模型误当本地 Agent。
+     */
+    fun isLocal(ref: String?): Boolean {
+        val route = ref?.substringBefore('/') ?: return false
+        if (route.startsWith("local-acp-")) return true
+        return route.startsWith("local-") && route.removePrefix("local-") in AGENT_CLIS
+    }
 
     /** 正在使用该服务商模型的 Bot（网页端 usersOf：model 或 appliedModel 命中其模型 ref）。 */
     fun users(p: Provider, bots: List<BotRef>): List<BotRef> {
@@ -145,11 +159,13 @@ object ModelProviders {
         return Draft(rows, revision)
     }
 
-    /** 保存会移除的模型上、非本地 Agent 的 Bot（网页端 fallbacksFor 的判定范围，不推算回退目标）。 */
+    /**
+     * 保存会移除的模型上、非本地 Agent 的 Bot：按 Bot 当前模型（model 优先于 appliedModel）判断——网页端 fallbacksFor 中
+     * 会切换或失败的正是这些；当前模型保留、只有已应用模型被移除的 Bot 不受影响（评审发现）。不推算回退目标。
+     */
     fun affected(p: Provider, draft: Draft, bots: List<BotRef>): List<BotRef> {
-        val removed = draft.rows.filter { it.existing && !it.selected }.map { it.ref }.toSet() +
-            draft.rows.filter { it.existing && !it.selected }.map { "${p.id}/${it.id}" }
-        return bots.filter { b -> !isLocal(b.current) && (b.model in removed || b.appliedModel in removed) }
+        val removed = draft.rows.filter { it.existing && !it.selected }.flatMap { listOf(it.ref, "${p.id}/${it.id}") }.toSet()
+        return bots.filter { b -> !isLocal(b.current) && b.current in removed }
     }
 
     // ---- 校验 ----
@@ -157,7 +173,8 @@ object ModelProviders {
     private val NAME_VALUE = Regex("^[A-Za-z_][A-Za-z0-9_]*=[^=]")
     private val QUOTED = Regex("^([\"']).*\\1$")
     private val VISIBLE_ASCII = Regex("^[\\x21-\\x7E]+$")
-    private val ROUTE_ID = Regex("^[a-z][a-z0-9-]*$")
+    /** 上游 providers.js ROUTE_ID：连字符不能连续、不能在结尾。 */
+    private val ROUTE_ID = Regex("^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
     /** key 本地预校验（上游 checkKey）；通过时 null。 */
     fun keyProblem(value: String): String? {
@@ -171,11 +188,10 @@ object ModelProviders {
         }
     }
 
-    /** 端点须为 http/https 地址（上游 checkEndpoint）。 */
-    fun endpointOk(value: String): Boolean {
-        val uri = runCatching { java.net.URI(value.trim()) }.getOrNull() ?: return false
-        return (uri.scheme == "http" || uri.scheme == "https") && !uri.host.isNullOrEmpty()
-    }
+    private val ENDPOINT = Regex("^https?://[^\\s/?#]+", RegexOption.IGNORE_CASE)
+
+    /** 端点须为 http/https 地址（上游 checkEndpoint 用 WHATWG URL；这里只要求协议与非空主机部分，主机名允许下划线等）。 */
+    fun endpointOk(value: String): Boolean = ENDPOINT.containsMatchIn(value.trim()) && value.trim().none { it.isWhitespace() }
 
     /** 手填的模型 id：逗号或空白分隔。 */
     fun typedIds(text: String): List<String> = text.split(Regex("[\\s,]+")).map { it.trim() }.filter { it.isNotEmpty() }
@@ -188,7 +204,7 @@ object ModelProviders {
 
     /** 自定义服务商本地预校验；通过时 null（key 为空可以；非空时按 checkKey）。 */
     fun customProblem(provider: String, baseURL: String, api: String, protocols: List<String>, key: String, models: List<String>): String? = when {
-        !ROUTE_ID.matches(provider.trim()) -> I18n.tr("服务商 id 为小写字母、数字与连字符，以字母开头", "A provider id is lowercase letters, digits and dashes, starting with a letter")
+        !ROUTE_ID.matches(provider.trim()) -> I18n.tr("服务商 id 为小写字母、数字与连字符，以字母开头，连字符不能连续或结尾", "A provider id is lowercase letters, digits and dashes, starting with a letter")
         !endpointOk(baseURL) -> I18n.tr("端点须为 http 或 https 地址", "Enter the endpoint as an http or https address")
         protocols.isNotEmpty() && api !in protocols -> I18n.tr("选择协议", "Choose a protocol")
         key.isNotBlank() && keyProblem(key) != null -> keyProblem(key)
@@ -219,11 +235,9 @@ object ModelProviders {
         /** 保存所选模型：端点返回的带回原对象，其余只带 id（网页端 save）。 */
         fun saveModels(provider: String, draft: Draft): String {
             val models = draft.selected.joinToString(",") { r -> r.raw?.let { Json.encode(it) } ?: ("{\"id\":" + q(r.id) + "}") }
-            return "{\"provider\":" + q(provider) + ",\"models\":[" + models + "]" + (draft.revision?.let { ",\"revision\":" + revisionJson(it) } ?: "") + "}"
+            return "{\"provider\":" + q(provider) + ",\"models\":[" + models + "]" + (draft.revision?.let { ",\"revision\":$it" } ?: "") + "}"
         }
         fun remove(provider: String) = "{\"provider\":" + q(provider) + "}"
-        /** revision 原样回传：数字保持数字。 */
-        private fun revisionJson(r: String) = if (r.toLongOrNull() != null) r else q(r)
     }
 }
 
