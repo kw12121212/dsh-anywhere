@@ -30,8 +30,8 @@ sections:
       status: complete
       command: android/gradlew -p android assembleDebug
     full-regression:
-      text: 完整回归
-      status: pending
+      text: 完整回归（2026-11-24：typecheck、build、Vitest 228/228、覆盖率 86%、Android core JUnit 通过；e2e 3 例 window-state 在 WSLg 上失败，已在未含本变更的 origin/dev 0511b3d 上复现相同失败，经用户明确接受为环境问题）
+      status: complete
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
@@ -39,7 +39,7 @@ sections:
       status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过
-      status: pending
+      status: complete
       command: strict-spec-cli verify dsbot-capabilities
 testing_gates:
   validation_task: core-junit

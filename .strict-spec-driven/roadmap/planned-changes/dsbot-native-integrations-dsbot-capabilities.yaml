@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-capabilities
   milestone: dsbot-native-integrations
-status: planned
+status: complete
 summary: 能力：查看 MCP、技能与能力包，保存、批准、删除，以及为单个 Bot 开关能力
 details: Settings → Capabilities 原生页：列出能力及其来源与状态；capability-save 新增或编辑（技能内容等长文本用全屏编辑器）、capability-approve 批准 Bot 提议的能力、capability-delete 删除（二次确认）；Bot 详情页中 bot-capability 为单个 Bot 开关能力。结果与网页端一致并经 feed 同步。 上游手机端参考（2026-11-22，team/capabilities.ts）：编辑类型为 MCP stdio、MCP HTTP、技能与能力包；能力状态按严重程度排序合成单一显示状态（纯逻辑放 core 以 JUnit 覆盖）。 0.3.10 核对（2026-11-24，capabilities.js）：state.capabilities 为能力库数组（name、kind mcp|skill|pack、description≤2000、createdBy、approved、transport stdio|streamable-http、command/args/env 或 url/headers、content、items）；名称为小写字母数字与单连字符且≤32，github、mail 等连接器名保留；能力种类保存后不可改；stdio MCP 由 Bot 提议时 approved=false，经 capability-approve 批准；env、headers 与 args 可用 $DSH_SECRET_<NAME> 引用密钥（App 原样显示引用，不解析值）；state.capabilityStatuses 为 {botId:{name:{state ready|connecting|needs-approval|error, error?}}}，能力包取子项中最严重的状态；bot-capability {botId, name, attached, mode} 的 mode 为 always（常驻）或 catalog（按需能力包目录，存于 bots[].packs），Bot 详情开关需能选择模式。
 depends_on:
