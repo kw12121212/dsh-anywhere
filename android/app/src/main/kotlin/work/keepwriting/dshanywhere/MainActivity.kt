@@ -136,6 +136,8 @@ class MainActivity : ComponentActivity() {
         graph.updates.appInForeground = false
         graph.updates.onLeftForeground()
         CookieManager.getInstance().flush()
+        // 离开 App：之后回来时清理本 App 复制的设备码与登录链接（dsbot-connectors-mail）
+        SensitiveClipboard.onLeave()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -152,11 +154,11 @@ class MainActivity : ComponentActivity() {
         graph.updates.onResumed()
     }
 
-    /** 窗口取得焦点（回到 App）：清掉本 App 复制、仍留在剪贴板的设备码与登录链接（dsbot-connectors-mail）。
+    /** 窗口取得焦点：离开过 App 后回来时，清掉本 App 复制、仍留在剪贴板的设备码与登录链接（dsbot-connectors-mail）。
      * 须在取得焦点后读剪贴板：ON_RESUME 时尚无焦点，Android 10+ 会拒绝访问。 */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) SensitiveClipboard.clearIfOurs(this)
+        if (hasFocus) SensitiveClipboard.onFocus(this)
     }
 
     override fun onPause() {

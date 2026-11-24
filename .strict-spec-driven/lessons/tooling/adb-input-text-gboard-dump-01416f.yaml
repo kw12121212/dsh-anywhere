@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-11-11T15:08:59.570Z'
-updated_at: '2026-11-11T15:08:59.570Z'
+updated_at: '2026-11-24T08:47:55.873Z'
 context: Android 模拟器验收用 adb shell input text 向 Compose TextField 输入 URL/token 等精确文本。
 observation: Gboard（AutoCorrect 开启）会给 input text 的输入追加或替换词尾：同一命令一次出现尾部空格、一次出现尾部斜杠（token=emu-token-1/ 之类），导致 token 校验失败且表象像服务端问题；另外尾部空白进 java.net.URI 直接抛 URISyntaxException。
 takeaway: 模拟器输入精确文本：① adb shell "input text '…'" 用设备侧引号包裹；② 输入后立即 uiautomator dump 验证字段文本与预期完全一致，不一致先修正再操作；③ 被测代码对用户输入做 trim 等防御（AppGraph.save 已加）。
@@ -17,3 +17,6 @@ occurrences:
   - origin: dsbot-api-client
     date: '2026-11-11'
     evidence: 本轮验收 /tmp/mock-dsh.log 的 GET /?token=emu-token-1/（尾部斜杠）与字段 dump 的尾部空格；修复输入流程后 mock 全绿。
+  - origin: dsbot-connectors-mail
+    date: '2026-11-24'
+    evidence: 2026-11-24 粘贴回调地址时 input text 只进了 state 参数前 7 位（服务端回 state mismatch）；连续 tap 下一个字段后立即 input text，密码串进了上一字段（team@qq.comgwrong）。每个字段输入后 sleep≈1s、收键盘再 dump 核对，缺的部分用 KEYCODE_MOVE_END 后补输

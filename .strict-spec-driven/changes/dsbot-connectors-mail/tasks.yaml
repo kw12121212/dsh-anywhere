@@ -35,7 +35,7 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
-      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：连接器列表已连接与类别分组及状态；DeepWiki 直连与断开二次确认；Notion OAuth 打开系统浏览器、粘贴 state 不符的地址显示服务端原因、粘贴正确落地地址完成登录、只读开关、请求卡随之标为已连接；GitHub 设备码打开验证页、复制后回到 App 剪贴板被清除（验收中发现并修复：ON_RESUME 时读剪贴板被拒、模拟器同步改写标签，改为窗口取得焦点时按内容摘要清除）；Slack 客户端设置（表单期间截图为黑屏即 FLAG_SECURE 生效）后进入浏览器登录、取消；Amap key 掩码连接；Sentry 重试；添加 https 地址、命令与导入一项，非 https 地址本地提示不发送；移除自加连接器确认后返回列表；邮箱添加 QQ（错误授权码显示服务端原因，正确后添加）、其他服务商缺主机本地提示、移除账号确认、移除规则；停靠区连接器卡「去连接」直达详情、邮件卡改收件人与主题后发送、选「允许这些收件人」后放弃规则生效；Bot 详情连接器开关关/开；enabled=0 时入口隐藏。凭据值均未进 mock 日志。冷启动 ANR 经堆栈核对为模拟器内存换页（主线程在 Compose 首次组合、系统态 17–20 秒），重启模拟器后正常
+      text: 设备验收（2026-11-24，Windows 模拟器 + mock --manage，中文界面）：连接器列表已连接与类别分组及状态；DeepWiki 直连与断开二次确认；Notion OAuth 打开系统浏览器、粘贴 state 不符的地址显示服务端原因、粘贴正确落地地址完成登录、只读开关、请求卡随之标为已连接；GitHub 设备码打开验证页；Slack 客户端设置（表单期间截图为黑屏即 FLAG_SECURE 生效）后进入浏览器登录、取消；Amap key 掩码连接；Sentry 重试；添加 https 地址、命令与导入一项，非 https 地址本地提示不发送；移除自加连接器确认后返回列表；邮箱添加 QQ（错误授权码显示服务端原因，正确后添加）、其他服务商缺主机本地提示、移除账号确认、移除规则；停靠区连接器卡「去连接」直达详情、邮件卡改收件人与主题后发送、选「允许这些收件人」后放弃规则生效；Bot 详情连接器开关关/开；enabled=0 时入口隐藏。凭据值均未进 mock 日志。剪贴板（评审修复后复验）：复制设备码后未离开 App、拉下再收起通知栏时仍可粘贴；回桌面再回来、或连接时自动复制并打开浏览器再回来，粘贴到搜索框为空。冷启动 ANR 经堆栈核对为模拟器内存换页（主线程在 Compose 首次组合、系统态 17–20 秒），重启模拟器后正常
       status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过

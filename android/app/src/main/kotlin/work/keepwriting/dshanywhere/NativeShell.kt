@@ -1099,6 +1099,15 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     /** 聊天读取的 IO 线程（dsbot-chat-cache）：网络不占状态 executor，缓存上屏与切换不被慢读取阻塞。 */
     private val readExecutor = Executors.newFixedThreadPool(2) { r -> Thread(r, "dsbot-read").apply { isDaemon = true } }
 
+    /**
+     * 等邮箱/OAuth 验证的慢端点（dsbot-connectors-mail，最长约 2 分钟）走独立线程：不占 2 线程的聊天读取池，
+     * 免得同时两个慢请求卡住聊天读取、媒体与其他写操作。
+     */
+    private val slowExecutor = Executors.newCachedThreadPool { r -> Thread(r, "dsbot-slow").apply { isDaemon = true } }
+
+    private fun executorFor(endpoint: String) =
+        if (endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS) slowExecutor else readExecutor
+
     /** POST /api/bot 同步调用（调用方线程执行）。 */
     private fun postBot(endpoint: String, payloadJson: String): DsbotApi.Result {
         val clean = graph.cleanUrl ?: return DsbotApi.Result.Failure(null, DsbotApi.Reason.NETWORK)
@@ -1117,7 +1126,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     /** 读取在 IO 线程执行，结果投回状态 executor 回调（单线程持有状态的约定不变）。 */
     private fun readOffExecutor(endpoint: String, payloadJson: String, onResult: (DsbotApi.Result) -> Unit) {
-        readExecutor.execute {
+        executorFor(endpoint).execute {
             val result = postBot(endpoint, payloadJson)
             executor.execute { onResult(result) }
         }
@@ -1272,7 +1281,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 }
             },
             read = { endpoint, payload, cb ->
-                readExecutor.execute {
+                executorFor(endpoint).execute {
                     val r = postBot(endpoint, payload)
                     mainHandler.post { cb(r) }
                 }
@@ -1286,6 +1295,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         feedGeneration.incrementAndGet()
         scheduler.shutdownNow()
         readExecutor.shutdownNow()
+        slowExecutor.shutdownNow()
         executor.shutdownNow()
     }
 

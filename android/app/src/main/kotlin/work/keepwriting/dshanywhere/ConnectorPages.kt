@@ -67,50 +67,55 @@ import work.keepwriting.core.MailSettings
 private const val GITHUB_TOKEN_URL = "https://github.com/settings/personal-access-tokens/new"
 
 /**
- * App 复制的设备码、授权链接与回调地址：标记敏感；回到 App（窗口取得焦点）时若剪贴板仍是本 App 最近复制的内容即清除，
- * 另在约 2 分钟后兜底清除（后台读不到剪贴板时跳过，等回到前台再清）。按内容摘要判断而非标签：
- * 系统或模拟器的剪贴板同步会改写标签；摘要只在内存里，不保存内容本身。
+ * App 复制的设备码、授权链接与回调地址：标记敏感；离开过 App 再回来（窗口取得焦点）时、或约 2 分钟兜底到点时，
+ * 若剪贴板文本仍是本 App 最近复制的内容即清除（判断见 core ClipboardGuard：按内容摘要而非标签——系统或模拟器的
+ * 剪贴板同步会改写标签；读不到剪贴板时保留待下次）。摘要只在内存里，不保存内容本身。
  */
 object SensitiveClipboard {
     private const val LABEL = "dsh-anywhere-connector"
     private const val CLEAR_AFTER_MS = 120_000L
     private val handler = Handler(Looper.getMainLooper())
-    @Volatile private var copiedDigest: String? = null
+    private val guard = work.keepwriting.core.ClipboardGuard()
 
     private fun digest(text: CharSequence): String =
         java.security.MessageDigest.getInstance("SHA-256").digest(text.toString().toByteArray()).joinToString("") { "%02x".format(it) }
 
+    private fun manager(context: Context) = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+
+    /** 当前剪贴板文本的摘要；读不到（无焦点、无文本）为 null。 */
+    private fun currentDigest(cm: ClipboardManager): String? =
+        runCatching { cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.let(::digest) }.getOrNull()
+
+    private fun clear(cm: ClipboardManager) {
+        runCatching { if (Build.VERSION.SDK_INT >= 28) cm.clearPrimaryClip() else cm.setPrimaryClip(ClipData.newPlainText("", "")) }
+    }
+
     fun copy(context: Context, text: String) {
-        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        val cm = manager(context) ?: return
         val clip = ClipData.newPlainText(LABEL, text)
         if (Build.VERSION.SDK_INT >= 33) {
             clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
         }
         runCatching { cm.setPrimaryClip(clip) }
-        copiedDigest = digest(text)
+        guard.onCopy(digest(text))
         val app = context.applicationContext
         handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({ clearIfOurs(app) }, CLEAR_AFTER_MS)
+        handler.postDelayed({ manager(app)?.let { if (guard.onTimer(currentDigest(it))) clear(it) } }, CLEAR_AFTER_MS)
     }
 
-    /** 剪贴板仍是本 App 最近复制的内容时清除；读不到（后台）时保留待下次。 */
-    fun clearIfOurs(context: Context) {
-        val want = copiedDigest ?: return
-        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-        runCatching {
-            val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text
-            if (text == null) {
-                // 剪贴板已空则不必再等；读不到（无焦点时为 null）则留待回到前台
-                if (!cm.hasPrimaryClip()) copiedDigest = null
-                return
-            }
-            if (digest(text) == want) {
-                if (Build.VERSION.SDK_INT >= 28) cm.clearPrimaryClip() else cm.setPrimaryClip(ClipData.newPlainText("", ""))
-            }
-            copiedDigest = null
-        }
+    /** Activity onStop：用户离开了 App。 */
+    fun onLeave() = guard.onLeave()
+
+    /** Activity 窗口取得焦点：离开过 App 后回来时判断是否清除。 */
+    fun onFocus(context: Context) {
+        if (!guard.pending) return
+        val cm = manager(context) ?: return
+        if (guard.onFocus(currentDigest(cm))) clear(cm)
     }
 }
+
+/** 同一窗口上同时显示的密钥表单计数：最后一个离开时才去掉 FLAG_SECURE。 */
+private val secureCounts = java.util.WeakHashMap<android.view.Window, Int>()
 
 /** 在系统浏览器中打开地址。 */
 internal fun openExternal(context: Context, url: String) {
@@ -126,14 +131,27 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-/** 显示期间给窗口加 FLAG_SECURE（禁止截屏与最近任务预览），离开即恢复。 */
+/** 显示期间给窗口加 FLAG_SECURE（禁止截屏与最近任务预览）；多个表单同时显示时按计数，最后一个离开才恢复。 */
 @Composable
 internal fun SecureWhileShown() {
     val context = LocalContext.current
     DisposableEffect(Unit) {
         val window = context.findActivity()?.window
-        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        if (window != null) {
+            secureCounts[window] = (secureCounts[window] ?: 0) + 1
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            if (window != null) {
+                val left = (secureCounts[window] ?: 1) - 1
+                if (left <= 0) {
+                    secureCounts.remove(window)
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    secureCounts[window] = left
+                }
+            }
+        }
     }
 }
 
@@ -486,15 +504,19 @@ fun ConnectorAddPage(api: ManageApi, onDone: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val busy = "connector:add" in api.inFlight
     val R = ConnectorSettings.Requests
-    LaunchedEffect(mode) {
+    var scanFailed by remember { mutableStateOf(false) }
+    var scanRound by remember { mutableStateOf(0) }
+    LaunchedEffect(mode, scanRound) {
         if (mode == AddMode.IMPORT && found == null && !scanning) {
             scanning = true
+            scanFailed = false
             api.read("connector-import-scan", R.importScan()) { res ->
                 scanning = false
                 when (res) {
                     is DsbotApi.Result.Ok -> found = ConnectorSettings.importItems(res.value)
-                    is DsbotApi.Result.BotError -> { found = emptyList(); error = work.keepwriting.core.BotManage.errorText(res.code, res.message) }
-                    is DsbotApi.Result.Failure -> { found = emptyList(); error = work.keepwriting.core.BotManage.errorText(null, null) }
+                    // 失败：保持未扫描状态并提示原因，可重试（不显示「没有找到」）
+                    is DsbotApi.Result.BotError -> { scanFailed = true; error = work.keepwriting.core.BotManage.errorText(res.code, res.message) }
+                    is DsbotApi.Result.Failure -> { scanFailed = true; error = work.keepwriting.core.BotManage.errorText(null, null) }
                 }
             }
         }
@@ -535,6 +557,7 @@ fun ConnectorAddPage(api: ManageApi, onDone: () -> Unit) {
                 Hint(tr("扫描运行 DS Bot 的电脑上 Claude Desktop、Cursor 与 VS Code 的 MCP 配置；导入时环境变量与请求头的值会存为密钥。", "Scans the MCP settings of Claude Desktop, Cursor, and VS Code on the computer running DS Bot. Environment and header values are saved as secrets."))
                 val list = found
                 when {
+                    list == null && scanFailed -> TextButton(onClick = { error = null; scanRound++ }, modifier = Modifier.padding(horizontal = 8.dp)) { Text(tr("重新扫描", "Scan again")) }
                     list == null -> Hint(tr("扫描中…", "Scanning…"))
                     list.isEmpty() -> Hint(tr("没有在 Claude Desktop、Cursor 或 VS Code 设置中找到 MCP 服务器。", "No MCP servers found in Claude Desktop, Cursor, or VS Code settings."))
                     else -> {

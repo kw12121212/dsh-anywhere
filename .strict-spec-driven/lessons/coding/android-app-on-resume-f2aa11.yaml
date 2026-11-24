@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: android-app-on-resume-f2aa11
+  title: Android 剪贴板清理：回到 App 时在窗口取得焦点后按内容摘要判断，不要在 ON_RESUME 读、也不要只认标签
+category: coding
+status: active
+created_at: '2026-11-24T08:47:56.140Z'
+updated_at: '2026-11-24T08:47:56.140Z'
+context: dsbot-connectors-mail 设备码与授权链接复制后需在回到 App 时从剪贴板清除（模拟器验收）
+observation: '在 Compose 的 ON_RESUME 里读 primaryClipDescription 被系统拒绝（logcat: Denying clipboard access ... not in focus），窗口焦点要稍后才到；改到 Activity.onWindowFocusChanged(true) 后可读，但模拟器与 Windows 宿主同步剪贴板会把本 App 写入的标签改写为 host clipboard，按标签判断永远不命中，设备码一直留在剪贴板'
+takeaway: 清理剪贴板的判断放在 Activity.onWindowFocusChanged(hasFocus=true)；按本 App 最近复制内容的内存摘要（SHA-256）比对剪贴板文本，不依赖 ClipDescription 标签；读不到（null）时保留摘要等下次前台；验收用「复制→离开→回来→粘贴到空输入框看是否贴进内容」，不要只看 Gboard 建议条或「粘贴」菜单是否出现
+applies_when: Android App 需要在复制敏感文本后自动清理剪贴板，或任何回到前台时读取剪贴板的逻辑
+occurrences:
+  - origin: dsbot-connectors-mail
+    date: '2026-11-24'
+    evidence: 2026-11-24 logcat Denying clipboard access（ON_RESUME）；临时日志 clearIfOurs label=host clipboard；改为焦点回调+摘要后，复制 MOCK-7406→回桌面→回来，粘贴到搜索框为空
