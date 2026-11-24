@@ -1,6 +1,7 @@
 package work.keepwriting.dshanywhere
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,10 +53,18 @@ private const val SECRET_HINT = "{\"API_KEY\": \"\$DSH_SECRET_MY_KEY\"}"
 /** 团队能力库列表：待批准置顶、出错其次；行内批准、编辑与二次确认删除。 */
 @Composable
 fun CapabilitiesPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> Unit, onEdit: (String) -> Unit) {
-    val items = CapabilityLibrary.listOrder(state, CapabilityLibrary.library(state))
+    // 行数据随 state 变化才重算（live 更新频繁，避免每次重组遍历全部 Bot）
+    val rows = remember(state) {
+        CapabilityLibrary.listOrder(state, CapabilityLibrary.library(state)).map { item ->
+            CapRowData(item, CapabilityLibrary.listStatus(state, item), CapabilityLibrary.sourceBot(state, item), CapabilityLibrary.users(state, item.name))
+        }
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<CapabilityLibrary.Item?>(null) }
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    val scroll = rememberScrollState()
+    // 错误提示在页顶：出错时滚回顶部，免得在长列表底部操作失败时看不到
+    LaunchedEffect(error) { if (error != null) scroll.animateScrollTo(0) }
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
         Text(tr("能力", "Capabilities"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp))
         Text(
             tr("团队共享的 MCP 服务器、技能与能力包；在 Bot 详情的「能力」中为每个 Bot 开启。", "MCP servers, skills, and packs shared by the team. Turn them on for each Bot under Capabilities in its details."),
@@ -62,13 +72,13 @@ fun CapabilitiesPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> Uni
         )
         TextButton(onClick = onAdd, modifier = Modifier.padding(horizontal = 8.dp)) { Text(tr("＋ 添加能力", "+ Add capability")) }
         ErrorLine(error) { error = null }
-        if (items.isEmpty()) {
+        if (rows.isEmpty()) {
             Text(tr("还没有保存的能力。", "No capabilities saved."), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
         }
-        for (item in items) {
+        for (row in rows) {
+            val item = row.item
             CapabilityRow(
-                state = state,
-                item = item,
+                row = row,
                 approving = "capability:approve:${item.name}" in api.inFlight,
                 onApprove = {
                     error = null
@@ -97,11 +107,11 @@ fun CapabilitiesPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> Uni
     }
 }
 
+private data class CapRowData(val item: CapabilityLibrary.Item, val status: CapabilityLibrary.Status?, val source: String?, val users: List<String>)
+
 @Composable
-private fun CapabilityRow(state: Json.Value.Object?, item: CapabilityLibrary.Item, approving: Boolean, onApprove: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val status = CapabilityLibrary.listStatus(state, item)
-    val source = CapabilityLibrary.sourceBot(state, item)
-    val users = CapabilityLibrary.users(state, item.name)
+private fun CapabilityRow(row: CapRowData, approving: Boolean, onApprove: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val (item, status, source, users) = row
     Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(item.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false))
@@ -200,6 +210,11 @@ fun CapabilityEditPage(state: Json.Value.Object?, api: ManageApi, name: String?,
                 } else {
                     MonoField("URL", draft.url, singleLine = true) { draft = draft.copy(url = it) }
                     ValueRow(tr("请求头（JSON）", "Headers (JSON)"), preview(draft.headersText), hint = tr("可用 \$DSH_SECRET_名称 引用密钥", "Use \$DSH_SECRET_NAME to reference a secret")) { editing = "headers" }
+                }
+                if (existing?.needsApproval == true && draft.transport == CapabilityLibrary.STDIO) {
+                    // 上游界面保存（ui:true）会把本地命令置为已批准
+                    Text(tr("这是 Bot 提议、尚未批准的本地命令：保存即视为批准，请先核对命令与参数。", "A Bot proposed this local command and it is not approved yet. Saving approves it, so check the command and arguments first."),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
                 }
                 if (!editingExisting && draft.transport == CapabilityLibrary.STDIO) {
                     Text(tr("本地命令在电脑上运行。", "Local commands run on the computer."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
@@ -309,10 +324,20 @@ private fun FullScreenEditor(title: String, initial: String, mono: Boolean, plac
 /** 单个 Bot 的能力页（网页端 BotCapabilitiesCard）：每项常驻/按需/关闭三段选择，在途时该项禁用。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BotCapabilitiesPage(state: Json.Value.Object?, botId: String, botName: String, api: ManageApi) {
+fun BotCapabilitiesPage(state: Json.Value.Object?, botId: String, botName: String, api: ManageApi, onGone: () -> Unit) {
+    // Bot 在别处被删除后不再渲染开关（否则点按只会得到服务端的 Unknown Bot）
+    if (work.keepwriting.core.BotManage.profileOf(state, botId) == null) {
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(tr("找不到它，可能已被删除", "Not found. It may have been deleted"))
+            TextButton(onClick = onGone) { Text(tr("回到团队", "Back to team")) }
+        }
+        return
+    }
     var error by remember { mutableStateOf<String?>(null) }
-    val rows = CapabilityLibrary.botRows(state, botId)
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    val rows = remember(state, botId) { CapabilityLibrary.botRows(state, botId) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(error) { if (error != null) scroll.animateScrollTo(0) }
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
         Text(tr("能力：", "Capabilities: ") + botName, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp))
         Text(
             tr("常驻：每次对话都加载；按需：列入目录，Bot 需要时才加载。", "Always on: loaded in every chat. In catalog: the Bot loads it only when it needs it."),

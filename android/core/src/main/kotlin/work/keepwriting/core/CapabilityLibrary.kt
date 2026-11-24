@@ -141,10 +141,10 @@ object CapabilityLibrary {
         }.map { it.str("name") ?: it.str("id") ?: "" }
     }
 
-    /** 来源：用户添加为 null；否则为提议它的 Bot 名（Bot 已删除时回退 id）。 */
+    /** 来源：用户添加为 null；否则为提议它的 Bot 名（Bot 已删除时为「已删除的 Bot」，不显示原始 id）。 */
     fun sourceBot(state: Json.Value.Object?, item: Item): String? {
         val by = item.createdBy ?: return null
-        return bot(state, by)?.str("name") ?: by
+        return bot(state, by)?.let { it.str("name") ?: by } ?: I18n.tr("已删除的 Bot", "a deleted Bot")
     }
 
     /** 列表行显示的单一状态：待批准优先，其余取团队层面最严重状态；未被任何 Bot 使用时为 null。 */
@@ -188,7 +188,7 @@ object CapabilityLibrary {
     )
 
     /**
-     * Bot 能力页各行：能力包在前、其余按名称；[modeOf] 为当前生效（含在途选择）的模式。
+     * Bot 能力页各行：能力包在前、其余按名称；[modeOf] 为各项的模式（页面传入已保存的模式，不做乐观改写）。
      * 经由能力包：本项非常驻时，列出把它包含在内且自身常驻的包（本项关闭时也列出按需的包）。
      */
     fun botRows(state: Json.Value.Object?, botId: String, modeOf: (String) -> Mode = { savedMode(state, botId, it) }): List<BotRow> {

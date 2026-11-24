@@ -39,6 +39,32 @@ class CapabilityLibraryTest {
         """.trimIndent(),
     ) as Json.Value.Object
 
+    /** 真实响应的脱敏夹具（{ok, value} 信封）取 value。 */
+    private fun fixture(name: String): Json.Value =
+        (Json.parse(checkNotNull(CapabilityLibraryTest::class.java.getResource("/dsbot/$name")).readText(Charsets.UTF_8)) as Json.Value.Object).members["value"]!!
+
+    @Test
+    fun `真实脱敏夹具 state-full：能力库、Bot 常驻挂载与 live 状态可解码（旧版无 packs 字段按空处理）`() {
+        val real = fixture("state-full.json") as Json.Value.Object
+        assertTrue(CapabilityLibrary.hasLibrary(real))
+        val lib = CapabilityLibrary.library(real)
+        assertEquals(21, lib.size)
+        assertEquals(20, lib.count { it.kind == CapabilityLibrary.SKILL })
+        val http = lib.single { it.kind == CapabilityLibrary.MCP }
+        assertEquals(CapabilityLibrary.HTTP, http.transport)
+        assertFalse(http.needsApproval)
+        assertTrue(lib.none { it.needsApproval })
+        // Bot 提议的能力：createdBy 为 botId
+        assertTrue(lib.all { it.createdBy != null })
+
+        val bot = "session-2f6d9790-919f-4a53-b13c-e016a3acf4e8"
+        assertEquals(CapabilityLibrary.Mode.ALWAYS, CapabilityLibrary.savedMode(real, bot, "subagent-provisioning"))
+        // 旧版 state 的 Bot 没有 packs 字段：不会误判为按需
+        assertEquals(CapabilityLibrary.Mode.OFF, CapabilityLibrary.savedMode(real, bot, "not-attached"))
+        assertEquals(CapabilityLibrary.Status("ready", null), CapabilityLibrary.botStatuses(real, bot)["subagent-provisioning"])
+        assertEquals("ready", CapabilityLibrary.teamStatus(real, "dsh-context-compaction")!!.state)
+    }
+
     @Test
     fun `能力库字段存在门控与解码（无效条目跳过、按名称排序）`() {
         assertTrue(CapabilityLibrary.hasLibrary(state))
@@ -72,6 +98,9 @@ class CapabilityLibraryTest {
         // notes：b1 就绪、b2 连接中 → 连接中更严重
         assertEquals("connecting", CapabilityLibrary.teamStatus(state, "notes")!!.state)
         assertEquals("error", CapabilityLibrary.teamStatus(state, "web-pack")!!.state)
+        // 多个 Bot 同为最严重级别：取 state.bots 顺序中先出现者的原因
+        val twoErrors = Json.parse("""{"bots":[{"id":"x"},{"id":"y"}],"capabilities":[],"capabilityStatuses":{"x":{"m":{"state":"error","error":"first"}},"y":{"m":{"state":"error","error":"second"}}}}""") as Json.Value.Object
+        assertEquals("first", CapabilityLibrary.teamStatus(twoErrors, "m")!!.error)
         assertNull(CapabilityLibrary.teamStatus(state, "search"))
 
         val lib = CapabilityLibrary.library(state).associateBy { it.name }
@@ -83,6 +112,8 @@ class CapabilityLibraryTest {
         assertEquals(listOf("小助手", "研究员"), CapabilityLibrary.users(state, "search"))
         assertNull(CapabilityLibrary.sourceBot(state, lib.getValue("notes")))
         assertEquals("研究员", CapabilityLibrary.sourceBot(state, lib.getValue("local-fs")))
+        // 提议它的 Bot 已删除：不显示原始 id
+        assertEquals("已删除的 Bot", CapabilityLibrary.sourceBot(state, lib.getValue("local-fs").copy(createdBy = "gone-bot")))
 
         // 列表排序：待批准、出错、其余按名称
         assertEquals(listOf("local-fs", "web-pack", "notes", "search"), CapabilityLibrary.listOrder(state, CapabilityLibrary.library(state)).map { it.name })
@@ -196,6 +227,21 @@ class CapabilityLibraryTest {
             (CapabilityLibrary.build(d) as CapabilityLibrary.Built.Ok).payload,
         )
         assertEquals("{}", CapabilityLibrary.draftOf(lib.getValue("notes")).envText)
+        // HTTP 与技能、能力包往返
+        val search = CapabilityLibrary.draftOf(lib.getValue("search"))
+        assertEquals("{\n  \"Authorization\": \"Bearer ${'$'}DSH_SECRET_SEARCH\"\n}", search.headersText)
+        assertEquals(
+            """{"name":"search","kind":"mcp","description":"网页搜索","transport":"streamable-http","url":"https://mcp.example.com","headers":{"Authorization":"Bearer ${'$'}DSH_SECRET_SEARCH"}}""",
+            (CapabilityLibrary.build(search) as CapabilityLibrary.Built.Ok).payload,
+        )
+        assertEquals(
+            """{"name":"notes","kind":"skill","description":"记笔记","content":"# Notes\nWrite things down."}""",
+            (CapabilityLibrary.build(CapabilityLibrary.draftOf(lib.getValue("notes"))) as CapabilityLibrary.Built.Ok).payload,
+        )
+        assertEquals(
+            """{"name":"web-pack","kind":"pack","description":"","items":["search","notes"]}""",
+            (CapabilityLibrary.build(CapabilityLibrary.draftOf(lib.getValue("web-pack"))) as CapabilityLibrary.Built.Ok).payload,
+        )
         assertEquals(listOf("local-fs", "notes", "search"), CapabilityLibrary.packCandidates(CapabilityLibrary.library(state), "web-pack").map { it.name })
     }
 

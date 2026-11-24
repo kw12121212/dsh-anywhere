@@ -435,6 +435,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     botId = current.botId,
                     botName = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.name ?: current.botId,
                     api = connection.manageApi,
+                    onGone = { connection.goHome() },
                 )
                 current is ShellPage.BotBrowser -> BotBrowserPage(
                     botId = current.botId,
