@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-group-rounds
+  milestone: dsbot-native-parity
+status: planned
+summary: 群轮次补齐：展开已结束轮次的完整发言、查看转述回复预览，以及判定改动是否可查看
+details: 对照 0.3.10 client.js 补齐群聊渲染细节：group-rows {roomId, from, to?, anchor?} 读取已结束轮次在群记录中的行（返回 {rows, open, speaking}，无效参数回空），用于展开折叠的轮次；group-relay-replies {sessionId, preview} 取转述回复（失败静默为空）；changes-check {sessionId, seq} 判定该处改动是否仍可查看（布尔），不可查看时隐藏改动入口。三者的显示位置与交互在提案时对照 client.js 核对，应答形态实测登记 dsbot-api 与 FINDINGS。验收：同一群在两端展开轮次与转述回复显示一致。
+depends_on:
+  - dsbot-group-chat

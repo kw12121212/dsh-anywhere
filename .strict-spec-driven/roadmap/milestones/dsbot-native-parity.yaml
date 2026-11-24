@@ -1,0 +1,45 @@
+schema: strict-spec-driven/roadmap-milestone/v2
+schema_version: 2
+artifact_type: roadmap_milestone
+schema_file: ../schemas/roadmap-milestone.yaml
+milestone:
+  dsbot-native-parity:
+    title: 原生 DS-Bot：0.3.10 设置与聊天补齐
+order: 850
+goal: 补齐对照 DS-Bot 0.3.10 网页端新发现、dsbot-native-integrations 未规划的功能：Settings 的概览、DeepSeek 服务、MCP 访问、电脑操控与 General 高级项，以及聊天层的群内搜索、群待办与群目标任务备注/取消、Bot 后台任务详情与回复、群已结束轮次展开与转述回复；至此原生界面覆盖 DS-Bot 0.3.10 网页端经 /api/bot 可达的全部功能，布局适合手机。
+scope:
+  in:
+    - Settings 概览页：团队状态汇总，显示项以 0.3.10 client.js 的 Overview 页为准，各项点按跳到对应原生设置页
+    - DeepSeek 服务：deepseek-services 状态（识图 OCR、朗读 TTS、听写 ASR 是否可用及原因）、deepseek-services-config 开关与音色、deepseek-synthesize 试听
+    - MCP 访问：mcp-set 开关与端口、mcp-client-add/update/remove 外部客户端及其可访问的 Bot 与群，新建时一次性显示令牌
+    - 电脑操控设置：computer-set-enabled、computer-set-level、computer-revoke-app、computer-system-status/permission、computer-provider-retry，按宿主能力降级
+    - General 高级项：记忆召回上限、后台命令超时等（写入端点待核对，见 intake 问题 general-advanced-endpoint）
+    - 聊天层补齐：group-search 群内搜索、room-todo 群待办、task-note/task-cancel 群目标任务备注与取消、bot-task-read/bot-task-send 后台任务详情与回复、group-rows/group-relay-replies/changes-check 群轮次展开、转述回复与改动可用性
+  out:
+    - 手机配对 phone-set/phone-pair/phone-pair-cancel/phone-remove：上游官方手机 App 的二维码配对与中继，与本 App 经 dsh URL 接入的方式不同
+    - 浏览器站点授权 browser-allow：不在 /api/bot 端点内，仅桌面应用内部通道可达
+    - Classic Agent 模式切换（requiresSurface，仅桌面界面）；生物识别解锁、推送通知
+done_criteria:
+  - 概览页各项与网页端 Overview 一致，点按进入对应原生设置页
+  - DeepSeek 服务页显示 OCR/TTS/ASR 状态与不可用原因，开关与音色修改后网页端一致，试听可在手机播放且音频不写磁盘与日志
+  - MCP 访问可开关并改端口，新建外部客户端时令牌只显示一次且可复制（剪贴板随后清理），修改可访问范围与删除在两端一致，令牌不入日志与诊断上报
+  - 电脑操控设置在桌面宿主上开关、调整 Bot 级别与撤销应用授权后两端一致；dsh Web 宿主显示「此宿主不支持电脑操控」而非报错
+  - 群内搜索可查到并跳转到命中消息；群待办勾选、删除与清理已完成，群目标任务备注与取消，后台任务详情分页查看与回复，结果均与网页端一致；完整回归命令通过
+intake_questions:
+  - id: general-advanced-endpoint
+    question: General 高级项（记忆召回上限、后台命令超时）经哪个端点写入？
+    context: 0.3.10 channel.js 的 set-prefs 只接受 theme、accent、layout、motion、effects、width、flatWidth，未见记忆上限与后台超时字段，可能写入 dsh 配置或仅桌面界面可达
+    impact: 决定 dsbot-general-advanced 是否可在手机上完成
+    recommendation: 在该变更提案时核对 client.js 的 General 页写入路径；经 /api/bot 不可达的项在手机上只读显示或移出范围
+planned_changes: {}
+dependencies:
+  - dsbot-native-integrations 里程碑完成（模型服务商、系统与关于等设置页是概览与 DeepSeek 服务的跳转目标）
+  - DeepSeek 服务验收需用户在 dsh 中配置 DeepSeek API key；电脑操控验收需桌面应用宿主，dsh Web 宿主只验降级
+risks:
+  - MCP 客户端令牌与 DeepSeek key 属敏感值：令牌只在新建应答中出现一次，必须不入日志、诊断上报与持久存储，剪贴板需清理
+  - 电脑操控与 General 高级项部分依赖桌面界面或 dsh 配置，经 /api/bot 可能不可达；不可达项在提案阶段确认后降级为只读或移出范围
+status: proposed
+notes:
+  - 来源：2026-11-24 对照 DS-Bot 0.3.10（npm 最新版仍为 0.3.10）channel.js 端点清单与 client.js Settings 页面列表（overview、general、appearance、bots、groups、schedules、usage、models、bot-models、local-agents、deepseek-services、connectors、im、phone、mcp、computer、browser、capabilities、secrets、about、feedback）盘点出的缺口
+  - stop-chat 在 hello capabilities 中声明但 0.3.10 client.js 未调用，私聊停止沿用既有 stop-member-work，不单独规划
+details: 沿用 dsbot-native-integrations 的约定：设置页为分组列表，进入各子页为全屏页；写操作经 dsbot-api-client 发出、不自动重试，成功后以 feed 刷新；参数构造、状态派生与脱敏等纯逻辑放 core 以 JUnit 覆盖；新端点的应答形态在各变更中实测并登记到 dsbot-api 技术标准与 FINDINGS，未实测可用的能力经 hello-capabilities 门控或按字段存在降级。

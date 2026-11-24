@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-settings-overview
+  milestone: dsbot-native-parity
+status: planned
+summary: Settings 概览页：团队状态汇总，各项点按跳到对应原生设置页
+details: '原生 Settings 首页加概览：显示项以 DS-Bot 0.3.10 client.js 的 Overview 页（keywords: home status summary）为准，提案时逐项核对并登记数据来源（state、usage-summary、update-check、capabilityStatuses、imStatus、connectors 等既有字段，不新增端点）。每项点按进入已有原生页（模型服务商、连接器、IM、能力、用量、关于等），对应页尚未上线或远端未声明能力时该项隐藏。状态汇总的派生逻辑放 core 以 JUnit 覆盖。验收：与网页端 Overview 同时查看，各项状态一致。'
+depends_on:
+  - dsbot-system-about
+  - dsbot-usage

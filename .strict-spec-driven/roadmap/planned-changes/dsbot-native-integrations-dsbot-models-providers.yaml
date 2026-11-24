@@ -6,7 +6,7 @@ planned_change:
   id: dsbot-models-providers
   milestone: dsbot-native-integrations
 status: planned
-summary: 模型与服务商设置：查看可用模型与思考强度，新增与删除服务商、填写 key、拉取并选择服务商模型
-details: Settings → Models 原生页：models/efforts/thinking 展示可用模型、思考强度与 thinking 选项；providers 列出服务商；provider-add 新增、provider-key 填写或更新 key（不回显，值不进日志与诊断上报、不留剪贴板）、provider-models 拉取并勾选模型、provider-remove 删除（二次确认）。选定模型可在 Bot 设置中使用。错误按服务端原因显示（key 无效、网络失败等）。 上游手机端参考（2026-11-22，settings-pages.tsx）：provider-key 传 value:null 即移除 key；provider-add 支持已知服务商与自定义服务商；provider-models 为「查找模型」动作；删除用行内确认或二次确认。上线后 dsbot-chat-bars-0310 的模型失败修复卡改为直达本页。
+summary: 模型与服务商设置：查看可用模型与思考强度，新增与删除服务商、填写 key、查找并保存服务商模型，以及批量切换 Bot 模型
+details: 'Settings → Models 原生页：models/efforts/thinking 展示可用模型、思考强度与 thinking 选项；providers 列出服务商；provider-add 新增、provider-key 填写或更新 key（不回显，值不进日志与诊断上报、不留剪贴板）、provider-models 拉取并勾选模型、provider-models-save {provider} 保存所选模型列表（仅可编辑且有模型列表的服务商可用，否则按服务端 invalid 原因显示）、provider-remove 删除（二次确认）。选定模型可在 Bot 设置中使用。错误按服务端原因显示（key 无效、网络失败等）。 上游手机端参考（2026-11-22，settings-pages.tsx）：provider-key 传 value:null 即移除 key；provider-add 支持已知服务商与自定义服务商；provider-models 为「查找模型」动作；删除用行内确认或二次确认。上线后 dsbot-chat-bars-0310 的模型失败修复卡改为直达本页。 0.3.10 补充（2026-11-24 盘点）：Settings → Models 另有 Bot models 页（keywords: batch switch models），为多个 Bot 批量切换模型，经既有 update-bot 逐个写入，结果与网页端一致；批量请求的构造与部分失败汇总放 core 以 JUnit 覆盖。'
 depends_on:
   - dsbot-bot-manage

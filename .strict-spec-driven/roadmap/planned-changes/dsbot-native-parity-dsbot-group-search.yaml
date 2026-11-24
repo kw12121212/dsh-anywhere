@@ -1,0 +1,12 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-group-search
+  milestone: dsbot-native-parity
+status: planned
+summary: 群内搜索：在群聊中搜索历史消息并跳转到命中位置
+details: 群聊页加搜索入口：group-search {roomId, query, before?, offset?} 分页返回命中（已归档的旧群 id 经 pastOwners 解析，未知群回 bot/not-found）；结果列表显示发言者、时间与高亮片段，点按跳转到群聊中该消息（必要时向前分页加载到位）。应答形态在本变更实测登记 dsbot-api 与 FINDINGS；分页游标与高亮片段处理放 core 以 JUnit 覆盖。验收：与网页端同一关键词结果一致并能跳转。
+depends_on:
+  - dsbot-group-chat

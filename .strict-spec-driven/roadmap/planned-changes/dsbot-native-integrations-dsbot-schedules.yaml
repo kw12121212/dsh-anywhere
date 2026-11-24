@@ -6,7 +6,7 @@ planned_change:
   id: dsbot-schedules
   milestone: dsbot-native-integrations
 status: planned
-summary: 日程任务：查看、新建与删除 Bot 的定时任务
+summary: 日程任务：查看、新建、暂停与恢复、删除 Bot 的定时任务
 details: Settings → Scheduled tasks 原生页：schedules 列出任务（所属 Bot、触发规则、下次运行时间、最近结果），schedule-create 新建（选择 Bot、填写内容与时间规则，时区按服务端约定显示）、schedule-delete 删除（二次确认）。 上游手机端参考（2026-11-22，DS-Bot 0.3.10）：另有 schedule-pause 暂停与恢复任务；时间规则选项为 at、every、daily、weekly、cron。
 depends_on:
   - dsbot-native-shell

@@ -1,0 +1,13 @@
+schema: strict-spec-driven/planned-change/v1
+schema_version: 1
+artifact_type: planned_change
+schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
+planned_change:
+  id: dsbot-general-advanced
+  milestone: dsbot-native-parity
+status: planned
+summary: General 高级项：记忆召回上限与后台命令超时等团队级设置
+details: Settings → General 的高级项（0.3.10 client.js：Memory「bring up related memory, recall limits」、Background work「background commands after seconds timeout」）。写入端点待核对（里程碑 intake 问题 general-advanced-endpoint）：0.3.10 set-prefs 只接受外观字段；提案时核对 client.js 写入路径，经 /api/bot 可达的项做成原生编辑并做数值范围校验（core JUnit），不可达的项只读显示或移出范围并在提案中说明。Classic Agent 模式（requiresSurface）不做。验收：可编辑项修改后网页端一致。
+depends_on:
+  - dsbot-prefs-theme
+  - dsbot-memory
