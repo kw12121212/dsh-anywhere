@@ -870,3 +870,19 @@ requirements:
         - GIVEN: 远端 DS-Bot 的 state 不含 IM 视图
         - WHEN: 打开团队页
         - THEN: 不显示 IM 接入入口，其余入口照常
+  local-agents-settings:
+    strength: MUST
+    statement: 团队页提供「本地 Agent」入口进入本地 Agent 页：「检测到的 Agent」列出电脑上找到的 Agent CLI（名称、简短版本、路径、已登录或未登录），可刷新重新检测，刷新进行中有提示；未登录的显示登录命令并可复制，提示在电脑终端运行；「自定义 Agent」列出按命令添加的 Agent（名称、命令与参数、不可用时标注）。每个 Agent 可展开查看其可用模型。可新增与修改自定义 Agent：名称必填（不超过 40 字），命令须为程序名、绝对路径或 ~/ 路径且不含空白，参数以空格分隔且不含换行，不符合时在本地提示而不发送，服务端拒绝（如电脑上找不到该程序）时显示原因；删除须二次确认。写操作不自动重试，成功后重新读取列表与网页端一致；远端不支持本地 Agent 时页面给出说明。
+    scenarios:
+      detect-and-refresh:
+        - GIVEN: 电脑上装有一个已登录和一个未登录的 Agent CLI
+        - WHEN: 进入本地 Agent 页并点刷新，复制未登录那个的登录命令，再展开已登录那个的可用模型
+        - THEN: 两个 CLI 分别显示已登录与未登录及版本，刷新期间有进行中提示；登录命令已复制并提示在电脑终端运行；展开后列出该 CLI 的可用模型
+      custom-crud:
+        - GIVEN: 本地 Agent 页没有自定义 Agent
+        - WHEN: 新增一个自定义 Agent（先以含空格的命令尝试），再修改其参数，最后二次确认删除
+        - THEN: 含空格的命令在本地提示且不发送；新增与修改后网页端本地 Agent 页显示相同的名称、命令与参数；删除须确认，确认后两端都不再显示
+      unsupported-remote:
+        - GIVEN: 远端不支持本地 Agent（local-agents 未知或 DSH 无法注册路由）
+        - WHEN: 进入本地 Agent 页
+        - THEN: 页面说明此远端不支持本地 Agent，不显示列表与新增入口

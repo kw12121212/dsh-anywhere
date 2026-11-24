@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-local-agents
   milestone: dsbot-native-integrations
-status: planned
+status: complete
 summary: 本地 Agent：查看、刷新、新增、修改与删除电脑上的本地 Agent，并选择其模型
 details: Settings 中本地 Agent 原生页：local-agents 列出、local-agent-refresh 刷新检测、local-agent-models 查看可用模型、local-agent-add/update/remove（删除二次确认）。本地 Agent 运行在电脑上，手机只做配置，与网页端一致。 实现要点：列表显示每个本地 Agent 的名称、类型、检测状态与当前模型；local-agent-refresh 重新检测电脑上的可用 Agent（进行中可见）；local-agent-models 列出可选模型供新增与修改时选择；local-agent-add/update/remove 的参数构造与校验放 core，以 JUnit 覆盖，字段形状以 dsbot-baseline-0310 实测登记为准，未知字段只读显示；写操作不自动重试，失败显示服务端原因。验收：在 App 中刷新检测、新增一个本地 Agent 并选模型、修改后删除，每一步网页端一致。
 depends_on:
