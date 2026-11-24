@@ -27,8 +27,8 @@ sections:
       status: complete
       command: android/gradlew -p android assembleDebug
     full-regression:
-      text: 完整回归
-      status: pending
+      text: 完整回归（2026-11-24，评审修复后最终状态）：xvfb-run -a 包裹配置的回归命令 EXIT=0——typecheck、build、Vitest 228/228、行覆盖率 86.92%、e2e 42 通过 2 跳过、Android core JUnit 通过（修复前一轮 e2e window.open 偶发 Execution context was destroyed，按 lesson 整体重跑通过）
+      status: complete
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
@@ -36,7 +36,7 @@ sections:
       status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过
-      status: pending
+      status: complete
       command: strict-spec-cli verify dsbot-im-bridges
 testing_gates:
   validation_task: core-junit
