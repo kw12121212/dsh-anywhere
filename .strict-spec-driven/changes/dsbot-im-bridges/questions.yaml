@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-im-bridges
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-im-bridges 与里程碑 dsbot-native-integrations。
+    answer: 用户在手机上无法添加、管理 IM 机器人，也无法允许新账号、绑定群聊或扫码接入微信，只能回电脑网页端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「IM 接入的新增与扫码或登录码登录流程可在手机上完成（二维码显示在手机上供另一台设备扫描或给出可复制链接）」。
+    answer: 在 App 中添加字段类 IM 机器人、扫码接入微信（手机显示二维码与可复制链接）、允许或拒绝账号请求、移除账号与聊天、绑定群聊、启停与切换对话 Bot、重试与移除，结果与网页端一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details。
+    answer: 完整交付 Settings → IM 原生页与 im-add/update/remove/pair/unpair/chat/retry/login-start/login-wait；平台以 0.3.10 远端声明的可用平台为准；凭据不回显、不入日志；凭据修改与网页端一致不提供。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 团队页与 Bot 详情既有入口、聊天与停靠区不变；远端无 im 字段时不出现入口；聊天中的 IM 来源标记与 IM 卡片按钮不在本变更内。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-native-shell 已完成，roadmap-recommend 按顺序推荐本项为 dsbot-native-integrations 下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

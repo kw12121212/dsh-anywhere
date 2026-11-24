@@ -66,6 +66,9 @@ fun TeamPage(
     /** 连接器（dsbot-connectors-mail）：远端 state 含 connectors 时显示入口。 */
     showConnectors: Boolean = false,
     onConnectors: () -> Unit = {},
+    /** IM 接入（dsbot-im-bridges）：远端 state 含 im 时显示入口。 */
+    showIm: Boolean = false,
+    onIm: () -> Unit = {},
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -106,6 +109,9 @@ fun TeamPage(
                 }
                 if (showConnectors) {
                     TextButton(onClick = onConnectors) { Text(tr("连接器", "Connectors")) }
+                }
+                if (showIm) {
+                    TextButton(onClick = onIm) { Text(tr("IM 接入", "IM")) }
                 }
                 if (archivedPrivate > 0) {
                     TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }

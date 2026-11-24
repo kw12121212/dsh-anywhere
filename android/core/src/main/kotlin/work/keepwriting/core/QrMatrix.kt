@@ -1,0 +1,26 @@
+package work.keepwriting.core
+
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import com.google.zxing.qrcode.encoder.Encoder
+
+/**
+ * 二维码点阵（dsbot-im-bridges 微信扫码登录）：以 ZXing core 编码（纠错级别 M、UTF-8，同网页端 qrcode-generator 的 M 级），
+ * 界面按点阵绘制并四周留 [QUIET] 个模块的空白。
+ */
+class QrMatrix private constructor(val size: Int, private val dark: BooleanArray) {
+    fun isDark(x: Int, y: Int): Boolean = dark[y * size + x]
+
+    companion object {
+        /** 静区宽度（模块数，同网页端 QUIET2）。 */
+        const val QUIET = 4
+
+        /** 编码失败（内容超出二维码容量等）时为 null。 */
+        fun encode(text: String): QrMatrix? = runCatching {
+            val code = Encoder.encode(text, ErrorCorrectionLevel.M, mapOf(EncodeHintType.CHARACTER_SET to "UTF-8"))
+            val m = code.matrix
+            val n = m.width
+            QrMatrix(n, BooleanArray(n * n) { i -> m.get(i % n, i / n).toInt() == 1 })
+        }.getOrNull()
+    }
+}

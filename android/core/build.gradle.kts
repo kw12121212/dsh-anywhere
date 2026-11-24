@@ -20,6 +20,8 @@ java {
 }
 
 dependencies {
+    // 二维码点阵（dsbot-im-bridges 微信扫码登录）：纯 Java、无传递依赖，版本钉死
+    implementation("com.google.zxing:core:3.5.3")
     testImplementation(kotlin("test"))
     testImplementation(platform("org.junit:junit-bom:5.13.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")

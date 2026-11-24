@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto'
 import { deflateSync } from 'node:zlib'
 import { createConnectors } from './mock-dsh-connectors.mjs'
+import { createIm } from './mock-dsh-im.mjs'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -104,7 +105,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
   }
   // live 键随 Agent 工作状态与浏览器持有状态变化（上游 liveAnswer 按 live 内容生成键）
-  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds) + '-' + JSON.stringify(caps.enabled ? capabilityStatuses() : {}) + '-' + conn.liveKey()
+  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds) + '-' + JSON.stringify(caps.enabled ? capabilityStatuses() : {}) + '-' + conn.liveKey() + '-' + im.liveKey()
   // 工作文件夹（dsbot-folders，ds-bot 0.3.10 folders.js 形态）：内存目录树；/home/user/.dsh 是数据目录（guarded）
   const DIRS = new Set(['/', '/home', '/home/user', '/home/user/projects', '/home/user/projects/alpha', '/home/user/projects/beta',
     '/home/user/notes', '/home/user/.config', '/home/user/.dsh', '/home/user/.dsh/ds-bot', '/home/user/.dsh/ds-bot/workspace',
@@ -208,6 +209,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   const bump = () => { team.revision += 1; pushRevision(team.revision) }
   // 连接器与邮箱（dsbot-connectors-mail，见 mock-dsh-connectors.mjs）
   const conn = createConnectors({ bump, botExists: (id) => Boolean(team.bots[id]) })
+  // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
+  const im = createIm({ bump, botExists: (id) => Boolean(team.bots[id]), roomExists: (id) => Boolean(team.rooms[id]) })
 
   function view() {
     return {
@@ -231,6 +234,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
       ...(caps.enabled ? { capabilities: capLibraryView(), capabilityStatuses: capabilityStatuses() } : {}),
       ...conn.view(),
+      ...im.view(),
     }
   }
 
@@ -302,7 +306,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
-    const connected = conn.handle(endpoint, p, ok, fail)
+    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail)
     if (connected) return connected
     try {
       switch (endpoint) {
@@ -905,5 +909,5 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params) }
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params) }
 }

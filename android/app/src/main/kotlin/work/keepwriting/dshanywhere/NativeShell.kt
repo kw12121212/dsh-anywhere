@@ -160,6 +160,12 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object ConnectorAdd : ShellPage
         /** 邮箱账号与发送规则。 */
         data object Mailbox : ShellPage
+        /** IM 接入（dsbot-im-bridges）。 */
+        data object Im : ShellPage
+        /** 添加某平台的 IM 机器人。 */
+        data class ImAdd(val platform: String) : ShellPage
+        /** 某个 IM 机器人的详情。 */
+        data class ImDetail(val id: String) : ShellPage
     }
 
 @Composable
@@ -465,6 +471,25 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
                 current is ShellPage.Mailbox -> MailboxPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.Im -> ImPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    onOpen = { id -> connection.openImDetail(id) },
+                    onAdd = { p -> connection.openImAdd(p) },
+                )
+                // 添加成功或扫码完成后返回 IM 页（只在仍停留在添加页时）
+                current is ShellPage.ImAdd -> ImAddPage(
+                    state = connection.stateSnapshot?.raw,
+                    platformId = current.platform,
+                    api = connection.manageApi,
+                    onDone = { if (connection.page == current) connection.goBack() },
+                )
+                current is ShellPage.ImDetail -> ImDetailPage(
+                    state = connection.stateSnapshot?.raw,
+                    id = current.id,
+                    api = connection.manageApi,
+                    onBack = { if (connection.page == current) connection.goBack() },
+                )
                 current is ShellPage.BotBrowser -> BotBrowserPage(
                     botId = current.botId,
                     botName = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.name ?: current.botId,
@@ -505,6 +530,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // 连接器（dsbot-connectors-mail）：state 含 connectors 时出现
                     showConnectors = work.keepwriting.core.ConnectorSettings.has(connection.stateSnapshot?.raw),
                     onConnectors = { connection.openConnectors() },
+                    // IM 接入（dsbot-im-bridges）：state 含 im 时出现
+                    showIm = work.keepwriting.core.ImBridges.has(connection.stateSnapshot?.raw),
+                    onIm = { connection.openIm() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -825,7 +853,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         ChatController(
             api = { endpoint, payloadJson, onResult ->
                 // 停靠区的邮件发送卡等慢端点（SMTP 最长约 2 分钟）：在读线程以长读超时发出，不占状态 executor
-                if (endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS) readOffExecutor(endpoint, payloadJson, onResult)
+                if (isSlowEndpoint(endpoint)) readOffExecutor(endpoint, payloadJson, onResult)
                 else executor.execute {
                     val clean = graph.cleanUrl
                     val result = if (clean == null) {
@@ -1105,8 +1133,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
      */
     private val slowExecutor = Executors.newCachedThreadPool { r -> Thread(r, "dsbot-slow").apply { isDaemon = true } }
 
+    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入。 */
+    private fun isSlowEndpoint(endpoint: String) =
+        endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ImBridges.SLOW_ENDPOINTS
+
     private fun executorFor(endpoint: String) =
-        if (endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS) slowExecutor else readExecutor
+        if (isSlowEndpoint(endpoint)) slowExecutor else readExecutor
 
     /** POST /api/bot 同步调用（调用方线程执行）。 */
     private fun postBot(endpoint: String, payloadJson: String): DsbotApi.Result {
@@ -1116,7 +1148,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
                 "POST", DsbotApi.url(clean, "/api/bot"),
                 "application/json", DsbotApi.buildRequest(endpoint, payloadJson).toByteArray(),
                 // 同步等模型的端点（dsbot-memory）与等邮箱/OAuth 验证的端点（dsbot-connectors-mail）用长读超时
-                slow = endpoint in work.keepwriting.core.MemoryPanel.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS,
+                slow = endpoint in work.keepwriting.core.MemoryPanel.SLOW_ENDPOINTS || isSlowEndpoint(endpoint),
             )
             DsbotApi.parseResponse(res.status, res.bodyText())
         } catch (_: Exception) {
@@ -1220,6 +1252,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openConnectorAdd() = push(ShellPage.ConnectorAdd)
 
     fun openMailbox() = push(ShellPage.Mailbox)
+
+    fun openIm() = push(ShellPage.Im)
+
+    fun openImAdd(platform: String) = push(ShellPage.ImAdd(platform))
+
+    fun openImDetail(id: String) = push(ShellPage.ImDetail(id))
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

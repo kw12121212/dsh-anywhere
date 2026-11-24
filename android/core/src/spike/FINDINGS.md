@@ -465,3 +465,17 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - OAuth 浏览器登录的回调为 DS-Bot 所在电脑的 `http://127.0.0.1:<FIXED_CALLBACK_PORT 或随机端口>/callback`；手机上授权后浏览器停在不可达的 127.0.0.1 页面，`connector-sign-in-code {id, input}` 接受整段地址（校验本次 `state`）或纯授权码完成登录；GitHub 走设备码（`pending.kind:"device"`，`userCode`、`verificationUri`），后台轮询完成；Slack 等 `clientSetup` 服务先 `needs-client`，`connector-client {id, clientId, clientSecret?}` 后开始浏览器登录。
 - `mail-account-add` 先 IMAP 登录验证（socketTimeout 60 秒）再存密钥与账号；`mail-send-answer` 同步 SMTP 发送（连接超时最长 120 秒），发送失败也回 `true` 并把卡标记 `failed`、告知 Bot。手机端把这些端点登记为长读超时（`ConnectorSettings.SLOW_ENDPOINTS`），停靠区的邮件作答也改在读线程发出。
 - 写端点成功应答（视图、`{view, created}`、`true`）、登录流程、规则 `applyRules` 与发送卡字段为源码核对，由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-connectors.mjs`）按同一形态覆盖：内置设备码、浏览器登录（粘贴地址校验 state）、needs-client、key、直连、出错与自加连接器样本、QQ 邮箱账号、规则、待发邮件卡与连接器请求卡；`/mock/connectors?enabled=0|1&complete=<id>&google=0|1&mailCard=1&connectorCard=<id>&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。
+
+## 30. IM 接入（2026-11-24，dsbot-im-bridges）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesIm` 探针组，未改动真实 IM 连接）**：
+- `state` 顶层含 `im`（对象，键 `connections`、`platforms`）与 live `imStatus`（对象）；hello `capabilities` 名单不含 IM 能力名——客户端以 `state.im` 字段存在门控入口。
+- `im.platforms=[telegram, weixin, feishu, dingtalk, wecom, qq, discord, slack]`（与 `src/shared/im-platforms.js` 目录顺序一致，即本机全部 8 个平台都有适配器）；`im.connections` 当前为空，`imStatus` 为空对象。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/refused"`，均在写入前拒绝）：`im-update/remove/pair/unpair/chat/retry {id:不存在}` → "No such IM bot"；`im-add {platform:不存在}` → "This platform is not available yet"；`im-login-start/im-login-wait {platform:"telegram"}` → "This platform has no QR login"。
+- 取证时 dsh-web 已改为打印 `https://127.0.0.1:13080/?token=…`（之前为 http）；runSpike 的目标改用该行替换为 tailnet 主机名（不回显 token）。
+
+**源码核对（ds-bot 0.3.10 `src/host/im/index.js`、`src/shared/im-platforms.js`、`im/platforms/weixin.js`、`channel.js`，client.js `ImPage`/`AddView`/`QrLogin`/`DetailView`/`GUIDES`）**：
+- 连接视图 `viewOf`：`{id, platform, account{id,name}|null, botId|null, settings{非密钥字段}, secrets[密钥字段名], enabled, paired[{id,name,at}], requests[{id,name,chatKey,chatKind,…}], chats{chatKey→{kind,title,target?,at}}, createdAt}`；`imStatusView`：`{connId→{state, error?, at}}`，网页端 `stateOf` 以停用优先、其余未知视为连接中。
+- 平台目录只在客户端共享代码里（字段、选项、密钥标记、`login:'qr'`），state 只下发可用平台 id；手机端内置同一目录（core `ImBridges.PLATFORMS`）并按 `im.platforms` 过滤。
+- `im-add` 先向平台校验账号（`checkAccount`）再保存，扫码平台拒绝；`im-login-start` 返回 `{loginId, qr, expiresAt, botId}`（`qr` 为编码进二维码的文本），`im-login-wait` 对微信 `get_qrcode_status` 长轮询（`POLL_TIMEOUT_MS=35_000`），返回 waiting/scanned/expired，确认后创建连接并返回 `{status:"done", id}`。手机端把 `im-add/update/retry/login-start/login-wait` 登记为慢端点。
+- 写端点成功应答与扫码流程由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-im.mjs`）按同一形态覆盖：Telegram 已连接（待允许请求、已配对账号、私聊、已绑定与未绑定群聊）、飞书出错（重试成功）、微信扫码；`/mock/im?enabled=0|1&scan=1&confirm=1&expire=1&request=<名字>&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键与字段名）。

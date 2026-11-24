@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-im-bridges
+  status: proposed
+summary:
+  what:
+    - 团队页新增「IM 接入」入口（远端 state 含 im 时显示）进入原生 IM 页：「等你允许」分组列出各 IM 机器人上待允许的账号请求（可允许或拒绝，im-pair）；「我的 IM 机器人」列出已添加的 IM 机器人（名称、平台、状态：已连接 / 连接中 / 正在重试 / 已停用 / 无法连接及原因、对话的 Bot、待允许数）；「添加 IM 机器人」按远端可用平台（Telegram、微信、飞书/Lark、钉钉、企业微信、QQ、Discord、Slack）列出并显示各平台已添加数
+    - 添加 IM 机器人（im-add）：显示该平台的开通步骤与开发者后台链接，选择对话的 Bot，按平台填写字段（选项字段如飞书版本、普通字段、不回显的密钥字段如 token 与 Secret），字段缺失时不发送，服务端校验失败显示原因；微信以扫码登录（im-login-start / im-login-wait）：在手机上显示二维码供另一台设备的微信扫描，同时提供复制链接与在微信中打开，显示正在获取 / 用微信扫码 / 已扫码请在手机上确认 / 已过期（可换一个二维码）状态，确认后自动添加并返回
+    - IM 机器人详情：状态与平台，出错时可重试（im-retry），启用开关与对话的 Bot（im-update）；等你允许的请求（im-pair 允许/拒绝）；已连接的账号逐个二次确认移除（im-unpair）；聊天列表（私聊/群聊），群聊可绑定到某个 Bot 或群聊或解除绑定（im-chat target），聊天可二次确认移除（im-chat remove）；二次确认后移除整个 IM 机器人（im-remove）
+  why:
+    - 用户在手机上无法接入或管理 IM 机器人：添加 Telegram、飞书等通道、扫码接入微信、允许新账号对话、把群聊绑定到 Bot 都只能回电脑网页端；DS-Bot 0.3.10 已提供完整的 im-* 端点与 state.im、live imStatus
+scope:
+  in:
+    - core：ImBridges（state.im 连接与可用平台、live imStatus 解码；平台目录（字段、选项、密钥字段、扫码登录、开通步骤与链接，中英文案）；状态合成与文案；聊天名称与绑定目标；添加表单校验；扫码登录应答解码；im-* 请求体；慢端点登记）与 QrMatrix（二维码点阵，ZXing core）；JUnit（ImBridgesTest、QrMatrixTest）
+    - app：ImPage（等你允许、我的 IM 机器人、添加平台）、ImAddPage（字段表单与微信扫码登录）、ImDetailPage 与 NativeShell 路由、TeamPage「IM 接入」入口；二维码原生绘制；密钥字段不回显、表单显示期间禁止截屏；扫码链接经 SensitiveClipboard 复制
+    - mock --manage IM 端点与 state.im / imStatus（含待允许请求、已连接账号、私聊与群聊、出错连接、微信扫码登录的等待→已扫码→完成流程）供模拟器验收；runSpike 对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记 IM 端点；设备验收
+  out:
+    - 修改已添加 IM 机器人的凭据字段（网页端详情页同样不提供，需移除后重新添加）；在手机上运行 IM 机器人或代替 IM 平台收发消息
+    - 聊天中消息来源的 IM 标记（live imVia）与 IM 卡片按钮；连接器、密钥设置页与本地 Agent（各自的规划变更）
+unchanged_behavior:
+  - 团队页既有入口与功能不变；Bot 详情页不变；聊天与停靠区不变
+  - 远端 state 不含 im 字段（旧版 DS-Bot）时不显示 IM 接入入口，其余功能照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-im-bridges

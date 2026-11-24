@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-im-bridges
+sections:
+  Implementation:
+    core-im:
+      text: core：ImBridges（state.im、imStatus 解码；内置平台目录与中英文案；状态合成与文案；聊天名称与绑定目标；添加校验；扫码登录应答；im-* 请求体；慢端点）与 QrMatrix（ZXing core 依赖钉在 core/build.gradle.kts）；JUnit（ImBridgesTest、QrMatrixTest 解码回读）
+      status: complete
+    app-im-pages:
+      text: app：ImPage、ImAddPage（字段表单、密钥字段 SecretField+SecureWhileShown、微信扫码登录循环与二维码绘制、复制与打开链接）、ImDetailPage（重试、启用、对话 Bot、请求允许/拒绝、账号与聊天二次确认移除、群聊绑定、移除 IM 机器人）、NativeShell 路由与慢端点、TeamPage「IM 接入」入口
+      status: complete
+    mock-im:
+      text: mock --manage：state.im 与 live imStatus（待允许请求、已连接账号、私聊与群聊绑定、出错连接）、全部 im-* 端点与微信扫码等待→已扫码→完成流程，/mock/im 控制与调用记录（只记参数键）
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（state.im、imStatus 形态，im-* 写端点以不存在的 id 或不支持扫码的平台取错误应答），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: pending
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: pending
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：IM 页分组与状态、添加 Telegram（密钥字段掩码、缺字段不可提交、服务端错误显示）、微信扫码（二维码显示、已扫码、完成后返回、过期换码、复制链接）、允许/拒绝请求、移除账号与聊天确认、群聊绑定与解绑、启停与切换对话 Bot、重试、移除 IM 机器人确认、无 im 字段时入口隐藏
+      status: pending
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: pending
+      command: strict-spec-cli verify dsbot-im-bridges
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit
