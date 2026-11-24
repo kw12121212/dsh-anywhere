@@ -915,5 +915,14 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setProviders: (params) => { const out = providers.set(params); bump(); return out } }
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setProviders: (params) => {
+      const out = providers.set(params)
+      // ?block=<botId>&code=<失败代码>&provider=<id>：让该 Bot 处于模型失败阻塞（修复卡验收）；?unblock=<botId> 清除
+      const block = params.get('block')
+      if (block && team.bots[block]) team.bots[block].blocked = { code: params.get('code') ?? 'MISSING_CREDENTIAL', provider: params.get('provider') ?? 'glm', at: Date.now() }
+      const unblock = params.get('unblock')
+      if (unblock && team.bots[unblock]) delete team.bots[unblock].blocked
+      bump()
+      return out
+    } }
 }
