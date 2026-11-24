@@ -266,6 +266,8 @@ fun BotDetailsPage(
     onOpenMemory: () -> Unit = {},
     /** 打开该 Bot 的浏览器页（dsbot-bot-browser）。 */
     onOpenBrowser: () -> Unit = {},
+    /** 打开该 Bot 的能力页（dsbot-capabilities）。 */
+    onOpenCapabilities: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -374,6 +376,11 @@ fun BotDetailsPage(
         if (work.keepwriting.core.MemoryPanel.enabled(state)) {
             SectionTitle(tr("记忆", "Memory"))
             ValueRow(tr("记忆", "Memory"), "›", hint = tr("它自己的记忆与团队共享记忆", "Its own memory and the team memory"), onClick = onOpenMemory)
+        }
+
+        if (work.keepwriting.core.CapabilityLibrary.hasLibrary(state)) {
+            SectionTitle(tr("能力", "Capabilities"))
+            ValueRow(tr("能力", "Capabilities"), "›", hint = work.keepwriting.core.CapabilityLibrary.botSummary(state, botId), onClick = onOpenCapabilities)
         }
 
         SectionTitle(tr("浏览器", "Browser"))

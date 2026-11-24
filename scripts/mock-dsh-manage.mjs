@@ -18,8 +18,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     revision: 100,
     mainBotIds: ['bot-1'],
     bots: {
-      'bot-1': { id: 'bot-1', name: '研究主管', role: '研究', instructions: '负责团队研究计划。', color: 'deepseek', avatar: { shape: 'whale' }, model: 'deepseek/v4', appliedModel: 'deepseek/v4', effort: 'high' },
-      'bot-2': { id: 'bot-2', name: '运维值班', role: '运维', instructions: '处理告警。', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/ops', sectionId: 'sec-1' },
+      'bot-1': { id: 'bot-1', name: '研究主管', role: '研究', instructions: '负责团队研究计划。', color: 'deepseek', avatar: { shape: 'whale' }, model: 'deepseek/v4', appliedModel: 'deepseek/v4', effort: 'high', capabilities: ['notes', 'web-pack'], packs: [] },
+      'bot-2': { id: 'bot-2', name: '运维值班', role: '运维', instructions: '处理告警。', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/ops', sectionId: 'sec-1', capabilities: [], packs: ['local-fs'] },
       'bot-3': { id: 'bot-3', name: '写作搭档', role: '写作', instructions: '', model: 'deepseek/v4', appliedModel: 'deepseek/v4', workDir: '/work/writing', permission: 'workspace-write' },
       'bot-4': { id: 'bot-4', name: '采购助理', role: '', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash' },
       // 工作文件夹已在电脑上被删除（不在目录树里）：选择页起点读不到时应退回主目录（dsbot-folders）
@@ -43,6 +43,44 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     prefs: { theme: 'paper', width: 90 },
   }
   const library = []
+  // 能力库（dsbot-capabilities，ds-bot 0.3.10 capabilities.js 形态）：web-pack 含 search 与 notes；local-fs 为运维值班提议、未批准的 stdio MCP；
+  // search 的 mockError 模拟连接失败（live capabilityStatuses 为 error）。enabled=false 时 state 不含能力库字段（旧版远端）
+  const caps = {
+    enabled: true,
+    items: {
+      'notes': { name: 'notes', kind: 'skill', description: '记笔记的约定', createdBy: null, createdAt: 1, updatedAt: 1, content: '# 笔记\n把要点写进 notes.md。' },
+      'search': { name: 'search', kind: 'mcp', description: '网页搜索', createdBy: null, createdAt: 1, updatedAt: 1, transport: 'streamable-http', url: 'https://mcp.example.com/search', headers: { Authorization: 'Bearer $DSH_SECRET_SEARCH_KEY' }, approved: true, mockError: 'HTTP 401 Unauthorized' },
+      'web-pack': { name: 'web-pack', kind: 'pack', description: '上网三件套', createdBy: null, createdAt: 1, updatedAt: 1, items: ['search', 'notes'] },
+      'local-fs': { name: 'local-fs', kind: 'mcp', description: '', createdBy: 'bot-2', createdAt: 2, updatedAt: 2, transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/work/ops'], env: {}, approved: false },
+    },
+    calls: [],
+  }
+  const CAP_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+  const capLeafStatus = (name) => {
+    const item = caps.items[name]
+    if (!item) return undefined
+    if (item.kind === 'mcp' && item.transport === 'stdio' && item.approved !== true) return { state: 'needs-approval' }
+    if (item.mockError) return { state: 'error', error: item.mockError }
+    return { state: 'ready' }
+  }
+  const capSeverity = { error: 3, 'needs-approval': 2, connecting: 1, ready: 0 }
+  // 上游 capabilityStatusesView：只为常驻挂载生成；能力包取子项最严重者
+  function capabilityStatuses() {
+    const out = {}
+    for (const bot of Object.values(team.bots)) {
+      const statuses = {}
+      for (const name of bot.capabilities ?? []) {
+        const item = caps.items[name]
+        if (!item) continue
+        const children = item.kind === 'pack' ? (item.items ?? []).map(capLeafStatus).filter(Boolean) : [capLeafStatus(name)].filter(Boolean)
+        const worst = children.sort((a, b) => capSeverity[b.state] - capSeverity[a.state])[0]
+        if (worst) statuses[name] = worst
+      }
+      out[bot.id] = statuses
+    }
+    return out
+  }
+  const capLibraryView = () => Object.values(caps.items).map(({ mockError, ...item }) => ({ ...item }))
   const agentTimers = {}
   // Bot 浏览器（dsbot-bot-browser，ds-bot 0.3.10 channel.js / browser.js / browser/session.js 形态）
   const browser = {
@@ -65,7 +103,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
   }
   // live 键随 Agent 工作状态与浏览器持有状态变化（上游 liveAnswer 按 live 内容生成键）
-  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds)
+  const liveKey = () => 'manage-' + team.revision + '-' + Object.keys(team.agentRunning).sort().join(',') + '-' + JSON.stringify(browser.holds) + '-' + JSON.stringify(caps.enabled ? capabilityStatuses() : {})
   // 工作文件夹（dsbot-folders，ds-bot 0.3.10 folders.js 形态）：内存目录树；/home/user/.dsh 是数据目录（guarded）
   const DIRS = new Set(['/', '/home', '/home/user', '/home/user/projects', '/home/user/projects/alpha', '/home/user/projects/beta',
     '/home/user/notes', '/home/user/.config', '/home/user/.dsh', '/home/user/.dsh/ds-bot', '/home/user/.dsh/ds-bot/workspace',
@@ -188,6 +226,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       memory: true,
       agents: Object.values(team.agents),
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
+      ...(caps.enabled ? { capabilities: capLibraryView(), capabilityStatuses: capabilityStatuses() } : {}),
     }
   }
 
@@ -263,7 +302,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       switch (endpoint) {
         case 'state':
           // 上游 channel.js：since 命中且 live 键相同只回三键；live 键变了附带 live 字段（work / browserHolds 等）
-          if (p.since === team.revision) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work, browserHolds: view().browserHolds })
+          if (p.since === team.revision) return ok(p.live === liveKey() ? { revision: team.revision, unchanged: true, liveKey: liveKey() } : { revision: team.revision, unchanged: true, liveKey: liveKey(), work: view().work, browserHolds: view().browserHolds, ...(caps.enabled ? { capabilityStatuses: capabilityStatuses() } : {}) })
           return ok(view())
         // DSH Agent（dsbot-member-agents，ds-bot 0.3.10 agents.js / parts.js agentPage / turns.js stopAgent 形态）
         case 'hello':
@@ -734,12 +773,89 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
           pushLive()
           return ok(true)
         }
+        // 能力（dsbot-capabilities）：上游 capabilities.js capabilityEndpoint（界面调用 ui:true）
+        case 'capability-save': {
+          caps.calls.push({ endpoint, name: p.name, kind: p.kind })
+          const name = String(p.name ?? '').trim()
+          if (name.length > 32 || !CAP_NAME.test(name) || name === 'github' || name === 'mail') throw new Error('Use a capability name with lowercase letters, digits, and single hyphens; connector names are reserved.')
+          if (!['mcp', 'skill', 'pack'].includes(p.kind)) throw new Error('Choose an MCP server, skill, or pack.')
+          const previous = caps.items[name]
+          if (previous && previous.kind !== p.kind) throw new Error('A capability cannot change its kind. Delete it and save a new one.')
+          const now = Date.now()
+          const item = { name, kind: p.kind, description: String(p.description ?? '').trim().slice(0, 2000), createdBy: previous?.createdBy ?? null, createdAt: previous?.createdAt ?? now, updatedAt: now }
+          const strings = (v) => { if (v === undefined) return []; if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) throw new Error('Arguments must be a list of text values.'); return [...v] }
+          const map = (v, label) => { if (v === undefined) return {}; if (v === null || typeof v !== 'object' || Array.isArray(v) || Object.values(v).some((x) => typeof x !== 'string')) throw new Error(`${label} must contain text values.`); return { ...v } }
+          if (p.kind === 'mcp') {
+            if (p.transport === 'streamable-http') {
+              const url = String(p.url ?? '').trim()
+              try { const u = new URL(url); if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error() } catch { throw new Error('Enter a valid HTTP or HTTPS URL.') }
+              Object.assign(item, { transport: 'streamable-http', url, headers: map(p.headers, 'Headers'), approved: true })
+            } else {
+              const command = String(p.command ?? '').trim()
+              if (command === '') throw new Error('Enter a command for the MCP server.')
+              Object.assign(item, { transport: 'stdio', command, args: strings(p.args), env: map(p.env, 'Environment variables'), approved: true })
+            }
+          } else if (p.kind === 'skill') {
+            item.content = String(p.content ?? '').trim()
+          } else {
+            const names = [...new Set(strings(p.items))]
+            for (const child of names) if (!caps.items[child] || !['mcp', 'skill'].includes(caps.items[child].kind)) throw new Error(`Packs can include only saved MCP servers and skills. ${child} is not one.`)
+            item.items = names
+          }
+          caps.items[name] = item
+          bump()
+          return ok(item)
+        }
+        case 'capability-delete': {
+          caps.calls.push({ endpoint, name: p.name })
+          const item = caps.items[String(p.name ?? '')]
+          if (!item) throw new Error(`No capability named ${p.name}.`)
+          delete caps.items[item.name]
+          for (const pack of Object.values(caps.items)) if (pack.kind === 'pack') pack.items = (pack.items ?? []).filter((c) => c !== item.name)
+          for (const bot of Object.values(team.bots)) {
+            bot.capabilities = (bot.capabilities ?? []).filter((n) => n !== item.name)
+            bot.packs = (bot.packs ?? []).filter((n) => n !== item.name)
+          }
+          bump()
+          return ok(true)
+        }
+        case 'capability-approve': {
+          caps.calls.push({ endpoint, name: p.name })
+          const item = caps.items[String(p.name ?? '')]
+          if (!item || item.kind !== 'mcp' || item.transport !== 'stdio') throw new Error(`No unapproved stdio MCP named ${p.name}.`)
+          item.approved = true
+          item.updatedAt = Date.now()
+          bump()
+          return ok(item)
+        }
+        case 'bot-capability': {
+          caps.calls.push({ endpoint, botId: p.botId, name: p.name, attached: p.attached, mode: p.mode })
+          const bot = team.bots[String(p.botId ?? '')]
+          if (!bot) throw new Error('Unknown Bot')
+          const name = String(p.name ?? '')
+          if (!caps.items[name]) throw new Error(`No capability named ${name}.`)
+          const mode = p.mode ?? 'always'
+          if (!['always', 'catalog'].includes(mode)) throw new Error('Capability mode must be always or catalog.')
+          bot.capabilities = (bot.capabilities ?? []).filter((n) => n !== name)
+          bot.packs = (bot.packs ?? []).filter((n) => n !== name)
+          if (p.attached === true) bot[mode === 'catalog' ? 'packs' : 'capabilities'].push(name)
+          bump()
+          return ok(bot.capabilities)
+        }
         default:
           return null
       }
     } catch (error) {
       return fail(error.message)
     }
+  }
+
+  // /mock/capabilities：?library=0|1 切换 state 是否带能力库（旧版远端）；?resetCalls=1 清空调用记录；返回能力库与调用记录
+  function setCapabilities(params) {
+    const lib = params.get('library')
+    if (lib === '0' || lib === '1') { caps.enabled = lib === '1'; bump(); pushLive() }
+    if (params.get('resetCalls') === '1') caps.calls = []
+    return { enabled: caps.enabled, items: capLibraryView(), bots: Object.fromEntries(Object.values(team.bots).map((b) => [b.id, { capabilities: b.capabilities ?? [], packs: b.packs ?? [] }])), statuses: capabilityStatuses(), calls: caps.calls }
   }
 
   function setBrowser(params) {
@@ -783,5 +899,5 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser }
+  return { handle, team, browser, setBrowser, setCapabilities }
 }

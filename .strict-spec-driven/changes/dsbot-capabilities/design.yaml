@@ -4,9 +4,9 @@ artifact_type: change_design
 schema_file: templates/strict-spec-driven/schemas/change-design.yaml
 change: dsbot-capabilities
 approach:
-  - 纯逻辑下沉 android/core 的 Capabilities：解码 state.capabilities（能力库数组：name、kind、description、createdBy、approved、transport、command/args/env、url/headers、content、items，未知字段忽略）、state.bots[].capabilities（常驻）与 bots[].packs（按需目录）、live capabilityStatuses{botId→{name→{state, error?}}}；派生每项在团队层面的单一显示状态（跨所有挂载它的 Bot 取最严重：error > needs-approval > connecting > ready，未挂载任何 Bot 且 stdio 未批准时为待批准，否则为未使用）、来源（createdBy 为空=你添加，否则为提议它的 Bot 名）、使用者列表；名称预校验与服务端同规则；capability-save/delete/approve 与 bot-capability 请求体由 core 构造。全部由 JUnit（CapabilitiesTest）覆盖。
-  - app 侧新增 ShellPage.Capabilities、ShellPage.CapabilityEdit(name?) 与 ShellPage.BotCapabilities(botId)：列表页按待批准、出错、其余分组排序；编辑页四种类型的表单（参数与环境变量/请求头以每行一项的文本编辑，技能内容进入全屏多行编辑器），保存经 manageAction 发出、不自动重试，失败原样显示服务端原因；Bot 能力页逐项开关并选择常驻/按需。所有写操作成功后依赖既有 state/feed 刷新显示，不做本地乐观改写。
   - 入口门控按字段存在：state 含 capabilities 数组时团队页显示「能力」、Bot 详情显示「能力」分组；0.3.10 的 hello capabilities 名单不含能力库对应能力名，沿用 chat-bars-fields-0310 的数据存在门控。mock --manage 补能力端点与状态以覆盖模拟器验收，对本机真实服务只做只读探针（state 与错误应答），不改动用户真实团队。
+  - 纯逻辑下沉 android/core 的 CapabilityLibrary（core 已有 hello 能力握手的 Capabilities 类型，故另名）：解码 state.capabilities（能力库数组：name、kind、description、createdBy、approved、transport、command/args/env、url/headers、content、items，无效条目跳过）、state.bots[].capabilities（常驻）与 bots[].packs（按需目录）、live capabilityStatuses{botId→{name→{state, error?}}}；派生列表行的单一显示状态（Bot 提议未批准的 stdio MCP 为待批准，否则跨所有 Bot 取最严重：error > needs-approval > connecting > ready，无 Bot 上报为空）、来源（createdBy 为空=你添加，否则为提议它的 Bot 名）、使用者列表；Bot 能力页各行复刻网页端 BotCapabilitiesCard（能力包在前、经由常驻/按需能力包生效的来源、挂载后才提示待批准、只对常驻项显示状态）；名称预校验与服务端同规则；编辑草稿（参数每行一项、环境变量与请求头为 JSON 对象文本，同网页端 CapabilityForm）与四个端点请求体由 core 构造。全部由 JUnit（CapabilityLibraryTest）覆盖。
+  - app 侧新增 ShellPage.Capabilities、ShellPage.CapabilityEdit(name?) 与 ShellPage.BotCapabilities(botId)：列表页按待批准、出错、其余排序，行内批准与二次确认删除；编辑页按种类显示表单（编辑已保存能力时名称与种类只读），环境变量、请求头与技能内容进入全屏多行编辑器，保存经 manageAction 发出、不自动重试，本地校验失败不发送、服务端失败原样显示原因；Bot 能力页每项为常驻/按需/关闭三段选择。所有写操作成功后依赖既有 state/feed 刷新显示，不做本地乐观改写。
 decisions:
   data-presence-gating:
     decision: 能力入口以 state.capabilities 字段存在与否门控，不经 capabilities.has 判定
@@ -18,8 +18,8 @@ decisions:
     decision: 环境变量、请求头与参数中的 $DSH_SECRET_<NAME> 引用按原文显示与编辑，App 不解析、不展开密钥值；编辑页提示可用该语法引用密钥；能力的 env/headers 值不写日志与诊断上报
     rationale: 上游只在服务端挂载时解析引用，state 中本就只有引用原文；把引用当普通文本既与网页端一致，又避免手机端接触密钥明文
   attach-mode-choice:
-    decision: Bot 能力开关页对每项提供常驻（always，写入 bots[].capabilities）与按需（catalog，写入 bots[].packs）两种挂载模式，切换模式即以新 mode 重发 bot-capability attached=true，关闭发 attached=false
-    rationale: 上游 setAttached 先从两个列表中移除再按 mode 加入，同一请求即可切换模式；按需目录是 0.3.10 能力包的核心用法，只做开关会丢失网页端已有的选择
+    decision: Bot 能力页每项提供常驻（always，写入 bots[].capabilities）/按需（catalog，写入 bots[].packs）/关闭三段选择；切换即以新 mode 发 bot-capability attached=true，关闭发 attached=false；选择在途时该项禁用，避免连点叠加请求
+    rationale: 复刻网页端 BotCapabilitiesCard 的三段 Segmented 与上游 setAttached（先从两个列表移除再按 mode 加入，同一请求即可切换模式）；按需目录是 0.3.10 能力包的核心用法，只做开关会丢失网页端已有的选择；以在途禁用代替网页端的排队重放更符合手机端既有 manageAction 的单键在途约定
   fullscreen-skill-editor:
     decision: 技能内容与说明等长文本进入全屏多行编辑器，返回时回填表单，不自动保存
     rationale: 手机屏幕上内嵌多行输入难以编辑长技能文本；与规划变更 details 中「长文本用全屏编辑器」一致，且不自动保存避免半成品写入服务端

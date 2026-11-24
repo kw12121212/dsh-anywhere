@@ -1155,6 +1155,12 @@ data: {"revision":8}
     }))
     return
   }
+  if (manage && url.startsWith('/mock/capabilities')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(manage.setCapabilities(q)))
+    return
+  }
   if (manage && url.startsWith('/mock/browser')) {
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     const state = manage.setBrowser(q)

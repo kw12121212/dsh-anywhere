@@ -14,9 +14,9 @@ summary:
     - 用户在手机上无法查看 Bot 用到的 MCP 与技能是否正常、无法批准 Bot 提议的本地 MCP，也无法为 Bot 增删能力，只能回到电脑网页端；DS-Bot 0.3.10 已经提供能力库与 capability-save/delete/approve、bot-capability 端点
 scope:
   in:
-    - core：Capabilities 模块（state.capabilities 能力库、bots[].capabilities/packs 挂载、live capabilityStatuses 解码；单一显示状态合成；来源与使用者统计；名称预校验；capability-save/delete/approve 与 bot-capability 请求体构造）；JUnit（CapabilitiesTest）
     - app：CapabilitiesPage（能力列表、批准、删除确认）、CapabilityEditPage（四种类型的编辑表单与技能内容全屏编辑）、BotCapabilitiesPage（单 Bot 开关与常驻/按需模式）、NativeShell 路由、TeamPage「能力」入口与 BotDetailsPage「能力」分组
     - mock --manage 能力端点与 state.capabilities/capabilityStatuses；对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记能力端点；设备验收
+    - core：CapabilityLibrary 模块（state.capabilities 能力库、bots[].capabilities/packs 挂载、live capabilityStatuses 解码；团队与单 Bot 显示状态派生；经由能力包的来源；来源与使用者统计；名称预校验；编辑草稿与 capability-save/delete/approve、bot-capability 请求体构造）；JUnit（CapabilityLibraryTest）
   out:
     - Bot 在聊天中通过工具提议或使用能力包（use_pack/drop_pack）的流程与其审批卡（由既有聊天与停靠区承担）
     - 在手机上解析或显示 $DSH_SECRET_ 引用的密钥值、管理密钥本身（dsbot-secrets-settings）；连接器（dsbot-connectors-mail）与 MCP 外部访问（dsbot-mcp-access）

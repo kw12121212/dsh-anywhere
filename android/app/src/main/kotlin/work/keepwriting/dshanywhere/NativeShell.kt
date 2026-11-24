@@ -146,6 +146,12 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class FolderPick(val target: FolderTarget) : ShellPage
         /** Bot 浏览器页（dsbot-bot-browser）。 */
         data class BotBrowser(val botId: String) : ShellPage
+        /** 团队能力库（dsbot-capabilities）。 */
+        data object Capabilities : ShellPage
+        /** 新增（name=null）或编辑一项能力。 */
+        data class CapabilityEdit(val name: String?) : ShellPage
+        /** 单个 Bot 的能力页。 */
+        data class BotCapabilities(val botId: String) : ShellPage
     }
 
 @Composable
@@ -345,6 +351,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                                 connection.openMemory(work.keepwriting.core.MemoryPanel.Owner.Bot(current.targetId), tr("记忆：", "Memory: ") + name)
                             },
                             onOpenBrowser = { connection.openBotBrowser(current.targetId) },
+                            onOpenCapabilities = { connection.openBotCapabilities(current.targetId) },
                         )
                     }
                 }
@@ -410,6 +417,25 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // 设好照片后回到详情页（只在仍停留在头像库页时）
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
+                current is ShellPage.Capabilities -> CapabilitiesPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    onAdd = { connection.openCapabilityEdit(null) },
+                    onEdit = { name -> connection.openCapabilityEdit(name) },
+                )
+                // 保存成功后返回（只在仍停留在本编辑页时）
+                current is ShellPage.CapabilityEdit -> CapabilityEditPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    name = current.name,
+                    onDone = { if (connection.page == current) connection.goBack() },
+                )
+                current is ShellPage.BotCapabilities -> BotCapabilitiesPage(
+                    state = connection.stateSnapshot?.raw,
+                    botId = current.botId,
+                    botName = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.name ?: current.botId,
+                    api = connection.manageApi,
+                )
                 current is ShellPage.BotBrowser -> BotBrowserPage(
                     botId = current.botId,
                     botName = work.keepwriting.core.BotManage.profileOf(connection.stateSnapshot?.raw, current.botId)?.name ?: current.botId,
@@ -444,6 +470,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onOpenArchived = { connection.openPrivateArchives() },
                     onTeamWorkspace = { connection.openFolderPick(FolderTarget.Team) },
                     onTeamPrefs = { connection.openTeamPrefs() },
+                    // 能力库（dsbot-capabilities）：state 含能力库字段时出现
+                    showCapabilities = work.keepwriting.core.CapabilityLibrary.hasLibrary(connection.stateSnapshot?.raw),
+                    onCapabilities = { connection.openCapabilities() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -1133,6 +1162,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openFolderPick(target: FolderTarget) = push(ShellPage.FolderPick(target))
 
     fun openBotBrowser(botId: String) = push(ShellPage.BotBrowser(botId))
+
+    fun openCapabilities() = push(ShellPage.Capabilities)
+
+    fun openCapabilityEdit(name: String?) = push(ShellPage.CapabilityEdit(name))
+
+    fun openBotCapabilities(botId: String) = push(ShellPage.BotCapabilities(botId))
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

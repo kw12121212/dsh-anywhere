@@ -6,28 +6,28 @@ change: dsbot-capabilities
 sections:
   Implementation:
     core-capabilities:
-      text: core：Capabilities（state.capabilities 能力库、bots[].capabilities/packs 挂载、live capabilityStatuses 解码；团队与单 Bot 单一显示状态合成；来源与使用者派生；名称预校验；capability-save/delete/approve 与 bot-capability 请求体）；JUnit（CapabilitiesTest）
-      status: pending
+      text: core：CapabilityLibrary（state.capabilities 能力库、bots[].capabilities/packs 挂载、live capabilityStatuses 解码；列表与单 Bot 显示状态派生、经由能力包来源；来源与使用者派生；名称预校验；编辑草稿与 capability-save/delete/approve、bot-capability 请求体）；JUnit（CapabilityLibraryTest）
+      status: complete
     app-capabilities-pages:
       text: app：CapabilitiesPage（列表分组排序、批准、删除二次确认）、CapabilityEditPage（MCP stdio/HTTP、技能、能力包表单，技能内容全屏编辑，名称本地预校验）、BotCapabilitiesPage（逐项开关与常驻/按需模式、状态显示）与 NativeShell 路由
-      status: pending
+      status: complete
     app-entries:
       text: app：TeamPage「能力」入口与 BotDetailsPage「能力」分组（state.capabilities 字段存在时显示）
-      status: pending
+      status: complete
     mock-capabilities:
       text: mock --manage：state.capabilities、bots[].capabilities/packs、live capabilityStatuses 与 capability-save/delete/approve、bot-capability 端点（含 Bot 提议的未批准 stdio MCP 与出错状态样本），供模拟器验收
-      status: pending
+      status: complete
     findings:
       text: 对本机真实服务做只读探针（state 中能力库/挂载/状态字段与写端点错误应答，不改动真实团队），登记 FINDINGS 新节
-      status: pending
+      status: complete
   Testing:
     core-junit:
       text: core JUnit
-      status: pending
+      status: complete
       command: android/gradlew -p android/core test
     app-build:
       text: 构建 :app 调试 APK
-      status: pending
+      status: complete
       command: android/gradlew -p android assembleDebug
     full-regression:
       text: 完整回归

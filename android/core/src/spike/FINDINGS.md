@@ -434,3 +434,20 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - **`browser-give-back {botId, callId?, outcome?}`**：需要 `rt.browserChannel`；面板交还不带 `outcome` 与 `callId`（只清 hold），停靠区交接卡带 `callId` 与 `outcome:"done"|"skip"`；未持有回 `bot/forbidden`，`callId` 过期回 `bot/stale`。
 - **`browser-stop {botId}`**：不依赖 `rt.browserChannel`，取消私聊与群成员工作，若存在 `rt.browserChannel` 则写入 `{by:"user", reason:"stopped"}`；成功回 `true`。
 - 手机端不调用 `browser-wait` / `browser-result`；快照仅存于内存，不写入日志、诊断上报与磁盘缓存。模拟器验收用 `node scripts/mock-dsh-server.mjs --manage` 的 `/mock/browser` 控制路由覆盖全部宿主模式。
+
+## 28. 能力库（2026-11-24，dsbot-capabilities）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesCapabilities` 探针组，未改动真实团队）**：
+- `state` 顶层含 `capabilities`（数组）与 live `capabilityStatuses`（对象），hello `capabilities` 名单不含能力库相关能力名——客户端以 `state.capabilities` 字段存在门控入口。
+- `state.capabilities=[36]`：`kind` 分布 skill=32、mcp=4（`transport` streamable-http=1、stdio=3）；3 个 stdio 均未批准；36 项 `createdBy` 均为 Bot id（Bot 提议）。三种键集：skill `{name, kind, description, content, createdBy, createdAt, updatedAt}`；HTTP MCP `{…, transport, url, headers, approved}`；stdio MCP `{…, transport, command, args, env, approved}`（与 `libraryView` 一致；本次无能力包样本）。
+- `state.bots[]`：12 个 Bot 均带 `capabilities` 与 `packs` 数组；常驻挂载 33 处、按需 0 处。
+- `capabilityStatuses`：12 个 botId 键，33 条状态全部 `{state:"ready"}`（条目只有 `state` 键；`error` 仅出错时出现）。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/refused"`，message 为服务端原文）：`capability-approve {name:不存在}` → "No unapproved stdio MCP named …"；`capability-delete {name:不存在}` → "No capability named …"；`bot-capability {botId:不存在}` → "Unknown Bot"；`capability-save` 无效名称 → "Use a capability name with lowercase letters, digits, and single hyphens; connector names are reserved."；`capability-save` 能力包含不存在子项 → "Packs can include only saved MCP servers and skills. … is not one."（两者都在写入前拒绝）。
+
+**源码核对（ds-bot 0.3.10 `src/host/capabilities.js`、`channel.js`、`store.js`，client `capability-settings.js`）**：
+- `capability-save`（界面调用 ui:true）：名称 `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$` 且 ≤32、github/mail 保留；已存在时不可改 kind；description trim 截 2000；stdio 需非空 command，args 为文本数组、env 为文本值对象，界面保存直接 `approved:true`；HTTP 需 http(s) URL，headers 为文本值对象；skill 存 trim 后的 content；pack 的 items 去重且只能是已保存的 mcp/skill。返回能力对象。
+- `capability-delete {name}` → `true`，同时从所有能力包与 Bot 的 capabilities/packs 移除；`capability-approve {name}` → 能力对象（仅 stdio MCP）。
+- `bot-capability {botId, name, attached, mode}`：先从两个列表移除再按 `mode`（always→capabilities，catalog→packs）加入；返回该 Bot 的 capabilities 数组。
+- `capabilityStatuses`：只为常驻挂载（`bot.capabilities`）生成；单项为该 Bot 各会话中最严重者（error > needs-approval > connecting > ready），能力包取子项最严重者。
+- 网页端 Shared capabilities 列表按名称排序、行内 Allow/Edit/Delete（再点一次删除）；表单参数每行一项、环境变量与请求头为 JSON 对象文本（占位 `{"API_KEY": "$DSH_SECRET_MY_KEY"}`）；Bot 能力卡为 Always on / In catalog / Off 三段、能力包在前，显示「经由某包常驻/按需」、挂载后才提示待批准、只对常驻项显示状态——均复刻进 core `CapabilityLibrary`（`CapabilityLibraryTest`）。
+- 模拟器验收用 `node scripts/mock-dsh-server.mjs --manage`：内置能力包、出错的 HTTP MCP 与 Bot 提议的未批准 stdio MCP 样本；`/mock/capabilities?library=0|1` 切换 state 是否带能力库，返回能力库、挂载与调用记录。
