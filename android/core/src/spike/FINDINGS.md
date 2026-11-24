@@ -483,6 +483,7 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 ## 31. 本地 Agent（2026-11-24，dsbot-local-agents）
 
 **实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesLocalAgents` 探针组，未改动真实本地 Agent，未调用会启动 CLI 的 local-agent-models）**：
+- `local-agents` 对团队数据只读，但不是无副作用：上游先 `scan()` 并 `applyRoutes()`（可能注册或替换本机 DSH 的本地 Agent 路由），并对找到的 CLI 首次运行 `--version`、每 60 秒运行一次登录状态检查（各自限时）——进本地 Agent 页即会在电脑上短暂运行这些检查；`local-agent-refresh` 不在上游 `READS`，只读宿主会拒绝。
 - `local-agents {}` → `{available:true, detected[7], custom[]}`；detected 项键 `{route, name, path, version, signIn, signedIn}`，route 为 `local-claude-code`、`local-codex-cli`、`local-copilot-cli`、`local-antigravity`、`local-opencode`、`local-kimi-cli`、`local-qoder`；`signedIn` 分布 true=2、null=5（无登录探测的 CLI 为 null）。本地 Agent 不在 state 中。
 - 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/refused"`，均在写入前拒绝）：`local-agent-update/remove {id:不存在}` → "Unknown agent"；`local-agent-add` 命令含空白 → "Command must be a program name, an absolute path, or a ~/path"。
 

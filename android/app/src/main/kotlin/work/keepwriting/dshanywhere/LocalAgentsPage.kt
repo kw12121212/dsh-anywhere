@@ -65,24 +65,37 @@ fun LocalAgentsPage(api: ManageApi) {
     var removing by remember { mutableStateOf<LocalAgents.Custom?>(null) }
     var copied by remember { mutableStateOf<String?>(null) }
     val models = remember { mutableStateMapOf<String, LaModels>() }
+    // 列表读取的代次：重读与刷新的应答不可取消、可能乱序到达，只采用最新一次（评审发现：旧应答后到会让已删除项复现）
+    val gen = remember { intArrayOf(0) }
     val R = LocalAgents.Requests
 
     fun apply(r: DsbotApi.Result) {
         load = when (r) {
-            is DsbotApi.Result.Ok -> LocalAgents.decode(r.value)?.let { LaLoad.Ok(it) } ?: LaLoad.Failed(BotManage.errorText(null, null), false)
+            is DsbotApi.Result.Ok -> LocalAgents.decode(r.value)?.let { LaLoad.Ok(it) } ?: LaLoad.Failed(tr("服务端应答无法识别", "The server answer could not be read"), false)
             is DsbotApi.Result.BotError -> LaLoad.Failed(BotManage.errorText(r.code, r.message), r.code == "bot/not-found")
             is DsbotApi.Result.Failure -> LaLoad.Failed(BotManage.errorText(null, null), false)
         }
     }
-    LaunchedEffect(round) { api.read("local-agents", R.list()) { apply(it) } }
+    LaunchedEffect(round) {
+        val mine = ++gen[0]
+        api.read("local-agents", R.list()) { if (mine == gen[0]) apply(it) }
+    }
     fun refresh() {
         if (refreshing) return
         refreshing = true
         error = null
+        val mine = ++gen[0]
         api.read("local-agent-refresh", R.refresh()) { r ->
             refreshing = false
-            models.clear()
-            if (r is DsbotApi.Result.Ok) apply(r) else error = (r as? DsbotApi.Result.BotError)?.let { BotManage.errorText(it.code, it.message) } ?: BotManage.errorText(null, null)
+            if (mine != gen[0]) return@read
+            if (r is DsbotApi.Result.Ok) {
+                // 服务端已清模型缓存与登录探测：页面里的模型与「已复制」提示一并失效
+                models.clear()
+                copied = null
+                apply(r)
+            } else {
+                error = (r as? DsbotApi.Result.BotError)?.let { BotManage.errorText(it.code, it.message) } ?: BotManage.errorText(null, null)
+            }
         }
     }
     fun toggleModels(route: String) {
@@ -154,7 +167,7 @@ fun LocalAgentsPage(api: ManageApi) {
                 if (view.custom.isEmpty() && editing != "new") Hint2(tr("按命令添加兼容 ACP 的 Agent。", "ACP-compatible agents, added by command."))
                 for (c in view.custom) {
                     if (editing == c.id) {
-                        AgentForm(c, api, "la:update:${c.id}", onClose = { editing = null }, onSaved = { editing = null; round++ }) { n, cmd, a -> R.update(c.id, n, cmd, a) to "local-agent-update" }
+                        AgentForm(c, api, "la:update:${c.id}", onClose = { editing = null }, onSaved = { editing = null; c.route?.let { models.remove(it) }; round++ }) { n, cmd, a -> R.update(c.id, n, cmd, a) to "local-agent-update" }
                         continue
                     }
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -184,7 +197,7 @@ fun LocalAgentsPage(api: ManageApi) {
             confirm = tr("删除", "Remove"),
             onConfirm = {
                 error = null
-                api.action("la:remove:${c.id}", "local-agent-remove", R.remove(c.id), { round++ }) { error = it }
+                api.action("la:remove:${c.id}", "local-agent-remove", R.remove(c.id), { c.route?.let { models.remove(it) }; round++ }) { error = it }
             },
             onDismiss = { removing = null },
         )

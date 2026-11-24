@@ -69,7 +69,7 @@ fun TeamPage(
     /** IM 接入（dsbot-im-bridges）：远端 state 含 im 时显示入口。 */
     showIm: Boolean = false,
     onIm: () -> Unit = {},
-    /** 本地 Agent（dsbot-local-agents）；为 null 时不显示入口。 */
+    /** 本地 Agent（dsbot-local-agents）：入口不门控（页面按 local-agents 应答说明不支持）；为 null 时不显示（默认参数，供预览等调用方）。 */
     onLocalAgents: (() -> Unit)? = null,
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),

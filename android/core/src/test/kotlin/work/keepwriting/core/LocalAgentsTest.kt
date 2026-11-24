@@ -46,6 +46,7 @@ class LocalAgentsTest {
         assertFalse(LocalAgents.decode(Json.parse("""{"available":false,"detected":[],"custom":[]}"""))!!.available)
         assertTrue(LocalAgents.decode(Json.parse("""{"detected":[],"custom":[]}"""))!!.available)
         assertNull(LocalAgents.decode(Json.parse("[]")))
+        assertNull(LocalAgents.decode(null))
     }
 
     @Test
@@ -84,6 +85,15 @@ class LocalAgentsTest {
         assertNull(LocalAgents.formProblem("a", "C:\\tools\\agent.exe", ""))
         assertNull(LocalAgents.formProblem("a", "my-agent.v2", ""))
         assertEquals(listOf("--a", "b"), LocalAgents.splitArgs("  --a   b "))
+        // 评审补充的边界：回车与 NUL、正斜杠盘符、相对与 ~user 路径、无分隔符盘符、命令含制表符
+        assertEquals("参数不能包含换行", LocalAgents.formProblem("a", "gemini", "x\ry"))
+        assertEquals("参数不能包含换行", LocalAgents.formProblem("a", "gemini", "x\u0000y"))
+        assertNull(LocalAgents.formProblem("a", "D:/tools/agent", ""))
+        val bad = "命令须为程序名、绝对路径或 ~/ 路径"
+        assertEquals(bad, LocalAgents.formProblem("a", "./agent", ""))
+        assertEquals(bad, LocalAgents.formProblem("a", "~user/x", ""))
+        assertEquals(bad, LocalAgents.formProblem("a", "C:agent", ""))
+        assertEquals(bad, LocalAgents.formProblem("a", "my\tagent", ""))
     }
 
     @Test
@@ -96,7 +106,8 @@ class LocalAgentsTest {
         assertEquals("""{"name":"G","command":"gemini","args":[]}""", R.add("G", "gemini", " "))
         assertEquals("""{"id":"agent-m1","name":"G2","command":"gemini","args":["acp"]}""", R.update("agent-m1", "G2", "gemini", "acp"))
         assertEquals("""{"id":"agent-m1"}""", R.remove("agent-m1"))
-        assertEquals(40, LocalAgents.decode(Json.parse("{}")).let { R.add("x".repeat(50), "a", "").substringAfter("\"name\":\"").substringBefore("\"").length })
+        val longName = R.add("x".repeat(50), "a", "").substringAfter("\"name\":\"").substringBefore("\"")
+        assertEquals(40, longName.length) // 名称截 40（同上游 slice(0, 40)）
         assertTrue("local-agent-models" in LocalAgents.SLOW_ENDPOINTS)
     }
 }

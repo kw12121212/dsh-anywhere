@@ -7,10 +7,23 @@ operations:
   ADDED:
     local-agent-endpoints:
       strength: MUST
-      statement: '本地 Agent 端点（DS-Bot 0.3.6 起已有，0.3.10 核对；经 dsh 的 POST /api/bot）：local-agents {} → {available: boolean（DSH 能否注册 LLM adapter）, detected[{route（如 local-claude-code、local-codex-cli）, name, path, version|null, signIn(登录命令文本), signedIn: true|false|null}], custom[{id, name, command, args[], route: ''local-acp-<id>'', available}]}（服务端扫描电脑上的 CLI 并限时探测版本与登录）；local-agent-refresh {} → 同上（清模型缓存与登录探测后重扫）；local-agent-models {route} → [{provider, id, name, reasoning?}]（首次会在电脑上启动该 CLI，未注册路由回 []）；local-agent-add {name, command, args[]} → 条目+route（validateCustom：名称必填截 40、命令为程序名/绝对路径/~/路径/盘符路径且无空白、参数不含换行；电脑上找不到程序名时拒绝）；local-agent-update {id, name?, command?, args?} → 条目+route；local-agent-remove {id} → custom 视图。失败为 {ok:false, error:{code:bot/refused, message}}。local-agents 不属于 0.3.10 新增端点，入口不经 hello 门控；local-agents、local-agent-refresh、local-agent-models、local-agent-add 属慢端点。实测与源码核对界定：local-agents 应答与写端点错误应答为本机真实服务只读实测（FINDINGS 第 31 节）；local-agent-models 与写端点成功应答为源码核对，由 mock --manage 覆盖，未改动用户真实本地 Agent'
+      statement: '本地 Agent 端点（DS-Bot 0.3.10 核对；经 dsh 的 POST /api/bot）：local-agents {} → {available: boolean（DSH 能否注册 LLM adapter）, detected[{route（如 local-claude-code、local-codex-cli）, name, path, version|null, signIn(登录命令文本), signedIn: true|false|null}], custom[{id, name, command, args[], route: ''local-acp-<id>'', available}]}（对团队数据只读，但会扫描电脑并可能更新已注册的本地 Agent 路由，首次对找到的 CLI 运行 --version、每 60 秒运行登录检查，各自限时）；local-agent-refresh {} → 同上（清模型缓存与登录探测后重扫；不在上游 READS，只读宿主拒绝）；local-agent-models {route} → [{provider, id, name, reasoning?}]（首次会在电脑上启动该 CLI，未注册路由回 []）；local-agent-add {name, command, args[]} → 条目+route（validateCustom：名称必填截 40、命令为程序名/绝对路径/~/路径/盘符路径且无空白、参数不含换行；电脑上找不到程序名时拒绝）；local-agent-update {id, name?, command?, args?} → 条目+route；local-agent-remove {id} → custom 视图。失败为 {ok:false, error:{code:bot/refused, message}}。0.3.10 hello capabilities 不含本地 Agent 能力名、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级（bot/not-found 说明此远端不支持，available=false 说明无法注册）；local-agents、local-agent-refresh、local-agent-models、local-agent-add 属慢端点。实测与源码核对界定：local-agents 应答与写端点错误应答为本机真实服务只读实测（FINDINGS 第 31 节）；local-agent-models 与写端点成功应答为源码核对，由 mock --manage 覆盖，未改动用户真实本地 Agent'
       rationale: 本地 Agent 端点首次被手机端消费，应答不在 state 中、会在电脑上运行 CLI，登记字段、门控方式、慢端点与取证边界作为单一事实来源，避免后续变更误按 hello 门控或在取证时启动 CLI
       enforcement:
         method: review
         detail: core JUnit（LocalAgentsTest）覆盖应答解码、简短版本、登录状态、模型解码、表单校验与参数切分、请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/local-agents/index.js（localAgentsEndpoint、detected、customView、freshList）、engines.js（validateCustom）、adapter.js（probeModels）、channel.js（端点分发）、client.js（LocalAgentsPage、AgentSignInRow、AgentForm、shortVersion）
-  MODIFIED: {}
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
   REMOVED: {}

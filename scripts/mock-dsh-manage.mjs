@@ -210,9 +210,9 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   const bump = () => { team.revision += 1; pushRevision(team.revision) }
   // 连接器与邮箱（dsbot-connectors-mail，见 mock-dsh-connectors.mjs）
   const conn = createConnectors({ bump, botExists: (id) => Boolean(team.bots[id]) })
-  // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
   // 本地 Agent（dsbot-local-agents，见 mock-dsh-local-agents.mjs）：不在 state 中
   const localAgents = createLocalAgents()
+  // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
   const im = createIm({ bump, botExists: (id) => Boolean(team.bots[id]), roomExists: (id) => Boolean(team.rooms[id]) })
 
   function view() {

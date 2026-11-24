@@ -30,7 +30,7 @@ export function createLocalAgents() {
     { route: 'local-claude-code', name: 'Claude Code', path: '/usr/local/bin/claude', version: '2.1.3 (Claude Code)', signIn: 'claude login', signedIn: true },
     { route: 'local-codex-cli', name: 'Codex', path: '/home/user/.local/bin/codex', version: 'codex-cli 0.48.0', signIn: 'codex login', signedIn: false },
   ]
-  const customView = () => custom.map((a) => ({ ...a, route: `local-acp-${a.id}`, available: KNOWN_PROGRAMS.has(a.command) || a.command.startsWith('/') }))
+  const customView = () => custom.map((a) => ({ ...a, route: `local-acp-${a.id}`, available }))  // 上游：路由注册与否（supported() 时自定义路由总会注册），与命令是否存在无关
   const list = () => ({ available, detected: available ? detected() : [], custom: customView() })
   const MODELS = {
     'local-claude-code': [{ provider: 'local-claude-code', id: 'sonnet', name: 'Claude Sonnet' }, { provider: 'local-claude-code', id: 'opus', name: 'Claude Opus' }],
