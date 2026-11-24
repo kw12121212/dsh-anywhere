@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-models-providers
+sections:
+  Implementation:
+    core-models:
+      text: core：ModelProviders（providers 应答、key 状态、使用者、模型草稿与受影响 Bot、key 与自定义服务商校验、provider-* 请求体、慢端点）、BotModelBatch（批量计划与汇总）、ChatBars 修复卡 fixInProviders；JUnit（ModelProvidersTest、BotModelBatchTest、ChatBarsTest 增补）
+      status: complete
+    app-models:
+      text: app：ModelProvidersPage（列表、key 编辑与移除、模型与思考强度、刷新模型草稿与保存确认、删除确认、刷新模型目录、远端不支持说明）、ProviderAddPage（内置/自定义、查找模型、手填模型 id）、BotModelsPage（批量切换与结果）、NativeShell 路由与慢端点、TeamPage 入口、修复卡直达
+      status: complete
+    mock-models:
+      text: mock --manage：providers（内置可添加、已设/缺/外部 key、可刷新自定义服务商、revision）、provider-key/add/models/models-save/remove（key 预校验、revision 冲突、删除时回退 Bot 模型），models 与 efforts 与目录联动，调用记录只记参数键
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（providers 应答键与计数、provider-key/add/models-save/remove 以不存在的服务商或无效 key 取错误应答，不写入），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: pending
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: pending
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：服务商列表与 key 状态、填写/更换/移除 key（掩码、禁截屏、预校验错误）、查看模型与思考强度、刷新模型草稿与保存（受影响 Bot 确认、revision 冲突）、新增内置与自定义服务商（查找模型）、删除二次确认、Bot 模型批量切换与汇总、修复卡直达、远端不支持说明
+      status: pending
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: pending
+      command: strict-spec-cli verify dsbot-models-providers
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

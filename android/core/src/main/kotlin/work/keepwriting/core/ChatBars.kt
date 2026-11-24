@@ -30,7 +30,8 @@ object ChatBars {
     )
 
     /** 修复卡：title 为可读原因，guidance 为修复指引；topUp 时显示「去充值」（TOP_UP_URL）。 */
-    data class Repair(val code: String, val title: String, val guidance: String, val topUp: Boolean)
+    /** [fixInProviders]：修复手段（填写或更换 API key）在 App 的「模型与服务商」页（dsbot-models-providers）。 */
+    data class Repair(val code: String, val title: String, val guidance: String, val topUp: Boolean, val fixInProviders: Boolean = false)
 
     data class Stage(val title: String, val status: String)
 
@@ -119,8 +120,8 @@ object ChatBars {
         val st = if (status != null) "（$status）" else ""
         val stEn = if (status != null) " ($status)" else ""
         val topUp = (code == "QUOTA" && provider == "deepseek-official") || code == "ACCOUNT_QUOTA"
-        val keyFix = if (zh) "请在电脑上打开网页端设置，为该服务商填写或更换 API key（或改用其他模型）；修好后此卡会自动消失，未消失可点「重试」。"
-        else "Open Settings in the web app on your computer and add or replace the API key (or choose another model); this card clears itself once fixed, otherwise tap Retry."
+        val keyFix = if (zh) "请在「模型与服务商」页为该服务商填写或更换 API key（或在 Bot 详情改用其他模型）；修好后此卡会自动消失，未消失可点「重试」。"
+        else "Add or replace this provider's API key on the Models & providers page (or choose another model in the Bot's details); this card clears itself once fixed, otherwise tap Retry."
         val signInFix = if (zh) "请在电脑上的网页端重新登录 DeepSeek 账号（或改用其他模型）；登录后此卡会自动消失，未消失可点「重试」。"
         else "Sign in to the DeepSeek account again in the web app on your computer (or choose another model); this card clears itself once signed in, otherwise tap Retry."
         val localFix = if (zh) "请在运行 dsh 的电脑上检查该本地 Agent，处理后点「重试」。"
@@ -148,8 +149,11 @@ object ChatBars {
                 (if (zh) "请在电脑上的网页端查看原因并处理，然后点「重试」。"
                 else "Check the cause in the web app on your computer, then tap Retry.")
         }
-        return Repair(code, title, guidance, topUp)
+        return Repair(code, title, guidance, topUp, fixInProviders = code in KEY_CODES)
     }
+
+    /** 修复手段是填写或更换 API key 的失败代码（可直达「模型与服务商」页）。 */
+    private val KEY_CODES = setOf("MISSING_CREDENTIAL", "INVALID_CREDENTIAL", "AUTH")
 
     private fun providerName(provider: String?, lang: Lang): String = when (provider) {
         null, "" -> if (lang == Lang.ZH) "模型服务" else "The model service"

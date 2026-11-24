@@ -168,6 +168,12 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class ImDetail(val id: String) : ShellPage
         /** 本地 Agent（dsbot-local-agents）。 */
         data object LocalAgents : ShellPage
+        /** 模型与服务商（dsbot-models-providers）。 */
+        data object ModelProviders : ShellPage
+        /** 新增服务商。 */
+        data object ProviderAdd : ShellPage
+        /** Bot 模型批量切换。 */
+        data object BotModels : ShellPage
     }
 
 @Composable
@@ -315,6 +321,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             onOpenDetails = { connection.openDetails(current.targetId) },
                             onOpenBrowser = { bid -> connection.openBotBrowser(bid) },
                             // 连接器请求卡「去连接」与邮件卡「管理规则」（dsbot-connectors-mail）：远端无连接器视图时为 null，提示到网页端
+                            // 模型失败修复卡直达模型与服务商页（dsbot-models-providers）
+                            onOpenProviders = { connection.openModelProviders() },
                             onOpenConnector = if (work.keepwriting.core.ConnectorSettings.has(connection.stateSnapshot?.raw)) ({ cid -> connection.openConnector(cid) }) else null,
                             onOpenSide = {
                                 val sid = entry?.sessionId
@@ -487,6 +495,15 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
                 current is ShellPage.LocalAgents -> LocalAgentsPage(connection.manageApi)
+                current is ShellPage.ModelProviders -> ModelProvidersPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    onAdd = { connection.openProviderAdd() },
+                    onBotModels = { connection.openBotModels() },
+                )
+                // 添加成功后返回服务商列表（只在仍停留在添加页时）；返回后列表重读
+                current is ShellPage.ProviderAdd -> ProviderAddPage(connection.manageApi, onDone = { if (connection.page == current) connection.goBack() })
+                current is ShellPage.BotModels -> BotModelsPage(connection.stateSnapshot?.raw, connection.manageApi)
                 current is ShellPage.ImDetail -> ImDetailPage(
                     state = connection.stateSnapshot?.raw,
                     id = current.id,
@@ -538,6 +555,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onIm = { connection.openIm() },
                     // 本地 Agent（dsbot-local-agents）：0.3.6 已有端点，不门控，页面按应答说明不支持
                     onLocalAgents = { connection.openLocalAgents() },
+                    // 模型与服务商（dsbot-models-providers）：不门控，页面按 providers 应答说明不支持
+                    onModelProviders = { connection.openModelProviders() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -1141,7 +1160,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入、本地 Agent。 */
     private fun isSlowEndpoint(endpoint: String) =
         endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ImBridges.SLOW_ENDPOINTS ||
-            endpoint in work.keepwriting.core.LocalAgents.SLOW_ENDPOINTS
+            endpoint in work.keepwriting.core.LocalAgents.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ModelProviders.SLOW_ENDPOINTS
 
     private fun executorFor(endpoint: String) =
         if (isSlowEndpoint(endpoint)) slowExecutor else readExecutor
@@ -1266,6 +1285,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openImDetail(id: String) = push(ShellPage.ImDetail(id))
 
     fun openLocalAgents() = push(ShellPage.LocalAgents)
+
+    fun openModelProviders() = push(ShellPage.ModelProviders)
+
+    fun openProviderAdd() = push(ShellPage.ProviderAdd)
+
+    fun openBotModels() = push(ShellPage.BotModels)
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-models-providers
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-models-providers。
+    answer: 用户在手机上无法添加服务商、填写或更换 API key、维护服务商模型列表，也无法批量切换 Bot 的模型；模型失败修复卡只能指引回电脑。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「新增模型服务商、填 key（不回显）、选模型并设为某 Bot 的模型后…网页端设置一致；删除服务商在两端一致」「为多个 Bot 批量切换模型后两端一致」。
+    answer: 在 App 中新增服务商并填 key（不回显）、刷新并保存其模型、把模型设为 Bot 的模型（既有 Bot 详情）、删除服务商，网页端一致；批量切换多个 Bot 的模型后两端一致；修复卡可直达本页。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details（含 provider-key value:null 移除、provider-add 已知与自定义、provider-models 查找模型、Bot models 批量切换）。
+    answer: 交付 Settings → Models 原生页（服务商、key、模型刷新与保存、新增与删除、思考强度查看）与 Bot models 批量切换页，修复卡直达；DSH 高级模型设置与 thinking 单轮耗时不在范围内。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: Bot 详情的单个模型与思考强度选择不变；修复卡其他代码的指引、去充值与重试不变；不显示任何密钥内容。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-bot-manage 已完成，roadmap-recommend 按顺序推荐本项为 dsbot-native-integrations 下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

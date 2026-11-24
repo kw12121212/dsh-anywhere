@@ -1,0 +1,49 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    model-providers:
+      strength: MUST
+      statement: 团队页提供「模型与服务商」入口进入模型与服务商页：列出 DSH 中已设置的模型服务商（名称与 id、模型数或出错原因、key 状态：需要 API key、已设置或在 DS Bot 之外设置、正在使用它的 Bot），可刷新模型目录；展开服务商可在不回显的输入框中填写或更换 API key（输入期间禁止截屏与最近任务预览，保存后清空输入框，不写入日志与诊断上报）或移除 key，key 在外部设置时说明无法在此修改；可查看该服务商的模型，点模型查看其思考强度。可刷新模型列表的服务商可刷新模型：列出端点返回的模型与端点未返回的已有模型（默认全选），逐个勾选并显示新增、移除与已选数量，至少选一个才能保存；保存前若有 Bot 正在用将被移除的模型，确认框列出这些 Bot 并说明它们下一轮会改用其他可用模型（没有时会失败），本地 Agent 上的 Bot 不受影响；别处已改动设置时显示原因并提示重新刷新。可新增服务商：内置服务商从 DSH 可添加列表中选择并可填 key；自定义 API 填服务商 id（小写字母、数字与连字符，字母开头）、可选名称、http/https 端点、协议与可选 key，可从端点查找模型勾选或手填模型 id（逗号或空白分隔），至少一个模型；key 与其他字段不符合服务端规则时在本地提示而不发送。自加的服务商可删除，须二次确认并说明使用其模型的 Bot 需另选模型。写操作不自动重试，失败显示服务端原因，成功后与网页端一致；远端不支持时页面给出说明。
+      scenarios:
+        add-key-and-models:
+          - GIVEN: DSH 可添加某内置服务商
+          - WHEN: 在 App 新增该服务商并在不回显的输入框填入 key，刷新其模型、取消勾选一个后保存，再在 Bot 详情把其中一个模型设为某 Bot 的模型
+          - THEN: key 以掩码显示且保存后输入框清空，服务商显示已设置；保存后网页端该服务商的模型列表一致；该 Bot 用新模型回复，网页端 Bot 设置一致
+        affected-bots-confirm:
+          - GIVEN: 某 Bot 正在使用服务商的模型 X
+          - WHEN: 刷新该服务商模型时取消勾选 X 并保存
+          - THEN: 确认框列出该 Bot 并说明下一轮会改用其他可用模型；确认后保存，取消则不保存
+        custom-and-remove:
+          - GIVEN: 已打开模型与服务商页
+          - WHEN: 新增一个自定义 API 服务商（先填含引号的 key），从端点查找并勾选模型后添加，随后二次确认删除它
+          - THEN: 含引号的 key 在本地提示不发送；添加后列表显示该服务商与所选模型，网页端一致；删除须确认，确认后两端都不再显示
+        providers-unsupported:
+          - GIVEN: 远端不支持模型服务商设置
+          - WHEN: 进入模型与服务商页
+          - THEN: 页面说明此远端不支持或此 DSH 无法设置模型服务商，其余功能照常
+    bot-models-batch:
+      strength: MUST
+      statement: 模型与服务商页提供「批量切换 Bot 模型」进入批量页：列出全部 Bot 及当前模型，本地 Agent 上的 Bot 不可选并标注保留自己的模型，可全选可选的 Bot 或清空；为选中的 Bot 选择一个模型后逐个切换（不自动重试），完成后显示已更新、未变、跳过与失败的数量，并在每个 Bot 上标注结果与失败原因；切换后网页端各 Bot 的模型一致。
+      scenarios:
+        batch-switch:
+          - GIVEN: 团队有三个使用 DS Bot 模型的 Bot 与一个本地 Agent 上的 Bot
+          - WHEN: 全选后为它们选择同一个模型
+          - THEN: 本地 Agent 上的 Bot 不可选；三个 Bot 逐个切换，已是该模型的标为未变，结果汇总显示，网页端三个 Bot 的模型一致
+  MODIFIED:
+    model-repair-card:
+      strength: MUST
+      statement: Bot 因只有用户能修复的模型失败（缺 API key、key 格式不对、key 被拒、额度或余额不足、DeepSeek 账号登录失效、本地 Agent 缺失/未登录/额度/异常退出）被阻塞时，私聊页显示修复卡：可读的原因（含服务商名称与状态码，若有）与修复指引——缺 API key、key 格式不对与 key 被拒时指引在 App 的「模型与服务商」页填写或更换 key（或在 Bot 详情改用其他模型），并提供直达该页的按钮；其他服务商额度不足时指引到该服务商充值或改用其他模型；DeepSeek 账号登录失效指引到电脑网页端重新登录，本地 Agent 问题指引到运行 dsh 的电脑处理；DeepSeek 官方服务额度不足或 DeepSeek 账号余额不足时提供「去充值」链接经系统浏览器打开；修复卡提供「重试」（resume），重试后以服务端推送状态为准；未知失败代码显示通用说明；修复卡与日志不显示或记录任何密钥内容。
+      scenarios:
+        missing-key-card:
+          - GIVEN: Bot 的模型没有配置 API key，上一轮因此失败
+          - WHEN: 打开该 Bot 的私聊页并点修复卡上的「去模型与服务商」
+          - THEN: 修复卡说明该 Bot 的模型还没有 API key 并指引在模型与服务商页填写；点按后打开模型与服务商页；修复卡提供重试
+        quota-topup-link:
+          - GIVEN: Bot 使用 DeepSeek 官方服务且余额不足被阻塞
+          - WHEN: 在修复卡上点按「去充值」
+          - THEN: 系统浏览器打开 DeepSeek 充值页
+  REMOVED: {}

@@ -95,6 +95,8 @@ fun BotChatPage(
     onOpenBrowser: ((String) -> Unit)? = null,
     /** 打开某个连接器页（mail 为邮箱页；dsbot-connectors-mail）；null 时提示到网页端。 */
     onOpenConnector: ((String) -> Unit)? = null,
+    /** 打开模型与服务商页（修复卡直达；dsbot-models-providers）。 */
+    onOpenProviders: (() -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(botId)
@@ -354,6 +356,7 @@ fun BotChatPage(
                 busy = "resume:$botId" in barInFlight,
                 onRetry = { onBarAction("resume:$botId", "resume", "{\"botId\":$idJson}") },
                 onTopUp = { onOpenLink(work.keepwriting.core.ChatBars.TOP_UP_URL, false) },
+                onOpenProviders = onOpenProviders,
             )
         }
         ComputerAskCards(asks = asks, inFlight = barInFlight) { ask, answer ->

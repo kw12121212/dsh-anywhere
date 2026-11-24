@@ -153,7 +153,8 @@ class ChatBarsTest {
         val r = assertNotNull(ChatBars.repair(sample(), "bot-a"))
         assertEquals("MISSING_CREDENTIAL", r.code)
         assertEquals("合成甲 使用的模型还没有 API key", r.title)
-        assertTrue(r.guidance.contains("网页端"))
+        assertTrue(r.guidance.contains("模型与服务商")) // dsbot-models-providers：改为直达 App 内页面
+        assertTrue(r.fixInProviders)
         assertFalse(r.topUp)
     }
 
@@ -170,6 +171,13 @@ class ChatBarsTest {
         assertFalse(ChatBars.repairOf("QUOTA", "openai", null, "B").topUp)
         assertTrue(ChatBars.repairOf("ACCOUNT_QUOTA", "deepseek-account", null, "B").topUp)
         assertFalse(ChatBars.repairOf("AUTH", "deepseek-official", 401, "B").topUp)
+    }
+
+    @Test
+    fun repairDirectsOnlyKeyCodesToProviders() {
+        for (c in listOf("MISSING_CREDENTIAL", "INVALID_CREDENTIAL", "AUTH")) assertTrue(ChatBars.repairOf(c, "openai", null, "B").fixInProviders, c)
+        for (c in listOf("QUOTA", "ACCOUNT_QUOTA", "ACCOUNT_SIGNED_OUT", "LOCAL_AGENT_MISSING", "WEIRD")) assertFalse(ChatBars.repairOf(c, "openai", null, "B").fixInProviders, c)
+        assertTrue(ChatBars.repairOf("ACCOUNT_SIGNED_OUT", "deepseek-account", null, "B").guidance.contains("网页端"))
     }
 
     @Test

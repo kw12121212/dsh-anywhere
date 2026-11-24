@@ -1,0 +1,30 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    provider-endpoints:
+      strength: MUST
+      statement: '模型服务商端点（DS-Bot 0.3.10 源码核对，经 dsh 的 POST /api/bot）：providers {} → {available:false} 或 {available:true, providers[{id, name, models[{id, ref, name}], declaredModels[{id, ref, name}], refreshable, key: null | {configured, writable}, removable, custom, error?}], addable[{id, name}], protocols[], revision}（内置的在前、自加的在后；key 为 null 表示该路由不用 API key）；provider-key {provider, value: string|null}（null 移除；写入前 checkKey：非空、不是 NAME=value、无引号、仅可见 ASCII；路由不用 key 或 key 在外部设置时拒绝）→ providersView；provider-add {provider, key?} 或 {custom:true, provider（^[a-z][a-z0-9-]*$ 形态）, name?(≤80), baseURL(http/https), api(protocols 之一), key?, models[≥1, 每项 {id, name?…}，id 不重复，≤500]} → providersView；provider-models {provider} 或 {baseURL, api?, key?}（key 只随本次请求发送、不保存）→ [{id, name?, contextWindow?, maxTokens?, inputModalities?}]；provider-models-save {provider, models[≥1], revision?}（仅可编辑且可列出模型的服务商；revision 不一致回 bot/stale）→ providersView；provider-remove {provider}（仅自加；随之移除其专属 key）→ providersView；models {} → {modelsKey}（刷新模型目录）；efforts {ref} → {efforts[{id, name}], defaultEffort?}。校验失败为 {ok:false, error:{code:bot/invalid, message}}，并发修改为 bot/stale；providers、provider-models、models、efforts 在上游 READS 内。0.3.10 hello capabilities 不含服务商能力名、state 无对应字段，入口不门控，页面以应答降级。provider-models、provider-add、provider-models-save 属慢端点。实测与源码核对界定：providers 应答形态与写端点错误应答为本机真实服务只读实测（FINDINGS 第 32 节）；写端点成功应答为源码核对，由 mock --manage 覆盖，未改动用户真实服务商与 key'
+      rationale: 服务商端点首次被手机端消费，涉及 API key 写入、并发修改检测与自定义路由校验，登记完整字段、错误码、门控方式与取证边界作为单一事实来源，避免后续变更把源码核对误当实测或在取证时改动用户的模型配置
+      enforcement:
+        method: review
+        detail: core JUnit（ModelProvidersTest、BotModelBatchTest）覆盖 providers 解码、key 状态与使用者、模型草稿与受影响 Bot、key 与自定义服务商校验、批量计划与汇总、全部请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/providers.js（providersView、checkKey、addProvider、customProfile、discoverModels、saveProviderModels、removeProvider）、channel.js（端点分发与 READS）、client.js（ProvidersPage、ProviderRow、ModelDraft、KeyEditor、AddProvider、KnownForm、CustomForm、draftFrom、draftSummary、fallbacksFor、BotModelsPage、planModelChange、runModelChange、summarizeModelChange）
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+  REMOVED: {}

@@ -71,6 +71,8 @@ fun TeamPage(
     onIm: () -> Unit = {},
     /** 本地 Agent（dsbot-local-agents）：入口不门控（页面按 local-agents 应答说明不支持）；为 null 时不显示（默认参数，供预览等调用方）。 */
     onLocalAgents: (() -> Unit)? = null,
+    /** 模型与服务商（dsbot-models-providers）：入口不门控；为 null 时不显示。 */
+    onModelProviders: (() -> Unit)? = null,
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -114,6 +116,9 @@ fun TeamPage(
                 }
                 if (showIm) {
                     TextButton(onClick = onIm) { Text(tr("IM 接入", "IM")) }
+                }
+                if (onModelProviders != null) {
+                    TextButton(onClick = onModelProviders) { Text(tr("模型与服务商", "Models & providers")) }
                 }
                 if (onLocalAgents != null) {
                     TextButton(onClick = onLocalAgents) { Text(tr("本地 Agent", "Local agents")) }

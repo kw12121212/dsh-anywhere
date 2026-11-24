@@ -67,7 +67,7 @@ private fun BarSurface(content: @Composable () -> Unit) {
 
 /** 模型失败修复卡：原因、指引、重试与（DeepSeek 额度时）去充值。 */
 @Composable
-fun RepairCard(repair: ChatBars.Repair, busy: Boolean, onRetry: () -> Unit, onTopUp: () -> Unit) {
+fun RepairCard(repair: ChatBars.Repair, busy: Boolean, onRetry: () -> Unit, onTopUp: () -> Unit, onOpenProviders: (() -> Unit)? = null) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         shape = MaterialTheme.shapes.medium,
@@ -86,6 +86,8 @@ fun RepairCard(repair: ChatBars.Repair, busy: Boolean, onRetry: () -> Unit, onTo
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (repair.topUp) TextButton(onClick = onTopUp) { Text(tr("去充值", "Top up")) }
+                // key 类失败直达「模型与服务商」页（dsbot-models-providers）
+                if (repair.fixInProviders && onOpenProviders != null) TextButton(onClick = onOpenProviders) { Text(tr("去模型与服务商", "Models & providers")) }
                 TextButton(onClick = onRetry, enabled = !busy) { Text(if (busy) tr("重试中…", "Retrying…") else tr("重试", "Retry")) }
             }
         }

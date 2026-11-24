@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-models-providers
+  status: proposed
+summary:
+  what:
+    - 团队页新增「模型与服务商」入口进入原生页（providers）：列出 DSH 中已设置的模型服务商（名称与 id、模型数或出错原因、key 状态：需要 API key / 已设置 / 在 DS Bot 之外设置、正在使用它的 Bot），可刷新模型目录（models）；展开某服务商：填写或更换 API key（不回显、禁止截屏、不入日志与剪贴板，provider-key）或移除 key（value:null），key 在外部设置时说明无法在此修改；查看该服务商的模型，点模型可查看其思考强度（efforts）
+    - 可刷新列表的服务商可「刷新模型」（provider-models）：列出端点返回的模型与端点未返回的已有模型，逐个勾选，显示新增/移除/已选数量，至少选一个；保存（provider-models-save，带 revision）前若有 Bot 正在用将被移除的模型，确认框列出这些 Bot 并说明下一轮会改用其他可用模型（没有则失败），本地 Agent 上的 Bot 不受影响；revision 冲突（别处已改）显示原因并提示重新刷新
+    - 新增服务商（provider-add）：内置服务商从 DSH 可添加列表中选择并可填 key；自定义 API 填服务商 id（小写字母数字与连字符、字母开头）、名称（可选）、端点（http/https）、协议（DSH 声明的协议）、key（可选），可从端点「查找模型」（provider-models，key 只随请求发送不保存）勾选，也可手填模型 id（逗号或空白分隔），至少一个模型；删除自加的服务商（provider-remove）二次确认并说明使用其模型的 Bot 需另选模型
+    - Bot 模型批量切换页：列出全部 Bot（当前模型），本地 Agent 上的 Bot 不可选，可全选/清空，为选中的 Bot 选择一个模型后逐个经 update-bot 切换，显示已更新/未变/跳过/失败汇总与每个 Bot 的结果
+    - 模型失败修复卡：缺 API key、key 格式不对与 key 被拒时，指引改为在 App 的「模型与服务商」页处理并提供直达按钮；额度不足、DeepSeek 账号登录与本地 Agent 的指引不变
+  why:
+    - 用户在手机上无法添加模型服务商、填写或更换 API key、维护服务商的模型列表，也无法批量切换 Bot 的模型；模型失败修复卡只能指引回电脑网页端；DS-Bot 0.3.10 已提供 providers、provider-key/add/models/models-save/remove 与 models、efforts 端点
+scope:
+  in:
+    - core：ModelProviders（providers 应答解码：available、providers[id,name,models,declaredModels,refreshable,key{configured,writable},removable,custom,error]、addable、protocols、revision；key 状态文案；使用者；模型草稿（同网页端 draftFrom/draftSummary）与受影响 Bot（被移除模型上的非本地 Bot）；key 预校验（同上游 checkKey）；自定义服务商校验（id、端点、模型 id 切分、至少一个模型）；provider-* 请求体）与 BotModelBatch（批量计划：本地 Agent 跳过、模型不可用跳过、已是该模型不变；结果汇总）；ChatBars 修复卡增加「可在模型与服务商页修复」标记；JUnit（ModelProvidersTest、BotModelBatchTest、ChatBarsTest 增补）
+    - app：ModelProvidersPage（列表、key 编辑、模型与思考强度、刷新模型草稿与保存确认、删除确认、刷新模型目录）、ProviderAddPage（内置/自定义、查找模型）、BotModelsPage（批量切换与结果）、NativeShell 路由、TeamPage「模型与服务商」入口、修复卡直达按钮
+    - mock --manage 服务商端点与状态（内置可添加服务商、已设 key/缺 key/外部 key、可刷新的自定义服务商、revision 冲突、key 预校验错误）供模拟器验收；runSpike 对本机真实服务只读探针（providers 应答形态与写端点错误应答）并登记 FINDINGS；dsbot-api 技术标准登记服务商端点；设备验收
+  out:
+    - DSH 自身 Models 页的高级设置（各模型的上下文、输出、输入、思考级别与顺序）；thinking 端点（单轮思考耗时，属聊天显示）
+    - 密钥设置页与密钥存储口令（dsbot-secrets-settings）；DeepSeek 服务（dsbot-deepseek-services）
+unchanged_behavior:
+  - Bot 详情的单个 Bot 模型与思考强度选择不变；团队页既有入口不变
+  - 修复卡的 DeepSeek 账号登录、本地 Agent 与未知代码的指引、「去充值」与「重试」不变；修复卡与日志不显示任何密钥内容
+  - 远端 providers 回 available:false 或不支持时页面给出说明，其余功能照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-models-providers

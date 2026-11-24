@@ -491,3 +491,14 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 自定义 Agent 路由为 `local-acp-<id>`（`CUSTOM_PREFIX`），custom 项 `{id, name, command, args[], route, available}`；`local-agent-add` 经 `validateCustom` 校验并在电脑上找不到程序名时拒绝，返回条目+route；`local-agent-update` 返回条目+route；`local-agent-remove` 返回 custom 视图；网页端写后重读 `local-agents`。
 - `local-agent-refresh` 清模型缓存与登录探测后重扫并刷新模型目录；`local-agent-models {route}` → `[{provider, id, name, reasoning?}]`，首次会在电脑上启动该 CLI。手机端把 local-agents、refresh、models、add 登记为慢端点。
 - 写端点成功应答、可用模型与「此远端不支持」（未知端点 bot/not-found、available=false）由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-local-agents.mjs`）按同一形态覆盖；`/mock/local-agents?enabled=0|1&available=0|1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。
+
+## 32. 模型服务商（2026-11-24，dsbot-models-providers）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesProviders` 探针组，未改动真实服务商、模型与 key，未调用会请求外部端点的 provider-models）**：
+- `providers {}` → `{available:true, providers[1], addable[42], protocols[openai-completions, openai-responses, anthropic-messages, google-generative-ai], revision:<数字>}`；provider 项键 `{id, name, models, declaredModels, refreshable, key, removable, custom}`（`error` 只在出错时出现），本机唯一的服务商为自加、可刷新、可删除，`key:{configured:true, writable:true}`，models 与 declaredModels 各 2 个。视图不含任何 key 值。服务商不在 state 中，hello 不含相应能力名。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/invalid"`，均在写入前拒绝）：`provider-key` 带引号的 key → "Paste the key without quotes"（checkKey 先于路由检查）；`provider-key {provider:不存在}` → "… takes no API key here"；`provider-add {provider:不存在}` → "DSH offers no provider …"；`provider-models-save {provider:不存在}` → "No editable provider …"；`provider-remove {provider:不存在}` → "… is not set up"。
+
+**源码核对（ds-bot 0.3.10 `src/host/providers.js`、`channel.js`，client.js `ProvidersPage`/`ProviderRow`/`ModelDraft`/`KeyEditor`/`AddProvider`/`BotModelsPage`/`bot-model-batch`）**：
+- `provider-key {provider, value}`：`value:null` 移除；写入前 checkKey（非空、非 NAME=value、无引号、仅可见 ASCII），路由不用 key 或 key 在外部设置时拒绝；`provider-add` 内置 `{provider, key?}` 或自定义 `{custom:true, provider(^[a-z][a-z0-9-]*$), name?, baseURL(http/https), api(protocols 之一), key?, models[≥1]}`；`provider-models {provider}` 或 `{baseURL, api?, key?}`（key 只随请求、不保存）；`provider-models-save {provider, models, revision?}`（revision 不一致回 `bot/stale`）；`provider-remove {provider}` 仅自加。写端点都返回 providersView。
+- 网页端保存模型前按 fallbacksFor 提示受影响 Bot（手机端只列出受影响 Bot，不推算回退目标）；Bot models 批量切换逐个 `update-bot {id, model}`，跳过本地 Agent 上的 Bot。
+- 写端点成功应答、revision 冲突与目录联动由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-providers.mjs`，同时作为 state.models 来源）覆盖；`/mock/providers?enabled=0|1&available=0|1&bumpRevision=1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。

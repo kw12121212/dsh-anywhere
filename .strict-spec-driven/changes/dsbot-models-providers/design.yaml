@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-models-providers
+approach:
+  - 服务商不在 state 中，由 providers 端点按需读取（上游按 DSH 的 LLM 设置与凭据描述生成，返回 revision 供保存模型时检测并发修改）；入口不门控（0.3.10 hello 不含此能力名、state 无字段），页面按应答降级：bot/not-found 说明此远端不支持，available:false 说明此 DSH 无法设置模型服务商；在 hello-capabilities 增补例外。
+  - 纯逻辑下沉 core：ModelProviders 解码 providers 应答、key 状态与使用者（state.bots 的 model/appliedModel 落在该服务商的模型 ref 上）、模型草稿（复刻网页端 draftFrom：端点返回的在前、未返回的已有模型在后，默认全选；draftSummary 新增/移除/已选）、受影响 Bot（被移除模型 ref 上的非本地 Agent Bot，按网页端 fallbacksFor 的判定范围，但不推算具体回退目标）、key 预校验（同 checkKey）、自定义服务商校验与全部请求体；BotModelBatch 复刻网页端 planModelChange/summarizeModelChange；ChatBars.Repair 增加 fixInProviders。全部由 JUnit 覆盖。
+  - app 侧 ShellPage.ModelProviders、ProviderAdd、BotModels：providers 与 provider-models 经 ManageApi.read（provider-models 在 READS 内、会请求外部端点，登记为慢端点），provider-key/add/models-save/remove 经 manageAction 写入并以应答中的新视图刷新页面（写端点返回 providersView）；key 输入用 SecretField+SecureWhileShown，保存后清空输入框；批量切换按顺序逐个 update-bot（每个都经 manageAction 在途去重、不自动重试），结束后显示汇总。修复卡在 fixInProviders 时显示「去模型与服务商」直达。
+decisions:
+  no-gating:
+    decision: 模型与服务商入口不门控，以 providers 应答决定页面内容，并在 hello-capabilities 增补例外
+    rationale: 0.3.10 hello capabilities 不含服务商能力名、state 无对应字段；按应答降级（bot/not-found、available:false）既兼容旧远端又不影响其他功能，与 dsbot-local-agents 一致
+  write-returns-view:
+    decision: provider-key/add/models-save/remove 成功后直接采用应答中的 providersView 刷新页面，不再额外读取
+    rationale: 上游这些写端点都返回 providersView（含新 revision），网页端同样以应答 setView；省一次请求且 revision 与写入一致
+  affected-bots-without-target:
+    decision: 保存模型前只列出正在用将被移除模型的非本地 Agent Bot，提示它们下一轮会改用其他可用模型（没有可用模型时会失败），不推算具体回退到哪个模型
+    rationale: 网页端 fallbacksFor 依赖 nextModel 的回退顺序与目录推算，逻辑复杂且属服务端行为；手机端如实提示影响范围并要求确认，避免在客户端复制一套可能与服务端不一致的回退算法
+  batch-sequential:
+    decision: 批量切换按选中顺序逐个调用 update-bot {id, model}，跳过本地 Agent 上的 Bot 与目录中没有的模型，已是该模型的标为未变，失败的记录原因继续下一个，最后汇总
+    rationale: 与网页端 runModelChange 一致；update-bot 一次只改一个 Bot，顺序执行避免并发写同一团队、结果可逐个对应；目标模型都是 DS Bot 自身模型，不涉及引擎切换确认
+  repair-direct:
+    decision: 模型失败修复卡只对 MISSING_CREDENTIAL、INVALID_CREDENTIAL、AUTH 显示「去模型与服务商」直达本页，指引文案改为在该页填写或更换 key（或在 Bot 详情改用其他模型）；额度不足、DeepSeek 账号登录、本地 Agent 与未知代码的指引不变
+    rationale: 规划变更要求本页上线后修复卡改为直达；只有 key 类失败的修复手段在本页可完成，额度不足需到服务商充值、换模型在 Bot 详情，直达本页没有帮助
+  slow-providers:
+    decision: provider-models、provider-add、provider-models-save 登记为慢端点
+    rationale: provider-models 请求外部端点列出模型，provider-add 自定义服务商会读取已知模型目录、保存模型会重算目录，最坏耗时可能超过默认 30 秒（slow-endpoints-executor）
+alternatives: []
+risks:
+  - 本机真实 DSH 的服务商设置是用户在用的配置：真实服务只做只读探针（providers 应答形态、写端点以不存在的服务商或无效 key 取错误应答，不写入），key、新增、模型保存与删除在 mock --manage 上覆盖
+  - 服务端在保存模型或删除服务商后自行为受影响的 Bot 回退模型，手机端只提示影响范围；实际回退结果以 state 刷新后的 Bot 模型为准

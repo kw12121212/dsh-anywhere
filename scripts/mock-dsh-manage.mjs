@@ -7,6 +7,7 @@ import { deflateSync } from 'node:zlib'
 import { createConnectors } from './mock-dsh-connectors.mjs'
 import { createIm } from './mock-dsh-im.mjs'
 import { createLocalAgents } from './mock-dsh-local-agents.mjs'
+import { createProviders } from './mock-dsh-providers.mjs'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -212,6 +213,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   const conn = createConnectors({ bump, botExists: (id) => Boolean(team.bots[id]) })
   // 本地 Agent（dsbot-local-agents，见 mock-dsh-local-agents.mjs）：不在 state 中
   const localAgents = createLocalAgents()
+  // 模型服务商（dsbot-models-providers，见 mock-dsh-providers.mjs）：也是 state.models 目录的来源
+  const providers = createProviders()
   // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
   const im = createIm({ bump, botExists: (id) => Boolean(team.bots[id]), roomExists: (id) => Boolean(team.rooms[id]) })
 
@@ -225,7 +228,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       rooms: Object.values(team.rooms).map((r) => ({ ...r, sessionId: r.id, parts: [] })),
       sections: team.sections,
       privateArchives: team.privateArchives,
-      models: MODELS,
+      models: providers.catalog(),
       defaultModel: 'deepseek/v4',
       permissions: { options: [{ value: 'read-only', name: '只读' }, { value: 'workspace-write', name: '工作区可写' }, { value: 'danger-full-access', name: '完全访问' }], defaultPreset: 'danger-full-access' },
       colors: ['deepseek', 'blue', 'violet', 'orange', 'green', 'magenta', 'cyan', 'red', 'yellow', 'brown', 'gray', 'black', 'aurora'],
@@ -309,7 +312,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
-    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail)
+    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail, bump)
     if (connected) return connected
     try {
       switch (endpoint) {
@@ -493,7 +496,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
           if (p.defaultBotModel !== undefined) {
             if (p.defaultBotModel === null || p.defaultBotModel === '') delete pr.defaultBotModel
             else if (engine(p.defaultBotModel) !== 'model') return invalid('A local agent cannot be the default model: a new Bot chooses to run on one when it is created')
-            else if (!MODELS.some((m) => m.ref === p.defaultBotModel)) return invalid('Unknown model')
+            else if (!providers.catalog().some((m) => m.ref === p.defaultBotModel)) return invalid('Unknown model')
             else pr.defaultBotModel = p.defaultBotModel
           }
           if (p.enterToSend !== undefined) { if (p.enterToSend === false) pr.enterToSend = false; else if (p.enterToSend === true || p.enterToSend === null) delete pr.enterToSend }
@@ -912,5 +915,5 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params) }
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setProviders: (params) => { const out = providers.set(params); bump(); return out } }
 }
