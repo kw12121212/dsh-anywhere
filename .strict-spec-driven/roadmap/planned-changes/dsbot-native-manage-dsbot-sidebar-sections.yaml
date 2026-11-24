@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-sidebar-sections
   milestone: dsbot-native-manage
-status: planned
+status: complete
 summary: 团队页侧栏分组：新建、重命名、排序、删除分组，以及把 Bot 与群移入分组
 details: 实现 section-save（新建、重命名、成员归入）、section-order（拖动排序）、section-delete（二次确认，组内条目回到默认位置）。手机上通过长按条目或分组标题进入编辑模式，拖动排序；结果与网页端侧栏一致并经 feed 同步。 实现要点：section-save 负责新建、重命名与成员归入（返回保存后的分组），section-order 以完整分组 id 列表提交新顺序，section-delete 后组内条目回到默认位置；排序拖动在团队页 LazyColumn 中实现，松手后一次提交，失败时恢复原顺序并显示服务端原因；把 Bot 或群移入分组也可通过条目长按菜单「移到分组」完成（拖动不便时的替代）。core：拖动后新顺序 id 列表的计算与校验（无重复、无遗漏）以 JUnit 覆盖。验收：在 App 中新建分组、重命名、拖动排序、把两个 Bot 移入、删除分组，每一步网页端侧栏一致；断网时拖动排序失败恢复原顺序。
 depends_on:

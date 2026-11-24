@@ -136,6 +136,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class MemoryHistory(val owner: work.keepwriting.core.MemoryPanel.Owner) : ShellPage
         /** 团队偏好（dsbot-prefs-theme）。 */
         data object TeamPrefs : ShellPage
+        /** 分组管理（dsbot-sidebar-sections）。 */
+        data object SectionsManage : ShellPage
         /** 保留关闭的已删除私有 Bot（dsbot-bot-manage）。 */
         data object PrivateArchives : ShellPage
         /** 头像库，为某个 Bot 选照片（dsbot-avatars）。 */
@@ -350,6 +352,11 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                 )
                 current is ShellPage.MemoryHistory -> MemoryHistoryPage(current.owner, connection.manageApi)
                 current is ShellPage.TeamPrefs -> TeamPrefsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.SectionsManage -> SectionsManagePage(
+                    team = connection.team,
+                    sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
+                    api = connection.manageApi,
+                )
                 current is ShellPage.FolderPick -> {
                     val snapshot = connection.stateSnapshot?.raw
                     val target = current.target
@@ -424,6 +431,17 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onOpenArchived = { connection.openPrivateArchives() },
                     onTeamWorkspace = { connection.openFolderPick(FolderTarget.Team) },
                     onTeamPrefs = { connection.openTeamPrefs() },
+                    sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
+                    onCreateSection = { name, onErr ->
+                        connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
+                    },
+                    onToggleSection = { id, collapsed, onErr ->
+                        connection.manageAction("section:collapse:$id", "section-save", work.keepwriting.core.TeamSections.Requests.collapse(id, collapsed), {}, onErr)
+                    },
+                    onMoveToSection = { entryId, sectionId, onErr ->
+                        connection.manageAction("section:move:$entryId", "set-flags", work.keepwriting.core.TeamSections.Requests.moveEntry(entryId, sectionId), {}, onErr)
+                    },
+                    onManageSections = { connection.openSectionsManage() },
                 )
                 }
             }
@@ -1088,6 +1106,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openNewRoom() = push(ShellPage.NewRoom)
 
     fun openTeamPrefs() = push(ShellPage.TeamPrefs)
+
+    fun openSectionsManage() = push(ShellPage.SectionsManage)
 
     fun openMemory(owner: work.keepwriting.core.MemoryPanel.Owner, title: String) = push(ShellPage.Memory(owner, title))
 

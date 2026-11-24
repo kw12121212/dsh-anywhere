@@ -1,6 +1,8 @@
 package work.keepwriting.dshanywhere
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -16,11 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -35,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import work.keepwriting.core.TeamHome
+import work.keepwriting.core.TeamSections
 
 /**
  * 团队页（dsbot-team-home）：分组列表（字段存在时显示、缺失降级）、搜索、空团队首次
@@ -51,13 +56,19 @@ fun TeamPage(
     onNewBot: () -> Unit = {},
     /** 新建群聊（dsbot-group-manage）。 */
     onNewRoom: () -> Unit = {},
-    /** 保留关闭的已删除私有 Bot 数（>0 时显示入口）。 */
-    archivedPrivate: Int = 0,
-    onOpenArchived: () -> Unit = {},
     /** 团队工作区（dsbot-folders）。 */
     onTeamWorkspace: () -> Unit = {},
     /** 团队偏好（dsbot-prefs-theme）。 */
     onTeamPrefs: () -> Unit = {},
+    /** 团队分组（dsbot-sidebar-sections）。 */
+    sections: List<TeamSections.Section> = emptyList(),
+    onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
+    onToggleSection: (id: String, collapsed: Boolean, onError: (String) -> Unit) -> Unit = { _, _, _ -> },
+    onMoveToSection: (entryId: String, sectionId: String?, onError: (String) -> Unit) -> Unit = { _, _, _ -> },
+    onManageSections: () -> Unit = {},
+    /** 保留关闭的已删除私有 Bot 数（>0 时显示入口）。 */
+    archivedPrivate: Int = 0,
+    onOpenArchived: () -> Unit = {},
     /** 团队的 DSH Agent（dsbot-member-agents；远端未声明 agents 能力时为空）。 */
     agents: List<work.keepwriting.core.DshAgents.Agent> = emptyList(),
     agentRunning: (String) -> Boolean = { false },
@@ -68,22 +79,28 @@ fun TeamPage(
 ) {
     var query by remember { mutableStateOf("") }
     var agentError by remember { mutableStateOf<String?>(null) }
+    var sectionError by remember { mutableStateOf<String?>(null) }
+    var creatingSection by remember { mutableStateOf(false) }
+    var entryMenu by remember { mutableStateOf<TeamHome.Entry?>(null) }
+    var movingEntry by remember { mutableStateOf<TeamHome.Entry?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         if (team != null) {
             // 入口按钮可横向滚动：窄屏上放不下时不挤压
             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.TextButton(onClick = onNewBot) { Text(tr("＋ 新建 Bot", "+ New Bot")) }
-                androidx.compose.material3.TextButton(onClick = onNewRoom) { Text(tr("＋ 新建群聊", "+ New group")) }
+                TextButton(onClick = onNewBot) { Text(tr("＋ 新建 Bot", "+ New Bot")) }
+                TextButton(onClick = onNewRoom) { Text(tr("＋ 新建群聊", "+ New group")) }
+                TextButton(onClick = { sectionError = null; creatingSection = true }) { Text(tr("＋ 新建分组", "+ New section")) }
                 if (canAddAgent) {
-                    androidx.compose.material3.TextButton(onClick = { agentError = null; onAddAgent { agentError = it } }) { Text(tr("＋ DSH Agent", "+ DSH Agent")) }
+                    TextButton(onClick = { agentError = null; onAddAgent { agentError = it } }) { Text(tr("＋ DSH Agent", "+ DSH Agent")) }
                 }
-                androidx.compose.material3.TextButton(onClick = onTeamWorkspace) { Text(tr("团队工作区", "Team workspace")) }
-                androidx.compose.material3.TextButton(onClick = onTeamPrefs) { Text(tr("团队偏好", "Team preferences")) }
+                TextButton(onClick = onTeamWorkspace) { Text(tr("团队工作区", "Team workspace")) }
+                TextButton(onClick = onTeamPrefs) { Text(tr("团队偏好", "Team preferences")) }
                 if (archivedPrivate > 0) {
-                    androidx.compose.material3.TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }
+                    TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }
                 }
             }
             agentError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
+            ErrorLine(sectionError) { sectionError = null }
             for (a in agents) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -111,43 +128,126 @@ fun TeamPage(
         )
         when {
             team == null -> CenteredHint(stringResource(R.string.team_loading))
-            team.isEmpty -> EmptyTeamGuide()
-            else -> TeamList(TeamHome.search(team, query), onOpenChat, isUnread)
+            team.isEmpty && sections.isEmpty() -> EmptyTeamGuide()
+            else -> TeamList(
+                team = TeamHome.search(team, query),
+                searching = query.isNotBlank(),
+                onOpenChat = onOpenChat,
+                isUnread = isUnread,
+                onToggleSection = { id, collapsed -> sectionError = null; onToggleSection(id, collapsed) { sectionError = it } },
+                onManageSections = onManageSections,
+                onLongPressEntry = { e -> if (!e.isMain) entryMenu = e },
+            )
         }
+    }
+    if (creatingSection) {
+        SectionNameDialog(
+            title = tr("新建分组", "New section"),
+            initial = "",
+            sections = sections,
+            selfId = null,
+            allowEmpty = true,
+            onConfirm = { name -> onCreateSection(name) { sectionError = it } },
+            onDismiss = { creatingSection = false },
+        )
+    }
+    entryMenu?.let { e ->
+        AlertDialog(
+            onDismissRequest = { entryMenu = null },
+            title = { Text(e.name) },
+            text = {
+                Column {
+                    TextButton(onClick = { entryMenu = null; movingEntry = e }) { Text(tr("移到分组", "Move to section")) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { entryMenu = null }) { Text(tr("关闭", "Close")) } },
+        )
+    }
+    movingEntry?.let { e ->
+        MoveToSectionDialog(
+            entry = e,
+            sections = sections,
+            onPick = { secId -> onMoveToSection(e.id, secId) { sectionError = it } },
+            onDismiss = { movingEntry = null },
+        )
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TeamList(team: TeamHome.Team, onOpenChat: (String?) -> Unit, isUnread: (TeamHome.Entry) -> Boolean) {
+private fun TeamList(
+    team: TeamHome.Team,
+    searching: Boolean,
+    onOpenChat: (String?) -> Unit,
+    isUnread: (TeamHome.Entry) -> Boolean,
+    onToggleSection: (String, Boolean) -> Unit,
+    onManageSections: () -> Unit,
+    onLongPressEntry: (TeamHome.Entry) -> Unit,
+) {
     val sections = team.sections
-    if (sections.all { it.entries.isEmpty() }) {
+    if (searching && sections.all { it.entries.isEmpty() }) {
         CenteredHint(stringResource(R.string.team_search_empty))
         return
     }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        sections.forEachIndexed { idx, sec ->
-            if (sec.entries.isEmpty()) return@forEachIndexed
-            item(key = "sec:$idx:${sec.id ?: sec.name}") {
-                Text(
-                    sec.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+        sections.forEach { sec ->
+            if ((sec.id == null || searching) && sec.entries.isEmpty()) return@forEach
+            item(key = "sec:${sec.id ?: "_ungrouped"}") {
+                val id = sec.id
+                if (id != null) {
+                    val collapsed = sec.collapsed && !searching
+                    val mark = if (collapsed) "▸" else "▾"
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = { onToggleSection(id, !sec.collapsed) },
+                                onLongClick = onManageSections,
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            tr("$mark ${sec.name}（${sec.entries.size}）", "$mark ${sec.name} (${sec.entries.size})"),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                } else {
+                    Text(
+                        sec.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
             }
-            items(sec.entries, key = { it.id }) { e ->
-                TeamEntryRow(e, unread = isUnread(e), onClick = { onOpenChat(e.id) })
+            if (sec.id == null || !sec.collapsed || searching) {
+                items(sec.entries, key = { it.id }) { e ->
+                    TeamEntryRow(
+                        e = e,
+                        unread = isUnread(e),
+                        onClick = { onOpenChat(e.id) },
+                        onLongClick = if (!e.isMain) { { onLongPressEntry(e) } } else null,
+                    )
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TeamEntryRow(e: TeamHome.Entry, unread: Boolean, onClick: () -> Unit) {
+private fun TeamEntryRow(e: TeamHome.Entry, unread: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+    val clickMod = if (onLongClick != null) {
+        Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    } else {
+        Modifier.clickable(onClick = onClick)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(clickMod)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

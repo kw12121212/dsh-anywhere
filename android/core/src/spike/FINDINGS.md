@@ -405,3 +405,15 @@ enterToSend 缺省时键不存在），网页端设过的消息宽度 90% 正是
 删除（回到主题默认）；motion quiet|normal|lively（normal 删除键）；layout bubble|flat（bubble 删除键）；width 50–100 整数（80 删除键）；
 defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent cannot be the default model…」、null/空串删除；enterToSend 只存 false。
 手机每次只发改动的一项、从不发 width/flatWidth/effects/thinking。网页端改偏好后经 revision 刷新 state，App 随之换配色与聊天布局。
+
+## 26. 团队侧栏分组（2026-11-24，dsbot-sidebar-sections）
+
+**实测（只读，夹具 `state-full.json`）**：本机团队当前 `state.sections` 为 `[]`，`bots[]` 与 `rooms[]` 条目均未携带 `sectionId`。
+
+**源码核对、未对真实团队写入**（ds-bot 0.3.10 `src/host/channel.js`、`roster.js`、`constants.js`、`store.js`、`text.js`）：
+- **state 形态**：`state.sections` 为 `[{id, name, collapsed?, color?}]`（数组顺序即侧栏分组顺序）；条目归属记在 `bots`/`rooms`/`agents` 各自的 `sectionId`（不在分组对象上存 `itemIds`）；Main Bot（`mainBotIds[0]`）不可归组，保存或改主 Bot 时删除其 `sectionId`，指向不存在分组的 `sectionId` 在加载时清除。
+- **`section-save {id?, name?, collapsed?, color?, items?, add?, remove?}`**：无 `id`（或空）时新建（`sec-<uuid8>`），空名时取 `freshSectionName`（「New section」及序号）；有 `id` 时按出现的键局部更新（`collapsed: false` 删除键）。名称经 `unquote`（去首尾空白与引号）、合并空白、截断 `SECTION_NAME_MAX = 32`；空名或与同级其他分组（`trim().toLowerCase()`）重名时拒绝（`bot/refused`）；`color` 只允许 `SECTION_COLORS`（`blue|orange|green|violet|rose`）或 null/空串。返回保存后的分组对象。
+- **`section-order {ids}`**：按 `ids` 重排 `state.sections`（未列出的已有分组按原顺序接在后面），返回整份 `state` 视图。
+- **`section-delete {id}`**：未知 `id` 拒绝 `Unknown section`；删除分组并清除所有条目上匹配的 `sectionId`，返回整份 `state` 视图。
+- **`set-flags {id, pinned?, hidden?, sectionId?}`**：`sectionId` 为 `null`/空串或主 Bot 时删除归属；否则校验 `id` 存在于 `state.sections`（未知 `Unknown section`）后写入。客户端移动单个条目走 `set-flags`，避免 `section-save` 的 `items` 全量替换覆盖并发改动。
+- **网页端顺序**：先渲染未分组条目，再按 `state.sections` 顺序渲染各分组。模拟器验收用 `node scripts/mock-dsh-server.mjs --manage` 注入同形态实现。

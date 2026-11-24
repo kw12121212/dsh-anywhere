@@ -38,7 +38,7 @@ risks:
   - 删除 Bot、删除群、遗忘记忆等不可逆操作须在手机上二次确认，误触成本高
   - 部分设置（文件夹移出团队工作区、把 Bot 加入在外部文件夹工作的群）会触发 Bot 侧审批而非立即生效，界面需正确表达待审批状态
   - 设置项与端点参数随 DS-Bot 版本变化较快；以 dsbot-mobile-polish 中 dsbot-baseline-0310 登记的 DS-Bot 0.3.10 端点清单与网页端为准，未知字段降级为只读显示
-status: proposed
+status: complete
 notes:
   - 端点参数与校验以 dsbot-api 技术标准（由 dsbot-api-spike 建立）与 channel.js 为准
   - 功能对等基准：DS-Bot 0.3.10（由 dsbot-baseline-0310 确立）client.js 中的 Bot 设置、群设置、详情面板与 Settings 的 General/Bots/Group chats 页；手机端交互参考上游 mobile/src/screens/manage.tsx（BotDetails、BotEdit、NewBot、GroupDetails/GroupSettings、NewGroup、Memory）、model-menu.tsx 与 team/optimistic.ts、team/group-folder.test.ts，只学行为，用 Compose 与 core 原生实现

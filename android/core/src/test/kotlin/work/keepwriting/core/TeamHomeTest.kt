@@ -86,7 +86,7 @@ class TeamHomeTest {
               {"id":"b2","name":"B","sessionId":"s2","sectionId":"gone"},
               {"id":"b3","name":"C","sessionId":"s3","sectionId":"secA"}],
              "rooms":[{"id":"r1","name":"R","members":["b1","b2"],"sessionId":"r1","sectionId":"secB"}],
-             "sections":[{"id":"secB","name":"后端","collapsed":true},{"id":"secA","name":"前端"},{"id":"secE","name":"空"}]}
+             "sections":[{"id":"secB","name":"后端","collapsed":true,"itemIds":["b3"]},{"id":"secA","name":"前端"},{"id":"secE","name":"空"}]}
         """.trimIndent()
         val team = TeamHome.assemble(checkNotNull(DsbotModels.decodeState(checkNotNull(Json.parse(stateJson)))))
         assertEquals(listOf(null, "secB", "secA", "secE"), team.sections.map { it.id })
@@ -97,8 +97,11 @@ class TeamHomeTest {
         assertEquals(listOf("C"), team.sections[2].entries.map { it.name })
         assertEquals("secA", team.sections[2].entries.single().sectionId)
         assertTrue(team.sections[3].entries.isEmpty())
-        // 搜索时去掉没有匹配的分组
+        // 搜索时去掉没有匹配的分组，折叠分组仍保留匹配条目
         assertEquals(listOf("secA"), TeamHome.search(team, "C").sections.map { it.id })
+        val collapsedHit = TeamHome.search(team, "R")
+        assertEquals(listOf("secB"), collapsedHit.sections.map { it.id })
+        assertEquals(listOf("R"), collapsedHit.sections.single().entries.map { it.name })
     }
 
     @Test

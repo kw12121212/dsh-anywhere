@@ -197,7 +197,7 @@ categories:
     electron-e2e-window-open-execution-context-was-d-cc60b5:
       title: Electron e2e「window.open 不弹出新窗口」偶发 Execution context was destroyed，与被测改动无关时整体重跑一次
       status: active
-      occurrences: 3
+      occurrences: 4
       path: .strict-spec-driven/lessons/testing/electron-e2e-window-open-execution-context-was-d-cc60b5.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:

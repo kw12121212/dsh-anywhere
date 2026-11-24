@@ -1,11 +1,16 @@
 package work.keepwriting.dshanywhere
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -16,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +35,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import work.keepwriting.core.TeamHome
 import work.keepwriting.core.TeamSections
 
@@ -115,60 +122,81 @@ fun SectionsManagePage(team: TeamHome.Team?, sections: List<TeamSections.Section
         if (sections.isEmpty()) {
             Text(tr("还没有分组。", "No sections yet."), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
         }
-        for (id in order) {
-            val sec = byId[id] ?: continue
+        val dragStart = dragId?.let { order.indexOf(it) }?.takeIf { it >= 0 }
+        val dragTarget = if (dragStart != null) TeamSections.targetIndex(dragStart, dragOffset, rowHeight, order.size) else null
+        for ((index, id) in order.withIndex()) {
+            key(id) {
+            val sec = byId[id]
+            if (sec != null) {
             val count = team?.sections?.firstOrNull { it.id == id }?.entries?.size ?: 0
             val dragging = dragId == id
-            Surface(
-                tonalElevation = if (dragging) 6.dp else 0.dp,
-                shadowElevation = if (dragging) 6.dp else 0.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { if (rowHeight == 0f || dragging) rowHeight = it.height.toFloat() }
-                    .graphicsLayer { translationY = if (dragging) dragOffset else 0f },
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(end = 8.dp)) {
-                    Text(
-                        "≡",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = if (ordering) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .semantics { contentDescription = tr("拖动调整「${sec.name}」的位置", "Drag to move ${sec.name}") }
-                            .pointerInput(id, ordering) {
-                                if (ordering) return@pointerInput
-                                detectDragGestures(
-                                    onDragStart = { error = null; local = latestOrder; dragId = id; dragOffset = 0f },
-                                    onDragEnd = {
-                                        dragId = null
-                                        dragOffset = 0f
-                                        local?.let { submit(it) }
-                                    },
-                                    onDragCancel = { dragId = null; dragOffset = 0f; local = null },
-                                ) { change, amount ->
-                                    change.consume()
-                                    dragOffset += amount.y
-                                    val cur = local ?: return@detectDragGestures
-                                    val from = cur.indexOf(id)
-                                    val to = TeamSections.targetIndex(from, dragOffset, rowHeight, cur.size)
-                                    if (to != from) {
-                                        // 越过半行即换位，偏移按换过的行数回拉，手指下仍是这一行
-                                        local = TeamSections.move(cur, from, to)
-                                        dragOffset -= (to - from) * rowHeight
-                                    }
-                                }
-                            }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(sec.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(tr("$count 个对话", "$count conversations") + if (sec.collapsed) tr(" · 已折叠", " · collapsed") else "",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    TextButton(enabled = "section:rename:$id" !in api.inFlight, onClick = { error = null; naming = sec }) { Text(tr("重命名", "Rename")) }
-                    TextButton(enabled = "section:delete:$id" !in api.inFlight, onClick = { error = null; deleting = sec }) {
-                        Text(tr("删除", "Delete"), color = MaterialTheme.colorScheme.error)
+            val shiftY = when {
+                dragging -> dragOffset
+                dragStart != null && dragTarget != null && dragStart < dragTarget && index in (dragStart + 1)..dragTarget -> -rowHeight
+                dragStart != null && dragTarget != null && dragStart > dragTarget && index in dragTarget until dragStart -> rowHeight
+                else -> 0f
+            }
+            Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).zIndex(if (dragging) 1f else 0f)) {
+                Surface(
+                    tonalElevation = if (dragging) 6.dp else 0.dp,
+                    shadowElevation = if (dragging) 6.dp else 0.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { if (rowHeight == 0f || dragging) rowHeight = it.height.toFloat() }
+                        .graphicsLayer { translationY = shiftY },
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(end = 8.dp)) {
+                        Text(
+                            "≡",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = if (ordering) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(sec.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(tr("$count 个对话", "$count conversations") + if (sec.collapsed) tr(" · 已折叠", " · collapsed") else "",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(enabled = "section:rename:$id" !in api.inFlight, onClick = { error = null; naming = sec }) { Text(tr("重命名", "Rename")) }
+                        TextButton(enabled = "section:delete:$id" !in api.inFlight, onClick = { error = null; deleting = sec }) {
+                            Text(tr("删除", "Delete"), color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
+                // 拖动热区放在不平移的容器上：拖动期间手势坐标不随行平移产生回馈跳动，松手后一次提交新顺序
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .width(56.dp)
+                        .fillMaxHeight()
+                        .semantics { contentDescription = tr("拖动调整「${sec.name}」的位置", "Drag to move ${sec.name}") }
+                        .pointerInput(id, ordering) {
+                            if (ordering) return@pointerInput
+                            detectDragGestures(
+                                onDragStart = { error = null; local = latestOrder; dragId = id; dragOffset = 0f },
+                                onDragEnd = {
+                                    val cur = latestOrder
+                                    val from = cur.indexOf(id)
+                                    val to = if (from >= 0) TeamSections.targetIndex(from, dragOffset, rowHeight, cur.size) else -1
+                                    dragId = null
+                                    dragOffset = 0f
+                                    if (from >= 0 && to >= 0 && to != from) {
+                                        val next = TeamSections.move(cur, from, to)
+                                        local = next
+                                        submit(next)
+                                    } else {
+                                        local = null
+                                    }
+                                },
+                                onDragCancel = { dragId = null; dragOffset = 0f; local = null },
+                            ) { change, amount ->
+                                change.consume()
+                                dragOffset += amount.y
+                            }
+                        },
+                )
+            }
+            }
             }
         }
     }

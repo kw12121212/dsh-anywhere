@@ -180,3 +180,10 @@ rules:
     enforcement:
       method: review
       detail: core JUnit（TeamPrefsTest）以真实 state-full 夹具的 prefs 覆盖解码与缺省，并逐值锁定四套主题配色、ACCENT_INKS 与 accentInk 判定；源码核对位置：ds-bot 0.3.10 src/host/channel.js 的 setPrefs、client.js 的 themes.js（THEMES、themeVars、darkAccent）与 inks.js（ACCENT_INKS、INKS）；FINDINGS 第 25 节
+  sections-0310:
+    strength: MUST
+    statement: 分组端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，鉴权同其他管理端点：会话 cookie）：state.sections 为 [{id, name, collapsed?, color?}]（顺序即侧栏顺序），条目归属记在 bots/rooms/agents 各自的 sectionId（不在分组对象里；Main Bot 不可归组，set-flags 对其设 sectionId 时删除该字段）；section-save {id?, name?, collapsed?, color?, items?, add?, remove?} 无 id 时新建（名称空时服务端取「New section」并加序号）、有 id 时按出现的键修改，名称合并空白后截断为 32 字、空名或与其他分组（大小写与空白归一后）重名时拒绝，color 只能是 blue/orange/green/violet/rose 或 null，value 为保存后的分组对象；section-order {ids} 按给出的 id 重排，未列出的分组按原顺序接在后面，value 为整份 state 视图；section-delete {id} 删除分组并清除组内条目的 sectionId，value 为整份 state 视图；set-flags {id, sectionId} 设或清（null/空串）单个条目的归属，未知分组拒绝「Unknown section」。拒绝为 {ok:false, error:{code, message}}。写端点为源码核对，未改用户真实团队；客户端移动条目用 set-flags 而不是 section-save 的 items 全量
+    rationale: 分组端点与 sectionId 归属此前未登记，旧实现按并不存在的 sections[].itemIds 解码，真实分组无法显示；登记形态让团队页与网页端侧栏一致
+    enforcement:
+      method: review
+      detail: core JUnit（TeamSectionsTest、TeamHomeTest）覆盖解码、顺序、名称校验与请求体；源码核对位置：ds-bot 0.3.10 src/host/roster.js 的 saveSection/reorderSections/deleteSection/setFlags/cleanSectionName/freshSectionName、src/host/constants.js 的 SECTION_COLORS 与 SECTION_NAME_MAX、client.js Sidebar 的分组渲染顺序；FINDINGS 第 26 节

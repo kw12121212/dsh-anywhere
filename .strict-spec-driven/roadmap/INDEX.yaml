@@ -34,7 +34,7 @@ milestones:
   dsbot-native-manage:
     title: 原生 DS-Bot：Bot、群与团队管理
     path: roadmap/milestones/dsbot-native-manage.yaml
-    status: proposed
+    status: complete
   dsbot-native-integrations:
     title: 原生 DS-Bot：模型、集成与系统设置
     path: roadmap/milestones/dsbot-native-integrations.yaml

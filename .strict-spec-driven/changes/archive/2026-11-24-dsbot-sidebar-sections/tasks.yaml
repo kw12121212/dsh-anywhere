@@ -7,39 +7,39 @@ sections:
   Implementation:
     core-sections:
       text: core：TeamSections（分组解码 id/name/collapsed/color、名称本地校验、拖动后新顺序计算与无重复无遗漏校验、section-save/section-order/section-delete/set-flags sectionId 请求体）与 TeamHome.assemble 按 sectionId 归组（itemIds 回退）、未分组在前、折叠分组；JUnit（TeamSectionsTest、TeamHomeTest 更新）
-      status: pending
+      status: complete
     app-team-page:
       text: app：团队页「＋ 新建分组」（名称对话框）、分组标题点按折叠/展开、长按分组标题进入分组管理页、条目长按「移到分组」选择器（Main Bot 不提供）
-      status: pending
+      status: complete
     app-manage-page:
       text: app：分组管理页——重命名、拖动手柄排序（松手一次提交 section-order，失败恢复原顺序并显示服务端原因）、删除二次确认；新建分组入口
-      status: pending
+      status: complete
     mock-sections:
       text: mock --manage：section-save（新建/重命名/折叠，名称校验同上游）、section-order、section-delete（组内条目回到未分组）与 set-flags sectionId；初始数据带一个分组
-      status: pending
+      status: complete
     findings:
       text: FINDINGS 第 26 节：分组端点与 state 形态（实测只读 + 源码核对）
-      status: pending
+      status: complete
   Testing:
     core-junit:
       text: core JUnit
-      status: pending
+      status: complete
       command: android/gradlew -p android/core test
     app-build:
       text: 构建 :app 调试 APK
-      status: pending
+      status: complete
       command: android/gradlew -p android assembleDebug
     full-regression:
       text: 完整回归
-      status: pending
+      status: complete
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
   Verification:
     device-acceptance:
       text: 设备验收（GAMEPC 模拟器 + mock --manage）：新建分组、重命名、拖动排序、把两个 Bot 移入、折叠/展开、删除分组，每一步 mock 的 state 与 App 显示一致；mock 停止后拖动排序失败恢复原顺序并显示原因
-      status: pending
+      status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过
-      status: pending
+      status: complete
       command: strict-spec-cli verify dsbot-sidebar-sections
 testing_gates:
   validation_task: core-junit

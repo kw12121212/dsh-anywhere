@@ -18,7 +18,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     mainBotIds: ['bot-1'],
     bots: {
       'bot-1': { id: 'bot-1', name: '研究主管', role: '研究', instructions: '负责团队研究计划。', color: 'deepseek', avatar: { shape: 'whale' }, model: 'deepseek/v4', appliedModel: 'deepseek/v4', effort: 'high' },
-      'bot-2': { id: 'bot-2', name: '运维值班', role: '运维', instructions: '处理告警。', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/ops' },
+      'bot-2': { id: 'bot-2', name: '运维值班', role: '运维', instructions: '处理告警。', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash', workDir: '/work/ops', sectionId: 'sec-1' },
       'bot-3': { id: 'bot-3', name: '写作搭档', role: '写作', instructions: '', model: 'deepseek/v4', appliedModel: 'deepseek/v4', workDir: '/work/writing', permission: 'workspace-write' },
       'bot-4': { id: 'bot-4', name: '采购助理', role: '', instructions: '', model: 'deepseek/v4-flash', appliedModel: 'deepseek/v4-flash' },
       // 工作文件夹已在电脑上被删除（不在目录树里）：选择页起点读不到时应退回主目录（dsbot-folders）
@@ -30,7 +30,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       'room-1': { id: 'room-1', name: '项目群', named: true, color: 'violet', members: ['bot-1', 'bot-2'], admin: 'bot-1', mode: 'admin', notice: '' },
       'room-2': { id: 'room-2', name: '闲聊群', named: true, members: ['bot-3', 'bot-4'], admin: null, mode: 'everyone', notice: '周五下午茶' },
     },
-    sections: [],
+    sections: [{ id: 'sec-1', name: '常用' }],
     privateArchives: [{ id: 'old-1', name: '旧私有助理', workDir: '/work/old-private' }],
     seq: 10,
     // 团队的 DSH Agent（dsbot-member-agents）：至多一个；chats 按会话存条目，titles 存会话标题，running 表示工作中
@@ -166,6 +166,26 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       agents: Object.values(team.agents),
       work: { bots: {}, rooms: {}, approvals: [], agents: Object.fromEntries(Object.keys(team.agentRunning).map((id) => [id, { since: team.agentRunning[id] }])) },
     }
+  }
+
+  const SECTION_COLORS = ['blue', 'orange', 'green', 'violet', 'rose']
+  const SECTION_NAME_MAX = 32
+  const unquote = (s) => String(s ?? '').trim().replace(/^["'“”「『《]+|["'“”」』》]+$/g, '').trim()
+  function cleanSectionName(text, selfId) {
+    const next = unquote(text).replace(/\s+/g, ' ').slice(0, SECTION_NAME_MAX)
+    if (next === '') throw new Error('Enter a section name')
+    if (team.sections.some((sec) => sec.id !== selfId && norm(sec.name) === norm(next))) {
+      throw new Error(`Another section is already called "${next}"`)
+    }
+    return next
+  }
+  function freshSectionName(base = 'New section') {
+    const stem = unquote(base).replace(/\s+/g, ' ').slice(0, SECTION_NAME_MAX - 4) || 'New section'
+    const taken = (n) => team.sections.some((sec) => norm(sec.name) === norm(n))
+    if (!taken(stem)) return stem
+    let index = 2
+    while (taken(`${stem} ${index}`)) index += 1
+    return `${stem} ${index}`
   }
 
   function createBot(p) {
@@ -449,16 +469,99 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
             if (others.length === 0) throw new Error('The team needs at least one Main Bot')
             team.mainBotIds = others
           }
+          if (team.mainBotIds[0] && team.bots[team.mainBotIds[0]]) delete team.bots[team.mainBotIds[0]].sectionId
           bump()
           return ok(view())
         }
         case 'set-flags': {
-          const entry = team.bots[p.id] ?? team.rooms[p.id]
+          const entry = team.bots[p.id] ?? team.rooms[p.id] ?? team.agents[p.id]
           if (!entry) throw new Error('Unknown conversation')
           if (typeof p.pinned === 'boolean') entry.pinned = p.pinned
           if (typeof p.hidden === 'boolean') entry.hidden = p.hidden
+          if (p.sectionId !== undefined) {
+            if (p.sectionId === null || p.sectionId === '' || p.id === team.mainBotIds[0]) delete entry.sectionId
+            else if (typeof p.sectionId === 'string' && team.sections.some((s) => s.id === p.sectionId)) entry.sectionId = p.sectionId
+            else throw new Error('Unknown section')
+          }
           bump()
           return ok(entry)
+        }
+        // 团队侧栏分组（dsbot-sidebar-sections，ds-bot 0.3.10 roster.js saveSection/reorderSections/deleteSection 形态）
+        case 'section-save': {
+          const color = p.color
+          if (color !== undefined && color !== null && color !== '' && !SECTION_COLORS.includes(color)) {
+            throw new Error('Unknown section color')
+          }
+          let sec
+          if (p.id !== undefined && p.id !== null && p.id !== '') {
+            sec = team.sections.find((entry) => entry.id === p.id)
+            if (!sec) throw new Error('Unknown section')
+            if (p.name !== undefined) sec.name = cleanSectionName(p.name, sec.id)
+            if (typeof p.collapsed === 'boolean') {
+              if (p.collapsed) sec.collapsed = true
+              else delete sec.collapsed
+            }
+            if (color !== undefined) {
+              if (color === null || color === '') delete sec.color
+              else sec.color = color
+            }
+          } else {
+            const clean = p.name !== undefined && String(p.name).trim() !== '' ? cleanSectionName(p.name) : freshSectionName()
+            sec = {
+              id: 'sec-' + ++team.seq,
+              name: clean,
+              ...(p.collapsed === true ? { collapsed: true } : {}),
+              ...(SECTION_COLORS.includes(color) ? { color } : {}),
+            }
+            team.sections.push(sec)
+          }
+          const entryOf = (entryId) => (entryId === team.mainBotIds[0] ? undefined : team.bots[entryId] ?? team.rooms[entryId] ?? team.agents[entryId])
+          const allEntries = [...Object.values(team.bots), ...Object.values(team.rooms), ...Object.values(team.agents)]
+          if (Array.isArray(p.items)) {
+            const keep = new Set(p.items)
+            for (const entry of allEntries) {
+              if (entry.sectionId === sec.id && !keep.has(entry.id)) delete entry.sectionId
+            }
+            for (const itemId of keep) {
+              const entry = entryOf(itemId)
+              if (entry !== undefined) entry.sectionId = sec.id
+            }
+          }
+          for (const itemId of p.add ?? []) {
+            const entry = entryOf(itemId)
+            if (entry !== undefined) entry.sectionId = sec.id
+          }
+          for (const itemId of p.remove ?? []) {
+            const entry = entryOf(itemId)
+            if (entry !== undefined && entry.sectionId === sec.id) delete entry.sectionId
+          }
+          bump()
+          return ok(sec)
+        }
+        case 'section-order': {
+          if (!Array.isArray(p.ids)) throw new Error('Section order must be an array of section ids')
+          const byId = new Map(team.sections.map((sec) => [sec.id, sec]))
+          const next = []
+          for (const id of p.ids) {
+            const sec = byId.get(id)
+            if (sec !== undefined) {
+              next.push(sec)
+              byId.delete(id)
+            }
+          }
+          for (const sec of byId.values()) next.push(sec)
+          team.sections = next
+          bump()
+          return ok(view())
+        }
+        case 'section-delete': {
+          if (!team.sections.some((sec) => sec.id === p.id)) throw new Error('Unknown section')
+          team.sections = team.sections.filter((sec) => sec.id !== p.id)
+          for (const entry of [...Object.values(team.bots), ...Object.values(team.rooms), ...Object.values(team.agents)]) {
+            if (entry.sectionId === p.id) delete entry.sectionId
+          }
+          bump()
+          return ok(view())
         }
         case 'folders':
           return ok({ team: teamDir, picker: 'browse', folders: [...new Set([...Object.values(team.bots), ...Object.values(team.rooms)].map((e) => e.workDir).filter((p) => p && DIRS.has(p)))].map((path) => ({ path, title: nameOf(path) })) })
