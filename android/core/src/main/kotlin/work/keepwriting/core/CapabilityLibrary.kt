@@ -130,10 +130,16 @@ object CapabilityLibrary {
         bots(state).mapNotNull { b -> b.str("id")?.let { botStatuses(state, it)[name] } }
             .maxWithOrNull(compareBy { severity(it.state) })
 
-    /** 直接挂载该能力的 Bot 名（常驻或按需；按 state.bots 顺序）。 */
-    fun users(state: Json.Value.Object?, name: String): List<String> =
-        bots(state).filter { name in it.strings("capabilities") || name in it.strings("packs") }
-            .map { it.str("name") ?: it.str("id") ?: "" }
+    /**
+     * 使用该能力的 Bot 名（按 state.bots 顺序）：直接挂载（常驻或按需），或挂载了包含它的能力包。
+     */
+    fun users(state: Json.Value.Object?, name: String): List<String> {
+        val packs = library(state).filter { it.kind == PACK && name in it.items }.map { it.name }.toSet()
+        return bots(state).filter { b ->
+            val attached = b.strings("capabilities") + b.strings("packs")
+            name in attached || attached.any { it in packs }
+        }.map { it.str("name") ?: it.str("id") ?: "" }
+    }
 
     /** 来源：用户添加为 null；否则为提议它的 Bot 名（Bot 已删除时回退 id）。 */
     fun sourceBot(state: Json.Value.Object?, item: Item): String? {
@@ -160,11 +166,11 @@ object CapabilityLibrary {
         else -> item.kind
     }
 
-    /** 列表次要文字（网页端 CapabilityRow）：能力包为说明 + 子项；其他为说明，空时为种类说明。 */
+    /** 列表次要文字（网页端 CapabilityRow；种类已由标签显示）：能力包为说明 + 子项；其他为说明（可为空）。 */
     fun secondary(item: Item): String =
         if (item.kind == PACK) listOf(item.description, item.items.joinToString(", ").ifEmpty { I18n.tr("无内容", "No items") })
             .filter { it.isNotEmpty() }.joinToString(" · ")
-        else item.description.ifEmpty { kindLabel(item) }
+        else item.description
 
     /** 列表排序：待批准置顶，其次出错，其余按名称。 */
     fun listOrder(state: Json.Value.Object?, items: List<Item>): List<Item> =

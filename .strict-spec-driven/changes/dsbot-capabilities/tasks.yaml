@@ -36,7 +36,7 @@ sections:
   Verification:
     device-acceptance:
       text: 设备验收（模拟器 + mock --manage）：能力列表来源与状态、批准待批准 stdio MCP、新建/编辑技能（全屏编辑）与 MCP、不合规名称本地提示、删除二次确认、Bot 能力页开关与常驻/按需切换、无能力库字段时入口隐藏
-      status: pending
+      status: complete
     strict-ready-verify:
       text: strict ready 与 verify 通过
       status: pending

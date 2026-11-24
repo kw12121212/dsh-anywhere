@@ -79,6 +79,8 @@ class CapabilityLibraryTest {
         assertEquals("needs-approval", CapabilityLibrary.listStatus(state, lib.getValue("local-fs"))!!.state)
         assertEquals(listOf("小助手", "研究员"), CapabilityLibrary.users(state, "notes"))
         assertEquals(listOf("研究员"), CapabilityLibrary.users(state, "local-fs"))
+        // search 只经由能力包 web-pack 使用（b1 常驻、b2 按需）
+        assertEquals(listOf("小助手", "研究员"), CapabilityLibrary.users(state, "search"))
         assertNull(CapabilityLibrary.sourceBot(state, lib.getValue("notes")))
         assertEquals("研究员", CapabilityLibrary.sourceBot(state, lib.getValue("local-fs")))
 
@@ -108,7 +110,8 @@ class CapabilityLibraryTest {
         val lib = CapabilityLibrary.library(state).associateBy { it.name }
         assertEquals("search, notes", CapabilityLibrary.secondary(lib.getValue("web-pack")))
         assertEquals("记笔记", CapabilityLibrary.secondary(lib.getValue("notes")))
-        assertEquals("MCP · 本地命令", CapabilityLibrary.secondary(lib.getValue("local-fs")))
+        assertEquals("", CapabilityLibrary.secondary(lib.getValue("local-fs")))
+        assertEquals("MCP · 本地命令", CapabilityLibrary.kindLabel(lib.getValue("local-fs")))
     }
 
     @Test

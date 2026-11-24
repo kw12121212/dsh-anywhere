@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -108,7 +109,9 @@ private fun CapabilityRow(state: Json.Value.Object?, item: CapabilityLibrary.Ite
                 Text(CapabilityLibrary.kindLabel(item), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
-        Text(CapabilityLibrary.secondary(item), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        CapabilityLibrary.secondary(item).takeIf { it.isNotEmpty() }?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
         val meta = listOf(
             if (source == null) tr("你添加的", "Added by you") else tr("由 $source 提议", "Proposed by $source"),
             if (users.isEmpty()) tr("未被 Bot 使用", "Not used by any Bot") else tr("使用者：", "Used by: ") + users.joinToString("、"),
@@ -283,7 +286,8 @@ private fun FullScreenEditor(title: String, initial: String, mono: Boolean, plac
     var text by remember { mutableStateOf(initial) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize().imePadding()) {
+            // 全屏对话框不让系统留白：自行避开状态栏、导航栏与输入法
+            Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
                     TextButton(onClick = onDismiss) { Text(tr("取消", "Cancel")) }
                     Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
