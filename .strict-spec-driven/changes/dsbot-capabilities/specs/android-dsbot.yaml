@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    team-capabilities:
+      strength: MUST
+      statement: 远端 state 含能力库时，团队页提供「能力」入口进入能力页：列出团队能力库中的 MCP（stdio 与 HTTP）、技能与能力包，显示名称、种类、说明、来源（由你添加或由哪个 Bot 提议）、使用它的 Bot 与按严重程度合成的单一状态（出错 > 待批准 > 连接中 > 就绪，出错时显示原因）；Bot 提议、尚未批准的 stdio MCP 显示为待批准并可批准（capability-approve）；可新增与编辑能力（capability-save）：MCP stdio 填命令、参数与环境变量，MCP HTTP 填 URL 与请求头，技能填说明并在全屏编辑器中编辑技能内容，能力包从已保存的 MCP 与技能中勾选；名称不符合规则（小写字母、数字与单连字符，不超过 32 字符，连接器名保留）时在本地提示而不发送，已保存能力不能改种类；删除能力（capability-delete）须二次确认并说明会从所有 Bot 与能力包中移除；环境变量、请求头与参数中的密钥引用（$DSH_SECRET_名称）按原文显示与保存，App 不解析密钥值，能力配置不写入日志与诊断上报；写操作不自动重试，失败显示服务端原因，成功后以 state 刷新与网页端一致；远端 state 不含能力库时不显示能力入口。
+      scenarios:
+        list-status-and-approve:
+          - GIVEN: 团队能力库有你添加的技能、一个正常连接的 HTTP MCP，以及一个 Bot 提议、尚未批准的 stdio MCP
+          - WHEN: 从团队页进入能力页并批准该 stdio MCP
+          - THEN: 列表显示各能力的种类、来源与状态，待批准项置顶并标注提议它的 Bot；批准后该项不再待批准，网页端能力页显示一致
+        save-edit-delete:
+          - GIVEN: 已打开能力页
+          - WHEN: 新建一个技能并在全屏编辑器中写入内容，再编辑其说明，随后二次确认删除；另以不合规名称（含大写或下划线）尝试保存
+          - THEN: 新建与编辑后网页端显示相同的名称、说明与内容；不合规名称在本地提示且不发送请求；删除需二次确认，确认后能力从列表、所有 Bot 与能力包中消失
+        no-library-no-entry:
+          - GIVEN: 远端 DS-Bot 的 state 不含能力库字段
+          - WHEN: 打开团队页与任一 Bot 详情页
+          - THEN: 不显示「能力」入口与 Bot 详情的「能力」分组，其余入口与功能照常
+    bot-capabilities:
+      strength: MUST
+      statement: 远端 state 含能力库时，Bot 详情页提供「能力」分组进入该 Bot 的能力页：列出团队能力库中的每项能力及其在该 Bot 上的挂载情况，逐项开关（bot-capability attached），开启时可选常驻（always，每次对话都加载）或按需（catalog，列入能力包目录、由 Bot 需要时加载），切换模式即生效；显示该 Bot 上每项能力的状态（就绪、连接中、待批准、出错及原因）；写操作不自动重试，失败显示服务端原因，成功后网页端同一 Bot 的能力设置一致。
+      scenarios:
+        toggle-and-mode:
+          - GIVEN: 团队能力库有一个技能与一个能力包，某 Bot 尚未挂载任何能力
+          - WHEN: 在该 Bot 的能力页开启技能为常驻、开启能力包为按需，再把技能切换为按需，最后关闭能力包
+          - THEN: 每一步后网页端该 Bot 的能力设置与 App 一致：技能先常驻后改为按需，能力包先在按需目录中、关闭后移除；页面显示各项在该 Bot 上的状态
+  MODIFIED: {}
+  REMOVED: {}

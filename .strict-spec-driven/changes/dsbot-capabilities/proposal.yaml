@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-capabilities
+  status: proposed
+summary:
+  what:
+    - 团队页新增「能力」入口进入原生能力页：列出团队能力库中的 MCP（stdio/HTTP）、技能与能力包，显示名称、种类、说明、来源（由你添加或由哪个 Bot 提议）、使用它的 Bot 数与合成后的单一状态（出错 > 待批准 > 连接中 > 就绪，按严重程度取最严重者），待批准的 stdio MCP 置顶并可一键批准（capability-approve）
+    - 新增与编辑能力（capability-save）：类型选择 MCP stdio（命令、参数、环境变量）、MCP HTTP（URL、请求头）、技能（说明与全屏编辑的技能内容）与能力包（从已保存的 MCP 与技能中勾选）；名称按服务端规则本地预校验（小写字母数字与单连字符、≤32、连接器名保留），已保存能力不可改种类；删除（capability-delete）二次确认并说明会从所有 Bot 与能力包移除
+    - Bot 详情页新增「能力」分组进入该 Bot 的能力开关页：逐项开关能力（bot-capability attached），并为每项选择常驻（always）或按需目录（catalog，能力包目录由 Bot 按需加载），显示该 Bot 上每项的状态与错误原因
+  why:
+    - 用户在手机上无法查看 Bot 用到的 MCP 与技能是否正常、无法批准 Bot 提议的本地 MCP，也无法为 Bot 增删能力，只能回到电脑网页端；DS-Bot 0.3.10 已经提供能力库与 capability-save/delete/approve、bot-capability 端点
+scope:
+  in:
+    - core：Capabilities 模块（state.capabilities 能力库、bots[].capabilities/packs 挂载、live capabilityStatuses 解码；单一显示状态合成；来源与使用者统计；名称预校验；capability-save/delete/approve 与 bot-capability 请求体构造）；JUnit（CapabilitiesTest）
+    - app：CapabilitiesPage（能力列表、批准、删除确认）、CapabilityEditPage（四种类型的编辑表单与技能内容全屏编辑）、BotCapabilitiesPage（单 Bot 开关与常驻/按需模式）、NativeShell 路由、TeamPage「能力」入口与 BotDetailsPage「能力」分组
+    - mock --manage 能力端点与 state.capabilities/capabilityStatuses；对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记能力端点；设备验收
+  out:
+    - Bot 在聊天中通过工具提议或使用能力包（use_pack/drop_pack）的流程与其审批卡（由既有聊天与停靠区承担）
+    - 在手机上解析或显示 $DSH_SECRET_ 引用的密钥值、管理密钥本身（dsbot-secrets-settings）；连接器（dsbot-connectors-mail）与 MCP 外部访问（dsbot-mcp-access）
+    - 在手机上启动、调试或测试 MCP 服务器；Settings 分组列表首页与其他设置页
+unchanged_behavior:
+  - Bot 详情页既有资料、模型、权限、外观、工作文件夹、记忆、浏览器、隐私、Main Bot、侧栏、复制与删除功能不变
+  - 团队页既有新建 Bot、新建群聊、新建分组、DSH Agent、团队工作区、团队偏好与已删除私有 Bot 入口不变
+  - 远端 state 不含能力库字段（旧版 DS-Bot）时不显示任何能力入口，其余功能照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-capabilities

@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    capability-endpoints-0310:
+      strength: MUST
+      statement: '能力端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权）：state.capabilities 为能力库数组，每项 {name, kind: mcp|skill|pack, description(≤2000), createdBy(null=用户界面添加，否则为提议它的 botId), createdAt, updatedAt}，mcp 另有 transport: stdio{command, args[], env{}, approved} 或 streamable-http{url, headers{}, approved:true}，skill 另有 content，pack 另有 items[]（只含已保存的 mcp 与 skill 名）；state.bots[].capabilities 为常驻挂载、bots[].packs 为按需目录挂载；live capabilityStatuses{botId→{name→{state: ready|connecting|needs-approval|error, error?}}}，能力包取子项最严重状态，未挂载或尚未建立会话的项无条目。capability-save {name, kind, description?, transport?, command?, args?, env?, url?, headers?, content?, items?} → 能力对象（名称须匹配 ^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$ 且 ≤32、github 与 mail 等连接器名保留；已存在时不可改 kind；用户界面保存的 stdio 直接 approved=true）；capability-delete {name} → true（同时从所有 Bot 与能力包移除）；capability-approve {name} → 能力对象（仅未批准的 stdio MCP，否则拒绝）；bot-capability {botId, name, attached, mode: always|catalog} → 该 Bot 的常驻列表（先从两个列表移除再按 mode 加入，attached=false 即移除）。失败均为 {ok:false, error}，按 reasonOf 显示服务端原因；只读宿主拒绝写入。0.3.10 hello capabilities 不含能力库能力名，客户端以 state.capabilities 字段存在门控入口。env/headers/args 中的 $DSH_SECRET_<NAME> 引用由服务端挂载时解析，客户端按原文处理、不展开；能力配置不写入日志与诊断上报。'
+      rationale: 能力库端点首次被手机端消费，登记完整字段、挂载模式与状态语义（含 hello 不声明能力名的门控方式）作为单一事实来源，避免后续变更把源码核对误当实测或误按 hello 门控
+      enforcement:
+        method: review
+        detail: core JUnit（CapabilitiesTest）覆盖能力库/挂载/状态解码、团队与单 Bot 状态合成、来源与使用者派生、名称预校验与四个端点请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/capabilities.js（itemInput、capabilityEndpoint、setAttached、statusFor、capabilityStatusesView、libraryView）、channel.js（state.capabilities、live capabilityStatuses、端点分发）、store.js（bots[].capabilities/packs 规整）；FINDINGS 登记本机真实服务只读探针结果与 mock --manage 覆盖范围
+  MODIFIED: {}
+  REMOVED: {}

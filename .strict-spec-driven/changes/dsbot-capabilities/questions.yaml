@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-capabilities
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-capabilities 与里程碑 dsbot-native-integrations。
+    answer: 用户在手机上看不到团队能力库（MCP、技能、能力包）及其状态，无法批准 Bot 提议的本地 MCP，也无法为单个 Bot 开关能力，只能回电脑网页端操作。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「能力的保存、批准与删除和网页端一致」与计划变更 details。
+    answer: 团队页「能力」页列出能力及来源与单一状态；新增/编辑四种类型、批准待批准的 stdio MCP、二次确认后删除，结果与网页端一致；Bot 详情「能力」页开关能力并选择常驻或按需，网页端同一 Bot 的能力设置一致并显示状态。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details（含 2026-11-24 对 0.3.10 capabilities.js 的核对）。
+    answer: 完整交付能力库查看、保存、批准、删除与单 Bot 开关（含 always/catalog 模式）；密钥引用按原文处理不展开；Settings 分组首页、Bot 聊天中的 use_pack 流程与 MCP 外部访问不在本变更内。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: Bot 详情页与团队页既有入口与功能不变；远端无能力库字段时不出现能力入口；聊天中的审批卡与停靠区行为不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-bot-manage 已完成，roadmap-recommend 按顺序推荐本项为 dsbot-native-integrations 下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

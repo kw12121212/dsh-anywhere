@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-capabilities
+sections:
+  Implementation:
+    core-capabilities:
+      text: core：Capabilities（state.capabilities 能力库、bots[].capabilities/packs 挂载、live capabilityStatuses 解码；团队与单 Bot 单一显示状态合成；来源与使用者派生；名称预校验；capability-save/delete/approve 与 bot-capability 请求体）；JUnit（CapabilitiesTest）
+      status: pending
+    app-capabilities-pages:
+      text: app：CapabilitiesPage（列表分组排序、批准、删除二次确认）、CapabilityEditPage（MCP stdio/HTTP、技能、能力包表单，技能内容全屏编辑，名称本地预校验）、BotCapabilitiesPage（逐项开关与常驻/按需模式、状态显示）与 NativeShell 路由
+      status: pending
+    app-entries:
+      text: app：TeamPage「能力」入口与 BotDetailsPage「能力」分组（state.capabilities 字段存在时显示）
+      status: pending
+    mock-capabilities:
+      text: mock --manage：state.capabilities、bots[].capabilities/packs、live capabilityStatuses 与 capability-save/delete/approve、bot-capability 端点（含 Bot 提议的未批准 stdio MCP 与出错状态样本），供模拟器验收
+      status: pending
+    findings:
+      text: 对本机真实服务做只读探针（state 中能力库/挂载/状态字段与写端点错误应答，不改动真实团队），登记 FINDINGS 新节
+      status: pending
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: pending
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: pending
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：能力列表来源与状态、批准待批准 stdio MCP、新建/编辑技能（全屏编辑）与 MCP、不合规名称本地提示、删除二次确认、Bot 能力页开关与常驻/按需切换、无能力库字段时入口隐藏
+      status: pending
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: pending
+      command: strict-spec-cli verify dsbot-capabilities
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit
