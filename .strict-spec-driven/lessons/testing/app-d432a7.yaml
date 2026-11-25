@@ -8,7 +8,7 @@ lesson:
 category: testing
 status: active
 created_at: '2026-11-16T09:24:10.046Z'
-updated_at: '2026-11-16T09:24:10.046Z'
+updated_at: '2026-11-25T04:14:13.853Z'
 context: Android 聊天的 Markdown 块/行内解析自初版起放在 :app 的 MarkdownText.kt（Compose 文件内 internal 函数），android-client/pure-logic-in-core（SHOULD）当时未被触发；:app 不进完整回归命令，解析行为因此没有任何自动化断言。
 observation: 2026-11-16 用户报障：群聊汇报里的交付文件（markdown 链接全在 - 列表行、指向 /home/… 服务器路径）在手机上全部打不开。根因是 parseBlocks 只对 Paragraph 行解析行内链接、Bullet/Ordered 渲染纯 Text——列表行链接成死文本。该缺陷随首版发布并存活多版：完整回归（npm 侧 224 例 + core 全量）没有任何用例能表达『哪些行的链接必须可点』这一可观察契约，纯逻辑留在 UI 模块使其不可测。
 takeaway: UI 模块里不依赖框架 API 的纯判定/解析函数（输入→输出）应在首次落地时即下沉 core 并以行为断言钉住可观察契约（哪些行、哪些语法、什么 URL 形态可暴露/可点）；缺陷后补下沉时先原样搬迁配行为表征测试（等价），再改行为配 RED→GREEN（缺失契约型缺陷的 RED 常以编译期 Unresolved 形态出现，需在任务里如实记录证据形态），不把搬迁与行为修复混在一次改动里。
@@ -17,3 +17,6 @@ occurrences:
   - origin: fix-android-chat-links-and-copy
     date: '2026-11-16'
     evidence: 'RED：android/gradlew -p android/core test --tests work.keepwriting.core.MarkdownParseTest 编译失败 e: Unresolved reference ''parts''（MarkdownParseTest.kt:93:28 起，2026-11-16 本地记录）；修复后 MarkdownParseTest 12 例全绿，完整回归命令（npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test）exit 0。'
+  - origin: dsbot-system-about
+    date: '2026-11-25'
+    evidence: 2026-11-25 dsbot-system-about 设计原定 DS-Bot/dsh 更新行状态文案由 :app 渲染、core 只给枚举；实现时按本教训改为 core 经 I18n.tr 输出文案并以 JUnit 覆盖全部分支，设计决策 state-enum-in-core 随之改写

@@ -78,6 +78,8 @@ fun TeamPage(
     /** 密钥设置（dsbot-secrets-settings）：远端 state 含 secrets 时显示入口。 */
     showSecrets: Boolean = false,
     onSecrets: () -> Unit = {},
+    /** 关于 DS Bot（dsbot-system-about）：入口不门控；为 null 时不显示。 */
+    onAboutDsBot: (() -> Unit)? = null,
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -133,6 +135,9 @@ fun TeamPage(
                 }
                 if (onLocalAgents != null) {
                     TextButton(onClick = onLocalAgents) { Text(tr("本地 Agent", "Local agents")) }
+                }
+                if (onAboutDsBot != null) {
+                    TextButton(onClick = onAboutDsBot) { Text(tr("关于 DS Bot", "About DS Bot")) }
                 }
                 if (archivedPrivate > 0) {
                     TextButton(onClick = onOpenArchived) { Text(tr("已删除的私有 Bot（$archivedPrivate）", "Deleted private Bots ($archivedPrivate)")) }

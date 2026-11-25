@@ -1,0 +1,49 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    dsbot-diagnostics-log:
+      strength: MUST
+      statement: 关于页提供「反馈与诊断」入口进入诊断页：显示远端诊断报告的版本、系统、模型、团队规模与只读状态等信息，以及最近错误（新到旧，含时间、级别、来源、Bot、位置与错误码）与错误总数，无错误时显示暂无错误；可查看远端完整错误日志全文；清理日志须二次确认，确认后只发送一次，成功后错误列表与总数清空。远端诊断报告与日志文本只在页面内显示，不写入 App 日志、诊断上报、剪贴板与持久存储；读取失败显示原因并可重试；远端不支持诊断端点时显示「此远端不支持」。
+      scenarios:
+        view-report-and-log:
+          - GIVEN: 远端 DS-Bot 诊断日志中有 3 条错误
+          - WHEN: 从关于页进入反馈与诊断页并展开完整日志
+          - THEN: 显示版本与系统等信息、3 条错误（新到旧）与总数 3，完整日志全文可滚动查看，内容与网页端 Feedback 页一致
+        clear-with-confirm:
+          - GIVEN: 诊断页显示有错误记录
+          - WHEN: 点击清理日志，先取消一次再确认
+          - THEN: 取消时不发请求；确认后错误列表显示暂无错误且总数为 0，网页端 Feedback 页同样已清空
+        text-not-persisted:
+          - GIVEN: 诊断页显示了远端错误与日志
+          - WHEN: 随后生成 App 自身的诊断上报并检查 App 日志
+          - THEN: 远端诊断报告与日志文本不出现在 App 日志与诊断上报中，也未写入剪贴板
+    dsbot-about-updates:
+      strength: MUST
+      statement: 团队页提供「关于 DS Bot」入口进入关于页：显示远端 DS-Bot 与 dsh 当前版本、App 已测基准版本（DS-Bot 0.3.10 与同期实测的 dsh 版本）及与基准一致、不一致或未知；远端提供仓库地址时显示源码链接、Star 数（读取失败时不显示数字）与更新说明链接，链接在系统浏览器中打开。更新区的 DS-Bot 行显示状态（有新版本、已是最新及检查时间、无法检查、更新中、已安装待重启 DSH、已更新、更新失败及原因、随 DS Bot 桌面应用更新、本地目录安装、更新检查已关闭），提供「检查更新」与（有新版本或失败重试时）「更新」；远端报告 dsh 版本时显示 dsh 行，dsh 可通过 npm 更新到已验证版本时提供「更新」，需先更新 DS-Bot 时提示所需版本，随桌面应用更新时只提示不提供按钮。执行任一更新前须二次确认并说明电脑上的服务可能重启、当前会话可能失效、远端版本将偏离 App 基准；确认后只发送一次、不自动重试；更新进行中且关于页可见、App 在前台时约每 2 秒刷新状态直到结束，离开页面或进入后台即停止；连接重建后关于页与版本提示条按新版本刷新。远端不支持版本检查端点时关于页显示「此远端不支持版本检查」，Star 数端点不支持或读取失败时只显示 Star 而不显示数字，其余区块（链接、反馈与诊断入口）照常；未连接时提示连接后自动读取。
+      scenarios:
+        versions-and-baseline:
+          - GIVEN: 团队已连接，远端 DS-Bot 为 0.3.10、dsh 为已测同期版本
+          - WHEN: 从团队页进入关于 DS Bot 页
+          - THEN: 显示两个远端版本与 App 基准版本并标明一致；显示源码、更新说明链接与 Star 数，点击链接在系统浏览器打开
+        check-and-install-dsbot:
+          - GIVEN: 远端 DS-Bot 有可用新版本
+          - WHEN: 点击检查更新后点击 DS-Bot 行的更新，先取消一次再确认
+          - THEN: 取消时不发请求；确认后显示更新中并约 2 秒刷新，结束后显示已安装需重启 DSH 或失败原因；与网页端关于页状态一致
+        dsh-row-variants:
+          - GIVEN: 远端 dsh 可更新到已验证版本；另一远端的 dsh 需先更新 DS-Bot；第三个远端的 dsh 随桌面应用更新
+          - WHEN: 分别打开关于页
+          - THEN: 第一种显示 dsh 更新按钮且二次确认后执行；第二种提示先更新 DS-Bot 指定版本且无按钮；第三种只提示随桌面应用更新且无按钮
+        reconnect-refresh:
+          - GIVEN: DS-Bot 更新完成后电脑上的服务重启，连接中断
+          - WHEN: App 重连成功
+          - THEN: 关于页与版本提示条按远端新版本刷新，版本与基准不一致时提示条显示
+        unsupported-degrade:
+          - GIVEN: 远端不支持版本检查端点；另一远端支持版本检查但不支持 Star 数端点
+          - WHEN: 分别打开关于页
+          - THEN: 第一种显示此远端不支持版本检查，反馈与诊断入口照常可用；第二种版本与更新区照常、Star 按钮只显示 Star 不显示数字
+  MODIFIED: {}
+  REMOVED: {}

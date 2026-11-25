@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-system-about
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-system-about summary/details。
+    answer: 手机端只能看到版本不一致提示条，无法在 App 中查看远端 DS-Bot 与 dsh 版本及与基准是否一致、检查与安装 DS-Bot/dsh 更新，也无法查看或清理 DS-Bot 诊断错误日志，只能回电脑网页端 About DS Bot 与 Feedback 页操作。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「关于页显示远端 DS-Bot 与 dsh 版本及基准版本；检查更新与安装更新（服务端执行）可从 App 触发；诊断日志可查看与清理；完整回归命令通过」。
+    answer: App 关于 DS Bot 页显示远端 DS-Bot 与 dsh 版本及基准版本与是否一致；可从 App 检查更新并在二次确认后触发电脑上的 DS-Bot/dsh 更新，重连后版本刷新；反馈与诊断页可查看诊断报告与完整日志并在二次确认后清理；完整回归命令通过。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details 与上游 DS-Bot 0.3.10 update.js、dsh-update.js、diagnostics.js、channel.js 与 client.js AboutPage/FeedbackPage 源码核对。
+    answer: 交付 Settings → About DS Bot 与 Feedback/诊断原生页（团队页入口不门控、按端点应答降级）：update-check 读取并显示版本与更新状态，update-install 与 dsh-update-install 在二次确认后执行并在安装中前台轮询，repo-stars 与链接信息展示；diagnostics、diagnostics-log 查看，diagnostics-clear 二次确认清理。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。来源：计划变更 details「不改变本 App 自身的自更新与诊断上报行为」与里程碑 scope.out。
+    answer: 不改变 DSH Anywhere 自身的自更新与诊断上报；不改变版本提示条判定规则；不提供复制诊断报告、GitHub issue、日志下载等网页端专有操作；不在真实服务上执行安装或清理日志的探针。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-native-shell 已完成，roadmap-recommend 按里程碑与依赖顺序推荐 dsbot-system-about 为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

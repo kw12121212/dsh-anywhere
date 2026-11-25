@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: lesson-93ea7d
+  title: 显示服务端时间戳的相对时间前先按手机当前时间封顶：服务端时钟略快会让「刚刚」变成绝对日期
+category: coding
+status: active
+created_at: '2026-11-25T04:14:25.616Z'
+updated_at: '2026-11-25T04:14:25.616Z'
+context: dsbot-system-about 关于 DS Bot 页显示 update-check 的 checkedAt（服务端 Date.now()）为「检查于 刚刚 / N 分钟前」，相对时间由手机当前时间减服务端时间戳得出。
+observation: 模拟器上点「检查更新」后提示变成「Checked Nov 25, 03:59」而不是「just now」：服务端写入的 checkedAt 比手机当前时间晚几秒，差值为负，落出 formatTime 的 0–60 秒分支直接走绝对日期格式；单测只用过去时刻，没覆盖时钟偏差。
+takeaway: 凡是用手机时钟与服务端时间戳计算相对时间（刚刚、N 分钟前、检查于…），先对服务端时间取 minOf(服务端时间, 手机当前时间) 再格式化，并补一条服务端时间略晚于手机的单测；不要假设两端时钟一致。
+applies_when: 在 Android/core 里把服务端返回的毫秒时间戳（checkedAt、time、updatedAt、lastUsedAt 等）与手机 System.currentTimeMillis 相减生成相对时间文案，或刚写入即读回显示时
+occurrences:
+  - origin: dsbot-system-about
+    date: '2026-11-25'
+    evidence: 2026-11-25 模拟器 + mock --manage：检查更新后显示 Checked Nov 25, 03:59；DsbotSystem.timeText 改为 minOf(ms, now) 后显示 Checked just now；DsbotSystemTest 新增 checkedAt = now + 4000 断言（修复前失败）

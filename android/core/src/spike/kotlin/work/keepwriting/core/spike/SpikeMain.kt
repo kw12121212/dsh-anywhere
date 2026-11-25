@@ -240,6 +240,9 @@ fun main() {
     // ---- 5i. 密钥设置与落盘加密（dsbot-secrets-settings）：state/secret-store 只读 + 写端点错误形态 ----
     ProbesSecrets { endpoint, payload -> post(endpoint, payload) }.run()
 
+    // ---- 5j. 关于 DS Bot 与诊断（dsbot-system-about）：update-check/repo-stars/diagnostics/diagnostics-log 只读 ----
+    ProbesSystem { endpoint, payload -> post(endpoint, payload) }.run()
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。

@@ -413,7 +413,8 @@ const server = createServer((req, res) => {
         return
       }
       const endpoint = /"endpoint":"([^"]+)"/.exec(body)?.[1] ?? ''
-      if (endpoint === 'update-check') {
+      // --manage 下由 mock-dsh-system.mjs 应答（关于 DS Bot 验收）
+      if (endpoint === 'update-check' && !manageMode) {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, value: { current: '9.9.9', dsh: { current: '9.9.9' } } }))
         return
@@ -1161,6 +1162,12 @@ data: {"revision":8}
     res.end(JSON.stringify(manage.setSchedules(q)))
     return
   }
+  if (manage && url.startsWith('/mock/system')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(manage.setSystem(q)))
+    return
+  }
   if (manage && url.startsWith('/mock/secrets')) {
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -1253,7 +1260,8 @@ data: {"revision":8}
     res.end('restarted')
     return
   }
-  if (noticesMode && url === '/mock/drop-feed') {
+  // --manage 下同样可断开 feed（关于 DS Bot 验收：模拟电脑上更新后服务重启、App 重连）
+  if ((noticesMode || manageMode) && url === '/mock/drop-feed') {
     for (const r of feedResponses) r.destroy()
     res.writeHead(200, { 'Content-Type': 'text/plain' })
     res.end('dropped')

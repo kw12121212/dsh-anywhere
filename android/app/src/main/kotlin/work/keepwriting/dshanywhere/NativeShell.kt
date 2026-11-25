@@ -180,6 +180,10 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class ScheduleCreate(val start: String?) : ShellPage
         /** 密钥设置与落盘加密（dsbot-secrets-settings）。 */
         data object Secrets : ShellPage
+        /** 关于 DS Bot：远端版本、基准比对与更新（dsbot-system-about）。 */
+        data object AboutDsBot : ShellPage
+        /** 反馈与诊断：远端诊断报告、错误日志与清理（dsbot-system-about）。 */
+        data object DsbotDiagnostics : ShellPage
     }
 
 @Composable
@@ -525,6 +529,13 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
                 current is ShellPage.Secrets -> SecretsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.AboutDsBot -> AboutDsBotPage(
+                    api = connection.manageApi,
+                    visible = connection.resumed && !connection.covered,
+                    online = connection.status == DsbotConnection.Status.ONLINE,
+                    onDiagnostics = { if (connection.page == current) connection.openDsbotDiagnostics() },
+                )
+                current is ShellPage.DsbotDiagnostics -> DsbotDiagnosticsPage(connection.manageApi)
                 current is ShellPage.ImDetail -> ImDetailPage(
                     state = connection.stateSnapshot?.raw,
                     id = current.id,
@@ -583,6 +594,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // 密钥设置（dsbot-secrets-settings）：state 含 secrets 时出现
                     showSecrets = work.keepwriting.core.SecretsSettings.hasSecrets(connection.stateSnapshot?.raw),
                     onSecrets = { connection.openSecrets() },
+                    // 关于 DS Bot（dsbot-system-about）：不门控，页面按各端点应答降级
+                    onAboutDsBot = { connection.openAboutDsBot() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -1183,10 +1196,11 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
      */
     private val slowExecutor = Executors.newCachedThreadPool { r -> Thread(r, "dsbot-slow").apply { isDaemon = true } }
 
-    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入、本地 Agent。 */
+    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入、本地 Agent、服务商、版本检查。 */
     private fun isSlowEndpoint(endpoint: String) =
         endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ImBridges.SLOW_ENDPOINTS ||
-            endpoint in work.keepwriting.core.LocalAgents.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ModelProviders.SLOW_ENDPOINTS
+            endpoint in work.keepwriting.core.LocalAgents.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ModelProviders.SLOW_ENDPOINTS ||
+            endpoint in work.keepwriting.core.DsbotSystem.SLOW_ENDPOINTS
 
     private fun executorFor(endpoint: String) =
         if (isSlowEndpoint(endpoint)) slowExecutor else readExecutor
@@ -1323,6 +1337,10 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openScheduleCreate(start: String?) = push(ShellPage.ScheduleCreate(start))
 
     fun openSecrets() = push(ShellPage.Secrets)
+
+    fun openAboutDsBot() = push(ShellPage.AboutDsBot)
+
+    fun openDsbotDiagnostics() = push(ShellPage.DsbotDiagnostics)
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

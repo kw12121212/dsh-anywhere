@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-system-about
+  status: proposed
+summary:
+  what:
+    - 团队页提供「关于 DS Bot」入口进入原生关于页：显示远端 DS-Bot 与 dsh 当前版本、App 已测基准版本（DS-Bot 0.3.10、dsh 0.2.2-rc.3）及是否一致；显示 GitHub 仓库链接、Star 数（repo-stars，仅页面打开时读取）与更新说明链接，链接交由系统浏览器打开
+    - 更新区：DS-Bot 行按 update-check 视图显示状态（可更新、已是最新与检查时间、检查失败、更新中、已安装待重启 dsh、已更新、失败原因、随桌面应用更新、本地目录安装、检查已关闭），提供「检查更新」（fresh:true）与「更新」（update-install）；dsh 行在 value.dsh.current 存在时显示，kind=npm 且可更新时提供「更新」（dsh-update-install），被 blockedBy 阻塞时提示先更新 DS-Bot，kind=app 时提示随桌面应用更新且不提供按钮；安装前二次确认提示服务可能重启、当前会话可能失效、版本将偏离 App 基准；安装中页面可见时约 2 秒轮询 update-check，结束后显示结果；重连后关于页与版本提示条按新版本刷新
+    - 「反馈与诊断」页（关于页内入口）：diagnostics 读取远端诊断报告（版本、系统、模型、只读状态等 facts 与最近错误列表及总数）；查看完整错误日志（diagnostics-log 纯文本，等宽可滚动）；二次确认后清理日志（diagnostics-clear），成功后重读报告；远端诊断文本只在页面内显示，不写入 App 日志、诊断上报、剪贴板与磁盘
+  why:
+    - 用户目前只能在电脑网页端 Settings → About DS Bot 与 Feedback 查看远端版本、检查和安装 DS-Bot/dsh 更新、查看与清理 DS-Bot 错误日志；手机端只有版本不一致提示条，无法得知可用更新或在服务出错时查看远端错误，也无法从手机触发电脑上的升级
+scope:
+  in:
+    - core：DsbotSystem（update-check 视图与 dsh 子视图解码、DS-Bot 行与 dsh 行状态文案与按钮判定（对齐上游 botHint/dshHint/showsDshRow）、基准比对文案、安装中轮询判定、repo-stars 与 diagnostics 报告/条目解码、条目摘要与时间文案、各端点请求体）；JUnit（DsbotSystemTest）
+    - app：AboutDsBotPage 与 DsbotDiagnosticsPage（版本与基准卡、更新区与二次确认、安装中前台轮询、链接区、诊断报告与错误列表、完整日志查看、清理二次确认），NativeShell 路由与 TeamPage「关于 DS Bot」入口；重连（feed hello boot 变化）后关于页重读 update-check
+    - mock --manage 系统端点（update-check 各 phase/source/dsh.kind 组合、update-install 与 dsh-update-install 的 installing→installed/failed 过渡、repo-stars、diagnostics、diagnostics-log、diagnostics-clear，含未知端点模拟，调用记录只记参数键）；runSpike 对本机真实服务只读探针（update-check fresh:false、repo-stars、diagnostics、diagnostics-log，只记形态不记内容）并登记 FINDINGS；dsbot-api 技术标准登记系统端点契约与 hello-capabilities 例外；设备验收
+  out:
+    - 本 App（DSH Anywhere）自身的自更新与诊断上报行为（由 android-app 与 diagnostics-reporting 承担，不变）
+    - 网页端专有操作：复制诊断报告、在 GitHub 新建 issue、下载日志文件、设置引导、桌面应用（DS Bot app / dsh app）自更新按钮
+    - 在 runSpike 中对真实服务调用 update-install、dsh-update-install 或 diagnostics-clear（会升级用户服务或清掉真实日志），这些成功形态只在 mock 上验收
+unchanged_behavior:
+  - 版本提示条（version-banner）的判定与显示规则不变，仍以连接时 update-check 与 hello 为准
+  - 团队页既有入口与排序不变；远端不支持某系统端点（bot/not-found）时关于页对应区块降级显示「此远端不支持」，其余区块照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-system-about

@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-11-23T09:34:09.509Z'
-updated_at: '2026-11-24T12:36:51.349Z'
+updated_at: '2026-11-25T04:14:14.745Z'
 context: dsbot-read-state 设备验收：评审后给 mock 的 /mock/bump 加了换预览与推实时 message，再在模拟器上复验
 observation: 后台跑着的 mock 是修改前启动的旧进程：bump 后预览不变、没有实时消息，一度以为客户端预览或已读有问题。重启 mock 后实时 message 照常推送，但聊天页仍看不到新消息——mock 的 chat 接口不含 bump 出的消息，revision 触发的重取合并把实时条目替换掉；真实服务端的聊天页会包含它。另外重启 mock 会使会话失效，需要在模拟器设置页重新保存带 token 的地址。
 takeaway: 改动 scripts/mock-dsh-server.mjs 后先 node --check，再停掉旧进程重启（并重新保存带 token 的地址），然后才验收；新增 mock 模式时让 state（lastAt/preview）、chat 条目与 feed 事件出自同一份数据，避免客户端在重取或合并时表现出真实服务不会出现的现象。
@@ -20,3 +20,6 @@ occurrences:
   - origin: dsbot-models-providers
     date: '2026-11-24'
     evidence: 2026-11-24 给 /mock/providers 增加 block/unblock 后重启 mock，App 会话失效（会话已失效页），重新保存带 token 地址后修复卡验收通过
+  - origin: dsbot-system-about
+    date: '2026-11-25'
+    evidence: 2026-11-25 dsbot-system-about：mock 的 ?checks=0 只关了 enabled 却仍报告有新版本（上游关闭检查时从不检查，latest 为 null），模拟器上显示了上游不会出现的「可更新」；改为 checks=0 同时清 latest/checkedAt 并重启 mock 后与上游一致

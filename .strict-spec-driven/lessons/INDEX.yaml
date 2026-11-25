@@ -116,6 +116,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/coding/android-app-on-resume-f2aa11.yaml
+    lesson-93ea7d:
+      title: 显示服务端时间戳的相对时间前先按手机当前时间封顶：服务端时钟略快会让「刚刚」变成绝对日期
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/lesson-93ea7d.yaml
   performance:
     http-chunked-27be03:
       title: 手写 HTTP 客户端的 chunked 正文必须批量搬运
@@ -182,7 +187,7 @@ categories:
     lesson-0d4784:
       title: 手写解析器的接受集必须以对端参考实现为契约并配负向测试
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/testing/lesson-0d4784.yaml
     socket-tls-tls-https-tls-283aef:
       title: 手写协议客户端在 socket 上分层 TLS 后，必须对同一个 TLS 套接字读写，且 https 分支要有真实 TLS 服务端测试
@@ -202,7 +207,7 @@ categories:
     app-d432a7:
       title: 留在 :app 的纯解析逻辑会让渲染行为缺陷零回归拦截
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/testing/app-d432a7.yaml
     electron-e2e-window-open-execution-context-was-d-cc60b5:
       title: Electron e2e「window.open 不弹出新窗口」偶发 Execution context was destroyed，与被测改动无关时整体重跑一次
@@ -223,7 +228,7 @@ categories:
     wslg-weston-7217b7:
       title: WSLg 的 Weston 不支持窗口最小化，不能用它验证最小化/恢复
       status: active
-      occurrences: 7
+      occurrences: 8
       path: .strict-spec-driven/lessons/tooling/wslg-weston-7217b7.yaml
     wails3-update-build-assets-build-ios-plist-72a1b8:
       title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
@@ -318,17 +323,17 @@ categories:
     wsl-worktree-android-tailnet-keystore-aar-90484d:
       title: WSL 新 worktree 里跑 Android 取证与构建的三个环境前提：tailnet 解析、keystore 路径、AAR
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/tooling/wsl-worktree-android-tailnet-keystore-aar-90484d.yaml
     mock-dsh-server-mock-393a7d:
       title: 改了 mock-dsh-server 要重启进程再验收，且 mock 各接口的数据要互相一致
       status: active
-      occurrences: 2
+      occurrences: 3
       path: .strict-spec-driven/lessons/tooling/mock-dsh-server-mock-393a7d.yaml
     pkill-f-shell-144-9e23d5:
       title: pkill -f 的模式会匹配到执行它的那条 shell 命令自身，命令以 144 退出且后续步骤静默没跑
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/tooling/pkill-f-shell-144-9e23d5.yaml
     generate-tasks-status-complete-apply-5f7615:
       title: 用 generate tasks --status complete 预置已完成任务后再调 apply，会把下一个待办错标为完成
@@ -338,7 +343,7 @@ categories:
     windows-adb-adb-devices-device-adb-shell-kill-se-bc6520:
       title: Windows 侧 adb 服务端卡死：adb devices 显示 device 但 adb shell 全部挂起，先 kill-server 再判断模拟器
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/tooling/windows-adb-adb-devices-device-adb-shell-kill-se-bc6520.yaml
     runspike-401-dsh-web-https-dsh-url-http-fe7536:
       title: runSpike 全部 401 时先查 dsh-web 打印的地址协议：改为 https 后 dsh-url 仍返回旧的 http 地址

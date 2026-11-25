@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-system-about
+approach:
+  - '端点契约按 DS-Bot 0.3.10 源码核对落实：update-check {fresh?} → DS-Bot 视图 {name, current, latest, source: registry|git|path|tarball|app|unknown, notesUrl, repoUrl, enabled, checkedAt, phase: idle|installing|installed|updated|failed, installed, error, available} 合并 dsh 子视图 {current, verified, kind: npm|app, blockedBy, checkedAt, phase: idle|installing|installed|failed, installed, error, available}（dsh 可为 null）；update-install {} 与 dsh-update-install {} 立即返回对应视图（phase=installing）、无可用更新时抛错（bot 错误应答）；repo-stars {} → 整数或 null（上游缓存 1 小时）；diagnostics {client?} → {facts, entries[≤50 新到旧], total, markdown, issuesUrl}；diagnostics-log {} → 已脱敏纯文本；diagnostics-clear {} → true。全部在上游 READS 内（只读宿主也可调用），上游 mobile.js CAPABILITIES 无对应能力名。'
+  - app 侧新增 ShellPage.AboutDsBot 与 ShellPage.DsbotDiagnostics；TeamPage 增加「关于 DS Bot」入口（不门控）。关于页进入时读 update-check（fresh:false）与 repo-stars；「检查更新」发 fresh:true；「更新」先弹二次确认（服务可能重启、会话可能失效、版本将偏离 App 基准 0.3.10/0.2.2-rc.3），确认后经 manageAction 发 install 端点、不自动重试；任一 phase=installing 且页面可见、App 在前台时以单飞请求约 2 秒轮询 update-check，离开页面或进入后台即停止；连接重建（feed hello boot 变化触发既有 checkVersion）后关于页自动重读，版本提示条沿用既有逻辑刷新。诊断页进入时读 diagnostics（client 只带 surface=android 与语言），可展开查看 diagnostics-log 全文，清理前二次确认，成功后重读报告。
+  - 纯逻辑下沉 core DsbotSystem：解码上述视图（未知字段与畸形值降级为缺省）、按上游 botHint/dshHint/showsDshRow 规则给出 DS-Bot 行与 dsh 行的状态文案（I18n.tr 中英文）与按钮（检查/更新/重试/无）、与 DsbotVersions 基准比对得出一致/不一致/未知、判定是否需要安装中轮询（任一 phase=installing）、诊断报告与条目解码（time/level/source/bot/where/code/status/text）与条目副标题、各端点请求体字面值；update-check 与 repo-stars 会在服务端请求 npm 注册表或 GitHub（单次最长 8 秒、可串行多次），登记为慢端点走长读超时。JUnit 覆盖全部分支。
+decisions:
+  no-gating:
+    decision: 关于 DS Bot 入口不门控，各区块按端点应答降级：bot/not-found 显示此远端不支持，读取失败显示错误与重试，不经 capabilities.has 判定，并在 hello-capabilities 增补例外
+    rationale: 上游 0.3.10 hello CAPABILITIES 无更新与诊断能力名、state 中也无对应字段；update-check 自 0.3.2 起即存在且是版本提示条的数据源，按能力门控会在所有远端上把入口隐藏；与本地 Agent、服务商、定时任务的 no-gating 做法一致
+  install-confirm-and-poll:
+    decision: update-install 与 dsh-update-install 执行前二次确认并说明后果，执行后只在页面可见且前台时约 2 秒单飞轮询 update-check 直到不再 installing
+    rationale: 安装在电脑上进行并可能卸载重装 DS-Bot 宿主或替换全局 dsh，会话与 feed 可能中断，计划变更与里程碑风险要求提示后果并在重连后刷新版本；上游网页端同样在 installing 时以 2 秒间隔重读，前台限定避免后台耗电与无意义请求
+  state-enum-in-core:
+    decision: DS-Bot 行与 dsh 行的状态、按钮判定与状态文案（经 core I18n.tr 输出中英文）都在 core 计算，app 层只负责渲染与交互
+    rationale: 上游判定分支多（phase × source × enabled × available × kind × blockedBy），状态到文案的映射若留在 :app 便无回归拦截（项目教训：留在 :app 的纯逻辑会让渲染缺陷零回归拦截）；core 已有 I18n.tr 供界面文案切换语言，放 core 才能以 JUnit 覆盖每个分支与两种语言
+  remote-diag-text-display-only:
+    decision: 远端诊断报告与日志文本只在页面内存中显示，不写入 App 日志、诊断上报、剪贴板与磁盘缓存，也不提供复制
+    rationale: 上游虽已脱敏密钥、令牌与家目录，日志仍可能含用户对话片段、模型与路径等信息；手机端只需查看与清理，复制与提交 issue 属网页端专有操作，收窄到只显示可避免新增泄露面
+alternatives:
+  - option: 把关于页放进 App 自身设置页（SettingsScreen 的关于）
+    reason: App 设置页承载 DSH Anywhere 自身版本与自更新，混入远端 DS-Bot/dsh 版本与远端安装会让两类更新混淆，且远端页面依赖 DS-Bot 连接，应与其他 DS-Bot 设置页一样从团队页进入
+risks:
+  - 本机真实服务含用户真实日志与在用版本：只读探针仅调用 update-check（fresh:false）、repo-stars、diagnostics、diagnostics-log 并只登记键与计数，绝不调用 update-install、dsh-update-install、diagnostics-clear；安装与清理流程在 mock --manage 上验收
+  - DS-Bot 更新会在 HMR 下卸载并重装宿主，安装中轮询可能连续失败：轮询失败不弹错、保持安装中显示，连接恢复后按重读结果显示，避免误报失败

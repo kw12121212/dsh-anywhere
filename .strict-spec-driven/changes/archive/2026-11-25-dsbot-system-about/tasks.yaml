@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-system-about
+sections:
+  Implementation:
+    core-system:
+      text: core：实现 DsbotSystem（update-check DS-Bot 视图与 dsh 子视图解码、DS-Bot 行与 dsh 行状态枚举与按钮判定对齐上游 botHint/dshHint/showsDshRow、基准比对、安装中轮询判定、repo-stars 与 diagnostics 报告/条目解码与摘要、7 个端点请求体），补 JUnit DsbotSystemTest
+      status: complete
+    app-about:
+      text: app：实现 AboutDsBotPage（版本与基准卡、Star 与链接区经系统浏览器打开、DS-Bot 与 dsh 更新行、检查更新、安装前二次确认、安装中前台可见时 2 秒单飞轮询、重连后重读、端点不支持降级）与 DsbotDiagnosticsPage（诊断报告 facts 与最近错误、完整日志查看、清理二次确认后重读，文本不进日志/诊断上报/剪贴板/磁盘），接入 NativeShell 路由与 TeamPage「关于 DS Bot」入口
+      status: complete
+    mock-system:
+      text: mock --manage：实现 scripts/mock-dsh-system.mjs 并接入 mock-dsh-server.mjs，覆盖 update-check（phase/source/enabled/dsh.kind/blockedBy 组合）、update-install 与 dsh-update-install 的 installing→installed/failed 过渡、repo-stars、diagnostics、diagnostics-log、diagnostics-clear 及端点不支持开关，/mock/system 控制并返回只记参数键的调用记录
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（update-check fresh:false、repo-stars、diagnostics、diagnostics-log，只记键、计数与形态，不调用 update-install/dsh-update-install/diagnostics-clear），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：关于页版本与基准一致/不一致显示、Star 与链接、检查更新、DS-Bot 与 dsh 安装二次确认与安装中轮询到已安装/失败、blockedBy 与 kind=app 提示、端点不支持降级；诊断页报告与错误列表、完整日志、清理二次确认后清空
+      status: complete
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-system-about
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

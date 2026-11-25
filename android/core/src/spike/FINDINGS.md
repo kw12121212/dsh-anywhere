@@ -527,3 +527,17 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `secret-set` 承担两类写入：带 `requestId` 时为聊天停靠区密钥请求卡作答；带 `name` 时为设置页新增密钥（`{name, value, purpose?, scope?}`）或替换已有密钥的值（`{name, value}`，保留既有 `purpose` 与 `scope`）。`secret-update {name, scope?, purpose?}` 仅更新作用 Bot 与用途、不接收 `value`；`secret-delete {name}` 删除密钥。
 - 存储加密端点：`secret-unlock {passphrase}` 为当前进程解锁（不改文件，属 `READS`，只读宿主亦可解锁）；`secret-encrypt {passphrase}` 将明文文件原子改写为加密信封（已加密或只读宿主拒绝）；`secret-decrypt {passphrase}` 验证口令后写回明文，亦为锁定态的恢复路径（未加密或只读宿主拒绝）。口令长度 8–1024 且不做 trim（空白字符有意义）。
 - 写端点成功应答、锁定态、口令校验、只读宿主与无 `secrets`/`secretStore` 降级由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-secrets.mjs`）覆盖；`/mock/secrets?enabled=0|1&storeEnabled=0|1&readOnly=...&lock=1&reason=...&request=0|1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键，绝不输出值与口令）。
+
+## 35. 关于 DS Bot 与诊断（2026-11-25，dsbot-system-about）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10 / dsh 0.2.2-rc.3，`runSpike` 的 `ProbesSystem` 探针组；未调用 `update-install`、`dsh-update-install`、`diagnostics-clear`，只记键集、枚举、计数与长度，不记诊断条目与日志文本）**：
+- `update-check {fresh:false}` → 键 `[available, checkedAt, current, dsh, enabled, error, installed, latest, name, notesUrl, phase, repoUrl, source]`，`current=latest=0.3.10`、`source=registry`、`enabled=true`、`phase=idle`、`available=false`，`repoUrl`/`notesUrl` 为 GitHub https 链接；`dsh` 子视图键 `[available, blockedBy, checkedAt, current, error, installed, kind, phase, verified]`，`current=0.2.2-rc.3`、`verified=null`、`kind=npm`、`phase=idle`、`available=false`。
+- `repo-stars {}` → 整数。
+- `diagnostics {client}` → 键 `[entries, facts, issuesUrl, markdown, total]`；`facts` 键 `[botVersion, dshVersion, models, node, os, team]`（只读宿主时另有 `readOnly`）；`entries` 50 条、按时间新到旧、`total=200`（上游 KEEP 上限）；条目键集为 `{time, level, source, text}` 加可选 `code`、`stack`（另有 `bot`/`where`/`status` 按来源出现），本机样本全为 `level=warn`、`source=host`。
+- `diagnostics-log {}` → 已脱敏纯文本（每行一条，栈帧缩进；本机约 81 KB、579 行）。
+
+**源码核对（ds-bot 0.3.10 `src/host/channel.js`、`update.js`、`dsh-update.js`、`diagnostics.js`，client.js `botHint`/`dshHint`/`showsDshRow`/`AboutPage`/`FeedbackPage`/`wakeUpdate`）**：
+- 7 个端点均在上游 `READS`（只读宿主也可调用），mobile.js `CAPABILITIES` 无对应能力名。`update-check` 非 fresh 时 10 分钟内返回缓存，fresh 时串行请求 npm 注册表（官方与镜像）或 GitHub，单次 8 秒超时——手机端登记为慢端点（`repo-stars` 同理，上游缓存 1 小时）。
+- `update-install` / `dsh-update-install` 立即返回 `phase=installing` 的视图（已在安装中原样返回）；无可用更新、dsh 随桌面应用更新或宿主不支持时抛错，经 channel 映射为 `bot/refused` 加原文。结果只经后续 `update-check` 读回：DS-Bot `installing→installed`（HMR 下先卸载再装，宿主会短暂消失，`updated` 由重启后的标记文件给出），dsh `installing→installed|failed`（`npm install -g @deepseek-ai/dsh@<verified>`）。网页端在任一 `installing` 时以 2 秒间隔重读，否则 60 分钟。
+- `diagnostics-clear` 清空内存与 `logs/diagnostics.jsonl`，返回 `true`。
+- 成功应答与各状态由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-system.mjs`）覆盖：`/mock/system?enabled=0|1&stars=0|1&installMs=<ms>&fail=1&source=...&checks=0|1&latest=<v|none>&dshKind=npm|app&dshVerified=<v|none>&blockedBy=<v|none>&noDsh=1&restart=1&bulk=<n>&reset=1&resetCalls=1`（调用记录只记参数键；`bulk` 追加带栈帧的告警以验证约 80 KB 完整日志的渲染）；`/mock/drop-feed` 在 `--manage` 下同样可用，用于模拟电脑上更新后服务重启、App 重连。
