@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-11-23T14:01:13.824Z'
-updated_at: '2026-11-25T04:14:14.081Z'
+updated_at: '2026-11-25T06:21:58.885Z'
 context: dsbot-rich-render：在同一条 Bash 命令里先 pkill -f "mock-dsh-server.mjs --port 13090" 再改 mock 文件、重启 mock
 observation: pkill -f 按完整命令行匹配，执行它的 bash -c 命令行里也含同一字符串，于是把自己杀掉：命令以 exit 144 结束，pkill 之后的 python 改文件没有执行，随后另起的 mock 仍是旧代码，设备验收看到的还是旧行为。
 takeaway: 停后台进程用 ps aux | grep "[n]ode scripts/…" | awk '{print $2}' | xargs -r kill 这类不会匹配自身的写法（方括号技巧），或单独一条命令执行 pkill；看到 144 退出要检查同一命令里 pkill 之后的步骤是否生效。
@@ -20,3 +20,6 @@ occurrences:
   - origin: dsbot-system-about
     date: '2026-11-25'
     evidence: 2026-11-25 dsbot-system-about 在同一条命令里先启动 mock（命令行含 mock-dsh-server.mjs --port 13099）再 pkill -f / pgrep -f "mock-dsh-serve[r].mjs --port 13099"：方括号技巧也无效，因为同一 shell 命令串里本就含完整的启动命令，两次均以 144 退出；改为按监听端口取 pid（ss -ltnp | grep :<端口>）再 kill
+  - origin: dsbot-usage
+    date: '2026-11-25'
+    evidence: 2026-11-25 dsbot-usage：用 pgrep -f "mock-dsh-serve[r].mjs --port 1318" 杀旧 mock 后，同一条命令行里又启动 node scripts/mock-dsh-server.mjs --port 13180，方括号技巧只防住了模式自身、没防住同一行后面的启动参数，shell 以 144 退出、后续构建没跑；改为先单独 ps 取 pid 存文件，再在另一条命令里 kill

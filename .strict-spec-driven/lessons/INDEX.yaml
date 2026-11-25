@@ -228,7 +228,7 @@ categories:
     wslg-weston-7217b7:
       title: WSLg 的 Weston 不支持窗口最小化，不能用它验证最小化/恢复
       status: active
-      occurrences: 8
+      occurrences: 9
       path: .strict-spec-driven/lessons/tooling/wslg-weston-7217b7.yaml
     wails3-update-build-assets-build-ios-plist-72a1b8:
       title: wails3 update build-assets 会额外生成 build/ios，并保留模板外的旧 plist 键
@@ -333,7 +333,7 @@ categories:
     pkill-f-shell-144-9e23d5:
       title: pkill -f 的模式会匹配到执行它的那条 shell 命令自身，命令以 144 退出且后续步骤静默没跑
       status: active
-      occurrences: 2
+      occurrences: 3
       path: .strict-spec-driven/lessons/tooling/pkill-f-shell-144-9e23d5.yaml
     generate-tasks-status-complete-apply-5f7615:
       title: 用 generate tasks --status complete 预置已完成任务后再调 apply，会把下一个待办错标为完成

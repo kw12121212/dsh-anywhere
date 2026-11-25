@@ -541,3 +541,18 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `update-install` / `dsh-update-install` 立即返回 `phase=installing` 的视图（已在安装中原样返回）；无可用更新、dsh 随桌面应用更新或宿主不支持时抛错，经 channel 映射为 `bot/refused` 加原文。结果只经后续 `update-check` 读回：DS-Bot `installing→installed`（HMR 下先卸载再装，宿主会短暂消失，`updated` 由重启后的标记文件给出），dsh `installing→installed|failed`（`npm install -g @deepseek-ai/dsh@<verified>`）。网页端在任一 `installing` 时以 2 秒间隔重读，否则 60 分钟。
 - `diagnostics-clear` 清空内存与 `logs/diagnostics.jsonl`，返回 `true`。
 - 成功应答与各状态由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-system.mjs`）覆盖：`/mock/system?enabled=0|1&stars=0|1&installMs=<ms>&fail=1&source=...&checks=0|1&latest=<v|none>&dshKind=npm|app&dshVerified=<v|none>&blockedBy=<v|none>&noDsh=1&restart=1&bulk=<n>&reset=1&resetCalls=1`（调用记录只记参数键；`bulk` 追加带栈帧的告警以验证约 80 KB 完整日志的渲染）；`/mock/drop-feed` 在 `--manage` 下同样可用，用于模拟电脑上更新后服务重启、App 重连。
+
+## 36. 用量（2026-11-25，dsbot-usage）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesUsage` 探针组；只记键集、计数、形态与字节数，不记名称、模型 id 与 token 数值）**：
+- `usage {timeZone}` → 顶层键 `[kinds, models, now, owners, rows, scanning]`；本机应答约 59 KB、`rows` 1219 行（最早 2026-10，约一个半月的账本），每行均为 9 元组 `[hour, owner, model, kind, input, cacheRead, cacheWrite, output, calls]`，小时键全部形如 `YYYY-MM-DD HH` 且按 hour 升序；`now` 同为小时键；`scanning=false`。体积对手机无压力，不需要分页或截断。
+- `owners` 16 项：`kind` 为 `{bot=12, room=3, other=1}`，其中 1 项带 `deleted:true`（已删除的群聊）；键集为 `[key, kind]`（other）与 `[id, key, kind, name]`（另有 `deleted`）。`models` 3 项，键集 `[key, model, name, provider]`，部分另有 `providerName`。`kinds` 为 `[chat, session-title, group, memory, compaction, side, image]`（客户端对未知用途原样显示）。
+- 非法 `timeZone`（`Not/AZone`）→ 正常应答（服务端回退到自身时区，上游 `hourKeys` 的 try/catch），不报错。
+- `usage-summary {botId, timeZone}` → 键 `[botId, day, models, month, scanning, week]`，`day/week/month` 键 `[cacheRead, cacheWrite, calls, input, output]`，`models[]` 键 `[cacheRead, cacheWrite, calls, input, key, name, output]`；未知 Bot → HTTP 200、`ok:false`、`error.code="bot/not-found"`、`"Unknown Bot"`。
+- 夹具：`android/core/src/test/resources/dsbot/usage-view.json` 由本探针写出（名称与键替换为序号、token 数值替换为合成值、只留最近 48 行，结构与下标关系保持真实）；`usage-summary.json` 按实测键集构造合成值。
+
+**源码核对（ds-bot 0.3.10 `src/host/usage.js` 的 `usageView`/`hourKeys`、`mobile.js` 的 `usageSummary`/`totals`、`channel.js` 的 `usage` 分发与 `READS`，client.js 的 `src/client/usage-data.js` 与 `usage-page.js`）**：
+- `usage` 只返回全部历史的小时明细，不接收范围参数；范围分桶、上期对比、排行与热力图全部在网页端客户端计算。上游先等账本扫描至多约 6 秒再以已有数据应答（`scanning` 为真表示仍在读旧会话），不属慢端点。
+- 网页端口径：总 token = input + cacheRead + cacheWrite + output；显示的「输入」含 cacheWrite；缓存命中率 = cacheRead /（input + cacheWrite + cacheRead）；`usage-summary` 的 day/week/month 为滚动的 24、7×24、30×24 小时。
+- 手机端在 core `Usage` 中复刻上述算法；`UsageTest` 以 `resources/dsbot/usage-ref.mjs` 在 node 中直接运行 `usage-data.js` 原文对同一夹具生成的期望值（`usage-expected-*.json`）逐范围全量比对。
+- 界面验收由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-usage.mjs`）覆盖：多 Bot、群聊、DSH Agent、其他与已删除 Bot，多模型多服务商，跨 13 个月的小时行，按请求 `timeZone` 生成小时键；`/mock/usage?enabled=0|1&summary=0|1&scanning=0|1&empty=1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。

@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-usage
+  status: proposed
+summary:
+  what:
+    - 团队页新增「用量」入口进入原生用量页（usage，带手机时区 timeZone）：时间范围切换 24 小时、7 天、30 天、12 周、12 个月与日历选日（自定义起止日期），按范围自动按小时、天、周或月分桶；只显示 token 数，不显示费用，与网页端一致
+    - 详情页：点按 Bot（含群聊、DSH Agent、其他、已删除 Bot）或模型进入详情——占总用量比例环、同样的统计与图表（明细为输出、输入、缓存命中）、该 Bot 用过的模型或该模型的使用者、用途分类（对话、群聊、压缩与交接、读图、记忆、标题、侧聊、其他）与该对象的热力图；详情页中的行可继续进入对应详情
+    - Bot 详情页新增「用量」行（远端 hello 声明 usage-summary 时）：显示该 Bot 近 24 小时、7 天、30 天的 token 数，点按进入用量页中该 Bot 的详情
+    - 总览：本范围总 token 数及与上一个同长时段相比的升降百分比、缓存命中率、输出 token、调用次数；原生绘制的堆叠柱状图可在「按 Bot / 按模型」之间切换（前 7 项单独着色，其余归为其余 Bot/其余模型与其他），点按柱子显示该时段明细；Bot 排行（Bot 与 DSH Agent 一起按用量排序，群聊与其他在分隔线后，与网页端一致）与模型排行，每行显示 token 数与占比；近 53 周的每日用量热力图；仍在读取旧会话时提示总数可能增长；无用量时显示空状态
+  why:
+    - 用户在手机上看不到各 Bot 与各模型消耗了多少 token，无法判断哪个 Bot 或模型用量异常，只能回电脑网页端 Settings → Usage；DS-Bot 0.3.10 已提供 usage 与 usage-summary 端点，里程碑 done_criteria 要求用量页按时间范围、Bot 与模型显示的 token 数与网页端一致
+scope:
+  in:
+    - core：Usage（usage 应答解码 owners/models/kinds/rows/now/scanning，行元组 [hour, owner, model, kind, input, cacheRead, cacheWrite, output, calls] 缺损降级；预设范围与自定义起止的分桶（复刻网页端 RANGES、spanRange、spanBuckets、bucketsOf、spanOf）、汇总与上期对比（summarize）、按 Bot/按模型系列取前 7 与更多/其他、排行、命中率与百分比文案（hitRate、percent2）、紧凑数字（compact）、用途分类、近 53 周热力图分级、自定义范围可选最早日期、刻度与时段标题文案、轮询间隔判定；usage-summary 解码）；JUnit（UsageTest）对照网页端同一数据的数字
+    - app：UsagePage（范围标签与日历选日、统计卡、Compose Canvas 堆叠柱状图与点按明细、按 Bot/按模型切换、Bot 与模型排行、热力图、读取中提示、空状态、远端不支持与读取失败说明）、UsageDetailPage（Bot/群聊/Agent/其他/模型详情）、NativeShell 路由、TeamPage「用量」入口、BotDetailsPage「用量」行（usage-summary，capabilities 门控）；页面可见且前台时轮询（读取中约 3 秒、平时约 20 秒、失败约 10 秒），离开页面或进入后台即停止，单飞并以代次号丢弃过期应答
+    - mock --manage：usage（多 Bot、群聊、Agent、其他、已删除 Bot，多个模型与服务商，跨 13 个月的小时行，scanning 开关）与 usage-summary 供模拟器验收；runSpike 对本机真实服务做只读探针（usage 应答键、行数、owners/models/kinds 计数与应答字节数，不记录名称与数值），登记 FINDINGS 新节并补脱敏夹具；dsbot-api 技术标准登记 usage 端点、hello-capabilities 增补例外；设备验收对照网页端同一范围的数字
+  out:
+    - 费用或价格换算（网页端同样只显示 token）；导出用量数据；按用途分类之外的其他维度筛选；在手机上清空或重建用量账本
+    - 鼠标悬停交互的逐像素复刻：手机上以点按显示明细代替；日历选日中网页端标记有用量日期的小圆点不复刻
+unchanged_behavior:
+  - 团队页既有入口与 Bot 详情页既有行与分组不变
+  - 远端不支持 usage 时只在用量页给出说明，其余功能照常；远端 hello 未声明 usage-summary 时 Bot 详情不显示用量行
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-usage

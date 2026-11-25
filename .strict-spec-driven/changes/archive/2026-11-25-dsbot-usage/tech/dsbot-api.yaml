@@ -1,0 +1,56 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    usage-endpoints:
+      strength: MUST
+      statement: '用量端点（DS-Bot 0.3.10 源码核对，经 dsh 的 POST /api/bot）：usage {timeZone?(IANA 时区 id，服务端截断 64 字符，非法时用服务端时区)} → {owners[{key, kind: bot|room|agent|other, id?, name?, deleted?}], models[{key: provider/model, provider, model, name, providerName?}], kinds[string：chat|group|compaction|image|memory|session-title|btw|side|other…], rows[[hour(''YYYY-MM-DD HH''，按 timeZone), owner 下标, model 下标, kind 下标, input, cacheRead, cacheWrite, output, calls]]（按 hour 升序，全部历史，以 15 分钟槽累加到小时）, now(''YYYY-MM-DD HH''), scanning: boolean}（上游等待账本扫描至多约 6 秒后以已有数据应答，不属慢端点）；usage-summary {botId, timeZone?} → {botId, day, week, month（近 24 小时、7×24 小时、30×24 小时的 {input, cacheRead, cacheWrite, output, calls}）, models[{key, name, input, cacheRead, cacheWrite, output, calls}]（近 30 天）, scanning}，未知 Bot 回 bot/not-found。客户端必须：请求带手机当前时区；总 token 为 input+cacheRead+cacheWrite+output，显示的输入含 cacheWrite，缓存命中率为 cacheRead/(input+cacheWrite+cacheRead)；分桶、上期对比与排行按网页端 usage-data.js 在客户端计算；小时键或 owner/model/kind 下标非法、元组不足 9 项时跳过该行，数值字段非法（null、非数字、负数、小数）按 0 计入（上游 count）；Bot 排行沿用网页端 isBot，bot 与 agent 同属 Bot 一组。usage 与 usage-summary 在上游 READS 内。usage 不在 0.3.10 hello capabilities 内，按 on-demand-page-degrade 入口不门控；usage-summary 在 capabilities 内，经 capabilities.has 门控。实测与源码核对界定：usage-summary 成功应答已由 dsbot-baseline-0310 实测（FINDINGS 第 12 节）；usage 应答键、行数与字节数由本变更对本机真实服务只读实测登记 FINDINGS 新节，夹具脱敏名称与数值'
+      rationale: 用量端点首次被手机端消费，应答只给全部历史的小时明细、汇总全在客户端完成，且数字须与网页端一致；登记元组下标、时区语义、token 口径与门控方式作为单一事实来源，避免口径偏差（如漏算 cacheWrite）造成两端数字不一致
+      enforcement:
+        method: review
+        detail: core JUnit（UsageTest）覆盖 usage 与 usage-summary 解码与缺损降级、各预设与自定义范围的分桶与上期对比、系列取前 7 与合并、排行、命中率与百分比、紧凑数字、热力图分级、请求体字面值，并以同一数据对照网页端算法的数字；源码核对位置：ds-bot 0.3.10 src/host/usage.js（usageView、hourKeys）、mobile.js（usageSummary、totals）、channel.js（usage 分发与 READS）、client.js（src/client/usage-data.js 的 RANGES/spanRange/spanBuckets/bucketsOf/spanOf/summarize/compact/percent2/hitRate，usage-page.js 的 UsagePage/Stats/Chart/Heat/Profile/kindLabel/ownerFace）
+    upstream-client-algorithm-parity:
+      strength: SHOULD
+      statement: 原生端复刻上游网页端在客户端完成的计算（分桶、汇总、排行、数字与百分比文案等）且验收口径为「与网页端数字一致」时，期望值应由仓库内的生成脚本在 node 中直接截取并执行对应基准版本 client.js 的模块原文、对同一夹具计算得出；生成脚本与期望 JSON 和夹具放在 android/core/src/test/resources/dsbot/ 下，core JUnit 逐项全量比对；手写或转述的期望值不作为一致性证据
+      rationale: dsbot-usage 的分桶、上期对比与紧凑数字规则细节多（周一起算、月界截断、toFixed 舍入、previous 窗口），转述极易出错；直接执行上游原文生成期望值可排除转述误差，基准版本升级时重跑脚本即可发现口径漂移
+      enforcement:
+        method: test
+        detail: 评审核对生成脚本截取的模块边界与基准版本（如 usage-ref.mjs 截取 // src/client/usage-data.js 至 // src/client/usage-page.js），期望 JSON 与夹具同时提交，JUnit 对每个范围/输入全量比对；并以一次故意改坏口径确认比对能失败
+      examples:
+        good:
+          - UsageTest 读取 usage-ref.mjs 生成的 usage-expected-*.json，对两套夹具 × 12 个范围比对桶键、各桶合计、堆叠、上期与排行
+        bad:
+          - 测试里手抄几组「看起来对」的数字，或照 Kotlin 实现推算期望值
+    on-demand-poll-single-flight:
+      strength: SHOULD
+      statement: 按需读取且需要轮询的原生页面只在页面可见且 App 在前台时轮询，每轮等上一次应答后再排下一次；协程取消不会取消已发出的 ManageApi 读取，因此同一端点必须在连接层单飞（后到的读取等待在途应答），不得因页面切换、前后台切换或打开同类详情页而让同一端点同时有多个请求占用读取池；同一端点的总览页与详情页共享最近一次读取结果与用户选定的筛选状态，返回时先显示已有结果、不重置筛选
+      rationale: dsbot-usage 评审发现：每页各自轮询时，设置页覆盖撤下、前后台切换与连续进入详情都会让多个 usage 请求同时在途（服务端扫描时每个最长约 6 秒），挤占 2 线程读取池上的聊天与媒体读取；详情返回总览时重新转圈并丢失所选范围。同里程碑与后续按需页（带轮询或详情栈）会复用这一做法
+      enforcement:
+        method: review
+        detail: 评审检查新增轮询页：轮询只在 resumed 且未被覆盖时运行、取消即停；同一端点经连接层共享加载器单飞（如 UsageStore.load 以 CompletableDeferred 合并在途请求）；详情跳转保留并回写筛选状态；离开全部相关页后清空共享视图
+      examples:
+        good:
+          - UsageStore：缓存最近视图并合并在途 usage 请求；openUsage 把当前 range/by 写回上一页
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+  REMOVED: {}

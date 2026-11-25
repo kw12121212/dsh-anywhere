@@ -75,6 +75,8 @@ fun TeamPage(
     onModelProviders: (() -> Unit)? = null,
     /** 定时任务（dsbot-schedules）：入口不门控；为 null 时不显示。 */
     onSchedules: (() -> Unit)? = null,
+    /** 用量（dsbot-usage）：入口不门控；为 null 时不显示。 */
+    onUsage: (() -> Unit)? = null,
     /** 密钥设置（dsbot-secrets-settings）：远端 state 含 secrets 时显示入口。 */
     showSecrets: Boolean = false,
     onSecrets: () -> Unit = {},
@@ -126,6 +128,9 @@ fun TeamPage(
                 }
                 if (onSchedules != null) {
                     TextButton(onClick = onSchedules) { Text(tr("定时任务", "Scheduled tasks")) }
+                }
+                if (onUsage != null) {
+                    TextButton(onClick = onUsage) { Text(tr("用量", "Usage")) }
                 }
                 if (showSecrets) {
                     TextButton(onClick = onSecrets) { Text(tr("密钥", "Secrets")) }
@@ -386,7 +391,10 @@ private fun EmptyTeamGuide() {
 
 /** 颜色名到头像圈颜色（DS-Bot 经典色系；未知色用主题色）。 */
 @Composable
-private fun colorOf(name: String?): Color = when (name) {
+private fun colorOf(name: String?): Color = teamColorOf(name, MaterialTheme.colorScheme.primary)
+
+/** 颜色名到 DS-Bot 经典色（未知色用 [fallback]）；用量页的 Bot 着色共用（dsbot-usage）。 */
+internal fun teamColorOf(name: String?, fallback: Color): Color = when (name) {
     "red" -> Color(0xFFE53935)
     "orange" -> Color(0xFFFB8C00)
     "yellow" -> Color(0xFFFDD835)
@@ -397,5 +405,5 @@ private fun colorOf(name: String?): Color = when (name) {
     "magenta" -> Color(0xFFD81B60)
     "gray", "charcoal", "graphite" -> Color(0xFF757575)
     "deepseek" -> Color(0xFF4D6BFE)
-    else -> MaterialTheme.colorScheme.primary
+    else -> fallback
 }

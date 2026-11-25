@@ -196,6 +196,7 @@ class DsbotFixturesTest {
             "image-preview.json", "avatar.json", "error-unknown-endpoint.json",
             "markdown-image-forbidden.json", "file-text-unavailable.json", "file-download-invalid-offset.json",
             "feed-stream-0310.sse",
+            "usage-view.json", "usage-summary.json",
         )
         for (name in names) {
             val text = fixture(name)

@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,6 +66,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
     val connection = remember { NativeShellConnection(graph) }
     // 设置页叠在外壳上时聊天页不算可见：不标记已读（dsbot-read-state）
     SideEffect { connection.covered = covered }
+    // 用量页共享视图只在用量页栈内保留（dsbot-usage）
+    LaunchedEffect(connection.page) { connection.trimUsageCache() }
     // 前后台：生命周期事件驱动状态机（后台断 feed、回前台重走连接）
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -180,6 +183,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class ScheduleCreate(val start: String?) : ShellPage
         /** 密钥设置与落盘加密（dsbot-secrets-settings）。 */
         data object Secrets : ShellPage
+        /** 用量（dsbot-usage）：[focus] 为 owner:<key> 或 model:<key> 时为该对象的详情；带上一页的范围与分组方式。 */
+        data class Usage(val focus: String?, val range: work.keepwriting.core.Usage.Range? = null, val by: work.keepwriting.core.Usage.By = work.keepwriting.core.Usage.By.BOT) : ShellPage
         /** 关于 DS Bot：远端版本、基准比对与更新（dsbot-system-about）。 */
         data object AboutDsBot : ShellPage
         /** 反馈与诊断：远端诊断报告、错误日志与清理（dsbot-system-about）。 */
@@ -389,6 +394,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             onOpenBrowser = { connection.openBotBrowser(current.targetId) },
                             onOpenCapabilities = { connection.openBotCapabilities(current.targetId) },
                             onOpenSchedules = { connection.openSchedules(current.targetId) },
+                            // 用量摘要（dsbot-usage）：远端 hello 声明 usage-summary 时显示
+                            showUsage = connection.capabilities.has(work.keepwriting.core.Usage.SUMMARY_CAPABILITY),
+                            onOpenUsage = { connection.openUsage("owner:" + current.targetId) },
                         )
                     }
                 }
@@ -529,6 +537,19 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
                 current is ShellPage.Secrets -> SecretsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                // 用量（dsbot-usage）：页面可见（未被设置页覆盖）且 App 在前台时轮询；点按对象进入其详情
+                current is ShellPage.Usage -> key(current) {
+                    UsagePage(
+                        state = connection.stateSnapshot?.raw,
+                        api = connection.manageApi,
+                        store = connection.usageStore,
+                        focusId = current.focus,
+                        initialRange = current.range,
+                        initialBy = current.by,
+                        active = connection.resumed && !connection.covered,
+                        onOpen = { focus, range, by -> if (connection.page == current) connection.openUsage(focus, range, by) },
+                    )
+                }
                 current is ShellPage.AboutDsBot -> AboutDsBotPage(
                     api = connection.manageApi,
                     visible = connection.resumed && !connection.covered,
@@ -591,6 +612,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onModelProviders = { connection.openModelProviders() },
                     // 定时任务（dsbot-schedules）：不门控，页面按 schedules 应答说明不支持或未开启
                     onSchedules = { connection.openSchedules(null) },
+                    // 用量（dsbot-usage）：不门控，页面按 usage 应答说明不支持
+                    onUsage = { connection.openUsage(null) },
                     // 密钥设置（dsbot-secrets-settings）：state 含 secrets 时出现
                     showSecrets = work.keepwriting.core.SecretsSettings.hasSecrets(connection.stateSnapshot?.raw),
                     onSecrets = { connection.openSecrets() },
@@ -1333,6 +1356,19 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openBotModels() = push(ShellPage.BotModels)
 
     fun openSchedules(owner: String?) = push(ShellPage.Schedules(owner))
+    /** 用量（dsbot-usage）：进入详情时把当前范围与分组方式写回上一页，返回后不重置（评审修复）。 */
+    fun openUsage(focus: String?, range: work.keepwriting.core.Usage.Range? = null, by: work.keepwriting.core.Usage.By = work.keepwriting.core.Usage.By.BOT) {
+        val from = page
+        if (from is ShellPage.Usage && range != null) page = from.copy(range = range, by = by)
+        push(ShellPage.Usage(focus, range, by))
+    }
+
+    /** 用量页共享读取与最近视图；离开全部用量页后清空。 */
+    val usageStore = UsageStore()
+
+    fun trimUsageCache() {
+        if (page !is ShellPage.Usage && backStack.none { it is ShellPage.Usage }) usageStore.clear()
+    }
 
     fun openScheduleCreate(start: String?) = push(ShellPage.ScheduleCreate(start))
 

@@ -1162,6 +1162,12 @@ data: {"revision":8}
     res.end(JSON.stringify(manage.setSchedules(q)))
     return
   }
+  if (manage && url.startsWith('/mock/usage')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(manage.setUsage(q)))
+    return
+  }
   if (manage && url.startsWith('/mock/system')) {
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' })

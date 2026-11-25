@@ -46,7 +46,7 @@ risks:
   - 服务商 key、密钥、邮箱密码等敏感值经 App 输入：必须不回显、不入日志与诊断上报、不在剪贴板残留，且只在用户配置的 harness 连接上发送
   - DS-Bot 设置页更新频繁，端点参数可能变化；以 dsbot-baseline-0310 登记的 DS-Bot 0.3.10 端点清单为准并对未知字段降级
   - Bot 浏览器画面快照为图片且按 2 秒轮询：须只在页面可见且 App 在前台时轮询、单飞请求并丢弃过期结果，画面内容可能含用户登录后的敏感页面，不写入日志、诊断上报与磁盘缓存
-status: proposed
+status: complete
 notes:
   - Bot 浏览器：browser-wait/browser-result 是浏览器宿主（桌面应用窗口）轮询并执行浏览器请求的接口，手机不调用；dsh Web 宿主上 rt.browserChannel 不存在，相关端点返回 bot/browser-off
   - 功能对等基准：DS-Bot 0.3.10（由 dsbot-baseline-0310 确立）client.js 中 Settings 的 Models、Connectors、Capabilities、Browser、Scheduled tasks、Usage、Secrets、Feedback、About DS Bot 页；上游 docs/plans 下 connectors、im、local-agents、memory-layers 等设计说明；手机端交互参考上游 mobile/src/screens/settings-pages.tsx、team/connectors.ts、team/capabilities.ts，只学行为，用 Compose 与 core 原生实现

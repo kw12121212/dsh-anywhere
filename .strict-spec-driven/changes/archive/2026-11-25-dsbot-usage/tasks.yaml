@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-usage
+sections:
+  Implementation:
+    findings:
+      text: 对本机真实服务做只读探针（usage 带 timeZone 的应答键、rows 行数、owners/models/kinds 计数、now 形态、scanning 与应答字节数，usage-summary 应答键；不记录名称与数值），登记 FINDINGS 新节并补脱敏夹具（usage-view.json 等）
+      status: complete
+    core-usage:
+      text: core：Usage（usage 与 usage-summary 解码与缺损降级；预设与自定义范围分桶、summarize 与上期对比、按 Bot/按模型系列取前 7 与更多/其他、排行、hitRate/percent2/compact 文案、用途分类、热力图分级、最早可选日期、刻度与时段标题、轮询间隔判定；usage 与 usage-summary 请求体）；JUnit（UsageTest）以同一数据对照网页端算法的数字
+      status: complete
+    app-usage:
+      text: app：UsagePage（范围标签与 DateRangePicker 选日、统计卡、Canvas 堆叠柱状图与点按明细、按 Bot/按模型切换、Bot 与模型排行、热力图、读取中提示、空状态、不支持与失败说明、可见且前台时轮询与代次号）、UsageDetailPage（Bot/群聊/Agent/其他/模型详情：比例环、统计、图表、模型或使用者、用途、热力图）、NativeShell 路由、TeamPage「用量」入口、BotDetailsPage「用量」行（usage-summary，capabilities 门控）
+      status: complete
+    mock-usage:
+      text: mock --manage：usage（多 Bot、群聊、Agent、其他、已删除 Bot，多模型多服务商，跨 13 个月的小时行，按请求 timeZone 生成键，scanning 开关）与 usage-summary（按同一数据计算 24 小时/7 天/30 天），调用记录只记参数键
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：各预设范围与日历选日的分桶与总数、上期对比、命中率、按 Bot/按模型切换与点按明细、排行进入 Bot 与模型详情、用途分类、热力图、读取中提示、空状态、不支持说明、离开页面停止轮询、Bot 详情用量行；并在真实服务上对照网页端同一范围（同一时区）的总数与 Bot/模型排行数字
+      status: complete
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-usage
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

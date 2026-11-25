@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    token-usage:
+      strength: MUST
+      statement: 团队页提供「用量」入口进入用量页，按手机当前时区显示团队的 token 用量（只显示 token 数，不显示费用）：时间范围可选 24 小时、7 天、30 天、12 周、12 个月或在日历上选择起止日期（最早到有用量记录的月份或 12 个月前），按范围以小时、天、周或月为单位分段；页面显示本范围总 token 数及与上一个同长时段相比的升降百分比、缓存命中率、输出 token 与调用次数，堆叠柱状图可在按 Bot 与按模型之间切换（前 7 项单独显示，其余合并），点按某段显示该时段明细；Bot 排行（Bot 与 DSH Agent 一起按用量排序，群聊与其他排在其后，与网页端一致）与模型排行显示各自 token 数与占比；显示近一年的每日用量热力图。点按 Bot、群聊、Agent、其他或模型进入详情页：显示其占总用量的比例、同样的统计与图表、该 Bot 用过的模型或该模型的使用者、按用途（对话或单聊、群聊、压缩与交接、识图、记忆、标题、侧边对话、其他）的分布与其热力图。远端声明支持 Bot 用量摘要时，Bot 详情页提供「用量」行显示该 Bot 近 24 小时、7 天与 30 天的 token 数，点按进入该 Bot 的用量详情。同一时区、同一时间范围下各数字与网页端一致；页面可见且 App 在前台时自动刷新，远端仍在读取旧会话时提示总数可能增长，离开页面或进入后台即停止刷新；无用量时显示空状态，远端不支持时页面给出说明，读取失败显示原因并可重试。
+      scenarios:
+        range-matches-web:
+          - GIVEN: 远端团队有多个 Bot 与模型的用量记录，手机与电脑浏览器时区相同
+          - WHEN: 在 App 用量页与网页端用量页分别选择 7 天、30 天与日历上同一段起止日期
+          - THEN: 两端的总 token 数、缓存命中率、调用次数、Bot 排行与模型排行的数字一致，图表按天或周分段
+        by-bot-by-model:
+          - GIVEN: 用量页显示 7 天范围
+          - WHEN: 把图表从按 Bot 切换为按模型，并点按某一天的柱子
+          - THEN: 柱子按模型堆叠，点按处显示该天各模型的 token 数
+        detail-pages:
+          - GIVEN: 用量页的 Bot 排行中有某 Bot
+          - WHEN: 点按该 Bot，再在其详情中点按它用过的某个模型
+          - THEN: 先显示该 Bot 的占比、统计、图表、用过的模型、用途分布与热力图，再进入该模型详情显示其使用者
+        bot-summary:
+          - GIVEN: 远端声明支持 Bot 用量摘要
+          - WHEN: 打开某 Bot 的详情页
+          - THEN: 显示「用量」行及近 24 小时、7 天与 30 天的 token 数，点按进入该 Bot 的用量详情
+        unsupported:
+          - GIVEN: 远端不支持用量端点
+          - WHEN: 进入用量页
+          - THEN: 页面说明此远端不支持，其余功能照常
+  MODIFIED: {}
+  REMOVED: {}

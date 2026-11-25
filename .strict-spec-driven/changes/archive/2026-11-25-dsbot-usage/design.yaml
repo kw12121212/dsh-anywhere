@@ -1,0 +1,40 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-usage
+approach:
+  - 用量不在 state 中，由 usage 按需读取（上游 usageView 等待账本扫描至多约 6 秒后以已有数据应答，scanning 表示仍在读旧会话）。入口不门控，按 on-demand-page-degrade：bot/not-found 说明此远端不支持，其他失败显示原因并可重试；hello-capabilities 增补例外。usage-summary 在 0.3.10 hello capabilities 中声明，Bot 详情的用量行经 capabilities.has 门控。请求均带 timeZone=手机当前时区 id，服务端按该时区生成 YYYY-MM-DD HH 小时键。
+  - 纯逻辑下沉 core Usage，逐个复刻网页端 src/client/usage-data.js 与 usage-page.js 的计算：小时键按无时区的本地日期时间运算（对应网页端把键当 UTC 毫秒处理的做法），预设范围取 2×count 个桶以得到上一同长时段（previous），自定义起止按天数选择小时/天/周/月单位与刻度步长；summarize 返回各桶 sum 与按系列堆叠值、总计、上期总数及按 owner/model/kind 的汇总；input 计入 cacheWrite（与网页端 addRow 一致），总 token 为四项之和；compact、percent2、hitRate、热力图 sqrt 分级、最早可选月份（首行与 12 个月前较早者）均有同名函数。缺损口径：小时键或 owner/model/kind 下标非法、元组不足 9 项时跳过该行；数值字段非法（null、非数字、负数、小数）按 0 计入（上游 count），不报错。Bot 排行沿用网页端 isBot：bot 与 agent 同属 Bot 一组按用量排序，群聊与其他排在分隔线后。
+  - app 侧 ShellPage.Usage(focus?, range, by)：focus 为 owner:<key> 或 model:<key>；进入详情时把当前范围与分组方式写回上一页，返回后不重置。连接层 UsageStore 为各用量页共享最近一次视图（进入详情或返回时先显示再刷新，离开全部用量页后清空），并保证同一时刻只有一个 usage 请求在途——协程取消不会取消已发出的网络请求，后到的读取等待同一应答，避免占满读取池。图表用 Compose Canvas 绘制堆叠柱（不引入图表库），点按柱子显示该时段明细卡；自定义范围用 Material3 DateRangePicker，可选日期限制在最早月份与今天之间；页面可见且前台时按网页端节奏轮询（scanning 时 3 秒、平时 20 秒、失败 10 秒），离开页面或进入后台即停止。Bot 详情的用量行在远端声明 usage-summary 时立即出现（读取中显示「…」），读取失败时说明读不到，仍可点按进入该 Bot 的用量详情。
+decisions:
+  no-gating:
+    decision: 用量页入口不做 hello 或字段门控，按 usage 应答降级，并在 hello-capabilities 增补例外；Bot 详情用量行按 capabilities.has(usage-summary) 门控
+    rationale: 0.3.10 hello capabilities 不含 usage 能力名、state 无用量字段，按 hello 门控会让入口永远隐藏；usage-summary 则是上游为手机端登记的能力名，按能力位门控与 hello-capabilities 规则一致
+  device-time-zone:
+    decision: usage 与 usage-summary 请求一律带手机当前时区 ZoneId.systemDefault().id 作为 timeZone
+    rationale: 服务端按 timeZone 生成小时键，网页端同样传浏览器 Intl 时区；用户在哪看就按哪的日界线与周界线分桶，对照网页端验收时两端时区一致即数字一致
+  client-side-aggregation:
+    decision: 分桶、上期对比、排行与热力图全部在客户端 core 按网页端算法计算，服务端只提供小时明细
+    rationale: 上游 usage 端点只返回小时粒度明细、不接收范围参数，网页端在客户端汇总；复刻同一算法并以 JUnit 对照同一数据，是「与网页端数字一致」的唯一可靠途径
+  poll-while-visible:
+    decision: 用量页可见且 App 在前台时按 scanning 3 秒、平时 20 秒、失败 10 秒轮询，离开即停止
+    rationale: 网页端 UsagePage 同样按此节奏轮询并在页面隐藏时停止；首次扫描大账本时 scanning 期间总数会增长，需要较快刷新；只在可见时轮询避免后台耗电
+  native-canvas-chart:
+    decision: 柱状图与热力图用 Compose Canvas 原生绘制，不引入第三方图表库
+    rationale: 里程碑 details 要求图表原生绘制；所需图形只有堆叠柱、比例环与网格热力图，Canvas 足够，新增依赖会触发 frontend-dependencies/android 依赖评审且增大 APK
+  tap-for-detail:
+    decision: 网页端悬停提示在手机上改为点按柱子或热力格显示明细卡，再次点按或点空白处关闭
+    rationale: 手机没有悬停；明细内容（时段标题、各系列或输出/输入/缓存命中）与网页端提示一致，只改变触发方式
+  colorless-bot-paint:
+    decision: 设了颜色的 Bot 用团队色；未设颜色的 Bot 按全部历史用量名次取调色板色（core Usage.ownerRanks），群聊、Agent 与其他用中性色
+    rationale: 网页端对未设颜色的 Bot 按 id 哈希派生默认色（需移植字符色表），本 App 团队页一直以主题色兜底、未移植该色表；若沿用主题色，多个未设颜色的 Bot 在堆叠图里只能靠逐次变淡区分，模拟器验收中难以辨认；按名次取色保证图表可区分且确定，颜色属展示细节、不影响数字一致
+alternatives:
+  - option: 在 core 外直接在 Compose 里计算汇总
+    reason: 汇总逻辑无法用纯 JVM JUnit 覆盖，违反 android-client 标准中纯逻辑下沉 core 的约定，也无法对照网页端数字做回归
+  - option: 引入 Vico 或 MPAndroidChart 等图表库
+    reason: 需求只有堆叠柱与热力网格，库的样式与点按行为仍需大量定制，且新增依赖增大 APK 并带来维护面
+risks:
+  - 上游首次扫描大账本可能超过 6 秒，期间 scanning 为真、总数偏小；页面须显示读取中提示，验收对照网页端时等 scanning 结束
+  - 本机真实服务的用量数据属于用户真实使用记录：探针只记录键名、计数与字节数，夹具脱敏名称与数值
+  - usage 应答包含全部历史的小时明细：本机实测约 59 KB、1219 行（约一个半月账本，FINDINGS 第 36 节），手机可直接处理；账本更长时体积线性增长，若将来成为问题再按上游接口变化处理，本变更不截断

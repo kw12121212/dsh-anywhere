@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-usage
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-usage。
+    answer: 用户在手机上看不到各 Bot 与各模型的 token 用量，无法判断用量异常，只能回电脑网页端 Settings → Usage。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「用量页按时间范围、Bot 与模型显示的 token 数与网页端一致」；计划变更 details「对照网页端同一范围的数字验收」。
+    answer: App 用量页在同一时区、同一时间范围下显示的总 token 数、Bot 排行与模型排行数字与网页端一致，可进入 Bot 与模型详情。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 summary/details（24 小时至 12 个月或日历选日、按 Bot 与按模型、Bot 与模型详情页、只显示 token、usage 带 timeZone、Bot 详情摘要用 usage-summary）。
+    answer: 交付 Settings → Usage 原生页：预设范围与日历选日、统计与上期对比、按 Bot/按模型堆叠图、Bot 与模型排行、热力图、Bot/模型详情页；Bot 详情页用 usage-summary 显示用量行；只显示 token 不显示费用。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 团队页与 Bot 详情既有入口不变；不显示费用；不在手机上清空或重建用量账本。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-native-shell 与 dsbot-baseline-0310 已完成，roadmap-recommend 按顺序推荐本项为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

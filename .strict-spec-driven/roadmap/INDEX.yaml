@@ -38,7 +38,7 @@ milestones:
   dsbot-native-integrations:
     title: 原生 DS-Bot：模型、集成与系统设置
     path: roadmap/milestones/dsbot-native-integrations.yaml
-    status: proposed
+    status: complete
   dsbot-native-parity:
     title: 原生 DS-Bot：0.3.10 设置与聊天补齐
     path: roadmap/milestones/dsbot-native-parity.yaml

@@ -270,6 +270,9 @@ fun BotDetailsPage(
     onOpenCapabilities: () -> Unit = {},
     /** 打开该 Bot 的定时任务（dsbot-schedules）。 */
     onOpenSchedules: () -> Unit = {},
+    /** 用量摘要（dsbot-usage）：远端声明 usage-summary 时显示「用量」行。 */
+    showUsage: Boolean = false,
+    onOpenUsage: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -390,6 +393,9 @@ fun BotDetailsPage(
 
         // 定时任务（dsbot-schedules）：远端支持且已开启时显示进行中任务数
         BotSchedulesRow(botId, api, onOpenSchedules)
+
+        // 用量（dsbot-usage）：近 24 小时、7 天、30 天的 Token 数，点按进入该 Bot 的用量详情
+        if (showUsage) BotUsageRow(botId, api, onOpenUsage)
 
         SectionTitle(tr("浏览器", "Browser"))
         ValueRow(tr("Bot 浏览器", "Bot browser"), "›", hint = tr("查看当前网页画面与持有状态", "View live snapshots and control state"), onClick = onOpenBrowser)
