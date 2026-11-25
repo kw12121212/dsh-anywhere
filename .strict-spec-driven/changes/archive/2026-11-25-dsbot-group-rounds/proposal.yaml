@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-group-rounds
+  status: proposed
+summary:
+  what:
+    - 按 DS-Bot 0.3.10 源码核对并对本机真实服务只读实测群轮次相关端点 group-rows {roomId, from, to?, anchor?}、group-relay-replies {sessionId, preview} 与 changes-check {sessionId, seq} 的应答形态，以及手机端 room-chat 对已结束轮次（服务端按群账本展开）与进行中轮次（最新页插入 live 行）的呈现，结论登记到 FINDINGS 新节与 dsbot-api 技术标准
+    - 以 room-chat 脱敏夹具与 core JUnit 锁定手机端对轮次展开行（user/bot/event 轮次事件、live 标记、duration）的解码与群页渲染；发现缺口时只在既有 RoomChat 解码与渲染内补齐
+    - 设备验收：同一群的已结束轮次发言在网页端与手机端显示一致；进行中轮次的已发言行与正在回复成员在两端一致
+  why:
+    - 路线图计划变更设想手机端需调用 group-rows 展开折叠轮次、调用 group-relay-replies 取转述回复、按 changes-check 隐藏改动入口；源码核对显示 0.3.10 mobile.js roomChat 已在服务端以 groupRows 展开已结束轮次并插入进行中轮次的 live 行，group-relay-replies 只对账本之前的旧群压缩结果有效且需要 room-chat 不提供的原始工具结果文本，changes-check 服务于手机端不存在的 DSH 改动审阅页；需要以实测与夹具确认手机端群轮次呈现已与网页端一致，并把端点结论登记为单一事实来源，避免后续重复规划
+scope:
+  in:
+    - 只读探针（runSpike 新增 ProbesGroupRounds）：对真实群调用 room-chat、group-rows（含无效参数回空）、group-relay-replies（非法参数回 null）、changes-check（未知 session 回 false），只记键集、计数与错误形态；严格遵守 spike-write-probes-non-mutating
+    - FINDINGS.md 新节与 room-chat 轮次夹具（Sanitize.json 脱敏）；core JUnit 覆盖轮次展开行解码与渲染
+    - delta-tech：dsbot-api 新增 group-rounds-endpoints-0310 规则，登记三端点形态、READS 归属与手机端不消费的依据
+  out:
+    - 改用 chat 或其他读取路径恢复账本之前旧群被 save-token 压缩的轮次（room-chat 跳过此类结果，手机端维持不显示）
+    - 手机端改动审阅入口与 DSH 改动审阅页（手机端 room-chat 条目不含 changes 字段）
+    - 群内搜索、群待办、群目标任务备注与取消等同里程碑其他计划变更
+unchanged_behavior:
+  - 群聊页的分页、更早消息、发送、@ 提及、停止群/成员、room-progress 与群目标行为不变
+  - 私聊页与后台任务详情页的渲染与轮询行为不变
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-group-rounds

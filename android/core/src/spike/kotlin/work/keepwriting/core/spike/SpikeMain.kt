@@ -255,6 +255,9 @@ fun main() {
     // ---- 5n. General 高级项（dsbot-general-advanced）：state.prefs 高级键只读 + backgroundAfterSec 越界错误形态 ----
     ProbesGeneralAdvanced { endpoint, payload -> post(endpoint, payload) }.run(stateVal)
 
+    // ---- 5o. 群轮次（dsbot-group-rounds）：room-chat 轮次呈现 + group-rows/group-relay-replies/changes-check 只读形态 ----
+    ProbesGroupRounds { endpoint, payload -> post(endpoint, payload) }.run(stateVal)
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。

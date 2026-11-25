@@ -2,7 +2,7 @@
 // 监听 127.0.0.1:13080，模拟器经 10.0.2.2:13080 访问宿主。
 // 页面包含：流式 chunked 输出、同源链接、外部链接、window.open（同源/外部）、
 // file: 打开按钮、跨主机 http 子资源引用。
-// 用法：node scripts/mock-dsh-server.mjs [--port 13080] [--status <code>] [--delay <ms>] [--chat-bars] [--chat-cache] [--notices] [--outbox] [--dock] [--read-state] [--reader] [--rich] [--manage]
+// 用法：node scripts/mock-dsh-server.mjs [--port 13080] [--status <code>] [--delay <ms>] [--chat-bars] [--chat-cache] [--notices] [--outbox] [--dock] [--read-state] [--reader] [--rich] [--manage] [--group-rounds]
 import { createServer } from 'node:http'
 import { writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
@@ -63,6 +63,10 @@ const richMode = process.argv.includes('--rich')
 // --manage：可变的内存团队与 Bot/群/团队管理端点（dsbot-native-manage 里程碑模拟器验收，见 mock-dsh-manage.mjs）；
 // 写入后经 feed 推 revision，日志只记端点与参数键。
 const manageMode = process.argv.includes('--manage')
+// --group-rounds：room-chat 回 0.3.10 实测形态（running 布尔、speaking 单个 botId），条目含服务端展开的
+// 已结束轮次行（id 为 callId:index、带 duration）、全部 ROUND_EVENTS 轮次事件与进行中轮次的 live 行
+// （dsbot-group-rounds 模拟器验收；形态见 FINDINGS 第 40 节）。
+const groupRoundsMode = process.argv.includes('--group-rounds')
 const manage = manageMode ? createManageTeam((revision) => setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision })}\n\n`)), 50), () => setTimeout(() => feedClients.forEach((write) => write(`event: live\ndata: {}\n\n`)), 50)) : null
 const richClosed = new Set()
 const richRevision = { n: 30 }
@@ -697,6 +701,28 @@ const server = createServer((req, res) => {
           { id: 'b1', kind: 'bot', botId: 'bot-1', name: '研究主管', color: 'blue', text: '收到，安排分工', time: 1700000000000 },
           { id: 'u-old', kind: 'user', text: 'kaigong', time: 1700000001000 },
           ...outboxState.roomLines,
+        ] } }))
+        return
+      }
+      if (groupRoundsMode && endpoint === 'room-chat') {
+        const t0 = Date.now() - 600_000
+        const who = (botId) => botId === 'bot-1' ? { botId, name: '研究主管', color: 'blue' } : { botId, name: '运维值班', color: 'green' }
+        const event = (callId, index, name, botId, extra = {}) => ({ id: `${callId}:${index}`, kind: 'event', event: name, ...who(botId), time: t0 + index * 1000, ...extra })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { roomId: 'room-1', running: true, speaking: 'bot-2', cursor: null, items: [
+          { id: '101', kind: 'user', text: '@研究主管 @运维值班 整理本周周报', time: t0 },
+          event('toolu_relay_a', 0, 'working', 'bot-1'),
+          { id: 'toolu_relay_a:1', kind: 'bot', ...who('bot-1'), text: '周报初稿已整理，见下文要点。', time: t0 + 60_000, duration: 12_000, sessionId: 'room-1' },
+          event('toolu_relay_a', 2, 'done', 'bot-1'),
+          event('toolu_relay_a', 3, 'approval', 'bot-2'),
+          event('toolu_relay_a', 4, 'lookup', 'bot-2', { text: '上周巡检' }),
+          event('toolu_relay_a', 5, 'missed', 'bot-1'),
+          event('toolu_relay_a', 6, 'failed', 'bot-2', { code: 'QUOTA', text: '429 quota exceeded' }),
+          event('toolu_relay_a', 7, 'resumed', 'bot-1'),
+          event('toolu_relay_a', 8, 'cut', 'bot-1'),
+          event('toolu_relay_a', 9, 'stopped', 'bot-2'),
+          { id: '120', kind: 'user', text: '继续补充数据', time: t0 + 300_000 },
+          { id: 'toolu_relay_b:0', kind: 'bot', ...who('bot-1'), text: '数据已补充。', time: t0 + 320_000, sessionId: 'room-1', live: true },
         ] } }))
         return
       }

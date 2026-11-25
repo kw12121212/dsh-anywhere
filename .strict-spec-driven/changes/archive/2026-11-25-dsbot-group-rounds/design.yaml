@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-group-rounds
+approach:
+  - 先核对后实现：以 ds-bot 0.3.10 源码（src/host/channel.js 186、369–386 行，mobile.js roomChat/roomItems/replyItem，groups.js rowsView/groupRelayReplies，changes.js changesAvailable，client.js GroupReplies/openChanges）为依据，再以 runSpike 只读探针对本机真实群实测，确认手机端 room-chat 已承担轮次展开
+  - 手机端不新增端点调用与界面入口：已结束轮次由 room-chat 服务端展开，进行中轮次的 live 行与 speaking 随最新页刷新；只在既有 RoomChat 解码与 renderRoom 中补齐实测发现的缺口（如 live 行、event 轮次事件、duration），并以脱敏夹具与 JUnit 锁定
+  - 以 delta-tech 在 dsbot-api 登记 group-rounds-endpoints-0310，写明三端点形态、均在 READS 内、手机端不消费的依据，以及账本之前旧群压缩轮次在手机端不显示的残余差异
+decisions:
+  rely-on-room-chat-expansion:
+    decision: 群轮次展开以 room-chat 服务端展开为准，手机端不调用 group-rows
+    rationale: 0.3.10 mobile.js roomItems 对带 range 的 group_relay 结果调用 groupRows 展开为条目，最新页还按 roomProgress 插入进行中轮次的 live 行；再调 group-rows 会重复展开并与 room-chat 分页去重冲突
+  no-relay-replies-on-mobile:
+    decision: 手机端不调用 group-relay-replies，账本之前旧群被压缩的轮次维持不显示并登记为残余差异
+    rationale: 该端点需要原始工具结果文本中的压缩预览，room-chat 条目不提供原文且对此类结果直接跳过；改换读取路径超出本计划变更的轮次展示范围
+  no-changes-entry:
+    decision: 手机端不提供改动审阅入口，也不调用 changes-check
+    rationale: changes-check 只为打开 DSH 桌面端改动审阅页做前置判定，手机端 room-chat 条目没有 changes 字段，也没有可打开的审阅页
+  roster-first-attribution:
+    decision: 群页成员名称与颜色以团队名册（state.bots）为先、条目自带值为后备；轮次事件成员名都缺时显示「某个 Bot」
+    rationale: 网页端以 roster.byId[botId] 为先；实测夹具 35 条 bot 行中 27 条不带 color，改名后条目名也会过期，只用条目值会与网页端颜色和名称不一致
+  failure-label-order:
+    decision: 运行失败原因按网页端 failureLabel 顺序：已知错误码（FAILURES 18 项）的本地化标签、原始消息、错误码、未知错误
+    rationale: 上游 failed 条目的 text 是原始错误消息，网页端对已知码显示本地化标签；以 text 为先会在额度、密钥等常见失败上与网页端显示不同
+alternatives:
+  - option: 手机端在展开已结束轮次时调用 group-rows 自行拼接发言行
+    reason: room-chat 已在服务端完成同一展开，客户端再拼会重复条目，并引入第二套去重与轮询
+  - option: 为恢复旧群压缩轮次改用 chat 端点读取群会话原始结果后调用 group-relay-replies
+    reason: 需要替换群聊页的整套读取与分页路径，影响已验收的群聊行为，收益仅限账本之前的旧群
+risks:
+  - 本机真实群可能没有进行中或旧格式的轮次，只读探针取不到对应样本；此时按源码核对登记并由 mock 覆盖，FINDINGS 中区分实测与源码核对
+  - 0.3.10 mobile roomChat 应答的 running 为布尔值、speaking 为单个 botId 或 null，而 RoomChat.decodeRoomPage 均按字符串列表解码（0.3.5 形态），群页从 room-chat 拿不到进行中与正在回复的信息；实测确认后在既有解码内兼容两种形态并登记，不扩展其他行为
+  - 轮次发言的耗时标签（duration ≥1 秒时网页端显示）手机端不显示，登记为与网页端的残余差异，留给后续变更；room-chat 的 event=schedule 条目在网页端显示「定时任务：…」，手机端沿用原始文本，不属本变更
+  - 名册在页面组合时传给控制器，若群页先于 state 到达完成首读，首屏成员色退回条目值，待下一次刷新后对齐

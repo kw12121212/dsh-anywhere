@@ -1,0 +1,29 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    group-round-rows:
+      strength: MUST
+      statement: 群聊页对 DS-Bot 0.3.10 的 room-chat 群轮次呈现与网页端一致：服务端展开的已结束轮次发言逐条显示并带成员名称与颜色（以团队名册的当前名称与颜色为先，条目自带值为后备）；轮次事件（开始处理、做完、等待批准、查找对话、未及时回应、运行失败及原因、被重启打断后继续或停下、被用户停止）显示为可见系统行，文案随 App 语言切换中英文，成员名缺失时显示「某个 Bot」而非原始 id；运行失败的原因按网页端顺序取已知错误码的本地化标签、原始错误消息、错误码、未知错误；room-chat 以布尔 running 与单个 speaking 成员表示进行中时，群页显示该成员工作中；账本之前旧群被压缩的轮次与轮次发言的耗时标签不显示（与网页端的已知差异）。
+      scenarios:
+        settled-round-events:
+          - GIVEN: 某群已结束的轮次中有成员开始处理、回复并做完，room-chat 返回展开的发言行与轮次事件条目
+          - WHEN: 打开该群的群聊页
+          - THEN: 发言行带成员名称与颜色，轮次事件显示为「某成员 开始做了」「某成员 做完了」等系统行，与网页端同一群一致
+        running-speaking-0310:
+          - GIVEN: 远端为 DS-Bot 0.3.10，room-chat 返回 running 为 true、speaking 为某成员 id，且 live 工作详情未下发
+          - WHEN: 群聊页刷新最新一页
+          - THEN: 群聊页显示该成员工作中；running 为 false 或 speaking 为 null 时不显示工作中
+        failed-event-reason-label:
+          - GIVEN: 某轮次事件为运行失败，条目带已知错误码（如额度用尽）与上游原始错误消息，或只带未知错误码，或两者都缺
+          - WHEN: 群聊页显示该轮次
+          - THEN: 已知错误码显示本地化标签（如「某成员 停下了：账户额度已用尽。换个模型，或让它继续。」）；只有原始消息时显示该消息，只有未知错误码时显示错误码，两者都缺时显示未知错误
+        roster-first-attribution:
+          - GIVEN: 群成员已改名，或轮次发言条目没有颜色
+          - WHEN: 群聊页显示该成员的轮次发言与轮次事件
+          - THEN: 显示团队名册中的当前名称与成员颜色，与网页端一致
+  MODIFIED: {}
+  REMOVED: {}

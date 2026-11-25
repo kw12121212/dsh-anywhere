@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import work.keepwriting.core.ChatRender
+import work.keepwriting.core.RoomChat
 import work.keepwriting.core.TeamHome
 
 /**
@@ -96,6 +98,9 @@ fun RoomChatPage(
         if (uri != null) controller.addAttachmentFromUri(context.contentResolver, uri)
     }
 
+    // 名册先于首读设置：成员名称与颜色以 state.bots 为先（dsbot-group-rounds）
+    val roster = remember(state) { RoomChat.roster(state) }
+    SideEffect { controller.roster = roster }
     LaunchedEffect(roomId) { controller.open(roomId) }
     LaunchedEffect(controller.jumpSignal) {
         if (controller.rows.isNotEmpty()) listState.scrollToItem(controller.rows.size)

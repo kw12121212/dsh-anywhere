@@ -49,6 +49,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/api/ds-bot-delta-tech-hello-capabilities-f433e4.yaml
+    client-js-f3169a:
+      title: 按网页端 client.js 规划原生端能力前，先看手机端端点是否已在服务端展开，并按上游渲染组件核对显示取值
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/client-js-f3169a.yaml
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突

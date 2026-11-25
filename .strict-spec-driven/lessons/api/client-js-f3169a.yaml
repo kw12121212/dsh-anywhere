@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: client-js-f3169a
+  title: 按网页端 client.js 规划原生端能力前，先看手机端端点是否已在服务端展开，并按上游渲染组件核对显示取值
+category: api
+status: active
+created_at: '2026-11-25T14:47:56.493Z'
+updated_at: '2026-11-25T14:47:56.493Z'
+context: dsbot-group-rounds：路线图按 0.3.10 client.js 的端点调用规划手机端调用 group-rows、group-relay-replies、changes-check 来展开群轮次、取转述回复、判定改动入口。
+observation: 源码核对发现 mobile.js roomChat 已在服务端用 groupRows 展开轮次并插入进行中 live 行，三个端点在手机端无输入或无入口，计划变更的前提不成立；同时沿用 0.3.5 的 room-chat 解码使 running(布尔)/speaking(单值) 全部丢失、无 text 的 kind=event 轮次事件被通用降级吞掉（真实群 16 条不可见）。初版又只读条目字段：多数轮次行无 color、成员改名后条目名过期，failed 原因以原始消息为先，与网页端 roster.byId 优先和 failureLabel 已知码优先不一致，被独立评审判为 MUST FIX；design 的 no-delta-spec 决定因此被推翻，补了 delta-spec 并请人类确认。
+takeaway: 规划或提案阶段：对网页端 client.js 调用的端点，先查 mobile.js 中手机端对应读端点（room-chat、chat 等）是否已在服务端展开同一数据，再决定手机端是否需要调用；实现阶段：凡是移植网页端的显示，打开上游渲染组件（如 RelayEvent、GroupMessage）而非只看应答字段，逐项核对名称/颜色的来源优先级（roster.byId 先于条目值）、标签映射与回退顺序（knownFailure 先于原始消息）和中英文案，并用真实夹具断言无 text 条目不会被通用降级吞掉；发现可见行为变化时立即补 delta-spec，不要等评审。
+applies_when: 为 DS-Bot 原生客户端规划或实现某个网页端功能（尤其路线图条目直接列出 client.js 调用的端点），或把网页端的事件行、成员归属、错误原因等显示文案移植到手机端，或复用早于 0.3.10 实现的 room-chat/chat 条目解码时
+occurrences:
+  - origin: dsbot-group-rounds
+    date: '2026-11-25'
+    evidence: FINDINGS 第 40 节：实测 room-chat running=bool(false)、speaking=null、群 B 57 条中 event=working 16 条无 text、35 条 bot 行 27 条无 color；独立评审 M1（roster 优先）与 M2（FAILURES 标签优先）修复后 RoomChatTest 15 项通过、模拟器复验 failed 显示「The account is out of quota」；questions.yaml spec-addition-confirmed 由人类确认保留新增要求

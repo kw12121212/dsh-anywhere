@@ -1,0 +1,56 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-group-rounds
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响：proposal 的 why。来源：计划变更 dsbot-group-rounds 与里程碑 dsbot-native-parity。
+    answer: 里程碑要求原生界面覆盖 0.3.10 网页端经 /api/bot 可达的全部群聊功能，计划变更列出 group-rows、group-relay-replies、changes-check 三个尚未核对的群轮次端点；需要确认手机端群轮次呈现与网页端一致。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响：验收与 Verification 任务。来源：计划变更 details 的验收条件。
+    answer: 同一群的已结束轮次发言与转述回复在网页端和手机端显示一致，三端点应答形态实测登记到 dsbot-api 与 FINDINGS。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响：优先级。来源：roadmap-recommend 脚本推荐。
+    answer: 前置依赖 dsbot-group-chat 已归档，strict-spec-cli roadmap-recommend 按路线图顺序推荐 dsbot-group-rounds 为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响：scope.out 与 unchanged_behavior。来源：里程碑 scope 与计划变更范围。
+    answer: 群聊页既有分页、发送、提及、停止、room-progress 与群目标行为不变；群内搜索、群待办、群目标任务备注与取消属其他计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: scope-after-source-check
+    question: 源码核对显示手机端 room-chat 已在服务端展开群轮次，group-relay-replies 与 changes-check 在手机端无可用输入或入口。本计划变更按哪种范围执行？
+    context: 影响：proposal 范围、实施文件、测试与 dsbot-api 技术标准。依据：0.3.10 mobile.js roomItems 对带 range 的 group_relay 结果调用 groupRows 展开，最新页插入进行中轮次 live 行；group-relay-replies 需要 room-chat 不提供的原始压缩预览文本；changes-check 只服务于桌面端 DSH 改动审阅页，room-chat 条目无 changes 字段。选项：A（推荐）按当前提案做窄范围技术变更——只读实测、登记 FINDINGS 与 dsbot-api、以夹具与 JUnit 锁定 room-chat 轮次解码，顺带兼容 0.3.10 room-chat 的 running 布尔与 speaking 单值形态，做两端一致性验收，不新增界面；B 取消本变更并经 roadmap 工作流删除该计划变更，只在 dsbot-api 登记结论（需另起变更或并入其他变更）；C 扩大范围，改用 chat 等路径读取群会话原始结果以恢复账本之前旧群的压缩轮次（影响已验收的群聊读取与分页，风险高）。
+    answer: 选 A：窄范围技术变更。只读实测并登记 FINDINGS 与 dsbot-api，用夹具与 JUnit 锁定 room-chat 轮次解码，兼容 0.3.10 room-chat 的 running 布尔与 speaking 单值形态，做两端一致性验收；不新增界面，不改主 spec。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按提案选项 A 理解：手机端群轮次以 room-chat 服务端展开为准，不调用 group-rows、group-relay-replies、changes-check；本变更做实测登记、解码兼容（含 running/speaking 0.3.10 形态）与两端一致性验收。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: spec-addition-confirmed
+    question: 归档时是否把新增的主 spec 要求 android-dsbot/group-round-rows 写入（与选 A 时「不改 spec」的描述不一致）？
+    context: 影响：spec 增量与归档。实施中发现轮次事件在手机端不可见、多数轮次发言不带颜色，修复后群页呈现属用户可见变化，按 delta spec 反映实际构建的规则新增一条要求，只新增不改既有要求。
+    answer: 保留新增要求并归档：范围 A 补充为新增一条群轮次呈现要求，不修改既有要求。
+    status: resolved
+    kind: requirement
+    answered_by: human

@@ -615,3 +615,24 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `memoryLimits`：作用域固定为 `group`（默认 12000）、`bot`（默认 8000）、`team`（默认 4000），合法值 `1000..200000` 整数；有效项与已有 `state.prefs.memoryLimits` 浅合并，传 `null` 或过滤后为空时删除整项 `state.prefs.memoryLimits`——因此手机端必须在发送前做 `1000..200000` 整数校验，避免非法值误清全部记忆上限。
 - `backgroundAfterSec`：默认 `5` 秒（`BACKGROUND_WAIT_MS = 5_000`），合法值 `0..600` 整数（`0` 表示立即转后台），传 `null` 删除键恢复默认，越界或非整数回 `bot/invalid`。
 - 界面验收由 `scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-manage.mjs` 扩展 `set-prefs`）覆盖开关、三项记忆容量、后台秒数、本地非法范围拦截、恢复默认与保留未改动 `width` 等偏好。
+
+## 40. 群轮次（2026-11-25，dsbot-group-rounds）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesGroupRounds` 探针组；只记键集、计数、类型与错误形态，不记群名、成员名与正文；遵守 `spike-write-probes-non-mutating`）**：
+- `room-chat {roomId}`（2 个真实群）→ 顶层键 `[cursor, items, roomId, running, speaking]`，**`running` 为布尔（`false`）、`speaking` 为 `null`**——与 0.3.5 的 botId 数组形态不同（客户端此前按字符串列表解码，从 room-chat 拿不到进行中与正在回复的成员）。
+  - 群 A：7 条，kind 分布 `{user=1, bot=6}`，6 条为轮次展开行（`id` 形如 `<callId>:<index>`），6 条带 `duration`。
+  - 群 B：57 条，kind 分布 `{event=16, bot=35, user=6}`，event 分布 `{working=16}`，31 条轮次展开行，14 条带 `duration`，`live` 行 0 条（当时无进行中轮次）。
+  - 键集：`bot=[botId, color, duration?, id, kind, name, sessionId, text, time]`、`user=[id, kind, text, time]`、`event=[botId, color, event, id, kind, name, time]`（轮次事件**无 `text`**，客户端此前按 note/text 渲染，全部不可见）。
+  - 脱敏夹具：`android/core/src/test/resources/dsbot/room-chat-rounds.json`（群 B，经 `Sanitize.json` 写出）。
+- `group-rows`：未知群 `{roomId:"spike-none", from:1}` 与非整数 `from` → HTTP 200、`ok:true`、`{open:false, rows:[], speaking:[]}`（无 `active` 键）；真实群 `{from:1, to:1}` → 键 `[active, open, rows, speaking]`，`rows` 1 条，行键 `[botId, color, name, text]`，`open=false, active=false, speaking=[]`。
+- `group-relay-replies`：未知 session 与不含省略标记的预览 → `ok:true`、`value:null`。
+- `changes-check {sessionId:"spike-none", seq:1}` → `ok:true`、`value:false`。
+
+**源码核对（ds-bot 0.3.10 `src/host/channel.js` 186 行 `READS` 与 369–386 行、`mobile.js` `roomChat`/`roomItems`/`replyItem`/`ROUND_EVENTS`、`groups.js` `rowsView`/`groupRelayReplies`、`changes.js` `changesAvailable`、`client.js` `GroupReplies`/`RelayEvent`/`openChanges`）**：
+- 三端点均在 `READS` 内。`mobile.js roomItems` 对带 range 的 `group_relay` 结果调用 `groupRows` 在服务端展开为 user/bot/event 条目，最新页按 `roomProgress` 插入进行中轮次的 `live: true` 行；`running` 为 `running.length > 0`，`speaking` 为首个进行中轮次的发言成员 id 或 `null`。手机端以 room-chat 为唯一来源，不再调 `group-rows`。
+- `group-relay-replies` 只恢复账本之前旧群被 save-token 压缩的转述结果，需要原始结果文本；room-chat 对此类结果（`JSON.parse` 失败）直接跳过且不提供原文，手机端不显示这类轮次（与网页端的残余差异）。
+- `changes-check` 只用于桌面端打开 DSH 改动审阅页前的判定；room-chat 条目不含 `changes` 字段，手机端无改动入口。
+- 轮次事件 `ROUND_EVENTS = done/stopped/working/approval/failed/missed/lookup/resumed/cut`，客户端按 `client.js RelayEvent` 的中英文案渲染为系统行（core `RoomChat.roundEventLine`）；failed 原因按 `failureLabel` 顺序：`FAILURES` 18 个已知码的本地化标签 → 条目 text（上游 groups.js 写入的是原始错误消息）→ code → 未知错误。
+- 成员归属：网页端 post/relay/event 以 `roster.byId[botId]` 为先、条目 name/color 为后备（client.js 31309、31330）；实测群 B 的 35 条 bot 行中 27 条不带 `color`。客户端以 `state.bots` 名册为先（core `RoomChat.roster`/`speakerOf`），名称都缺时显示「某个 Bot」。
+- 残余差异：轮次发言的 `duration` 耗时标签（网页端 ≥1 秒显示）手机端不显示；room-chat 的 `event=schedule` 条目网页端显示「定时任务：…」，手机端沿用原始文本（不属本变更）。
+- 界面验收由 `scripts/mock-dsh-server.mjs --group-rounds` 覆盖：room-chat 回 0.3.10 形态（`running: true`、`speaking: "bot-2"`），条目含已结束轮次展开行（带 `duration`）、全部 9 种轮次事件与进行中轮次的 `live` 行。

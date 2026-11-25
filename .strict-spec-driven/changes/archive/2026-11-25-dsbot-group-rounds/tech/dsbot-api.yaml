@@ -1,0 +1,28 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    group-rounds-endpoints-0310:
+      strength: MUST
+      statement: 群轮次相关端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，均在上游 READS 内）：group-rows {roomId, from(整数), to?(整数), anchor?(字符串)} → {rows[{botId, name, color, text, …}], open, active, speaking[]}，未知群或非整数参数回 {rows:[], open:false, speaking:[]}（无 active 键）；group-relay-replies {sessionId, preview} → 恢复的回复数组或 null（仅对账本之前旧群被 save-token 压缩的转述结果有效，未知 session 或无省略标记回 null）；changes-check {sessionId, seq} → 布尔（DSH 是否仍提供该轮改动摘要，供桌面端打开改动审阅页前判定，未知 session 回 false）。手机端以 room-chat 为群轮次唯一来源：上游 mobile.js roomItems 已对带 range 的 group_relay 结果按群账本展开为 user/bot/event 条目（id 为 callId:index，bot 行可带 duration，多数行不带 color），最新页按 roomProgress 插入进行中轮次的 live 行；0.3.10 room-chat 的 running 为布尔、speaking 为单个 botId 或 null（0.3.5 为 botId 数组）。客户端必须：同时兼容两种 running/speaking 形态（running 为 true 时以 speaking 成员为运行者）；成员名称与颜色以团队名册 state.bots 为先、条目值为后备，名称都缺时显示通用「某个 Bot」而非原始 id；把 kind=event 且 event ∈ {done, stopped, working, approval, failed, missed, lookup, resumed, cut} 的轮次事件（多数无 text，failed 与 lookup 可带 text）按网页端 RelayEvent 文案渲染为可见系统行，failed 原因按 failureLabel 顺序取已知错误码标签、text、code、未知错误；不为展开轮次再调 group-rows，不调用 group-relay-replies 与 changes-check（room-chat 不提供原始结果文本与 changes 字段）。残余差异：room-chat 跳过的账本之前压缩轮次不显示，轮次发言的 duration 耗时标签不显示。
+      rationale: 三端点首次核对，计划变更原设想手机端调用它们；实测发现 room-chat 的 running/speaking 形态已变更、轮次事件因无 text 在手机端不可见、多数轮次行不带 color。登记端点形态、手机端不消费的理由、名册优先与失败标签顺序作为单一事实来源
+      enforcement:
+        method: test
+        detail: core JUnit（RoomChatTest）以实测脱敏夹具 room-chat-rounds.json 锁定 running 布尔/speaking 单值解码、16 条 working 轮次事件可见、缺 color 的轮次发言经名册取成员色，并逐条断言全部 ROUND_EVENTS 的中英文案、failed 四级回退与名册优先归属、live 行渲染；实测登记见 FINDINGS 第 40 节（ProbesGroupRounds）；源码核对位置：ds-bot 0.3.10 src/host/channel.js（186 行 READS、369–386 行）、mobile.js（roomChat、roomItems、replyItem、ROUND_EVENTS）、groups.js（rowsView、groupRelayReplies）、changes.js（changesAvailable）、client.js（GroupReplies、RelayEvent、FAILURES/failureLabel、post/relay 的 roster.byId 归属、openChanges）
+    member-attribution-roster-first:
+      strength: SHOULD
+      statement: 原生端在聊天、群聊、轮次事件或提醒中显示成员归属（名称、颜色）时，应与网页端一致地以团队名册 state.bots（按 botId）为先、条目自带的 name/color 只作后备；两者都缺时显示通用称呼（如「某个 Bot」/「a Bot」），不显示原始 session id；名册解析放 core 并以真实夹具 JUnit 断言缺 color 或名称过期的条目取到名册值
+      rationale: 网页端 post/relay/event 均以 roster.byId[botId] ?? 条目值 渲染（0.3.10 client.js）；实测群轮次条目 77% 不带 color，成员改名后条目名过期，只用条目值会与网页端颜色与名称不一致（dsbot-group-rounds 评审 M1）
+      enforcement:
+        method: test
+        detail: core JUnit 用真实夹具断言：名册在场时缺 color 的行取名册色、改名成员显示当前名、名册与条目都无名时显示通用称呼；评审检查新增的成员归属显示是否经名册解析
+      examples:
+        good:
+          - RoomChat.renderRoom(page, RoomChat.roster(state)) 让 room-chat-rounds.json 中缺 color 的 35 条轮次发言全部取到名册色
+        bad:
+          - 直接用条目自带的 name/color，名称缺失时退回显示 botId（session-xxxx）
+  MODIFIED: {}
+  REMOVED: {}

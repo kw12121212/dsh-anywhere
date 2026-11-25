@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-group-rounds
+sections:
+  Implementation:
+    findings:
+      text: runSpike 新增 ProbesGroupRounds 只读探针：对本机真实群调用 room-chat（最新页与 steps）、group-rows（真实范围若可得、无效参数回空 {rows:[],open:false,speaking:[]}）、group-relay-replies（非法参数回 null）、changes-check（未知 session 回 false），只记键集、计数与错误形态，遵守 spike-write-probes-non-mutating；登记 FINDINGS.md 新节并区分实测与源码核对，用 Sanitize.json 写出 room-chat 轮次脱敏夹具
+      status: complete
+    core-room-rounds:
+      text: core：按实测核对 RoomChat.decodeRoomPage 与 renderRoom 对轮次展开行（user/bot/event 轮次事件、live 标记、duration）以及 running 布尔/speaking 单值形态的解码，只在既有解码与渲染内补齐缺口；编写或扩展 RoomChat JUnit 以夹具锁定
+      status: complete
+    app-room-rounds:
+      text: app：仅当 core 补齐改变了群页可见数据（如进行中/正在回复成员）时，在 RoomChatPage/RoomChatController 内最小接入；不新增端点调用与界面入口。记录：无需改动——RoomChatController 已以 page.running 驱动「工作中」指示、轮次事件经既有 SystemLine 渲染，core 解码修正即生效
+      status: complete
+    mock-room-rounds:
+      text: mock：scripts/mock-dsh-server.mjs 的群聊夹具补充已结束轮次展开行、进行中轮次 live 行与 0.3.10 running/speaking 形态，供模拟器验收
+      status: complete
+    delta-tech-registered:
+      text: 确认 delta-tech dsbot-api group-rounds-endpoints-0310 与实测结论一致，按实测更新形态与实测/源码核对界定
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: '设备验收（模拟器 + mock，及有条件时对照真实服务）：同一群的已结束轮次发言、轮次事件与进行中轮次的已发言行和正在回复成员在网页端与手机端显示一致。记录（2026-11-25，Windows 侧模拟器 emulator-5554，mock --group-rounds，评审修复后复验）：群聊页显示「Working: 运维值班」（running=true、speaking=bot-2）、9 种轮次事件全部为可见系统行、failed 显示已知码标签「The account is out of quota」而非原始消息、轮次发言与 live 行带成员名；uiautomator 文本与截图一致。真实服务对照以 ProbesGroupRounds 实测与 room-chat-rounds.json 夹具 JUnit 代替（真实群 16 条 working 事件此前不可见）。验收后 App 地址已恢复为 127.0.0.1:13081、端口转发已移除'
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict ready 与 verify 校验变更产物结构与任务覆盖
+      status: complete
+      command: strict-spec-cli verify dsbot-group-rounds
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

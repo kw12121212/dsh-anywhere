@@ -62,6 +62,10 @@ class RoomChatController(
         private set
     var running by mutableStateOf<List<String>>(emptyList())
         private set
+
+    /** 团队名册（state.bots 的名称与颜色），群页渲染成员归属时优先于条目自带值；页面在组合时更新，executor 线程读取。 */
+    @Volatile
+    var roster: Map<String, RoomChat.Speaker> = emptyMap()
     var jumpSignal by androidx.compose.runtime.mutableIntStateOf(0)
         private set
 
@@ -117,7 +121,7 @@ class RoomChatController(
                 if (res !is DsbotApi.Result.Ok || roomId == id || cache[keyOf(id)] != null) return@readApi
                 val page = RoomChat.decodeRoomPage(res.value)
                 val ann = (res.value as? Json.Value.Object)?.members?.get("announcement")?.let { (it as? Json.Value.StringValue)?.value }
-                cache.put(keyOf(id), work.keepwriting.core.ChatCache.Entry(RoomChat.renderRoom(page), page.cursor, id, extra = ann))
+                cache.put(keyOf(id), work.keepwriting.core.ChatCache.Entry(RoomChat.renderRoom(page, roster), page.cursor, id, extra = ann))
             }
         })
     }
@@ -184,7 +188,7 @@ class RoomChatController(
                     running = page.running
                     announcement = (res.value as? Json.Value.Object)?.members?.get("announcement")?.let { (it as? Json.Value.StringValue)?.value }
                     val merge = work.keepwriting.core.ChatRefresh.merge(
-                        rows.map { it.item }, RoomChat.renderRoom(page),
+                        rows.map { it.item }, RoomChat.renderRoom(page, roster),
                         isLocal = { it is ChatRender.Item.Message && it.seq == null },
                         matches = { a, b ->
                             a is ChatRender.Item.Message && b is ChatRender.Item.Message &&
@@ -246,7 +250,7 @@ class RoomChatController(
             when (res) {
                 is DsbotApi.Result.Ok -> {
                     val page = RoomChat.decodeRoomPage(res.value)
-                    val newRows = RoomChat.renderRoom(page).map { Row(nextRowKey++, it) }
+                    val newRows = RoomChat.renderRoom(page, roster).map { Row(nextRowKey++, it) }
                     rows.addAll(0, newRows)
                     cursor = page.cursor
                     canLoadEarlier = page.cursor != null
