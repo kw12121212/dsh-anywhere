@@ -11,6 +11,7 @@ package work.keepwriting.core
  */
 object ChatBars {
     const val TITLE_MAX = 80
+    const val DETAIL_TEXT_MAX = 400
     const val LIST_MAX = 20
     const val STAGES_MAX = 20
 
@@ -20,6 +21,22 @@ object ChatBars {
     enum class Lang { ZH, EN }
 
     data class Task(val id: String, val title: String, val status: String, val running: Boolean)
+
+    /** 后台任务详情元数据（dsbot-bot-task-detail）：从 state.bots[].tasks[] 全量状态查找，含已结束任务以便平滑切为只读。 */
+    data class TaskDetail(
+        val id: String,
+        val title: String,
+        val status: String,
+        val sessionId: String?,
+        val origin: String?,
+        val startedAt: Long?,
+        val updatedAt: Long?,
+        val endedAt: Long?,
+        val summary: String?,
+        val error: String?,
+        val running: Boolean,
+        val active: Boolean,
+    )
 
     data class ComputerAsk(
         val id: String,
@@ -47,6 +64,8 @@ object ChatBars {
     /** 活动中的任务状态（ds-bot threads.js ACTIVE_TASK_STATUSES）。 */
     private val ACTIVE_TASKS = setOf("running", "waiting_work", "waiting_approval")
 
+    fun isActiveTaskStatus(status: String): Boolean = status in ACTIVE_TASKS
+
     /** 只有进行中的目标显示目标条；complete/stopped 不显示。 */
     private val SHOWN_GOALS = setOf("drafting", "active", "paused")
 
@@ -72,6 +91,31 @@ object ChatBars {
                 Task(id, clip(o.str("title")?.trim().orEmpty().ifEmpty { id }, TITLE_MAX), status, o.bool("running")))
         }.sortedWith(compareBy<Triple<Int, Long, Task>> { it.first }.thenByDescending { it.second })
             .map { it.third }.take(LIST_MAX)
+    }
+
+    /**
+     * 按 botId 与 taskId 查找任务详情元数据（不限活动态，dsbot-bot-task-detail）：
+     * 用户查看详情期间任务可能结束并保留在 state.bots[].tasks[] 中，查全量可平滑切只读并显示摘要/错误。
+     */
+    fun taskOf(state: Json.Value.Object?, botId: String, taskId: String): TaskDetail? {
+        if (taskId.isEmpty()) return null
+        val list = botOf(state, botId)?.arr("tasks") ?: return null
+        val o = list.firstOrNull { (it as? Json.Value.Object)?.str("id") == taskId } as? Json.Value.Object ?: return null
+        val status = o.str("status")?.takeIf { it.isNotEmpty() } ?: return null
+        return TaskDetail(
+            id = taskId,
+            title = clip(o.str("title")?.trim().orEmpty().ifEmpty { taskId }, TITLE_MAX),
+            status = status,
+            sessionId = o.str("sessionId")?.takeIf { it.isNotEmpty() },
+            origin = o.str("origin")?.takeIf { it.isNotEmpty() },
+            startedAt = o.num("startedAt"),
+            updatedAt = o.num("updatedAt") ?: o.num("startedAt"),
+            endedAt = o.num("endedAt"),
+            summary = o.str("summary")?.trim()?.takeIf { it.isNotEmpty() }?.let { clip(it, DETAIL_TEXT_MAX) },
+            error = o.str("error")?.trim()?.takeIf { it.isNotEmpty() }?.let { clip(it, DETAIL_TEXT_MAX) },
+            running = o.bool("running"),
+            active = isActiveTaskStatus(status),
+        )
     }
 
     // ---- 电脑操作 ----
@@ -189,7 +233,17 @@ object ChatBars {
         "running" -> if (lang == Lang.ZH) "运行中" else "Running"
         "waiting_approval" -> if (lang == Lang.ZH) "等你审批" else "Waiting for approval"
         "waiting_work" -> if (lang == Lang.ZH) "等待交接" else "Waiting for hand-off"
+        "completed" -> if (lang == Lang.ZH) "已完成" else "Done"
+        "failed" -> if (lang == Lang.ZH) "已失败" else "Failed"
+        "interrupted" -> if (lang == Lang.ZH) "已中断" else "Interrupted"
+        "stopped" -> if (lang == Lang.ZH) "已停止" else "Stopped"
         else -> status
+    }
+
+    fun taskOriginLabel(origin: String?, lang: Lang = I18n.lang): String? = when (origin) {
+        "fg-handoff" -> if (lang == Lang.ZH) "转自对话" else "Moved from chat"
+        "bot-handoff" -> if (lang == Lang.ZH) "同伴委派" else "Teammate request"
+        else -> null
     }
 
     // ---- 写操作失败提示 ----

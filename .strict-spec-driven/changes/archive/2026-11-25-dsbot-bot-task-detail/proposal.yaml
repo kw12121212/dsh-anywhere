@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-bot-task-detail
+  status: proposed
+summary:
+  what:
+    - 私聊后台任务条（TaskBar）点按任一任务进入原生「后台任务详情」全屏页：顶部显示任务标题、状态、来源、已运行或结束时间与显示/隐藏步骤开关，运行中提供停止按钮（bot-stop-task）
+    - 经 bot-task-read {botId, taskId, cursor?, steps?} 分页读取任务记录（steps=true 时包含每轮工具步骤 steps 条目），复用聊天条目渲染组件呈现任务说明（task-brief）、用户追问（user）、Bot 输出（bot，含 Markdown、交付文件与图片引用）、工具步骤（steps）与分段分隔线（divider）；支持更早分页，切换步骤或刷新最新一页时不丢弃也不重复已加载的更早记录
+    - 任务处于活动状态（running、waiting_work、waiting_approval）时，页面可见且 App 在前台按间隔单飞刷新最新一页，底部提供追问输入框经 bot-task-send {botId, taskId, text} 向任务追加消息（在途禁用、不自动重试、失败保留草稿并提示可读原因）；任务结束（completed、failed、stopped、interrupted）后自动切为只读（隐藏输入框与停止按钮，显示结束状态与摘要或错误）
+  why:
+    - 目前手机端私聊后台任务条只能查看任务标题与状态并停止，无法查看后台任务的执行步骤与输出，也无法在任务运行中补充说明，只能回到电脑网页端查看；DS-Bot 0.3.10 已提供 bot-task-read 与 bot-task-send 端点，里程碑 done_criteria 要求后台任务详情分页查看与回复与网页端一致
+scope:
+  in:
+    - core：扩展 ChatBars（taskOf 从 state.bots[].tasks[] 按 botId/taskId 查找任意状态任务元数据，补全已结束状态与来源标签、isActiveTask 判定）；新增 BotTaskDetail（bot-task-read/bot-task-send 请求体构造、应答解码与 JSON null cursor 判尽、task-brief/steps/divider 与 ChatRender 条目解码、更早页与最新页按 (sessionId, seq) 去重合并、空文本校验与错误文案）；JUnit（BotTaskDetailTest）全量覆盖
+    - app：TaskBar 任务行支持点按进入详情；BotChatPage 共享渲染组件抽为包内可见供复用；新增 ShellPage.BotTaskDetail(botId, taskId)、BotTaskDetailPage 全屏页与 NativeShell 路由及单飞读取接入（含前台可见 2.5s 轮询、切换步骤与返回代次丢弃、结束态最终刷新切只读、顶部停止与底部追问发送、未知任务与错误降级）
+    - mock 与取证：scripts/mock-dsh-server.mjs（--chat-bars 与 --manage）支持 bot-task-read（分页、steps=true、多状态任务）与 bot-task-send（追加消息入任务记录、结束态 bot/invalid、未知 Bot/任务 bot/not-found）及状态切换辅助；runSpike 新增 ProbesBotTask 只读实测本机服务错误形态与可用样本，登记 FINDINGS 新节并补夹具；delta-tech 更新 dsbot-api 与 hello-capabilities 例外
+  out:
+    - 群聊后台任务条与群内任务详情入口（计划变更限定从私聊后台任务条进入）
+    - Bot 详情页的历史已结束任务列表（DetailsTaskList）与向后台任务发送图片或文件附件（网页端 bot-task-send 同样只支持纯文本）
+    - 后台任务审批作答流改写（待处理审批仍由私聊既有停靠区与电脑操作请求卡处理）
+unchanged_behavior:
+  - 私聊后台任务条的过滤（仅私聊活动任务，排除带 roomId 的群任务）、排序（等待审批在前、其余按更新时间倒序）、折叠计数与行内停止按钮行为不变
+  - 远端未返回 bots[].tasks 字段时私聊不显示任务条，原有私聊、群聊、停靠区与缓存行为不变
+  - 既有 ChatRender 在私聊与群聊页中的条目渲染、分段切换与流式拼接行为不变
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-bot-task-detail

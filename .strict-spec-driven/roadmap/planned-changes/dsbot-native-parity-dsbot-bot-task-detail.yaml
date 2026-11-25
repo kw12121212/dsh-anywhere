@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-bot-task-detail
   milestone: dsbot-native-parity
-status: planned
+status: complete
 summary: 后台任务详情：分页查看 Bot 后台任务的步骤与输出，并向运行中的任务发送消息
 details: 在私聊的后台任务条（dsbot-chat-bars-0310）点按任务进入详情页：bot-task-read {botId, taskId, cursor?, steps?} 分页读取任务记录（steps=true 含步骤），bot-task-send {botId, taskId, text} 向任务追加消息；未知 Bot 回 bot/not-found。详情页复用聊天条目渲染；任务结束后只读。应答形态在本变更实测登记。验收：与网页端任务详情一致，发送的消息在两端出现。
 depends_on:

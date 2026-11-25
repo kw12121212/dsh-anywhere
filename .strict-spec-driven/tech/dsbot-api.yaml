@@ -83,6 +83,7 @@ rules:
       - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
       - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
       - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+      - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
@@ -308,3 +309,10 @@ rules:
     examples:
       good:
         - UsageStore：缓存最近视图并合并在途 usage 请求；openUsage 把当前 range/by 写回上一页
+  bot-task-detail-endpoints-0310:
+    strength: MUST
+    statement: 'Bot 后台任务详情端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot）：bot-task-read {botId, taskId, cursor?, steps?}（在 READS 内，只读宿主也可调用；steps 仅在为 true 时传 true，cursor 透传上一页原始值）→ {sessionId, items[], cursor: {part, beforeSeq?} | null}，items 与 chat 同构并额外包含 taskView 专有条目：kind=task-brief {name?, text, time?, seq?, sessionId?}、kind=steps {turn, tools[{name, label?, ok?}], ms?, time?, sessionId?}（仅 steps=true 时插入每轮末尾）、kind=divider {time}；未知 Bot 或未知任务回 bot/not-found。bot-task-send {botId, taskId, text}（写端点，非 READS）→ {botId, taskId, sessionId}；未知 Bot 或未知任务回 bot/not-found，空文本或任务已结束（非 running/waiting_work/waiting_approval）回 bot/invalid，只读宿主回 bot/read-only。客户端必须：JSON null 与缺键 cursor 一律视为已到最早；刷新最新页时按 (item.sessionId ?: page.sessionId, seq) 与已加载更早页去重合并；从 state.bots[].tasks[] 全量状态（含 completed/failed/stopped/interrupted）查找任务元数据以在任务结束后平滑切为只读；活动态 2.5 秒轮询遵循 on-demand-poll-single-flight 仅在前台可见时单飞运行；发送不自动重试。实测与源码核对界定：未知 Bot/任务的错误形态及本机可用只读样本由本变更 ProbesBotTask 实测登记 FINDINGS 新节，写端点成功形态与无真实任务时的条目形态按 0.3.10 源码核对（src/host/channel.js、bot-tasks.js deliverToTask/taskViewOf、parts.js taskPage/partPage/displayItems/applySteps、client.js TaskReaderView），由 mock --chat-bars/--manage 覆盖。'
+    rationale: bot-task-read 与 bot-task-send 首次被手机端消费，包含 task-brief/steps/divider 等任务视图专有条目与分页去重语义，登记请求/响应形态、错误码与实测/源码核对边界作为单一事实来源
+    enforcement:
+      method: review
+      detail: core JUnit（BotTaskDetailTest）覆盖请求体构造、task-brief/steps/divider 与 ChatRender 条目解码、JSON null cursor 判尽、(sessionId, seq) 去重合并、全状态任务元数据解析与错误文案；源码核对位置：ds-bot 0.3.10 src/host/channel.js（853–869 行）、src/host/bot-tasks.js（taskViewOf、deliverToTask）、src/host/parts.js（taskPage、partPage taskView、displayItems、stepsItems、applySteps）、client.js（TaskReaderView）

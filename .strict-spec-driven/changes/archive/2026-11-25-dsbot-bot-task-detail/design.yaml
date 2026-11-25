@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-bot-task-detail
+approach:
+  - 入口门控沿用 dsbot-chat-bars-0310 的数据存在门控：bot-task-read 与 bot-task-send 不在 0.3.10 hello capabilities 名单中，入口位于仅在 state.bots[].tasks 有私聊活动任务时显示的 TaskBar，同时在 delta-tech 为 dsbot-api 的 hello-capabilities 增补例外，详情页对 bot/not-found 等错误做可读降级。
+  - 纯逻辑下沉 core（遵循 android-client/pure-logic-in-core）：ChatBars.taskOf(state, botId, taskId) 从 bots[].tasks[] 全部状态中提取任务详情元数据（id/title/status/sessionId/origin/startedAt/updatedAt/endedAt/summary/error/running 与 isActive）；BotTaskDetail 负责构造 bot-task-read（仅在 cursor 非空时带 cursor、仅在 steps=true 时带 steps:true）与 bot-task-send（trim 后非空校验）请求体，复用 DsbotModels.decodeChatPage 处理 JSON null cursor，解码 task-brief、steps（tools[{name,label,ok}] 与 ms）与 divider 以及复用 ChatRender.renderItem/extras 处理其余消息/附件/交付文件，并实现与网页端 TaskReaderView 一致的 (sessionId, seq) 去重分页合并与错误文案。
+  - app 侧新增 ShellPage.BotTaskDetail(botId, taskId) 压栈在 ShellPage.Chat 之上，返回回到私聊页；BotChatPage 中 MessageBubble、ToolCardRow、ImageRow 抽为 internal 直接复用，与 ChatMediaOverlays 共用 Markdown、链接点击与长按选择器、代码块复制、图片查看器与交付文件下载分享。BotTaskDetailPage 遵循 dsbot-api/on-demand-poll-single-flight：通过连接层单飞读取器与请求代次号加载，仅在页面可见且 App 在前台（resumed && !covered）且任务活跃时每 2.5 秒等上一次读完再排下一次；任务从活跃变为结束时触发一次最终刷新并切为只读（隐藏输入框与停止按钮，显示结束状态与摘要/错误）；发送操作在途禁用、不自动重试，成功后清空输入并刷新最新页与静默同步 state，失败保留草稿并显示可读提示。
+decisions:
+  data-presence-gating:
+    decision: 入口随私聊后台任务条以 state.bots[].tasks 字段存在门控，不经 capabilities.has，并在 dsbot-api 的 hello-capabilities 增补例外
+    rationale: DS-Bot 0.3.10 mobile.js CAPABILITIES 不含 bot-task-read/bot-task-send，入口本身依附于按字段存在显示的私聊任务条；按 dsbot-api/hello-capabilities 与历史教训登记例外，且页面对 bot/not-found 做可读降级
+  lookup-all-task-statuses:
+    decision: 详情页任务元数据从 state.bots[].tasks[] 全量任务（含已结束）查找，而不是只从活动任务列表查找
+    rationale: 用户在详情页查看期间任务可能完成、失败、中断或被停止，上游 taskViewOf 会保留已结束任务（最多 50 条）；查全量可平滑过渡到只读态并展示最终状态、摘要或错误，而不会误报任务不存在
+  core-task-detail-model:
+    decision: 请求构造、bot-task-read 解码（含 task-brief/steps/divider 与 null cursor）和更早页/最新页去重合并全部下沉 core 的 BotTaskDetail 并用 JUnit 覆盖
+    rationale: 遵循 android-client/pure-logic-in-core 与 cursor-null-json-null 教训，确保分页游标 null 判尽、工具步骤解码与轮询合并去重有纯 JVM 回归覆盖
+  single-flight-visible-poll:
+    decision: 活动任务每 2.5 秒轮询仅在页面可见且 App 在前台时执行，每轮等上次读完再排下次，配合连接层单飞与代次号防覆盖
+    rationale: 遵循 dsbot-api/on-demand-poll-single-flight，避免前后台切换或切换显示步骤时并发请求占满 2 线程读池或旧应答覆盖新结果
+  reuse-chat-render-widgets:
+    decision: 直接复用 BotChatPage 的 MessageBubble、ToolCardRow、ImageRow 与 ChatMediaOverlays，仅新增 task-brief、steps 与 divider 轻量行组件
+    rationale: 计划变更明确要求详情页复用聊天条目渲染；直接复用可确保 Markdown、链接打开与长按选择器、代码块复制、图片与交付文件查看以及团队平铺/气泡偏好完全一致
+alternatives:
+  - option: 在 BotTaskDetailPage 中单独重写一套 Markdown 与消息气泡渲染组件
+    reason: 会与私聊/群聊的渲染细节（链接长按选择器、平铺模式、交付文件、图片画廊）漂移，也违背计划变更复用聊天条目渲染的要求
+  - option: 打开详情页后沿用全量覆盖而不保留已加载的更早页
+    reason: 活动任务每 2.5 秒刷新最新一页时会清空用户已向上翻出的更早历史，体验与网页端 TaskReaderView 不一致
+risks:
+  - 本机真实服务当前可能没有正在运行或已保留的后台任务，导致只读探针无法在不改动真实团队的前提下取得 bot-task-read 成功样本；将严格遵循 spike-write-probes-non-mutating 只做只读探针与错误形态实测，并在 FINDINGS 与 dsbot-api 技术标准中明确区分实测与 0.3.10 源码核对形态，缺失或畸形字段一律安全降级
+  - 任务可能在用户输入追问期间恰好结束，导致 bot-task-send 返回 bot/invalid；页面须展示服务端可读错误、保留草稿供用户复制并随即同步为只读态

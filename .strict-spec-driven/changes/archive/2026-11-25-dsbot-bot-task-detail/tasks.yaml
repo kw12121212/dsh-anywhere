@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-bot-task-detail
+sections:
+  Implementation:
+    findings:
+      text: 对本机真实服务运行只读探针（ProbesBotTask：bot-task-read 与 bot-task-send 未知 Bot/任务错误形态，若存在真实任务则只读记录应答键与条目形态；遵守 spike-write-probes-non-mutating 不改动真实任务），登记 FINDINGS.md 新节并按实测/源码核对界定补夹具
+      status: complete
+    core-bot-task-detail:
+      text: core：扩展 ChatBars（taskOf 全状态任务元数据、已结束状态与来源标签、isActiveTask 判定）并新增 BotTaskDetail（bot-task-read/bot-task-send 请求体构造、应答解码含 task-brief/steps/divider 与 JSON null cursor 判尽、更早页与最新页按 (sessionId, seq) 去重合并、空文本校验与错误文案）；编写 BotTaskDetailTest JUnit 覆盖全部逻辑与夹具
+      status: complete
+    app-bot-task-detail:
+      text: app：TaskBar 任务行支持点按进入详情；BotChatPage 复用渲染组件抽为 internal；新增 ShellPage.BotTaskDetail(botId, taskId)、BotTaskDetailPage 全屏页（标题/状态/来源/时长/步骤开关/停止按钮、复用聊天条目渲染 + task-brief/steps/divider、更早分页、前台可见 2.5s 单飞轮询与代次号、运行中底部追问发送与结束后切只读）及 NativeShell 接入
+      status: complete
+    mock-bot-task-detail:
+      text: mock：在 scripts/mock-dsh-server.mjs（--chat-bars 与 --manage）支持 bot-task-read（含多页 cursor、steps=true 工具步骤、task-brief/user/bot/divider 条目）与 bot-task-send（追加消息入任务记录、结束态回 bot/invalid、未知 Bot/任务回 bot/not-found）及任务结束状态切换端点供验收
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译与资源无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock 服务端，及有条件时对照真实服务）：私聊后台任务条点按进详情、分页加载更早记录、显示/隐藏步骤、向运行中任务发送追问消息且失败不自动重试、停止或结束后自动切只读
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict ready 与 verify 校验全部变更产物结构与覆盖
+      status: complete
+      command: strict-spec-cli verify dsbot-bot-task-detail
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

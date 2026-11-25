@@ -246,6 +246,9 @@ fun main() {
     // ---- 5k. 用量（dsbot-usage）：usage/usage-summary 只读（不记名称与数值） ----
     ProbesUsage { endpoint, payload -> post(endpoint, payload) }.run(firstBotId)
 
+    // ---- 5l. 后台任务详情（dsbot-bot-task-detail）：bot-task-read/bot-task-send 只读探针 ----
+    ProbesBotTask { endpoint, payload -> post(endpoint, payload) }.run(stateVal, firstBotId)
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。

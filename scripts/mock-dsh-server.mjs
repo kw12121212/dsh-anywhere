@@ -7,6 +7,7 @@ import { createServer } from 'node:http'
 import { writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
 import { createManageTeam } from './mock-dsh-manage.mjs'
+import { createBotTasks } from './mock-dsh-bot-tasks.mjs'
 
 function argValue(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -125,13 +126,16 @@ function readStateValue() {
   return value
 }
 const dockAnswered = new Set()
-const bars = { revision: 7, stopped: new Set(), answered: new Set(), computerStopped: false, resumed: false }
+const bars = { revision: 7, answered: new Set(), computerStopped: false, resumed: false }
+const barTasks = createBotTasks({
+  bump: () => {
+    bars.revision++
+    setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision: bars.revision })}\n\n`)), 50)
+  },
+  botExists: (id) => id === 'bot-1' || id === 'bot-2',
+})
 function chatBarsState() {
-  const tasks = [
-    { id: 'task-1', title: '整理本周市场数据', status: 'running', sessionId: 't-1', startedAt: 1, updatedAt: 2, running: true },
-    { id: 'task-2', title: '核对报价表', status: 'waiting_approval', sessionId: 't-2', startedAt: 1, updatedAt: 2, running: false },
-    { id: 'task-0', title: '已完成任务（不应显示）', status: 'completed', sessionId: 't-0', startedAt: 1, updatedAt: 2, running: false },
-  ].filter(t => !bars.stopped.has(t.id))
+  const tasks = barTasks.tasksViewOf('bot-1')
   const asks = {}
   if (!bars.answered.has('ask-1')) asks['ask-1'] = { id: 'ask-1', botId: 'bot-1', sessionId: 's-bot-1', appName: 'Notes', at: 10 }
   if (!bars.answered.has('ask-2')) asks['ask-2'] = { id: 'ask-2', botId: 'bot-2', sessionId: 'room-1', roomId: 'room-1', appName: 'Calendar', at: 11 }
@@ -639,9 +643,15 @@ const server = createServer((req, res) => {
         res.end(JSON.stringify({ ok: true, value: chatBarsState() }))
         return
       }
-      if (chatBars && ['bot-stop-task', 'computer-app-answer', 'computer-stop', 'resume'].includes(endpoint)) {
+      if (chatBars && ['bot-task-read', 'bot-task-send', 'bot-stop-task'].includes(endpoint)) {
+        const parsed = (() => { try { return JSON.parse(body).payload ?? {} } catch { return {} } })()
+        const out = barTasks.handle(endpoint, parsed, (value) => ({ ok: true, value }), (message, code = 'bot/refused') => ({ ok: false, error: { code, message } }))
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(out))
+        return
+      }
+      if (chatBars && ['computer-app-answer', 'computer-stop', 'resume'].includes(endpoint)) {
         console.log('  chat-bars write:', endpoint, body)
-        if (endpoint === 'bot-stop-task') bars.stopped.add(/"taskId":"([^"]+)"/.exec(body)?.[1])
         if (endpoint === 'computer-app-answer') bars.answered.add(/"id":"([^"]+)"/.exec(body)?.[1])
         if (endpoint === 'computer-stop') bars.computerStopped = true
         if (endpoint === 'resume') bars.resumed = true
@@ -1166,6 +1176,12 @@ data: {"revision":8}
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(manage.setUsage(q)))
+    return
+  }
+  if ((manage || chatBars) && url.startsWith('/mock/bot-tasks')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(manage ? manage.setBotTasks(q) : barTasks.set(q)))
     return
   }
   if (manage && url.startsWith('/mock/system')) {

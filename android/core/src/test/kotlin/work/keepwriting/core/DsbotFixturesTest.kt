@@ -197,6 +197,7 @@ class DsbotFixturesTest {
             "markdown-image-forbidden.json", "file-text-unavailable.json", "file-download-invalid-offset.json",
             "feed-stream-0310.sse",
             "usage-view.json", "usage-summary.json",
+            "bot-task-read-steps.json",
         )
         for (name in names) {
             val text = fixture(name)
@@ -213,6 +214,7 @@ class DsbotFixturesTest {
             "hello.json", "hello-api-unsupported.json", "notices.json", "notices-reset.json",
             "image-preview.json", "avatar.json", "error-unknown-endpoint.json",
             "markdown-image-forbidden.json", "file-text-unavailable.json", "file-download-invalid-offset.json",
+            "bot-task-read-steps.json",
         )) {
             assertContentRedacted(parse(name), inContent = false, name)
         }

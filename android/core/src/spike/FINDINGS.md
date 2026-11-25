@@ -556,3 +556,21 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 网页端口径：总 token = input + cacheRead + cacheWrite + output；显示的「输入」含 cacheWrite；缓存命中率 = cacheRead /（input + cacheWrite + cacheRead）；`usage-summary` 的 day/week/month 为滚动的 24、7×24、30×24 小时。
 - 手机端在 core `Usage` 中复刻上述算法；`UsageTest` 以 `resources/dsbot/usage-ref.mjs` 在 node 中直接运行 `usage-data.js` 原文对同一夹具生成的期望值（`usage-expected-*.json`）逐范围全量比对。
 - 界面验收由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-usage.mjs`）覆盖：多 Bot、群聊、DSH Agent、其他与已删除 Bot，多模型多服务商，跨 13 个月的小时行，按请求 `timeZone` 生成小时键；`/mock/usage?enabled=0|1&summary=0|1&scanning=0|1&empty=1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。
+
+## 37. 后台任务详情（2026-11-25，dsbot-bot-task-detail）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesBotTask` 探针组；只记键集、计数与错误码，不记任务标题、Bot 名称与正文内容）**：
+- `state.bots[].tasks` 实测发现 24 条已结束任务（`status: completed`）；取首条只读探测 `bot-task-read`：
+  - `bot-task-read {botId, taskId}` → 顶层键 `[cursor, items, sessionId]`，`items` 14 条，kind 分布 `{user=1, bot=12, event=1}`，键集 `user/bot=[kind, seq, sessionId, text, time, turn]`、`event=[kind, role, seq, sessionId, text, time, turn]`，`cursor=null`（到最早为 JSON `null`）。
+  - `bot-task-read {botId, taskId, steps:true}` → 顶层键 `[cursor, items, sessionId]`，`items` 15 条，kind 分布 `{user=1, bot=12, event=1, steps=1}`，新增 `steps` 条目键集 `[kind, ms, time, tools, turn]`（不带 `sessionId` 与 `seq`），`tools[]` 键集 `[label, name]`（`ok` 为可选布尔值），`cursor=null`。
+  - 脱敏夹具：`android/core/src/test/resources/dsbot/bot-task-read-steps.json`（由本次 `runSpike` 经 `Sanitize.json` 脱敏写出）。
+- 错误形态（均 HTTP 200、`ok:false`、`error.code="bot/not-found"`，严格遵守 `spike-write-probes-non-mutating` 未向真实任务发写请求）：
+  - `bot-task-read` 未知 Bot → `"Unknown Bot"`；真实 Bot + 未知任务 → `"Unknown task"`。
+  - `bot-task-send` 未知 Bot → `"Unknown Bot"`；真实 Bot + 未知任务 → `"Unknown task"`。
+
+**源码核对（ds-bot 0.3.10 `src/host/channel.js` 853–869 行与 `READS`、`bot-tasks.js` `taskViewOf`/`deliverToTask`、`parts.js` `taskPage`/`partPage`/`displayItems`/`stepsItems`/`applySteps`、`client.js` `TaskReaderView`）**：
+- `bot-task-read` 在上游 `READS` 内（只读宿主也可读），`bot-task-send` 为写端点（只读宿主 `bot/read-only`，空文本或任务已结束回 `bot/invalid`，成功返回 `{botId, taskId, sessionId}`）。
+- `parts.js` 在 `taskView: true` 下额外产生 `kind: "task-brief"`（`{name?, text, time, seq, sessionId}`）与跨分段时的 `kind: "divider"`（`{time}`）；`role: "task-followup"` 经 `displayItems` 转为 `kind: "user"`；翻页 `cursor` 形态与 `chat` 一致（`{part, beforeSeq?}` 或 `null`）。
+- 网页端 `TaskReaderView` 活动态每 2.5 秒静默刷新最新一页，并与已加载的更早页按 `(item.sessionId ?? page.sessionId, seq)` 去重拼接；任务由活跃转为结束时执行一次最终刷新并切只读（隐藏输入框与停止按钮）。
+- `bot-task-read`/`bot-task-send` 不在 0.3.10 `mobile.js` `CAPABILITIES` 内，入口随私聊后台任务条按 `state.bots[].tasks` 字段存在显隐。
+- 界面验收由 `scripts/mock-dsh-server.mjs`（`--chat-bars` 与 `--manage`）覆盖 `bot-task-read` 分页与 `steps=true`、`bot-task-send` 追加与结束态 `bot/invalid` 及 `/mock/bot-tasks` 结束切换。

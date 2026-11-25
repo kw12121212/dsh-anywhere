@@ -1,0 +1,68 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: android-bot-task-detail
+  title: 在私聊后台任务条查看后台任务详情、步骤与输出并向运行中任务追加消息
+area: android
+status: draft
+actors:
+  - name: 用户
+    role: 在 Android 手机端查看并跟进 Bot 后台任务的团队成员
+  - name: 远端 DS-Bot 服务
+    role: 运行后台任务并提供 bot-task-read、bot-task-send 与 bot-stop-task 接口的服务端
+preconditions:
+  - App 已连接到 DS-Bot 0.3.10 及以上远端服务并打开某 Bot 的私聊页
+  - 该 Bot 存在至少一个私聊活动后台任务，私聊输入框上方显示后台任务条
+main_flow:
+  open-task-detail:
+    action: 用户展开私聊后台任务条并点按其中一个任务，进入全屏后台任务详情页，顶部显示任务标题、状态、来源、步骤开关与停止按钮，列表加载并复用聊天条目渲染任务说明、消息与输出
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: bot-task-detail
+  toggle-steps:
+    action: 用户切换显示步骤或隐藏步骤，App 带或不带 steps=true 重新读取任务记录，列表对应展示或收起各轮工具调用步骤
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: bot-task-detail
+  load-earlier:
+    action: 当服务端返回非空 cursor 时，用户点按更早的消息，App 透传 cursor 分页前插更早记录且不重复；无更多页时提示已到最早
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: bot-task-detail
+  send-followup:
+    action: 任务仍在活动态时，用户在底部输入消息并发送，App 经 bot-task-send 提交（在途禁用、不自动重试），成功后清空输入框并刷新显示该追问消息，与网页端一致
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: bot-task-detail
+  ended-readonly:
+    action: 用户在详情页停止任务或任务自然结束后，App 完成最终刷新并自动切为只读态，显示结束状态与摘要或错误并隐藏输入框与停止按钮
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: bot-task-detail
+exception_flows:
+  send-failed:
+    trigger: 网络中断、只读宿主或服务端拒绝追加消息（如任务刚结束返回 bot/invalid）
+    steps:
+      keep-draft-show-error:
+        action: 详情页保留未发出的输入草稿并显示可读失败原因，App 不自动重试
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: bot-task-detail
+  task-not-found:
+    trigger: 任务或 Bot 已不存在，或远端不支持 bot-task-read（返回 bot/not-found）
+    steps:
+      show-unavailable:
+        action: 详情页显示可读的不存在或不可用说明且不崩溃，返回私聊页正常
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: bot-task-detail
+  read-failed:
+    trigger: 首次读取或加载更早页发生网络错误或服务端错误
+    steps:
+      show-retryable-error:
+        action: 详情页显示可读失败原因并允许重试，不丢失已加载的条目
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: bot-task-detail

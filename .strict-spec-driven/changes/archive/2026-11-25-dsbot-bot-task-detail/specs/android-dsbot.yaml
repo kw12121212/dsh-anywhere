@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    bot-task-detail:
+      strength: MUST
+      statement: 在私聊页的后台任务条中点按任一任务进入原生全屏「后台任务详情」页：顶部显示任务标题、状态、来源、已运行或结束时间与显示/隐藏步骤开关，活动态（运行中、等待审批、等待交接）提供停止按钮（bot-stop-task）；页面经 bot-task-read {botId, taskId, cursor?, steps?} 分页读取任务记录（切换显示步骤时传 steps=true 并按各轮展示工具调用步骤），复用聊天条目渲染呈现任务说明（task-brief）、用户追加消息、Bot 回复（含 Markdown、链接点击与长按选择器、代码块复制、图片与交付文件）、工具步骤与分段分隔线；服务端返回非空 cursor 时提供「更早的消息」分页加载并去重前插，cursor 为 null 或缺失时提示已到最早；活动态且页面在前台可见时定期静默刷新最新一页而不丢失已加载的更早记录，底部提供纯文本输入框经 bot-task-send {botId, taskId, text} 向任务追加消息（在途禁用、不自动重试、成功后清空输入并刷新呈现与网页端一致、失败保留草稿并提示可读原因）；任务结束（已完成、已失败、已停止、已中断）后完成最终刷新并自动切为只读（隐藏输入框与停止按钮，显示结束状态与摘要或错误）；未知 Bot/任务或远端不支持（bot/not-found）及网络/读取失败均显示可读原因并支持重试或返回，不崩溃。
+      scenarios:
+        open-and-toggle-steps:
+          - GIVEN: 某 Bot 在私聊页有活动中的后台任务，任务包含任务说明、多轮输出与工具调用步骤
+          - WHEN: 在私聊后台任务条展开并点按该任务，进入详情页后点击显示步骤，再点击隐藏步骤
+          - THEN: 进入详情页后显示标题、状态与复用聊天样式的任务说明和输出；开启显示步骤后各轮工具步骤出现，隐藏后收起
+        load-earlier-pages:
+          - GIVEN: 某后台任务存在超过一页的历史记录，首页返回非空 cursor，第二页返回 cursor:null
+          - WHEN: 进入任务详情页并点击「更早的消息」
+          - THEN: 更早记录前插到列表上方且与最新页不重复，加载完后提示已到最早，且活动态刷新最新页时保留已加载的更早记录
+        send-followup-active:
+          - GIVEN: 某后台任务处于运行中，用户打开该任务详情页
+          - WHEN: 在底部输入框输入追加消息并发送
+          - THEN: 发送中按钮禁用，成功后输入框清空、该追问消息出现在详情列表且与网页端同一任务详情一致
+        ended-becomes-readonly:
+          - GIVEN: 用户正在查看一个运行中的后台任务详情页
+          - WHEN: 点击顶部停止按钮或任务在远端结束（completed/failed/stopped/interrupted）
+          - THEN: 任务详情页完成最终刷新后显示结束状态（及摘要或错误），隐藏底部输入框与停止按钮变为只读
+        send-fail-no-auto-retry:
+          - GIVEN: 用户正在查看运行中的后台任务并输入了追加消息
+          - WHEN: 网络中断或服务端返回 bot/invalid 导致发送失败
+          - THEN: 详情页显示可读失败原因、保留输入草稿，App 不自动重试
+        not-found-degrade:
+          - GIVEN: 任务或 Bot 已不存在，或远端版本不支持 bot-task-read（返回 bot/not-found）
+          - WHEN: 打开该任务详情页或刷新读取
+          - THEN: 详情页显示可读的不存在或不可用提示，不崩溃，按返回键正常回到私聊页
+  MODIFIED: {}
+  REMOVED: {}

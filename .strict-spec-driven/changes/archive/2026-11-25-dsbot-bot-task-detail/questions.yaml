@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-bot-task-detail
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-bot-task-detail 与里程碑 dsbot-native-parity。
+    answer: 用户在手机端私聊的后台任务条中只能看到任务标题、状态和停止按钮，看不到后台任务的步骤与输出，也无法在任务运行中追加消息，只能回到电脑网页端查看与回复。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec、delta scene 与验收。来源：里程碑 done_criteria「后台任务详情分页查看与回复，结果均与网页端一致」；计划变更 details「验收：与网页端任务详情一致，发送的消息在两端出现」。
+    answer: 从私聊后台任务条点按任务可进入详情页，分页查看任务说明、消息与工具步骤，向运行中任务发送的消息在手机端与网页端都出现，任务结束后自动变为只读不可再发消息。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。来源：roadmap-recommend 脚本推荐与依赖状态。
+    answer: 前置依赖 dsbot-chat-bars-0310 已完成并归档，strict-spec-cli roadmap-recommend 按严格路线图顺序将 dsbot-bot-task-detail 推荐为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：proposal 的 scope.out、unchanged_behavior 与评审。来源：计划变更 details 范围限定。
+    answer: 私聊后台任务条原有的过滤、排序、折叠计数与行内停止行为不变；本次不含群聊任务入口、Bot 详情历史任务列表与向后台任务发送附件；既有私聊与群聊渲染行为不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 的 what 与 scope.in。来源：计划变更 summary 与 details。
+    answer: 在私聊后台任务条点按任务进入原生全屏详情页，经 bot-task-read {botId, taskId, cursor?, steps?} 分页读取并支持显示/隐藏步骤，复用聊天条目渲染组件，运行中经 bot-task-send {botId, taskId, text} 发送纯文本追问消息并支持停止任务，任务结束后自动切为只读。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

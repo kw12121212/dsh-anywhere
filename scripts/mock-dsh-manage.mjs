@@ -12,6 +12,7 @@ import { createSchedules } from './mock-dsh-schedules.mjs'
 import { createSecrets } from './mock-dsh-secrets.mjs'
 import { createSystem } from './mock-dsh-system.mjs'
 import { createUsage } from './mock-dsh-usage.mjs'
+import { createBotTasks } from './mock-dsh-bot-tasks.mjs'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -229,6 +230,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   const usage = createUsage({ team })
   // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
   const im = createIm({ bump, botExists: (id) => Boolean(team.bots[id]), roomExists: (id) => Boolean(team.rooms[id]) })
+  const botTasks = createBotTasks({ bump, botExists: (id) => Boolean(team.bots[id]) })
 
   function view() {
     return {
@@ -236,7 +238,10 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       liveKey: liveKey(),
       mainBotId: team.mainBotIds[0] ?? null,
       mainBotIds: team.mainBotIds,
-      bots: Object.values(team.bots).map((b) => ({ ...b, sessionId: 's-' + b.id, parts: [] })),
+      bots: Object.values(team.bots).map((b) => {
+        const tasks = botTasks.tasksViewOf(b.id)
+        return { ...b, sessionId: 's-' + b.id, parts: [], ...(tasks.length > 0 ? { tasks } : {}) }
+      }),
       rooms: Object.values(team.rooms).map((r) => ({ ...r, sessionId: r.id, parts: [] })),
       sections: team.sections,
       privateArchives: team.privateArchives,
@@ -326,7 +331,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
-    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail) ?? schedules.handle(endpoint, p, ok, fail) ?? secrets.handle(endpoint, p, ok, fail) ?? system.handle(endpoint, p, ok, fail) ?? usage.handle(endpoint, p, ok)
+    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail) ?? schedules.handle(endpoint, p, ok, fail) ?? secrets.handle(endpoint, p, ok, fail) ?? system.handle(endpoint, p, ok, fail) ?? usage.handle(endpoint, p, ok) ?? botTasks.handle(endpoint, p, ok, fail)
     if (connected) return connected
     try {
       switch (endpoint) {
@@ -930,7 +935,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setSchedules: (params) => schedules.set(params), setSecrets: (params) => secrets.set(params), setSystem: (params) => system.set(params), setUsage: (params) => usage.set(params), setProviders: (params) => {
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setSchedules: (params) => schedules.set(params), setSecrets: (params) => secrets.set(params), setSystem: (params) => system.set(params), setUsage: (params) => usage.set(params), setBotTasks: (params) => botTasks.set(params), setProviders: (params) => {
       const out = providers.set(params)
       // ?block=<botId>&code=<失败代码>&provider=<id>：让该 Bot 处于模型失败阻塞（修复卡验收）；?unblock=<botId> 清除
       const block = params.get('block')

@@ -189,6 +189,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object AboutDsBot : ShellPage
         /** 反馈与诊断：远端诊断报告、错误日志与清理（dsbot-system-about）。 */
         data object DsbotDiagnostics : ShellPage
+        /** Bot 后台任务详情（dsbot-bot-task-detail）：从私聊后台任务条进入，分页看步骤与输出并可向运行中任务追问。 */
+        data class BotTaskDetail(val botId: String, val taskId: String) : ShellPage
     }
 
 @Composable
@@ -338,6 +340,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             // 连接器请求卡「去连接」与邮件卡「管理规则」（dsbot-connectors-mail）：远端无连接器视图时为 null，提示到网页端
                             // 模型失败修复卡直达模型与服务商页（dsbot-models-providers）
                             onOpenProviders = { connection.openModelProviders() },
+                            // 后台任务条点按任务进入任务详情页（dsbot-bot-task-detail）
+                            onOpenTask = { tid -> connection.openBotTaskDetail(current.targetId, tid) },
                             onOpenConnector = if (work.keepwriting.core.ConnectorSettings.has(connection.stateSnapshot?.raw)) ({ cid -> connection.openConnector(cid) }) else null,
                             onOpenSide = {
                                 val sid = entry?.sessionId
@@ -557,6 +561,20 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDiagnostics = { if (connection.page == current) connection.openDsbotDiagnostics() },
                 )
                 current is ShellPage.DsbotDiagnostics -> DsbotDiagnosticsPage(connection.manageApi)
+                current is ShellPage.BotTaskDetail -> key(current) {
+                    BotTaskDetailPage(
+                        botId = current.botId,
+                        taskId = current.taskId,
+                        state = connection.stateSnapshot?.raw,
+                        api = connection.manageApi,
+                        store = connection.botTaskReadStore,
+                        visible = connection.resumed && !connection.covered,
+                        media = connection.media,
+                        onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
+                        onSyncState = { connection.syncStateQuiet() },
+                        onBack = { if (connection.page == current) connection.goBack() },
+                    )
+                }
                 current is ShellPage.ImDetail -> ImDetailPage(
                     state = connection.stateSnapshot?.raw,
                     id = current.id,
@@ -1377,6 +1395,16 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openAboutDsBot() = push(ShellPage.AboutDsBot)
 
     fun openDsbotDiagnostics() = push(ShellPage.DsbotDiagnostics)
+
+    fun openBotTaskDetail(botId: String, taskId: String) = push(ShellPage.BotTaskDetail(botId, taskId))
+
+    /** 后台任务详情最新页单飞读取器（dsbot-bot-task-detail）。 */
+    val botTaskReadStore = BotTaskReadStore()
+
+    /** 静默补拉一次增量 state（主线程调用，不改变离线状态）：用于写操作因任务刚结束失败时立即同步只读态。 */
+    fun syncStateQuiet() {
+        executor.execute { lastState.let { fetchStateOnce(it?.revision, it?.liveKey, quiet = true) } }
+    }
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

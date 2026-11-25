@@ -1,0 +1,35 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    bot-task-detail-endpoints-0310:
+      strength: MUST
+      statement: 'Bot 后台任务详情端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot）：bot-task-read {botId, taskId, cursor?, steps?}（在 READS 内，只读宿主也可调用；steps 仅在为 true 时传 true，cursor 透传上一页原始值）→ {sessionId, items[], cursor: {part, beforeSeq?} | null}，items 与 chat 同构并额外包含 taskView 专有条目：kind=task-brief {name?, text, time?, seq?, sessionId?}、kind=steps {turn, tools[{name, label?, ok?}], ms?, time?, sessionId?}（仅 steps=true 时插入每轮末尾）、kind=divider {time}；未知 Bot 或未知任务回 bot/not-found。bot-task-send {botId, taskId, text}（写端点，非 READS）→ {botId, taskId, sessionId}；未知 Bot 或未知任务回 bot/not-found，空文本或任务已结束（非 running/waiting_work/waiting_approval）回 bot/invalid，只读宿主回 bot/read-only。客户端必须：JSON null 与缺键 cursor 一律视为已到最早；刷新最新页时按 (item.sessionId ?: page.sessionId, seq) 与已加载更早页去重合并；从 state.bots[].tasks[] 全量状态（含 completed/failed/stopped/interrupted）查找任务元数据以在任务结束后平滑切为只读；活动态 2.5 秒轮询遵循 on-demand-poll-single-flight 仅在前台可见时单飞运行；发送不自动重试。实测与源码核对界定：未知 Bot/任务的错误形态及本机可用只读样本由本变更 ProbesBotTask 实测登记 FINDINGS 新节，写端点成功形态与无真实任务时的条目形态按 0.3.10 源码核对（src/host/channel.js、bot-tasks.js deliverToTask/taskViewOf、parts.js taskPage/partPage/displayItems/applySteps、client.js TaskReaderView），由 mock --chat-bars/--manage 覆盖。'
+      rationale: bot-task-read 与 bot-task-send 首次被手机端消费，包含 task-brief/steps/divider 等任务视图专有条目与分页去重语义，登记请求/响应形态、错误码与实测/源码核对边界作为单一事实来源
+      enforcement:
+        method: review
+        detail: core JUnit（BotTaskDetailTest）覆盖请求体构造、task-brief/steps/divider 与 ChatRender 条目解码、JSON null cursor 判尽、(sessionId, seq) 去重合并、全状态任务元数据解析与错误文案；源码核对位置：ds-bot 0.3.10 src/host/channel.js（853–869 行）、src/host/bot-tasks.js（taskViewOf、deliverToTask）、src/host/parts.js（taskPage、partPage taskView、displayItems、stepsItems、applySteps）、client.js（TaskReaderView）
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+        - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
+  REMOVED: {}

@@ -97,6 +97,8 @@ fun BotChatPage(
     onOpenConnector: ((String) -> Unit)? = null,
     /** 打开模型与服务商页（修复卡直达；dsbot-models-providers）。 */
     onOpenProviders: (() -> Unit)? = null,
+    /** 打开后台任务详情页（任务条点按任务进入；dsbot-bot-task-detail）。 */
+    onOpenTask: ((String) -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(botId)
@@ -371,7 +373,11 @@ fun BotChatPage(
             }
         }
         if (tasks.isNotEmpty()) {
-            TaskBar(tasks = tasks, inFlight = barInFlight) { task ->
+            TaskBar(
+                tasks = tasks,
+                inFlight = barInFlight,
+                onOpen = onOpenTask?.let { fn -> { task -> fn(task.id) } },
+            ) { task ->
                 onBarAction(
                     "task:${task.id}", "bot-stop-task",
                     "{\"botId\":$idJson,\"taskId\":${work.keepwriting.core.JsonString.of(task.id)}}",
@@ -610,7 +616,7 @@ object CameraOutput {
 }
 
 @Composable
-private fun MessageBubble(
+internal fun MessageBubble(
     fromUser: Boolean,
     markdown: String,
     onCopy: () -> Unit,
@@ -662,7 +668,7 @@ private fun StreamingBubble(text: String) {
 }
 
 @Composable
-private fun ToolCardRow(item: ChatRender.Item.ToolCard) {
+internal fun ToolCardRow(item: ChatRender.Item.ToolCard) {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         shape = MaterialTheme.shapes.small,
@@ -682,7 +688,7 @@ private fun ToolCardRow(item: ChatRender.Item.ToolCard) {
 }
 
 @Composable
-private fun ImageRow(item: ChatRender.Item.Image, onOpen: () -> Unit) {
+internal fun ImageRow(item: ChatRender.Item.Image, onOpen: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable(onClick = onOpen),
         verticalAlignment = Alignment.CenterVertically,

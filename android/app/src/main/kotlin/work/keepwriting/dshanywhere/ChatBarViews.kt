@@ -140,9 +140,14 @@ fun ComputerStopBar(busy: Boolean, onStop: () -> Unit) {
     }
 }
 
-/** 后台任务条：折叠显示数量，展开后逐任务显示标题、状态与停止。 */
+/** 后台任务条：折叠显示数量，展开后逐任务显示标题、状态与停止；点按任务行进入详情页（dsbot-bot-task-detail）。 */
 @Composable
-fun TaskBar(tasks: List<ChatBars.Task>, inFlight: List<String>, onStop: (ChatBars.Task) -> Unit) {
+fun TaskBar(
+    tasks: List<ChatBars.Task>,
+    inFlight: List<String>,
+    onOpen: ((ChatBars.Task) -> Unit)? = null,
+    onStop: (ChatBars.Task) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
     BarSurface {
         Row(
@@ -159,20 +164,25 @@ fun TaskBar(tasks: List<ChatBars.Task>, inFlight: List<String>, onStop: (ChatBar
         if (expanded) {
             // 展开列表限高可滚动，任务多时不挤掉消息列表与输入框
             Column(modifier = Modifier.heightIn(max = 168.dp).verticalScroll(rememberScrollState())) {
-            for (task in tasks) {
-                val busy = "task:${task.id}" in inFlight
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(task.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            ChatBars.taskStatusLabel(task.status),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                for (task in tasks) {
+                    val busy = "task:${task.id}" in inFlight
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .let { if (onOpen != null) it.clickable { onOpen(task) } else it }
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(task.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                ChatBars.taskStatusLabel(task.status),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(onClick = { onStop(task) }, enabled = !busy) { Text(if (busy) tr("停止中…", "Stopping…") else tr("停止", "Stop")) }
                     }
-                    TextButton(onClick = { onStop(task) }, enabled = !busy) { Text(if (busy) tr("停止中…", "Stopping…") else tr("停止", "Stop")) }
                 }
-            }
             }
         }
     }

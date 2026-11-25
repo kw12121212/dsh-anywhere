@@ -4,6 +4,10 @@ artifact_type: scenes_index
 schema_file: templates/strict-spec-driven/schemas/scenes-index.yaml
 areas:
   android:
+    android-bot-task-detail:
+      title: 在私聊后台任务条查看后台任务详情、步骤与输出并向运行中任务追加消息
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-bot-task-detail.yaml
     android-chat-open-file-link:
       title: 在群聊查看 Bot 汇报并打开交付文件与复制文字
       status: draft
