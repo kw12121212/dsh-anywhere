@@ -22,7 +22,7 @@ class DsbotFixturesTest {
         "note", "content", "summary", "description", "goal", "draft", "kickoff",
         "label", "caption", "transcript", "role", "why", "after", "old", "purpose", "detail",
         "url", "endpoint", "baseurl", "name", "title",
-        "data", "dataurl",
+        "data", "dataurl", "audiobase64",
     )
 
     private fun fixture(name: String): String {
@@ -198,6 +198,7 @@ class DsbotFixturesTest {
             "feed-stream-0310.sse",
             "usage-view.json", "usage-summary.json",
             "bot-task-read-steps.json",
+            "deepseek-services.json",
         )
         for (name in names) {
             val text = fixture(name)
@@ -215,6 +216,7 @@ class DsbotFixturesTest {
             "image-preview.json", "avatar.json", "error-unknown-endpoint.json",
             "markdown-image-forbidden.json", "file-text-unavailable.json", "file-download-invalid-offset.json",
             "bot-task-read-steps.json",
+            "deepseek-services.json",
         )) {
             assertContentRedacted(parse(name), inContent = false, name)
         }

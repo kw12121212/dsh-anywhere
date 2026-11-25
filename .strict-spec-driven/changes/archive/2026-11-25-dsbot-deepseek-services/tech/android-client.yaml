@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: android-client
+operations:
+  ADDED:
+    in-memory-audio-playback:
+      strength: SHOULD
+      statement: Android 端播放服务端合成或下发的临时/敏感音频（如 deepseek-synthesize 的 WAV）时，先在 core 校验容器头与解码前字节上限（防 OOM），在 :app 经 MediaPlayer + MediaDataSource 直接从内存 ByteArray 流式播放（遵守 size == 0 返回 0 的契约），不得写入 cacheDir 等磁盘临时文件；异步合成与播放回调须带代次号并在页面销毁（DisposableEffect）、退后台（!resumed）或被覆盖层遮挡（covered）时立即停止并释放播放器、清空内存引用；承载原始音频字节的值对象须覆写 toString() 仅输出字节长度与媒体类型，避免误入日志或诊断堆栈。
+      rationale: dsbot-deepseek-services 首次在 Android 端引入服务端合成音频播放，要求音频不落磁盘、不入日志与诊断上报；未来在私聊/群聊气泡接入消息朗读播放器时会复用相同的内存播放、生命周期释放与防泄露约束，提前沉淀可避免落盘残留、后台幽灵播音、MediaDataSource readAt 契约失误与 ByteArray 误打印。
+      enforcement:
+        method: review
+        detail: 评审检查新增音频播放是否复用纯内存 MediaDataSource（零临时文件）、是否在 core 校验容器头与上限并覆写字节包装类 toString()、是否在 onDispose/退后台/覆盖层时停止释放 MediaPlayer 并丢弃过期回调。
+  MODIFIED: {}
+  REMOVED: {}

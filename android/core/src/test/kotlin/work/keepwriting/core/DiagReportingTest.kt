@@ -85,6 +85,13 @@ class DiagReportingTest {
         assertFalse(quotedOut.contains("sk-quoted"))
         assertFalse(quotedOut.contains("my space pass"))
         assertFalse(quotedOut.contains("single-quoted-99"))
+
+        val audioLine = """resp {"audioBase64":"UklGRiQAAABXQVZFZm10IBAAAAABAAEA","mediaType":"audio/wav"} audio_base64=UklGRrawVal"""
+        val audioOut = DiagText.sanitize(audioLine)
+        assertTrue(audioOut.contains("\"audioBase64\":\"***\""))
+        assertTrue(audioOut.contains("audio_base64=***"))
+        assertTrue(audioOut.contains("\"mediaType\":\"audio/wav\""))
+        assertFalse(audioOut.contains("UklGR"))
     }
 
     @Test

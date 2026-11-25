@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-deepseek-services
+approach:
+  - 遵循 tech/android-client pure-logic-in-core：在 android/core 新增纯 JVM 模块 DeepSeekServices，封装 deepseek-services 与 deepseek-services-config 应答解码、生效偏好（preferences 与默认值合并）、可用音色列表合并、OCR/TTS/ASR 状态派生（对齐 0.3.10 client.js capabilityState 与 asrState）、TTS 计费字符长度与 60 KiB 请求体预检、WAV 头（RIFF/WAVE 与 data 块）校验与 Base64 解码、端点请求体构造及 SLOW_ENDPOINTS 集合，由 DeepSeekServicesTest JUnit 完整覆盖。
+  - 遵循 tech/dsbot-api on-demand-page-degrade：deepseek-services 不在 0.3.10 hello capabilities 名单中且 state 无完整服务状态视图，入口不做 capabilities.has 门控（在模型与服务商页与团队页均可进入），进入页面后按需读取并维护代次号防止乱序覆盖，bot/not-found 时显示此远端不支持，deepseek-services-config 返回新视图直接采用并使旧读取失效。
+  - 遵循经验教训 ds-bot-httpsocket-30-e242f3：上游 deepseek-synthesize 调用 api.deepseek.com/v1/tools/tts 限时 300 秒，将其纳入 DeepSeekServices.SLOW_ENDPOINTS，在 NativeShellConnection 中路由至 slowExecutor 与 300 秒读超时的 slowHttp，避免阻塞 2 线程读取池或 30 秒误报超时。
+  - 音频试听采用 Android SDK 原生 MediaPlayer + MediaDataSource（minSdk 26 >= 23）直接从内存 ByteArray 读取 WAV 字节流播放，不创建任何临时文件或磁盘缓存；播放结束、手动停止、发起新试听或页面离开（DisposableEffect）时立即停止并 release MediaPlayer 并清空内存引用。
+  - 隐私与脱敏纵深防御：在 core DiagText.sanitize、spike Sanitize.CONTENT_KEYS 与 DsbotFixturesTest.contentKeys 中增加 audioBase64 字段脱敏，确保合成音频 base64 与 API key 绝不进入日志、诊断上报、dump 或夹具。
+decisions:
+  no-gating-on-demand:
+    decision: 入口不经 hello capabilities 门控，页面按 deepseek-services 应答降级并在 delta-tech 登记 hello-capabilities 例外
+    rationale: 核对 DS-Bot 0.3.10 src/host/mobile.js CAPABILITIES 与 channel.js，deepseek-services/deepseek-services-config/deepseek-synthesize 不在 CAPABILITIES 名单内且 state 不含完整服务状态；按 tech/dsbot-api on-demand-page-degrade 与既有 local-agents/providers/schedules/usage 先例采用不门控+按应答降级，并按经验教训 ds-bot-delta-tech-hello-capabilities-f433e4 在 delta-tech 中完整更新 hello-capabilities exceptions。
+  speech-field-readonly:
+    decision: ASR 听写区按 0.3.10 实际字段 speech 只读展示就绪状态与不可用原因
+    rationale: 核对 DS-Bot 0.3.10 src/host/deepseek-services.js 第 650-660 行与 client.js 第 39203-39362 行，服务端返回字段名为 speech（含 registered/providerId/configured/ready/reason）而非 asr；且网页端切换听写服务商调用的是 DSH 宿主内部通道 actions.speech().configure，不经 /api/bot。因此在手机端只读展示 speech 状态与原因，不伪造写操作。
+  in-memory-wav-player:
+    decision: 使用 MediaPlayer.setDataSource(MediaDataSource) 在内存播放 WAV 试听音频
+    rationale: Android 模块 minSdk=26（高于 MediaDataSource 要求的 API 23），可零外部依赖直接流式读取 ByteArray 播放 WAV，严格满足里程碑与计划变更「音频不写磁盘与日志」的约束。
+  synthesize-slow-endpoint:
+    decision: 将 deepseek-synthesize 列入 SLOW_ENDPOINTS 走独立慢线程池与 300 秒读超时
+    rationale: 核对 deepseek-services.js 第 34 行 TTS_TIMEOUT_MS=300_000；若走默认 30 秒 HttpSocket 与 2 线程 readExecutor，长文本合成可能超时误报失败并挤占聊天读取。遵守既有 slow-endpoints 约定与 lesson ds-bot-httpsocket-30-e242f3。
+  reset-defaults-via-null:
+    decision: 提供「恢复默认」动作向 deepseek-services-config 发送 {ocr:null,tts:null,voice:null}
+    rationale: 上游 updateServices 明确支持 ocr/tts/voice 传 null 删除已存覆盖以恢复默认（ocr=false、tts=system、voice=stella），计划变更明细亦明确包含 true/false/null 恢复默认语义。
+alternatives:
+  - option: 把试听 WAV 写入 app cacheDir 临时文件再用 MediaPlayer(filePath) 播放
+    reason: 违背里程碑 done_criteria「音频不写磁盘与日志」与计划变更「返回的 wav 只在内存播放，不写磁盘」要求，且异常崩溃可能残留磁盘文件。
+  - option: 使用 AudioTrack 手写 WAV PCM 解析与播放
+    reason: WAV 头可能有多种采样率/声道/位深或扩展块，MediaPlayer + MediaDataSource 同样纯内存无落盘且原生兼容标准 WAV 容器，代码更简单可靠。
+risks:
+  - 本机真实服务若未配置 DeepSeek API key 或处于非官方 baseURL，只读探针能测到 deepseek-services 真实视图与错误形态，但无法在不付费/不改配置前提下拿到 deepseek-synthesize 成功 WAV 样本；按 spike-write-probes-non-mutating 原则，成功合成与配置写入在 mock 服务端与模拟器完整覆盖，并严格按 0.3.10 源码核对字段形态。
+  - 用户在试听合成请求在途时离开页面或连续点击试听，迟到的旧回调可能触发幽灵播放；通过试听代次号与 DisposableEffect 生命周期标记丢弃过期结果并立即停止释放播放器。

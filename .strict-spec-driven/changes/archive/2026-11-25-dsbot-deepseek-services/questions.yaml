@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-deepseek-services
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 用户在手机端无法查看 DeepSeek 官方识图（OCR）、朗读（TTS）与听写（ASR）服务的可用状态和不可用原因，也不能在手机上开关 OCR、切换 TTS 朗读模式与音色或试听语音，只能回到电脑网页端查看和配置。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 用户可在手机端「DeepSeek 服务」页看到 API key、OCR、TTS 与 ASR 的状态和不可用原因（未设 key 时可直达模型与服务商页），开关 OCR、切换朗读模式与音色或恢复默认后与网页端一致，试听可在手机内存中播放且错误按服务端原因提示，音频不写磁盘与日志。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 dsbot-models-providers 已归档，strict-spec-cli roadmap-recommend 按严格路线图顺序推荐 dsbot-deepseek-services 为 dsbot-native-parity 里程碑的下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 模型与服务商页既有服务商与 key 管理不变；团队页既有入口与列表行为不变；不实现 DSH 内部通道的听写服务商选择或插件页跳转；不改动私聊/群聊消息气泡朗读；不把音频或凭据写入磁盘、日志或诊断上报。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 DS-Bot 0.3.10 的 deepseek-services、deepseek-services-config（ocr/tts/voice 与 null 恢复默认）与 deepseek-synthesize 端点实现原生全屏设置页，ASR 按实际返回字段 speech 只读展示状态与原因，试听经 MediaPlayer + MediaDataSource 纯内存播放 WAV。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

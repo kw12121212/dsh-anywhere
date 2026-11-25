@@ -1,0 +1,57 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: android-deepseek-services
+  title: 在手机端查看并配置 DeepSeek 服务与试听语音
+area: android
+status: draft
+actors:
+  - name: 用户
+    role: 在 Android 手机端管理 DS-Bot DeepSeek 官方服务的团队成员
+  - name: 远端 DS-Bot 服务
+    role: 提供 deepseek-services、deepseek-services-config 与 deepseek-synthesize 接口的服务端
+preconditions:
+  - App 已连接到远端 DS-Bot 服务且会话有效
+main_flow:
+  open-services-page:
+    action: 用户从模型与服务商页或团队页进入原生「DeepSeek 服务」页，App 按需调用 deepseek-services 显示官方端点、API key 状态以及识图（OCR）、朗读（TTS）与听写（ASR）的可用状态和原因
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: deepseek-services
+  toggle-ocr-and-tts:
+    action: 用户开启或关闭识图 OCR、切换朗读引擎（系统/DeepSeek）与音色（如 Stella/Tide）或恢复默认，App 经 deepseek-services-config 单次提交（不自动重试），成功后直接采用返回视图并与网页端一致
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: deepseek-services
+  preview-tts-audio:
+    action: 在 DeepSeek 朗读开启且 API key 就绪时，用户输入或使用默认试听文本点按试听，App 经 deepseek-synthesize 取回 WAV 并在内存中直接播放（可手动停止，离开页面立即停止释放），音频不落磁盘、日志与诊断上报
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: deepseek-services
+exception_flows:
+  missing-api-key:
+    trigger: 远端未配置 DeepSeek API key 或 DeepSeek 路由指向其他网关导致无法识别官方 key
+    steps:
+      guide-to-providers:
+        action: 页面显示服务端给出的不可用原因并提供「管理模型与服务商」按钮直达模型与服务商页，配置完成后返回自动刷新状态
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: deepseek-services
+  synthesize-rejected:
+    trigger: TTS 关闭（bot/unavailable）、试听文本为空或超长（bot/invalid）、上游服务拒绝或网络失败
+    steps:
+      show-reason:
+        action: 页面显示服务端给出的可读原因（网络失败给可读提示），不自动重试且不崩溃
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: deepseek-services
+  remote-unsupported:
+    trigger: 远端旧版 DS-Bot 不支持 deepseek-services 端点（返回 bot/not-found）或读取失败
+    steps:
+      degrade-cleanly:
+        action: 不支持时显示「此远端不支持 DeepSeek 服务」，读取失败时显示原因并可重试，其余功能照常
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: deepseek-services

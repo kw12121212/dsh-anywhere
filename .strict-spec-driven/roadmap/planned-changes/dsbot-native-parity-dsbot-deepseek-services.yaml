@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-deepseek-services
   milestone: dsbot-native-parity
-status: planned
+status: complete
 summary: DeepSeek 服务：查看识图、朗读、听写的可用状态与原因，开关服务、选择音色并试听
 details: Settings → Models → DeepSeek services 原生页：deepseek-services 返回 {endpoint, key{configured, ref, reason}, ocr{supported, enabled, configured, reason}, tts, asr…}，逐项显示是否可用与不可用原因（如 DeepSeek API key 未设置时引导到模型服务商页）；deepseek-services-config 改 ocr/tts 开关（true/false/null 恢复默认）与音色；deepseek-synthesize {text, voice} 试听（TTS 关闭时回 unavailable、超长文本回 invalid，按服务端原因显示），返回的 wav 只在内存播放，不写磁盘、日志与诊断上报。应答完整形态在本变更实测并登记 dsbot-api 与 FINDINGS。验收：开关与音色修改后网页端一致，试听可播放。
 depends_on:

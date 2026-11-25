@@ -177,6 +177,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object ProviderAdd : ShellPage
         /** Bot 模型批量切换。 */
         data object BotModels : ShellPage
+        /** DeepSeek 服务（dsbot-deepseek-services）：识图 OCR、朗读 TTS 与音色试听、听写 ASR 状态。 */
+        data object DeepSeekServices : ShellPage
         /** 定时任务（dsbot-schedules）；[owner] 非空时只显示该 Bot 的任务。 */
         data class Schedules(val owner: String?) : ShellPage
         /** 新建定时任务；[start] 为预选的 Bot 或群聊。 */
@@ -523,10 +525,16 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     api = connection.manageApi,
                     onAdd = { connection.openProviderAdd() },
                     onBotModels = { connection.openBotModels() },
+                    onDeepSeekServices = { connection.openDeepSeekServices() },
                 )
                 // 添加成功后返回服务商列表（只在仍停留在添加页时）；返回后列表重读
                 current is ShellPage.ProviderAdd -> ProviderAddPage(connection.manageApi, onDone = { if (connection.page == current) connection.goBack() })
                 current is ShellPage.BotModels -> BotModelsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.DeepSeekServices -> DeepSeekServicesPage(
+                    api = connection.manageApi,
+                    visible = connection.resumed && !connection.covered,
+                    onOpenModels = { connection.openModelProviders() },
+                )
                 current is ShellPage.Schedules -> SchedulesPage(
                     state = connection.stateSnapshot?.raw,
                     api = connection.manageApi,
@@ -628,6 +636,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onLocalAgents = { connection.openLocalAgents() },
                     // 模型与服务商（dsbot-models-providers）：不门控，页面按 providers 应答说明不支持
                     onModelProviders = { connection.openModelProviders() },
+                    // DeepSeek 服务（dsbot-deepseek-services）：不门控，页面按 deepseek-services 应答说明不支持
+                    onDeepSeekServices = { connection.openDeepSeekServices() },
                     // 定时任务（dsbot-schedules）：不门控，页面按 schedules 应答说明不支持或未开启
                     onSchedules = { connection.openSchedules(null) },
                     // 用量（dsbot-usage）：不门控，页面按 usage 应答说明不支持
@@ -1237,11 +1247,11 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
      */
     private val slowExecutor = Executors.newCachedThreadPool { r -> Thread(r, "dsbot-slow").apply { isDaemon = true } }
 
-    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入、本地 Agent、服务商、版本检查。 */
+    /** 等外部服务的慢端点（tech/dsbot-api slow-endpoints-executor）：连接器与邮箱、IM 接入、本地 Agent、服务商、版本检查、DeepSeek 语音合成。 */
     private fun isSlowEndpoint(endpoint: String) =
         endpoint in work.keepwriting.core.ConnectorSettings.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ImBridges.SLOW_ENDPOINTS ||
             endpoint in work.keepwriting.core.LocalAgents.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.ModelProviders.SLOW_ENDPOINTS ||
-            endpoint in work.keepwriting.core.DsbotSystem.SLOW_ENDPOINTS
+            endpoint in work.keepwriting.core.DsbotSystem.SLOW_ENDPOINTS || endpoint in work.keepwriting.core.DeepSeekServices.SLOW_ENDPOINTS
 
     private fun executorFor(endpoint: String) =
         if (isSlowEndpoint(endpoint)) slowExecutor else readExecutor
@@ -1372,6 +1382,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openProviderAdd() = push(ShellPage.ProviderAdd)
 
     fun openBotModels() = push(ShellPage.BotModels)
+
+    fun openDeepSeekServices() = push(ShellPage.DeepSeekServices)
 
     fun openSchedules(owner: String?) = push(ShellPage.Schedules(owner))
     /** 用量（dsbot-usage）：进入详情时把当前范围与分组方式写回上一页，返回后不重置（评审修复）。 */

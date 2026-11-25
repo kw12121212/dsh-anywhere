@@ -574,3 +574,27 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 网页端 `TaskReaderView` 活动态每 2.5 秒静默刷新最新一页，并与已加载的更早页按 `(item.sessionId ?? page.sessionId, seq)` 去重拼接；任务由活跃转为结束时执行一次最终刷新并切只读（隐藏输入框与停止按钮）。
 - `bot-task-read`/`bot-task-send` 不在 0.3.10 `mobile.js` `CAPABILITIES` 内，入口随私聊后台任务条按 `state.bots[].tasks` 字段存在显隐。
 - 界面验收由 `scripts/mock-dsh-server.mjs`（`--chat-bars` 与 `--manage`）覆盖 `bot-task-read` 分页与 `steps=true`、`bot-task-send` 追加与结束态 `bot/invalid` 及 `/mock/bot-tasks` 结束切换。
+
+## 38. DeepSeek 服务（2026-11-25，dsbot-deepseek-services）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesDeepSeekServices` 探针组；严格遵守 `spike-write-probes-non-mutating`，不修改真实团队偏好，不触发付费语音合成）**：
+- `deepseek-services {}` → HTTP 200、`ok:true`，顶层键 `[endpoint, key, ocr, preferences, speech, tts]`：
+  - `key` 键 `[configured, ref]`（本机 `configured=true`，无 `reason`）
+  - `ocr` 键 `[configured, enabled, supported]`（`supported=true, enabled=false, configured=true`，无 `reason`）
+  - `tts` 键 `[configured, enabled, supported, voices]`（`supported=true, enabled=false, configured=true, voices=[stella, tide]`，无 `reason`）
+  - `speech` 键 `[configured, providerId, ready, reason, registered]`（`registered=false, providerId=deepseek-asr, configured=true, ready=false`，`reason="This DSH has no speech-to-text service (voice input is not mounted)"`）——确认 0.3.10 听写状态字段名为 `speech` 而非 `asr`
+  - `preferences` 键 `[ocr, tts, voice]`（`ocr=false, tts=system, voice=stella`）
+  - 脱敏夹具：`android/core/src/test/resources/dsbot/deepseek-services.json`（由本次 `runSpike` 经 `Sanitize.json` 脱敏写出）。
+- 错误形态（均 HTTP 200、`ok:false`）：
+  - `deepseek-services-config {"ocr":"bad"}` → `error.code="bot/invalid"`、`"ocr must be true, false or null"`
+  - `deepseek-services-config {"tts":"bad"}` → `error.code="bot/invalid"`、`"tts must be \"deepseek\", \"system\" or null"`
+  - `deepseek-services-config {"voice":"bad-voice"}` → `error.code="bot/invalid"`、`"voice must be stella or tide or null"`
+  - `deepseek-synthesize {"text":"   "}` → `error.code="bot/unavailable"`、`"DeepSeek text-to-speech is off. Turn it on in DS Bot settings."`
+  - `deepseek-synthesize {"text":"hi","voice":"bad-voice"}` → `error.code="bot/unavailable"`、`"DeepSeek text-to-speech is off. Turn it on in DS Bot settings."`
+
+**源码核对（ds-bot 0.3.10 `src/host/deepseek-services.js`、`channel.js` 186 行 `READS` 与 870–873 行分发、`client.js` `src/client/services-settings.js`）**：
+- `deepseek-services` 与 `deepseek-synthesize` 在上游 `READS` 内（只读宿主也可读），`deepseek-services-config` 为写端点（只读宿主 `bot/read-only`）。
+- `deepseek-services-config` 接受 `{ocr?: true|false|null, tts?: "deepseek"|"system"|null, voice?: "stella"|"tide"|null}`，`null` 删除已存覆盖恢复默认（`{ocr:false, tts:"system", voice:"stella"}`），写入保存后返回更新后的 `servicesStatus()` 视图。
+- `deepseek-synthesize {text, voice?}` 在上游向 `https://api.deepseek.com/v1/tools/tts` 发起请求（`TTS_TIMEOUT_MS = 300_000`，属慢端点），成功返回 `{audioBase64, mediaType: "audio/wav"}`；TTS 关闭或 key 未配置回 `bot/unavailable`，空文本、非法音色、计费字符数超 10,000（汉字计 2 其余计 1）或请求体超 60 KiB 回 `bot/invalid`，上游 HTTP 或 WAV 头校验失败回 `bot/refused`。
+- `deepseek-services` / `deepseek-services-config` / `deepseek-synthesize` 不在 0.3.10 `mobile.js` `CAPABILITIES` 内，入口不门控，按 `on-demand-page-degrade` 随应答降级；听写服务商选择在网页端走 DSH 内部通道 `actions.speech().configure`，不在 `/api/bot` 端点内，手机端只读展示 `speech` 状态。
+- 界面验收由 `scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-deepseek-services.mjs`）覆盖状态展示、key 缺失/受阻、配置修改与 `null` 恢复默认、试听 WAV 内存播放与错误提示及 `enabled=0` 不支持降级。

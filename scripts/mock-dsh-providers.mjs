@@ -156,5 +156,6 @@ export function createProviders() {
 
   // 同上游 channel.js modelsKey：目录 ref（缺 key 加 !）与默认模型
   const modelsKey = () => `${catalog().map((m) => `${m.ref}${m.needsKey ? '!' : ''}`).join(',')}|deepseek/v4`
-  return { handle, set, catalog, modelsKey }
+  const keyConfigured = (id) => Boolean(find(id)?.key?.configured)
+  return { handle, set, catalog, modelsKey, keyConfigured }
 }

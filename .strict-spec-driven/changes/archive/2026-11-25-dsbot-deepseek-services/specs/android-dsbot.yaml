@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    deepseek-services:
+      strength: MUST
+      statement: 模型与服务商页与团队页提供「DeepSeek 服务」入口进入原生全屏「DeepSeek 服务」页：页面按需调用 deepseek-services 显示官方端点、DeepSeek API key 状态（已设置或需要 API key 及受阻原因，提供「管理模型与服务商」直达模型与服务商页且返回后刷新状态），以及识图（OCR）、朗读（TTS）与听写（ASR，服务端 speech 字段）各自的可用状态与不可用原因（ASR 听写区只读显示状态与原因）；可开关识图 OCR（true/false）、切换朗读方式（系统 / DeepSeek）、在 DeepSeek 朗读时选择音色（如 Stella / Tide）及一键「恢复默认」（提交 null 还原默认配置），修改经 deepseek-services-config 单次发出、在途禁用、不自动重试，成功后直接采用服务端返回视图并与网页端一致，失败显示服务端原因；提供语音试听区，可输入试听文本并经 deepseek-synthesize {text, voice} 合成试听（TTS 关闭回 bot/unavailable、空文本或超长文本回 bot/invalid、上游拒绝回 bot/refused 均按服务端原因显示），返回的 WAV 仅在内存中播放且可停止、离开页面立即停止并释放，绝不写入磁盘、日志与诊断上报；远端不支持 deepseek-services 端点（bot/not-found）时页面说明此远端不支持，其他读取失败显示原因并可重试，不影响其余功能。
+      scenarios:
+        status-and-key-guide:
+          - GIVEN: 团队已连接，远端未设置 DeepSeek API key（或 DeepSeek 路由指向非官方端点）
+          - WHEN: 从模型与服务商页或团队页进入「DeepSeek 服务」页并点击「管理模型与服务商」
+          - THEN: 页面显示官方端点、API key 未设置及 OCR/TTS/ASR 各自不可用原因；点击后进入模型与服务商页，配置完成后返回「DeepSeek 服务」页自动刷新为已就绪状态
+        config-toggle-voice-reset:
+          - GIVEN: 团队已连接且 DeepSeek API key 已设置，当前 OCR 关闭、朗读为系统、音色为 Stella
+          - WHEN: 在「DeepSeek 服务」页开启 OCR、将朗读切换为 DeepSeek 并将音色改为 Tide，随后点击恢复默认
+          - THEN: 每次修改在途禁用、不自动重试，成功后页面立即显示新状态且与网页端 DeepSeek services 页一致；恢复默认后回到 OCR 关闭、系统朗读与默认音色，两端一致
+        synthesize-preview-in-memory:
+          - GIVEN: DeepSeek 朗读已开启且 API key 就绪
+          - WHEN: 在试听区点按试听，随后在播放中点按停止或离开页面
+          - THEN: App 经 deepseek-synthesize 取回 WAV 并在手机内存中直接播放；停止或离开页面时播放立即中止并释放；磁盘缓存、App 日志与诊断上报中均不含音频数据
+        synthesize-errors-shown:
+          - GIVEN: DeepSeek 朗读处于关闭（系统）状态，或开启状态下输入超过服务端限制的文本
+          - WHEN: 在试听区尝试试听
+          - THEN: 服务端返回 bot/unavailable 或 bot/invalid 时页面显示服务端给出的原因，不自动重试且应用不崩溃
+        remote-unsupported-degrade:
+          - GIVEN: 远端不支持 deepseek-services 端点（返回 bot/not-found）
+          - WHEN: 进入「DeepSeek 服务」页
+          - THEN: 页面说明此远端不支持 DeepSeek 服务，不显示可操作开关与试听按钮，其余页面与聊天功能照常
+  MODIFIED: {}
+  REMOVED: {}

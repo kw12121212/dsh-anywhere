@@ -12,6 +12,10 @@ areas:
       title: 在群聊查看 Bot 汇报并打开交付文件与复制文字
       status: draft
       path: .strict-spec-driven/scenes/android/android-chat-open-file-link.yaml
+    android-deepseek-services:
+      title: 在手机端查看并配置 DeepSeek 服务与试听语音
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-deepseek-services.yaml
     android-first-setup:
       title: Android 首次设置并验证连接
       status: draft

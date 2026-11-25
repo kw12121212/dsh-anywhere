@@ -79,7 +79,13 @@ private fun Note(text: String, error: Boolean = false) {
 /** 模型与服务商页。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ModelProvidersPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> Unit, onBotModels: () -> Unit) {
+fun ModelProvidersPage(
+    state: Json.Value.Object?,
+    api: ManageApi,
+    onAdd: () -> Unit,
+    onBotModels: () -> Unit,
+    onDeepSeekServices: (() -> Unit)? = null,
+) {
     var load by remember { mutableStateOf<PvLoad>(PvLoad.Loading) }
     var round by remember { mutableIntStateOf(0) }
     var open by remember { mutableStateOf<String?>(null) }
@@ -114,6 +120,9 @@ fun ModelProvidersPage(state: Json.Value.Object?, api: ManageApi, onAdd: () -> U
                 FlowRow(modifier = Modifier.padding(horizontal = 8.dp)) {
                     TextButton(onClick = onAdd) { Text(tr("＋ 新增服务商", "+ Add a provider")) }
                     TextButton(onClick = onBotModels) { Text(tr("批量切换 Bot 模型", "Change several Bots")) }
+                    if (onDeepSeekServices != null) {
+                        TextButton(onClick = onDeepSeekServices) { Text(tr("DeepSeek 服务", "DeepSeek services")) }
+                    }
                     // 经写通道：成功后补拉 state（带 modelsKey），Bot 的模型选择随之更新；再重读服务商
                     TextButton(enabled = "pv:catalog" !in api.inFlight, onClick = {
                         error = null

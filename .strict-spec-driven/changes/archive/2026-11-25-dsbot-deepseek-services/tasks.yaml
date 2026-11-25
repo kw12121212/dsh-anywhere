@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-deepseek-services
+sections:
+  Implementation:
+    findings:
+      text: 对本机真实服务运行只读探针（ProbesDeepSeekServices：deepseek-services 只读视图、deepseek-services-config 非法参数错误形态、deepseek-synthesize 空文本与非法音色错误形态；遵守 spike-write-probes-non-mutating 不改动真实团队偏好、不触发付费语音合成），登记 android/core/src/spike/FINDINGS.md 新节并产出脱敏夹具
+      status: complete
+    core-deepseek-services:
+      text: core：新增 DeepSeekServices（deepseek-services/deepseek-services-config 应答解码、默认偏好与音色列表合并、OCR/TTS/ASR 状态与不可用原因派生、TTS 计费字符长度与请求体上限校验、WAV 头校验与 Base64 解码、请求体构造与 SLOW_ENDPOINTS），并扩展 DiagText.sanitize 与 Sanitize 脱敏 audioBase64；编写 DeepSeekServicesTest、DiagReportingTest 与 DsbotFixturesTest JUnit 测试
+      status: complete
+    app-deepseek-services:
+      text: app：新增 ShellPage.DeepSeekServices、DeepSeekServicesPage 全屏原生页（API key 状态与直达模型与服务商页且返回自动刷新、OCR 开关、朗读模式与音色选择、恢复默认、ASR 听写状态只读展示、试听输入与 MediaPlayer+MediaDataSource 纯内存 WAV 播放与停止释放），在 ModelProvidersPage 与 TeamPage 增加入口并在 NativeShell 接入慢端点路由
+      status: complete
+    mock-deepseek-services:
+      text: mock：在 scripts/mock-dsh-manage.mjs 与 scripts/mock-dsh-server.mjs 新增 deepseek-services、deepseek-services-config（支持 ocr/tts/voice 与 null 恢复默认及非法参数 bot/invalid）与 deepseek-synthesize（TTS 关闭或未配 key 回 bot/unavailable、空文本/超长文本/非法音色回 bot/invalid、正常返回内存生成的有效 WAV base64）及状态切换控制端点供设备验收
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译与资源无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock 服务端，及有条件时对照真实服务）：从模型与服务商页及团队页进入 DeepSeek 服务页，验证 key 未设置引导跳转、OCR/TTS 开关与音色修改及恢复默认与服务端一致、试听纯内存播放及 TTS 关闭/超长错误提示、远端不支持降级，并确认音频不落磁盘与日志
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict verify 校验全部变更产物结构、场景覆盖与门禁状态
+      status: complete
+      command: strict-spec-cli verify dsbot-deepseek-services
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

@@ -61,9 +61,9 @@ object DiagText {
 
     private val URL_TOKEN = Regex("""https?://[^\s"'<>]+""")
     private val TOKEN_VALUE = Regex("""token=[^&\s"'<>]*""")
-    // JSON 字符串形态的凭据、密钥与口令字段（不区分大小写；匹配含转义引号的完整 JSON 字符串值）。
+    // JSON 字符串形态的凭据、密钥、口令与合成音频字段（不区分大小写；匹配含转义引号的完整 JSON 字符串值）。
     private val JSON_SECRET_FIELD = Regex(
-        """("(?:passphrase|secret|secretValue|secret_value|password|apiKey|api_key|clientSecret|client_secret|accessToken|access_token|refreshToken|refresh_token|token|authorization|cookie)"\s*:\s*)"(?:[^"\\]|\\.)*"""",
+        """("(?:passphrase|secret|secretValue|secret_value|password|apiKey|api_key|clientSecret|client_secret|accessToken|access_token|refreshToken|refresh_token|token|authorization|cookie|audioBase64|audio_base64)"\s*:\s*)"(?:[^"\\]|\\.)*"""",
         RegexOption.IGNORE_CASE,
     )
     // secret-set 载荷中的 value 字段（保留密钥名 name，仅脱敏 value）。
@@ -73,7 +73,7 @@ object DiagText {
     )
     // 键值形态的敏感字段（支持无引号、双引号与单引号包裹的值，如 passphrase="my pass"、DSH_SECRET_FOO='bar'、dsh-auth=xxx）。
     private val KV_SECRET_VALUE = Regex(
-        """\b((?:DSH_SECRET_[A-Z0-9_]+|passphrase|secret|password|api_key|apiKey|clientSecret|client_secret|dsh-auth)\s*[=:]\s*)(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&"',;}\]]+)""",
+        """\b((?:DSH_SECRET_[A-Z0-9_]+|passphrase|secret|password|api_key|apiKey|clientSecret|client_secret|dsh-auth|audioBase64|audio_base64)\s*[=:]\s*)(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&"',;}\]]+)""",
         RegexOption.IGNORE_CASE,
     )
     // Authorization: Bearer / Basic 头。

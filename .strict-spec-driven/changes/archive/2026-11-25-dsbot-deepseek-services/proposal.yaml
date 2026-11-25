@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-deepseek-services
+  status: proposed
+summary:
+  what:
+    - 为 Android 原生 DS-Bot 新增 DeepSeek 服务设置页（Settings → Models → DeepSeek services）：读取并展示识图（OCR）、朗读（TTS）与听写（ASR）的可用状态及不可用原因，支持开关 OCR、切换朗读引擎与音色及恢复默认，并支持纯内存 WAV 语音试听。
+  why:
+    - 用户目前在手机端无法查看 DeepSeek 官方识图、朗读、听写服务是否就绪或缺少 API key 的具体原因，也不能在手机上开关 OCR、切换 DeepSeek TTS 音色或试听语音，只能回到电脑网页端设置。
+scope:
+  in:
+    - 从模型与服务商页和团队页进入原生全屏「DeepSeek 服务」页，按需调用 deepseek-services 读取 endpoint、API key（configured/ref/reason）、OCR（supported/enabled/configured/reason）、TTS（supported/enabled/configured/voices/reason）、ASR（speech：registered/providerId/configured/ready/reason）与当前生效偏好（preferences）
+    - DeepSeek API key 未配置或受阻时显示服务端给出的原因并引导直达原生「模型与服务商」页，返回后自动刷新服务状态
+    - 通过 deepseek-services-config 修改 OCR 开关（true/false）、朗读模式（system/deepseek）与音色（如 stella/tide），并提供「恢复默认」（发送 null 还原默认配置），写操作不自动重试、成功后直接采用返回视图
+    - 通过 deepseek-synthesize {text, voice} 在手机端试听合成语音，按服务端原因提示 TTS 关闭（bot/unavailable）、空文本或超长文本（bot/invalid）等错误，返回的 WAV 字节仅在内存中播放并随停止/离开页面立即释放，不写磁盘、日志与诊断上报
+    - ASR 听写状态区按 deepseek-services 的 speech 字段只读展示就绪状态与不可用原因（DSH 听写服务选择通道不经 /api/bot）
+    - 对本机真实服务运行只读探针登记 FINDINGS 与脱敏夹具，补充 core JUnit 与 mock 服务端支持，并在 dsbot-api 技术标准中登记端点契约与 hello-capabilities 例外
+  out:
+    - 不改动 DSH 宿主的听写服务选择（speech.catalog/configure）与插件页跳转（不在 /api/bot 端点内）
+    - 不把聊天消息朗读播放器接入私聊或群聊气泡（本次仅提供 DeepSeek 服务页内试听）
+    - 不在本页直接输入或保存 DeepSeek API key（统一引导至既有「模型与服务商」页）
+unchanged_behavior:
+  - 模型与服务商页既有服务商列表、API key 编辑、模型刷新、新增删除与批量切换 Bot 模型行为不变
+  - 团队页既有列表、分组、未读、搜索与其他设置入口行为不变
+  - 远端不支持 deepseek-services 端点（返回 bot/not-found）时仅在本页提示不支持，其他页面与聊天功能不受影响
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-deepseek-services

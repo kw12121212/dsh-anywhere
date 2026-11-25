@@ -73,6 +73,8 @@ fun TeamPage(
     onLocalAgents: (() -> Unit)? = null,
     /** 模型与服务商（dsbot-models-providers）：入口不门控；为 null 时不显示。 */
     onModelProviders: (() -> Unit)? = null,
+    /** DeepSeek 服务（dsbot-deepseek-services）：入口不门控；为 null 时不显示。 */
+    onDeepSeekServices: (() -> Unit)? = null,
     /** 定时任务（dsbot-schedules）：入口不门控；为 null 时不显示。 */
     onSchedules: (() -> Unit)? = null,
     /** 用量（dsbot-usage）：入口不门控；为 null 时不显示。 */
@@ -137,6 +139,9 @@ fun TeamPage(
                 }
                 if (onModelProviders != null) {
                     TextButton(onClick = onModelProviders) { Text(tr("模型与服务商", "Models & providers")) }
+                }
+                if (onDeepSeekServices != null) {
+                    TextButton(onClick = onDeepSeekServices) { Text(tr("DeepSeek 服务", "DeepSeek services")) }
                 }
                 if (onLocalAgents != null) {
                     TextButton(onClick = onLocalAgents) { Text(tr("本地 Agent", "Local agents")) }
