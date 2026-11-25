@@ -1,0 +1,52 @@
+schema: strict-spec-driven/delta-scene/v1
+schema_version: 1
+artifact_type: delta_scene
+schema_file: templates/strict-spec-driven/schemas/delta-scene.yaml
+target_scene: android-general-advanced
+scene:
+  title: 在手机端查看并修改团队偏好的高级设置（记忆召回上限与后台命令超时）
+  area: android
+  actors:
+    - name: 用户
+      role: 在 Android 手机端管理 DS-Bot 团队高级偏好的成员
+    - name: 远端 DS-Bot 服务
+      role: 提供 state 与 set-prefs 接口的服务端
+  preconditions:
+    - App 已连接到远端 DS-Bot 服务且会话有效
+operations:
+  ADDED:
+    exception_flows:
+      invalid-number-input:
+        trigger: 用户在任一记忆容量或命令转后台秒数输入框填入空值、非整数或超出允许范围的数值后尝试保存
+        steps:
+          block-invalid-locally:
+            action: 页面在本地提示允许的整数范围（记忆容量 1000–200000、命令转后台 0–600）且不发出 set-prefs 请求，避免非法记忆容量被服务端过滤而误清已有上限
+            covered_by:
+              - spec_id: android-dsbot
+                requirement_id: general-advanced-prefs
+      server-rejected:
+        trigger: 远端为只读宿主、网络中断或服务端返回 bot/invalid / bot/read-only 等错误
+        steps:
+          show-error-no-retry:
+            action: 页面显示服务端给出的可读原因（网络失败给可读提示），App 不自动重试，远端与当前生效偏好保持不变
+            covered_by:
+              - spec_id: android-dsbot
+                requirement_id: general-advanced-prefs
+    main_flow:
+      open-advanced-section:
+        action: 用户进入「团队偏好」页，看到底部默认收起的「高级」分组（摘要「记忆 · 后台工作」），点按展开后看到自动带上相关记忆开关、群/Bot/团队三项记忆容量上限与命令转后台秒数的当前生效值（缺失时显示默认值）
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: general-advanced-prefs
+      edit-memory-and-bg:
+        action: 用户切换自动带上相关记忆开关、修改任一记忆容量（1000–200000 整数）或命令转后台秒数（0–600 整数）并保存，App 经 set-prefs 仅提交改动键（在途禁用、不自动重试），成功后随 state 刷新并与网页端 General → Advanced 一致，其他偏好与服务端已存消息宽度不变
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: general-advanced-prefs
+      restore-defaults:
+        action: 用户在任一高级项偏离默认值时点按「恢复默认」，App 经 set-prefs 仅还原记忆自动召回、记忆容量上限与命令转后台秒数为默认值，两端一致且不改动主题、布局、宽度、Enter 键或默认模型等其他偏好
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: general-advanced-prefs
+  MODIFIED: {}
+  REMOVED: {}

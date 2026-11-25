@@ -1,0 +1,37 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED: {}
+  MODIFIED:
+    team-prefs-0310:
+      strength: MUST
+      statement: '团队偏好（DS-Bot 0.3.10）：state.prefs 只含与默认不同的键（实测样本含 theme=paper、width=90、defaultBotModel），缺省为 theme=deepseek、accent=主题默认、layout=bubble、motion=normal、effects=full、width=80、flatWidth=100、enterToSend=true、thinking=false、memoryAutoRecall=true、memoryLimits={group:12000,bot:8000,team:4000}、backgroundAfterSec=5；set-prefs（经 dsh 的 POST /api/bot，endpoint 为 set-prefs，鉴权同其他管理端点：会话 cookie）以「键: 值」只处理出现的键并返回最新 prefs，取值不合法时回 bot/invalid：theme 须为小写字母开头、至多 32 位的标识；accent 为 #rrggbb，null 或空串清除；layout 为 bubble 或 flat（bubble 或 null 删除）；motion 为 quiet、normal 或 lively（normal 或 null 删除）；enterToSend 为 false 时保存、true 或 null 删除；defaultBotModel 经模型解析，null 或空串清除，本地 Agent 拒绝；memoryAutoRecall 为 false 时保存、其他值（如 true/null）删除键恢复默认；memoryLimits 仅接受作用域 group/bot/team 且为 1000–200000 的整数，有效项合并写入 state.prefs.memoryLimits，传入 null 或过滤后无有效项时删除整项 state.prefs.memoryLimits（不抛 bot/invalid——因此客户端必须在发送前做 1000–200000 整数校验，避免非法输入误清已有上限）；backgroundAfterSec 为 0–600 的整数（0 表示立即转后台），null 删除键恢复默认 5 秒，越界或非整数回 bot/invalid（"The background wait is 0 to 600 seconds"）。网页端主题配色见 client 的 themes.js（deepseek、mono、paper、moonlight，各有 light 与 dark），强调色候选为 ACCENT_INKS 的首色、深色下用第二色。客户端只发送被修改的键（不发 width 与 flatWidth）。实测与源码核对界定：state.prefs 读形态与 backgroundAfterSec 越界返回 bot/invalid 经本机真实服务只读实测（FINDINGS 第 25、39 节）；set-prefs 成功写入与 memoryLimits/memoryAutoRecall 行为按 0.3.10 源码核对并在 mock --manage 覆盖，未改动用户真实团队偏好。'
+      rationale: 团队偏好端点与形态此前未登记高级项字段；memoryLimits 服务端静默过滤空结果删除整项的隐蔽行为要求客户端前置范围校验；只发改动键是保留手机不提供的偏好的唯一方式
+      enforcement:
+        method: review
+        detail: core JUnit（TeamPrefsTest）以真实 state-full 夹具的 prefs 覆盖解码与缺省，逐值锁定四套主题配色、ACCENT_INKS 与 accentInk 判定，以及 memoryAutoRecall、memoryLimits（1000–200000）、backgroundAfterSec（0–600）的解码、异常值降级、边界校验与请求体字面值；源码核对位置：ds-bot 0.3.10 src/host/channel.js（MEMORY_LIMIT_SCOPES/MIN/MAX、setPrefs 188–257 行）、constants.js（BACKGROUND_WAIT_MS/BACKGROUND_AFTER_MAX_SEC）、memory-entries.js（MEMORY_LIMITS）、steer.js（backgroundWaitMs）、client.js（themes.js、inks.js、GeneralPage/MEMORY_SIZES/MemorySize/SecondsField 42154–42183 与 42421–42507 行）；FINDINGS 第 25、39 节登记
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+        - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
+        - DeepSeek 服务（deepseek-services、deepseek-services-config、deepseek-synthesize）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无完整服务状态视图，入口不门控，页面按 deepseek-services 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试（dsbot-deepseek-services 设计决策 no-gating-on-demand，按 deepseek-services-endpoints-0310 与 on-demand-page-degrade）
+        - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
+  REMOVED: {}

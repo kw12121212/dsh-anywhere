@@ -2,19 +2,21 @@ package work.keepwriting.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** dsbot-prefs-theme：真实 state 的 prefs 解码与缺省、主题配色与深色强调色映射、请求体字面值。 */
+/** dsbot-prefs-theme / dsbot-general-advanced：真实 state 的 prefs 解码与缺省、主题配色、高级项校验与请求体字面值。 */
 class TeamPrefsTest {
     private val real = (Json.parse(checkNotNull(TeamPrefsTest::class.java.getResource("/dsbot/state-full.json")).readText(Charsets.UTF_8)) as Json.Value.Object).members["value"] as Json.Value.Object
     private fun obj(t: String) = Json.parse(t) as Json.Value.Object
 
     @Test
     fun realPrefs() {
-        // 实测：{theme:"paper", width:90, defaultBotModel}；其余取缺省
+        // 实测：{theme:"paper", width:90, defaultBotModel}；其余（含高级项）取缺省
         val p = assertNotNull(TeamPrefs.decode(real))
         assertEquals("paper", p.theme)
         assertNull(p.accent)
@@ -23,6 +25,13 @@ class TeamPrefsTest {
         assertTrue(p.enterToSend)
         assertEquals("dsh-opencode-go/deepseek-v4.1-flash", p.defaultBotModel)
         assertFalse(p.flat || p.quiet)
+        assertTrue(p.memoryAutoRecall)
+        assertEquals(TeamPrefs.DEFAULT_MEMORY_LIMITS, p.memoryLimits)
+        assertEquals(12_000, p.memoryLimits.of(TeamPrefs.MemoryScope.GROUP))
+        assertEquals(8_000, p.memoryLimits.of(TeamPrefs.MemoryScope.BOT))
+        assertEquals(4_000, p.memoryLimits.of(TeamPrefs.MemoryScope.TEAM))
+        assertEquals(5, p.backgroundAfterSec)
+        assertFalse(p.hasCustomAdvanced)
     }
 
     @Test
@@ -119,5 +128,104 @@ class TeamPrefsTest {
         assertEquals("""{"enterToSend":false}""", R.enterToSend(false))
         assertEquals("""{"defaultBotModel":null}""", R.defaultBotModel(null))
         assertEquals("""{"defaultBotModel":"glm/x"}""", R.defaultBotModel("glm/x"))
+        assertEquals("""{"memoryAutoRecall":false}""", R.memoryAutoRecall(false))
+        assertEquals("""{"memoryAutoRecall":true}""", R.memoryAutoRecall(true))
+        assertEquals("""{"memoryLimits":{"group":16000}}""", R.memoryLimit(TeamPrefs.MemoryScope.GROUP, 16_000))
+        assertEquals("""{"memoryLimits":{"bot":1000}}""", R.memoryLimit(TeamPrefs.MemoryScope.BOT, 1_000))
+        assertEquals("""{"memoryLimits":{"team":200000}}""", R.memoryLimit(TeamPrefs.MemoryScope.TEAM, 200_000))
+        assertEquals("""{"backgroundAfterSec":0}""", R.backgroundAfterSec(0))
+        assertEquals("""{"backgroundAfterSec":15}""", R.backgroundAfterSec(15))
+        assertEquals("""{"backgroundAfterSec":600}""", R.backgroundAfterSec(600))
+        assertEquals("""{"backgroundAfterSec":null}""", R.backgroundAfterSec(null))
+        assertEquals(
+            """{"memoryAutoRecall":true,"memoryLimits":null,"backgroundAfterSec":null}""",
+            R.resetAdvanced(),
+        )
+        // 防御性拦截越界构造（避免触发服务端 memoryLimits 空过滤静默清空）
+        assertFailsWith<IllegalArgumentException> { R.memoryLimit(TeamPrefs.MemoryScope.GROUP, 999) }
+        assertFailsWith<IllegalArgumentException> { R.memoryLimit(TeamPrefs.MemoryScope.TEAM, 200_001) }
+        assertFailsWith<IllegalArgumentException> { R.backgroundAfterSec(-1) }
+        assertFailsWith<IllegalArgumentException> { R.backgroundAfterSec(601) }
+    }
+
+    @Test
+    fun advancedDecodeAndDegrade() {
+        val custom = TeamPrefs.decode(
+            obj("""{"prefs":{"memoryAutoRecall":false,"memoryLimits":{"group":16000,"bot":1000,"team":200000},"backgroundAfterSec":0}}"""),
+        )!!
+        assertFalse(custom.memoryAutoRecall)
+        assertEquals(TeamPrefs.MemoryLimits(group = 16_000, bot = 1_000, team = 200_000), custom.memoryLimits)
+        assertFalse(custom.memoryLimits.isDefault)
+        assertEquals(0, custom.backgroundAfterSec)
+        assertTrue(custom.hasCustomAdvanced)
+
+        // 单项自定义也触发 hasCustomAdvanced，科学计数法/整值浮点按整数解析
+        val singleLimit = TeamPrefs.decode(obj("""{"prefs":{"memoryLimits":{"bot":1e4}}}"""))!!
+        assertTrue(singleLimit.memoryAutoRecall)
+        assertEquals(TeamPrefs.MemoryLimits(group = 12_000, bot = 10_000, team = 4_000), singleLimit.memoryLimits)
+        assertEquals(5, singleLimit.backgroundAfterSec)
+        assertTrue(singleLimit.hasCustomAdvanced)
+
+        val maxBg = TeamPrefs.decode(obj("""{"prefs":{"backgroundAfterSec":600}}"""))!!
+        assertEquals(600, maxBg.backgroundAfterSec)
+        assertTrue(maxBg.hasCustomAdvanced)
+
+        val recallOnly = TeamPrefs.decode(obj("""{"prefs":{"memoryAutoRecall":false}}"""))!!
+        assertFalse(recallOnly.memoryAutoRecall)
+        assertTrue(recallOnly.hasCustomAdvanced)
+
+        // 越界、小数、错误类型均降级为默认值且不崩溃
+        val bad = TeamPrefs.decode(
+            obj("""{"prefs":{"memoryAutoRecall":"false","memoryLimits":{"group":999,"bot":200001,"team":4000.5},"backgroundAfterSec":601}}"""),
+        )!!
+        assertTrue(bad.memoryAutoRecall)
+        assertEquals(TeamPrefs.DEFAULT_MEMORY_LIMITS, bad.memoryLimits)
+        assertEquals(5, bad.backgroundAfterSec)
+        assertFalse(bad.hasCustomAdvanced)
+
+        val bad2 = TeamPrefs.decode(
+            obj("""{"prefs":{"memoryLimits":"not-an-object","backgroundAfterSec":-1}}"""),
+        )!!
+        assertEquals(TeamPrefs.DEFAULT_MEMORY_LIMITS, bad2.memoryLimits)
+        assertEquals(5, bad2.backgroundAfterSec)
+
+        val badDecimal = TeamPrefs.decode(obj("""{"prefs":{"backgroundAfterSec":1.5}}"""))!!
+        assertEquals(5, badDecimal.backgroundAfterSec)
+    }
+
+    @Test
+    fun advancedNumberValidationAndLabels() {
+        assertEquals(TeamPrefs.NumberParse.Valid(1_000), TeamPrefs.parseMemoryLimit("1000"))
+        assertEquals(TeamPrefs.NumberParse.Valid(16_000), TeamPrefs.parseMemoryLimit(" 16000 "))
+        assertEquals(TeamPrefs.NumberParse.Valid(200_000), TeamPrefs.parseMemoryLimit("200000"))
+        for (bad in listOf("", "   ", "0", "999", "200001", "-1000", "+1000", "12000.5", "12000.0", "1e4", "abc", "999999999999")) {
+            assertIs<TeamPrefs.NumberParse.Invalid>(TeamPrefs.parseMemoryLimit(bad), "memoryLimit should reject '$bad'")
+        }
+
+        assertEquals(TeamPrefs.NumberParse.Valid(0), TeamPrefs.parseBackgroundAfterSec("0"))
+        assertEquals(TeamPrefs.NumberParse.Valid(15), TeamPrefs.parseBackgroundAfterSec(" 15 "))
+        assertEquals(TeamPrefs.NumberParse.Valid(600), TeamPrefs.parseBackgroundAfterSec("600"))
+        for (bad in listOf("", "   ", "-1", "601", "+5", "1.5", "5.0", "1e2", "abc", "999999999999")) {
+            assertIs<TeamPrefs.NumberParse.Invalid>(TeamPrefs.parseBackgroundAfterSec(bad), "backgroundAfterSec should reject '$bad'")
+        }
+
+        val before = I18n.lang
+        try {
+            I18n.lang = ChatBars.Lang.ZH
+            assertEquals("群记忆容量", TeamPrefs.memoryScopeLabel(TeamPrefs.MemoryScope.GROUP))
+            assertEquals("Bot 记忆容量", TeamPrefs.memoryScopeLabel(TeamPrefs.MemoryScope.BOT))
+            assertEquals("团队记忆容量", TeamPrefs.memoryScopeLabel(TeamPrefs.MemoryScope.TEAM))
+            assertTrue((TeamPrefs.parseMemoryLimit("500") as TeamPrefs.NumberParse.Invalid).message.contains("1000"))
+            assertTrue((TeamPrefs.parseBackgroundAfterSec("601") as TeamPrefs.NumberParse.Invalid).message.contains("600"))
+
+            I18n.lang = ChatBars.Lang.EN
+            assertEquals("Group memory size", TeamPrefs.memoryScopeLabel(TeamPrefs.MemoryScope.GROUP))
+            assertEquals("Bot memory size", TeamPrefs.memoryScopeLabel(TeamPrefs.MemoryScope.BOT))
+            assertEquals("Team memory size", TeamPrefs.memoryScopeLabel(TeamPrefs.MemoryScope.TEAM))
+            assertTrue((TeamPrefs.parseMemoryLimit("500") as TeamPrefs.NumberParse.Invalid).message.contains("200000"))
+            assertTrue((TeamPrefs.parseBackgroundAfterSec("601") as TeamPrefs.NumberParse.Invalid).message.contains("600"))
+        } finally {
+            I18n.lang = before
+        }
     }
 }

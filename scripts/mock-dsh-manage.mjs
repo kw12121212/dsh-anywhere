@@ -523,6 +523,22 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
             else pr.defaultBotModel = p.defaultBotModel
           }
           if (p.enterToSend !== undefined) { if (p.enterToSend === false) pr.enterToSend = false; else if (p.enterToSend === true || p.enterToSend === null) delete pr.enterToSend }
+          if (p.backgroundAfterSec !== undefined) {
+            const s = p.backgroundAfterSec
+            if (s === null) delete pr.backgroundAfterSec
+            else if (Number.isInteger(s) && s >= 0 && s <= 600) pr.backgroundAfterSec = s
+            else return invalid('The background wait is 0 to 600 seconds')
+          }
+          if (p.memoryAutoRecall !== undefined) {
+            if (p.memoryAutoRecall === false) pr.memoryAutoRecall = false
+            else delete pr.memoryAutoRecall
+          }
+          if (p.memoryLimits !== undefined) {
+            const scopes = new Set(['group', 'bot', 'team'])
+            const sizes = Object.entries(p.memoryLimits ?? {}).filter(([k, v]) => scopes.has(k) && Number.isInteger(v) && v >= 1000 && v <= 200000)
+            if (sizes.length === 0) delete pr.memoryLimits
+            else pr.memoryLimits = { ...pr.memoryLimits, ...Object.fromEntries(sizes) }
+          }
           bump()
           return ok({ ...pr })
         }

@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-general-advanced
+sections:
+  Implementation:
+    findings:
+      text: 对本机真实服务运行只读探针（ProbesGeneralAdvanced：只读检查 state.prefs 的高级键形态，并以越界 backgroundAfterSec=601/-1 验证 set-prefs 返回 bot/invalid 且不落盘；严禁探测 memoryLimits/memoryAutoRecall 避免静默删除落盘，遵守 spike-write-probes-non-mutating），登记 android/core/src/spike/FINDINGS.md 第 39 节
+      status: complete
+    core-general-advanced:
+      text: core：扩展 TeamPrefs（Prefs 增加 memoryAutoRecall/memoryLimits/backgroundAfterSec 及默认值，新增记忆容量与后台超时常量、parseMemoryLimit/parseBackgroundAfterSec 范围校验、hasCustomAdvanced 与 Requests.memoryAutoRecall/memoryLimit/backgroundAfterSec/resetAdvanced），补充 TeamPrefsTest JUnit 覆盖解码、异常值降级、边界校验与请求体字面值
+      status: complete
+    app-general-advanced:
+      text: app：在 TeamPrefsPage 底部新增默认收起的可折叠「高级」分组（摘要「记忆 · 后台工作」），原生编辑自动带上相关记忆开关、群/Bot/团队记忆容量（1000–200000 整数）与命令转后台秒数（0–600 整数）及恢复默认，本地校验非法输入并显示范围提示且不发送，在途禁用、不自动重试、成功后随 state 刷新
+      status: complete
+    mock-general-advanced:
+      text: mock：在 scripts/mock-dsh-manage.mjs 扩展 set-prefs 支持 memoryAutoRecall、memoryLimits（合并与 null/空删除）与 backgroundAfterSec（0–600 校验与 bot/invalid 错误文案），确保不改动 width 等未提交键供设备验收
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译与资源无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock 服务端，及有条件时对照真实只读状态）：进入团队偏好页展开「高级」分组，验证自动带上相关记忆开关、记忆容量与命令转后台秒数修改与非法值本地拦截、恢复默认与服务端 state 一致且 width 等未改偏好保持不变
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict verify 校验全部变更产物结构、场景覆盖与门禁状态
+      status: complete
+      command: strict-spec-cli verify dsbot-general-advanced
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

@@ -24,6 +24,10 @@ areas:
       title: Android 连接出错后去设置检查并修正
       status: draft
       path: .strict-spec-driven/scenes/android/android-fix-connection.yaml
+    android-general-advanced:
+      title: 在手机端查看并修改团队偏好的高级设置（记忆召回上限与后台命令超时）
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-general-advanced.yaml
   diagnostics:
     report-client-errors:
       title: 客户端错误上报诊断

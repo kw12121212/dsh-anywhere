@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-general-advanced
+  status: proposed
+summary:
+  what:
+    - 为 Android 原生 DS-Bot 的「团队偏好」页补齐 DS-Bot 0.3.10 Settings → General → Advanced 高级项：在可折叠的「高级」分组中提供自动带上相关记忆开关（memoryAutoRecall）、群/Bot/团队三项记忆容量上限（memoryLimits：1000–200000 字符）与命令转后台超时秒数（backgroundAfterSec：0–600 秒），并支持本地数值范围校验与一键恢复默认。
+  why:
+    - 用户目前在手机端无法调整团队级记忆自动召回、记忆容量上限与命令转后台秒数，只能回到电脑网页端 Settings → General → Advanced 修改。
+scope:
+  in:
+    - 核对 DS-Bot 0.3.10 channel.js 与 client.js 确认 General 高级项均经现有 POST /api/bot set-prefs 读写：memoryAutoRecall（默认 true）、memoryLimits.{group,bot,team}（默认 12000/8000/4000，范围 1000–200000 整数）与 backgroundAfterSec（默认 5，范围 0–600 整数）
+    - 在 core TeamPrefs 中扩展高级项字段解码与缺省值、整数范围与格式预校验（记忆容量 1000–200000、命令转后台 0–600）、单项与恢复默认请求体构造（仅发改动键，不发 width/flatWidth 等其他键）及偏离默认判定，以 TeamPrefsTest JUnit 完整覆盖
+    - 在 app TeamPrefsPage 底部新增默认收起的可折叠「高级」分组（收起时展示「记忆 · 后台工作」摘要），展开后原生编辑自动带上相关记忆开关、三项记忆容量与命令转后台秒数，本地拦截非法数值并提示范围（避免非法 memoryLimits 被服务端过滤而误清全部上限），提供恢复默认，写操作在途禁用、不自动重试、成功后以 state 刷新并与网页端一致
+    - 在 scripts/mock-dsh-manage.mjs 扩展 set-prefs 支持 memoryAutoRecall、memoryLimits 与 backgroundAfterSec（对齐 0.3.10 校验与合并/删除语义）；对本机真实服务运行只读探针（读取 state.prefs 与验证 backgroundAfterSec 越界返回 bot/invalid 且不落盘），登记 FINDINGS.md 新节并更新 tech/dsbot-api 契约
+  out:
+    - Classic Agent 模式切换（requiresSurface，仅桌面/网页表面支持，手机端不做）
+    - DSH 内部设置槽位项（settings.general.item 的 language、composer-enter 与其余 DSH 插件项，不经 /api/bot）
+    - 桌面应用数据目录迁移（Data location，仅桌面应用提供）
+    - Appearance 页的界面动效（effects）与显示思考过程（thinking）以及电脑端消息宽度（width/flatWidth）
+unchanged_behavior:
+  - 团队偏好页既有的主题、强调色、消息布局、头像动画、Enter 键发送与新 Bot 默认模型行为不变
+  - 手机修改任一偏好（含高级项或恢复默认）时绝不发送 width、flatWidth、effects、thinking 等未改动的键，服务端已存消息宽度等保持不变
+  - 聊天页既有布局、动画静音、Enter 发送行为、记忆面板（memory-view/add/edit 等）与团队页其他入口行为不变
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-general-advanced

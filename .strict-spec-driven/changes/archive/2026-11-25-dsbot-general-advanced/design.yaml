@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-general-advanced
+approach:
+  - 遵循 tech/android-client pure-logic-in-core：在 android/core 的 TeamPrefs 中直接扩展 Prefs 数据类（带向后兼容默认参数 memoryAutoRecall=true、memoryLimits=DEFAULT_MEMORY_LIMITS、backgroundAfterSec=DEFAULT_BACKGROUND_AFTER_SEC），提供三项记忆容量常量、范围校验函数（parseMemoryLimit、parseBackgroundAfterSec）、高级项偏离默认判定（hasCustomAdvanced）及单键/恢复默认请求体构造（Requests.memoryAutoRecall、Requests.memoryLimit、Requests.backgroundAfterSec、Requests.resetAdvanced），由 TeamPrefsTest JUnit 全量覆盖。
+  - 遵循 tech/dsbot-api team-prefs-0310 与 manage-write-feedback：复用现有 TeamPrefsPage 与 ManageApi.action（POST /api/bot set-prefs），每次修改只发改动键（单作用域 memoryLimits 为 {"memoryLimits":{"group":16000}}，避免覆盖其他作用域；恢复默认仅发 {"memoryAutoRecall":true,"memoryLimits":null,"backgroundAfterSec":null}，不碰外观/宽度/默认模型）；在途键按项独立防重复，失败展示服务端原因，成功等待 state 刷新。
+  - 针对上游 channel.js 250–254 行的隐蔽行为做客户端保护：服务端对 memoryLimits 会静默过滤非法值并在有效项为空时 delete state.prefs.memoryLimits（而非返回 bot/invalid），因此客户端在发送前必须通过 core 严格校验整数范围 1000–200000，非法输入在本地给出可读范围提示且禁止提交，杜绝误清已有记忆上限。
+  - UI 布局对齐 DS-Bot 0.3.10 client.js GeneralPage：在 TeamPrefsPage 底部放置默认收起的可折叠「高级」分组（摘要「记忆 · 后台工作」），展开后按「记忆」与「后台工作」组织控件；数值项采用移动端友好的数字输入+保存按钮行（附默认值与范围提示），输入同步服务端最新值并在本地校验失败时标错提示、不发请求；有任一高级项非默认时显示「恢复默认」按钮。
+decisions:
+  general-advanced-via-set-prefs:
+    decision: 所有 General 高级项均复用既有 POST /api/bot set-prefs 端点读写，在 TeamPrefsPage 内作为可折叠「高级」分组呈现，不新建独立页面或新端点
+    rationale: 直接核对 DS-Bot 0.3.10 src/host/channel.js（240–255 行）与 client.js GeneralPage（42487–42501 行），memoryAutoRecall、memoryLimits 与 backgroundAfterSec 全部由 set-prefs 写入并随 state.prefs 返回，且 Classic Agent 与 DSH 内部槽位项不在 /api/bot 范围；放在既有团队偏好页的「高级」折叠区内，既对齐网页端 GeneralPage 层次，又避免在团队页增加过多零散入口。
+  client-side-memory-limit-guard:
+    decision: 在 core 中对记忆容量（1000–200000）与命令转后台秒数（0–600）做严格整数校验，非法输入仅本地提示并拦截发送
+    rationale: channel.js 250–254 行对 memoryLimits 不抛 bot/invalid，而是过滤非法项并在空结果时 delete state.prefs.memoryLimits；若不本地拦截，输入越界数值会静默抹掉用户已配置的全部三项记忆上限。同时校验逻辑下沉 core 满足 pure-logic-in-core 并由 JUnit 锁定边界。
+  single-scope-memory-limit-write:
+    decision: 修改单个记忆容量时仅发送 {memoryLimits:{<scope>:value}}，恢复默认时发送 {memoryAutoRecall:true,memoryLimits:null,backgroundAfterSec:null}
+    rationale: channel.js 253 行以 { ...state.prefs.memoryLimits, ...Object.fromEntries(sizes) } 合并写入，单键发送与网页端 client.js 42495 行完全一致，避免覆盖另一设备刚改过的其他作用域上限；恢复默认按 channel.js 242/248/252 行语义删除三项高级键、不触碰其他偏好。
+  hello-capabilities-exception:
+    decision: General 高级项入口不经 hello capabilities 门控，在 delta-tech 中为 hello-capabilities 增补例外并扩展 team-prefs-0310
+    rationale: DS-Bot 0.3.10 mobile.js CAPABILITIES 不含高级偏好项，且 state.prefs 默认不落盘这些键无法按字段存在门控；set-prefs 自早期版本即存在，复用既有不门控的团队偏好页并在 delta-tech 登记例外与契约，符合经验教训 ds-bot-delta-tech-hello-capabilities-f433e4。
+alternatives:
+  - option: 为 General 高级项单独新增一个顶层页面（如 ShellPage.GeneralAdvanced）
+    reason: 仅有 5 个团队偏好字段且全部归属 state.prefs / set-prefs，与已有 TeamPrefsPage 共享数据源与写通道，单开顶层页会割裂团队偏好体验并增加团队页菜单负担。
+  - option: 像网页端一样在输入框失焦（onBlur）时自动提交保存
+    reason: 手机触屏上收起键盘、滚动页面或切走焦点极易误触发提交，且非法值静默回退不如显式「保存」按钮配合内联范围错误提示直观安全。
+risks:
+  - 对本机真实服务运行只读探针时严禁测试非法 memoryLimits 或 memoryAutoRecall（channel.js 会静默 delete 对应键并执行 rt.save()，违反 spike-write-probes-non-mutating）；探针只读 state.prefs 并仅用越界 backgroundAfterSec（如 601、-1）验证 bot/invalid 拒绝。
+  - 用户在编辑某个数值输入框期间若网页端推送了新 state.prefs，草稿不应被无关 state 刷新覆盖，同时当该项服务端值确实变化或保存成功后需同步最新值；通过按项记录 syncedValue 仅在服务端该项值变化时重置草稿避免冲突。

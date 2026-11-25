@@ -1,0 +1,29 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    general-advanced-prefs:
+      strength: MUST
+      statement: 团队偏好页底部提供默认收起的可折叠「高级」分组（收起时显示摘要「记忆 · 后台工作」），展开后原生提供与 DS-Bot 0.3.10 网页端 Settings → General → Advanced 一致的团队级高级项：自动带上相关记忆开关（memoryAutoRecall，默认开启）、三项记忆容量上限（群记忆容量默认 12000、Bot 记忆容量默认 8000、团队记忆容量默认 4000，单位字符，允许 1000–200000 的整数）与命令转后台秒数（backgroundAfterSec，默认 5 秒，允许 0–600 的整数，0 表示立即转后台）；任一高级项偏离默认值时提供「恢复默认」将高级项统一还原为默认。每次修改经 set-prefs 仅发送被改动的键（单作用域记忆容量仅发送该作用域，恢复默认仅还原高级项），绝不发送 width、flatWidth、effects、thinking 等未改偏好，服务端已存消息宽度与其他偏好保持不变；记忆容量或命令转后台输入为空、非整数或超出允许范围时在本地提示合法范围且不发送请求（防止非法记忆容量被服务端过滤而误清全部记忆上限）；写操作在途禁用、不自动重试，成功后以服务端 state 刷新并与网页端一致，网页端改动后 App 随之更新；只读宿主、网络失败或服务端拒绝时显示可读原因且不改变远端生效偏好。Classic Agent 模式与 DSH 内部设置槽位不在手机端提供。
+      scenarios:
+        expand-and-edit-memory-bg:
+          - GIVEN: 团队已连接，当前团队偏好为默认值且服务端已存消息宽度 90%
+          - WHEN: 进入团队偏好页展开「高级」分组，关闭「自动带上相关记忆」，将群记忆容量改为 16000、命令转后台改为 15 秒并保存
+          - THEN: 每次修改仅提交对应改动键且在途禁用，保存后显示新值并与网页端 General → Advanced 一致，Bot/团队记忆容量仍为 8000/4000，服务端消息宽度仍为 90%
+        local-range-validation:
+          - GIVEN: 已展开团队偏好页的「高级」分组，服务端已存 Bot 记忆容量为 10000
+          - WHEN: 在群记忆容量输入 500（或 200001、小数、空值），或在命令转后台输入 601（或 -1）并尝试保存
+          - THEN: 本地显示允许的整数范围提示且不发出 set-prefs 请求，服务端已存的 Bot 记忆容量 10000 不受影响
+        restore-advanced-defaults:
+          - GIVEN: 团队已自定义自动带上相关记忆为关闭、群记忆容量为 16000、命令转后台为 0 秒，且主题为 Paper、消息宽度为 90%
+          - WHEN: 在「高级」分组点按「恢复默认」
+          - THEN: 自动带上相关记忆恢复为开启、三项记忆容量恢复为 12000/8000/4000、命令转后台恢复为 5 秒且与网页端一致，主题仍为 Paper、消息宽度仍为 90%
+        server-reject-no-retry:
+          - GIVEN: 远端为只读宿主或网络中断
+          - WHEN: 在「高级」分组切换自动带上相关记忆或保存命令转后台秒数
+          - THEN: 页面显示服务端给出的原因或可读网络失败提示，App 不自动重试，当前生效偏好不变
+  MODIFIED: {}
+  REMOVED: {}

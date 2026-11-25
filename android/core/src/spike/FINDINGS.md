@@ -598,3 +598,20 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `deepseek-synthesize {text, voice?}` 在上游向 `https://api.deepseek.com/v1/tools/tts` 发起请求（`TTS_TIMEOUT_MS = 300_000`，属慢端点），成功返回 `{audioBase64, mediaType: "audio/wav"}`；TTS 关闭或 key 未配置回 `bot/unavailable`，空文本、非法音色、计费字符数超 10,000（汉字计 2 其余计 1）或请求体超 60 KiB 回 `bot/invalid`，上游 HTTP 或 WAV 头校验失败回 `bot/refused`。
 - `deepseek-services` / `deepseek-services-config` / `deepseek-synthesize` 不在 0.3.10 `mobile.js` `CAPABILITIES` 内，入口不门控，按 `on-demand-page-degrade` 随应答降级；听写服务商选择在网页端走 DSH 内部通道 `actions.speech().configure`，不在 `/api/bot` 端点内，手机端只读展示 `speech` 状态。
 - 界面验收由 `scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-deepseek-services.mjs`）覆盖状态展示、key 缺失/受阻、配置修改与 `null` 恢复默认、试听 WAV 内存播放与错误提示及 `enabled=0` 不支持降级。
+
+## 39. General 高级项（2026-11-25，dsbot-general-advanced）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10 / dsh 0.2.2-rc.3，`runSpike` 的 `ProbesGeneralAdvanced` 探针组；严格遵守 `spike-write-probes-non-mutating`，不改动真实团队偏好）**：
+- `state` 只读检查：`state.memory=true`，`state.prefs` 键集 `[defaultBotModel, theme, width]`，`memoryAutoRecall`、`memoryLimits`、`backgroundAfterSec` 均为缺省未落盘（`null`）。
+- `set-prefs` 越界/非整数错误形态（均 HTTP 200、`ok:false`、`error.code="bot/invalid"`，在 `rt.save()` 之前抛出）：
+  - `set-prefs {"backgroundAfterSec":601}` → `"The background wait is 0 to 600 seconds"`
+  - `set-prefs {"backgroundAfterSec":-1}` → `"The background wait is 0 to 600 seconds"`
+  - `set-prefs {"backgroundAfterSec":1.5}` → `"The background wait is 0 to 600 seconds"`
+- **非破坏性取证边界**：严禁对真实服务探测非法 `memoryLimits` 或 `memoryAutoRecall`，因为上游 `channel.js` 246–254 行不会抛 `bot/invalid`，而是过滤后静默 `delete state.prefs.memoryLimits` / `delete state.prefs.memoryAutoRecall` 并执行 `rt.save()`。
+
+**源码核对（ds-bot 0.3.10 `src/host/channel.js` 35–37 与 240–255 行、`constants.js` 89–90 行、`memory-entries.js` 9 行、`steer.js` 88–91 行、`client.js` `MEMORY_SIZES`/`MemorySize`/`SecondsField`/`GeneralPage` 42154–42183 与 42421–42507 行）**：
+- 里程碑 intake 问题 `general-advanced-endpoint` 结论：General → Advanced 的记忆与后台工作高级项**全部经既有 `POST /api/bot` `set-prefs` 写入**并随 `state.prefs` 返回（非 DSH 私有通道）；仅 Classic Agent 模式（`actions.setSurface`）、DSH 设置槽位（`settings.general.item`）与桌面应用数据目录迁移（`dsBotApp.moveData`）不经 `/api/bot`。
+- `memoryAutoRecall`：默认 `true`（仅 `false` 落盘，传 `true`/`null` 等非 `false` 值删除键）。
+- `memoryLimits`：作用域固定为 `group`（默认 12000）、`bot`（默认 8000）、`team`（默认 4000），合法值 `1000..200000` 整数；有效项与已有 `state.prefs.memoryLimits` 浅合并，传 `null` 或过滤后为空时删除整项 `state.prefs.memoryLimits`——因此手机端必须在发送前做 `1000..200000` 整数校验，避免非法值误清全部记忆上限。
+- `backgroundAfterSec`：默认 `5` 秒（`BACKGROUND_WAIT_MS = 5_000`），合法值 `0..600` 整数（`0` 表示立即转后台），传 `null` 删除键恢复默认，越界或非整数回 `bot/invalid`。
+- 界面验收由 `scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-manage.mjs` 扩展 `set-prefs`）覆盖开关、三项记忆容量、后台秒数、本地非法范围拦截、恢复默认与保留未改动 `width` 等偏好。

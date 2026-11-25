@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-general-advanced
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 用户在手机端无法查看和修改团队级的记忆自动召回、群/Bot/团队记忆容量上限与命令转后台秒数，只能回到电脑网页端的 Settings → General → Advanced 操作。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 用户可在手机端「团队偏好」页展开「高级」分组，查看并修改自动带上相关记忆开关、群/Bot/团队记忆容量（1000–200000 整数）与命令转后台秒数（0–600 整数）或一键恢复默认；非法数值在本地提示范围且不发送，保存后与网页端 General → Advanced 完全一致且不改动其他偏好与消息宽度。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 dsbot-prefs-theme 与 dsbot-memory 已归档，strict-spec-cli roadmap-recommend 按严格路线图顺序推荐 dsbot-general-advanced 为 dsbot-native-parity 里程碑的下一个可执行计划变更，且经源码核对所有高级项均可经 /api/bot set-prefs 原生编辑。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 团队偏好页既有的主题、强调色、消息布局、头像动画、Enter 发送与默认模型不变；服务端已存消息宽度（width/flatWidth）及其他未改偏好不变；Classic Agent 模式（requiresSurface）、DSH 内部设置槽位与桌面数据目录迁移不在范围内。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 经核对 DS-Bot 0.3.10 channel.js 与 client.js，General 高级项的 memoryAutoRecall、memoryLimits（group/bot/team）与 backgroundAfterSec 均由既有 set-prefs 端点读写，在既有团队偏好页以可折叠「高级」分组原生实现编辑、本地范围校验与恢复默认；Classic Agent 模式与 DSH 内部槽位项排除在外。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

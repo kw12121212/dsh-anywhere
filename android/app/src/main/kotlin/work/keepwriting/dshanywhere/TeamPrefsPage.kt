@@ -1,16 +1,27 @@
 package work.keepwriting.dshanywhere
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -19,12 +30,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
@@ -97,27 +110,38 @@ fun teamColorScheme(p: TeamPrefs.Palette, dark: Boolean): ColorScheme {
 }
 
 /**
- * 团队偏好页（dsbot-prefs-theme）：主题、强调色、消息布局、头像动画等级、Enter 键行为、新 Bot 默认模型。
+ * 团队偏好页（dsbot-prefs-theme / dsbot-general-advanced）：主题、强调色、消息布局、头像动画等级、
+ * Enter 键行为、新 Bot 默认模型，以及可折叠的「高级」分组（记忆自动召回、记忆容量上限、命令转后台秒数）。
  * 每次只发送改动的那一项（不发宽度，服务端已存的宽度原样保留）；保存后由 state 刷新显示。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TeamPrefsPage(state: Json.Value.Object?, api: ManageApi) {
     val prefs = TeamPrefs.decode(state) ?: TeamPrefs.DEFAULT
+    val memoryEnabled = (state?.members?.get("memory") as? Json.Value.BoolValue)?.value != false
     var error by remember { mutableStateOf<String?>(null) }
     var pickModel by remember { mutableStateOf(false) }
-    fun set(key: String, payload: String) {
+    var advancedOpen by remember { mutableStateOf(false) }
+    var resetGen by remember { mutableStateOf(0) }
+    fun set(key: String, payload: String, onOk: () -> Unit = {}) {
         error = null
-        api.action("prefs:$key", "set-prefs", payload, {}) { error = it }
+        api.action("prefs:$key", "set-prefs", payload, { onOk() }) { error = it }
     }
     fun busy(key: String) = "prefs:$key" in api.inFlight
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Text(tr("团队偏好", "Team preferences"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
-        Text(
-            tr("与网页端共用；明暗按本机「外观」设置。消息宽度只在电脑网页端设置。", "Shared with the web app; light or dark follows this phone's Appearance. Message width is set on the computer only."),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp),
-        )
+    val resetBusy = busy("resetAdvanced")
+    val anyAdvBusy = resetBusy ||
+        busy("memoryAutoRecall") ||
+        busy("backgroundAfterSec") ||
+        TeamPrefs.MemoryScope.entries.any { busy("memoryLimit:${it.key}") }
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 错误条固定在滚动容器上方：滚动到底部操作「高级」分组失败时仍立即可见
         ErrorLine(error) { error = null }
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Text(tr("团队偏好", "Team preferences"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+            Text(
+                tr("与网页端共用；明暗按本机「外观」设置。消息宽度只在电脑网页端设置。", "Shared with the web app; light or dark follows this phone's Appearance. Message width is set on the computer only."),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp),
+            )
 
         SectionTitle(tr("主题", "Theme"))
         FlowRow(modifier = Modifier.padding(horizontal = 12.dp)) {
@@ -175,6 +199,107 @@ fun TeamPrefsPage(state: Json.Value.Object?, api: ManageApi) {
 
         SectionTitle(tr("新 Bot 默认模型", "Default model for new Bots"))
         ValueRow(tr("模型", "Model"), BotManage.modelName(state, prefs.defaultBotModel) ?: tr("跟随 DSH 默认", "DSH default"), enabled = !busy("model")) { pickModel = true }
+
+        HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { advancedOpen = !advancedOpen }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(tr("高级", "Advanced"), style = MaterialTheme.typography.titleMedium)
+                if (!advancedOpen) {
+                    Text(
+                        tr("记忆 · 后台工作", "Memory · Background work"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                text = if (advancedOpen) "▾" else "▸",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
+
+        if (advancedOpen) {
+            SectionTitle(tr("记忆", "Memory"))
+            if (!memoryEnabled) {
+                Text(
+                    tr("当前团队已关闭记忆功能，以下配置将在开启记忆后生效。", "Team memory is currently turned off; these settings apply when memory is enabled."),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            SwitchRow(
+                label = tr("自动带上相关记忆", "Bring up related memory"),
+                hint = if (prefs.memoryAutoRecall) {
+                    tr("对话时自动检索并带上相关记忆。", "Automatically bring up related memory in chats.")
+                } else {
+                    tr("已关闭自动记忆召回。", "Automatic memory recall is off.")
+                },
+                on = prefs.memoryAutoRecall,
+                enabled = !busy("memoryAutoRecall") && !resetBusy,
+            ) { on ->
+                set("memoryAutoRecall", TeamPrefs.Requests.memoryAutoRecall(on))
+            }
+            for (scope in TeamPrefs.MemoryScope.entries) {
+                val saved = prefs.memoryLimits.of(scope)
+                PrefsIntField(
+                    label = TeamPrefs.memoryScopeLabel(scope),
+                    hint = tr(
+                        "默认 ${scope.defaultSize} 字符（范围 ${TeamPrefs.MEMORY_LIMIT_MIN}–${TeamPrefs.MEMORY_LIMIT_MAX}）。",
+                        "Default ${scope.defaultSize} chars (range ${TeamPrefs.MEMORY_LIMIT_MIN}–${TeamPrefs.MEMORY_LIMIT_MAX}).",
+                    ),
+                    saved = saved,
+                    resetGen = resetGen,
+                    busy = busy("memoryLimit:${scope.key}") || resetBusy,
+                    parse = TeamPrefs::parseMemoryLimit,
+                    onSave = { value -> set("memoryLimit:${scope.key}", TeamPrefs.Requests.memoryLimit(scope, value)) },
+                )
+            }
+
+            SectionTitle(tr("后台工作", "Background work"))
+            PrefsIntField(
+                label = tr("命令转后台（秒）", "Background commands after (seconds)"),
+                hint = tr(
+                    "默认 ${TeamPrefs.DEFAULT_BACKGROUND_AFTER_SEC} 秒（范围 ${TeamPrefs.BACKGROUND_AFTER_MIN_SEC}–${TeamPrefs.BACKGROUND_AFTER_MAX_SEC}；0 表示立即转后台）。",
+                    "Default ${TeamPrefs.DEFAULT_BACKGROUND_AFTER_SEC}s (range ${TeamPrefs.BACKGROUND_AFTER_MIN_SEC}–${TeamPrefs.BACKGROUND_AFTER_MAX_SEC}; 0 backgrounds immediately).",
+                ),
+                saved = prefs.backgroundAfterSec,
+                resetGen = resetGen,
+                busy = busy("backgroundAfterSec") || resetBusy,
+                parse = TeamPrefs::parseBackgroundAfterSec,
+                onSave = { value -> set("backgroundAfterSec", TeamPrefs.Requests.backgroundAfterSec(value)) },
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                OutlinedButton(
+                    enabled = prefs.hasCustomAdvanced && !anyAdvBusy,
+                    onClick = { set("resetAdvanced", TeamPrefs.Requests.resetAdvanced()) { resetGen++ } },
+                ) {
+                    Text(tr("恢复默认", "Restore defaults"))
+                }
+                Text(
+                    tr("仅还原上述高级项，不影响外观、宽度与默认模型。", "Resets only the advanced settings above."),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        }
     }
     if (pickModel) {
         val groups = BotManage.models(state)
@@ -190,5 +315,49 @@ fun TeamPrefsPage(state: Json.Value.Object?, api: ManageApi) {
         PickerDialog(tr("新 Bot 默认模型", "Default model for new Bots"), options, prefs.defaultBotModel, headers,
             onPick = { ref -> pickModel = false; if (ref != prefs.defaultBotModel) set("model", TeamPrefs.Requests.defaultBotModel(ref)) },
             onDismiss = { pickModel = false })
+    }
+}
+
+/** 高级数值项输入行：本地整数范围校验，非法输入即时提示且不可保存，仅在服务端该项值变化或恢复默认时重置草稿。 */
+@Composable
+private fun PrefsIntField(
+    label: String,
+    hint: String,
+    saved: Int,
+    resetGen: Int,
+    busy: Boolean,
+    parse: (String) -> TeamPrefs.NumberParse,
+    onSave: (Int) -> Unit,
+) {
+    var draft by remember(saved, resetGen) { mutableStateOf(saved.toString()) }
+    val parsed = parse(draft)
+    val errorText = (parsed as? TeamPrefs.NumberParse.Invalid)?.message
+    val parsedInt = (parsed as? TeamPrefs.NumberParse.Valid)?.value
+    val dirty = draft != saved.toString()
+    val canSave = parsedInt != null && parsedInt != saved && !busy
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it.take(12) },
+            label = { Text(label) },
+            singleLine = true,
+            enabled = !busy,
+            isError = errorText != null,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            supportingText = {
+                Text(errorText ?: hint)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (dirty) {
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(enabled = !busy, onClick = { draft = saved.toString() }) {
+                    Text(tr("还原", "Revert"))
+                }
+                TextButton(enabled = canSave, onClick = { if (parsedInt != null) onSave(parsedInt) }) {
+                    Text(tr("保存", "Save"))
+                }
+            }
+        }
     }
 }
