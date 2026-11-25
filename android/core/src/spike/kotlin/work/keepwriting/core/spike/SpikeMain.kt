@@ -234,6 +234,9 @@ fun main() {
     // ---- 5g. 模型服务商（dsbot-models-providers）：providers 只读 + 写端点错误形态（不调 provider-models） ----
     ProbesProviders { endpoint, payload -> post(endpoint, payload) }.run()
 
+    // ---- 5h. 定时任务（dsbot-schedules）：schedules 只读 + 写端点错误形态 ----
+    ProbesSchedules { endpoint, payload -> post(endpoint, payload) }.run()
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。

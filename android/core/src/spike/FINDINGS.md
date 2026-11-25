@@ -503,3 +503,15 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `provider-key {provider, value}`：`value:null` 移除；写入前 checkKey（非空、非 NAME=value、无引号、仅可见 ASCII），路由不用 key 或 key 在外部设置时拒绝；`provider-add` 内置 `{provider, key?}` 或自定义 `{custom:true, provider(^[a-z][a-z0-9-]*$), name?, baseURL(http/https), api(protocols 之一), key?, models[≥1]}`；`provider-models {provider}` 或 `{baseURL, api?, key?}`（key 只随请求、不保存）；`provider-models-save {provider, models, revision?}`（revision 不一致回 `bot/stale`）；`provider-remove {provider}` 仅自加。写端点都返回 providersView。
 - 网页端保存模型前按 fallbacksFor 提示受影响 Bot（手机端只列出受影响 Bot，不推算回退目标）；Bot models 批量切换逐个 `update-bot {id, model}`，跳过本地 Agent 上的 Bot。
 - 写端点成功应答、revision 冲突与目录联动由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-providers.mjs`，同时作为 state.models 来源）覆盖；`/mock/providers?enabled=0|1&available=0|1&bumpRevision=1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。
+
+## 33. 定时任务（2026-11-24，dsbot-schedules）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesSchedules` 探针组，未改动用户真实定时任务）**：
+- `schedules {}` → `{available:true, canPause:true, tasks[23]}`；顶层键 `[available, canPause, tasks]`；日程不在 `state` 中，`hello` 的 `capabilities` 名单不含日程能力名，客户端入口不门控、按应答降级（`bot/not-found` 说明远端不支持，`available:false` 说明需在 DSH 插件页开启 Automation tasks）。
+- 实测 `tasks` 分布：`kind` 为 `{rrule=9, daily=3, cron=1, at=9, after=1}`；`status` 为 `{active=12, ended=10, paused=1}`；`state` 为 `{scheduled=12, finished=10, paused=1}`；23 项均带 `botId`，其中部分任务同时带 `botId` 与 `roomId`（Bot 在群聊会话创建的任务——客户端归入该 Bot 分组并在行内注明所在群聊，不重复归入群聊分组）。
+- 实测任务键集覆盖 `{id, title, prompt, kind, scheduledAt, status, state, sessionId, botId, roomId?, time?, timeZone?, expression?, rrule?, afterSeconds?, createdAt?, updatedAt?, lastDelivery?, involvedSessionIds?, target?}`（客户端解码保留展示与操作所需字段，安全忽略其余字段）。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/invalid"`，均在任何写入前拒绝）：`schedule-create` 未知 `target`（含空标题时仍先校验对象）→ `"No such Bot or group chat"`；`schedule-pause` 未知 `{sessionId, id}` → `"No such task"`；`schedule-delete` 未知 `{sessionId, id}` → `"No such task"`。
+
+**源码核对（ds-bot 0.3.10 `src/host/schedules.js`、`channel.js`，client.js `useSchedules`/`timingText`/`nextText`/`canPauseTask`/`TaskRow2`/`TaskForm`/`SchedulesPage`/`BotSchedules`）**：
+- `schedule-create {target, title(1–120), prompt, when: {kind:'at', at(ISO，将来)} | {kind:'daily', time(HH:mm[:ss]), timeZone} | {kind:'weekly', time, timeZone, weekdays[1–7，至少一个]} | {kind:'every', minutes(1–10080)}}` → 返回最新 `schedules` 视图；`schedule-pause {sessionId, id, active}`（`canPause` 为真时可用，到点的一次性任务不可暂停）→ 返回最新视图；`schedule-delete {sessionId, id}` → 返回最新视图。`schedules` 在上游 `READS` 内。
+- 写端点成功应答、到点一次性任务不可暂停、`canPause` 与 `available` 开关及不支持降级由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-schedules.mjs`）覆盖；`/mock/schedules?enabled=0|1&available=0|1&canPause=0|1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。

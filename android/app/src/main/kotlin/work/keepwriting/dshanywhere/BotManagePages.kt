@@ -268,6 +268,8 @@ fun BotDetailsPage(
     onOpenBrowser: () -> Unit = {},
     /** 打开该 Bot 的能力页（dsbot-capabilities）。 */
     onOpenCapabilities: () -> Unit = {},
+    /** 打开该 Bot 的定时任务（dsbot-schedules）。 */
+    onOpenSchedules: () -> Unit = {},
 ) {
     val profile = remember(state, botId) { BotManage.profileOf(state, botId) }
     if (profile == null) {
@@ -385,6 +387,9 @@ fun BotDetailsPage(
 
         // 连接器（dsbot-connectors-mail）：逐个开关已连接的连接器对该 Bot 是否可用
         BotConnectorsGroup(state, botId, api) { error = it }
+
+        // 定时任务（dsbot-schedules）：远端支持且已开启时显示进行中任务数
+        BotSchedulesRow(botId, api, onOpenSchedules)
 
         SectionTitle(tr("浏览器", "Browser"))
         ValueRow(tr("Bot 浏览器", "Bot browser"), "›", hint = tr("查看当前网页画面与持有状态", "View live snapshots and control state"), onClick = onOpenBrowser)

@@ -1,0 +1,26 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-schedules
+approach:
+  - 日程不在 state 中，由 schedules 按需读取（上游以 DSH 的 schedule 服务列出、只保留团队 Bot 与群聊会话的任务，并派生 state：scheduled/overdue/paused/finished）。入口不门控，按 on-demand-page-degrade：bot/not-found 说明此远端不支持，available:false 说明需在 DSH 插件页开启 Automation tasks；hello-capabilities 增补例外。列表读取带代次号，写端点返回新视图直接采用。
+  - 纯逻辑下沉 core Schedules：解码任务（id、title、prompt、kind、scheduledAt、everySeconds、time、timeZone、weekdays、expression、status、state、sessionId、botId/roomId），时间规则文案复刻网页端 timingText（工作日/周末/每天的特例、every 的天/小时/分钟、时区不同注明），下次运行文案复刻 nextText，可暂停复刻 canPauseTask，分组按 state.bots 再 state.rooms 的顺序（网页端 byChat），新建 when 构造与校验复刻 TaskForm 与上游 selectorOf（时刻 HH:mm，weekdays 1–7，every 分钟 1–10080，at 须为将来），时间格式化用 java.time 并注入 now 与 zone 便于测试。
+  - app 侧 ShellPage.Schedules(filterBotId?) 与 ScheduleCreate(target?)：列表经 ManageApi.read，前台每 60 秒重读一次（网页端同样轮询）；暂停、删除与新建经 manageAction，成功后采用应答视图；日期与时刻用 Material3 DatePicker/TimePicker 对话框；Bot 详情的行用同一读取显示该 Bot 进行中任务数。
+decisions:
+  no-gating:
+    decision: 日程入口不做 hello 或字段门控，按 schedules 应答降级，并在 hello-capabilities 增补例外
+    rationale: 0.3.10 hello capabilities 不含日程能力名、state 无字段；按 on-demand-page-degrade 规则以应答降级，available:false 时给出开启 Automation tasks 的指引
+  device-time-zone:
+    decision: 每天与每周规则使用手机当前时区（ZoneId.systemDefault），列表中时区与手机不同时注明
+    rationale: 与网页端用浏览器 Intl 时区一致：用户在哪看就按哪的时间；上游按任务自带的 time_zone 触发，跨时区时列表注明避免误解
+  poll-while-open:
+    decision: 日程页打开期间每 60 秒重读一次列表，离开即停止
+    rationale: 下次运行时间与逾期状态随时间变化、Bot 也可能自己改任务；网页端 useSchedules 同样轮询；只在页面可见时轮询避免后台耗电
+  no-edit:
+    decision: 不提供编辑已有任务，只提供新建、暂停/恢复与删除
+    rationale: 上游 schedule-* 端点没有编辑能力（编辑由 Bot 的 schedule_edit 工具完成），网页端同样只能新建、暂停与删除
+alternatives: []
+risks:
+  - 本机真实 DSH 可能未开启 Automation tasks 或没有任务：真实服务只做只读探针（schedules 应答与写端点错误应答），新建、暂停与删除在 mock --manage 上覆盖
+  - Material3 日期时间选择器为实验 API：只用于选值，最终以 core 的校验与 ISO 字符串为准

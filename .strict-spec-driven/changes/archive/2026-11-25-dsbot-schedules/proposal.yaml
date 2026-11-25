@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-schedules
+  status: proposed
+summary:
+  what:
+    - 团队页新增「定时任务」入口进入原生日程页（schedules）：按 Bot 与群聊分组列出团队的定时任务，每项显示名称、时间规则（一次、每天、每周几、每隔多久、cron 表达式，时区与手机不同时注明）、所在群聊、下次运行时间或已逾期/已暂停/已结束，点按展开完整的任务内容；DSH 未开启 Automation tasks 时说明需在 DSH 设置的插件页开启
+    - 暂停与恢复（schedule-pause，远端声明 canPause 时提供；到点的一次性任务不可暂停），删除二次确认（schedule-delete）；失败显示服务端原因并重读列表
+    - 新建定时任务（schedule-create）：选择发送对象（Bot 或群聊），填写名称（≤120 字）与要做的事，选择时间规则：一次（日期与时间，须为将来）、每天（时刻）、每周（勾选星期几与时刻）、重复（每隔 N 分钟/小时/天，1 分钟到 7 天），每天与每周使用手机当前时区；本地预校验不通过时不发送
+    - Bot 详情页新增「定时任务」行，显示该 Bot 进行中的任务数，进入日程页并只显示该 Bot 的任务、新建时预选该 Bot
+  why:
+    - 用户在手机上看不到也管理不了 Bot 的定时任务（每日简报、定期巡检等），无法临时暂停或新建，只能回电脑网页端；DS-Bot 0.3.10 已提供 schedules、schedule-create、schedule-pause、schedule-delete 端点
+scope:
+  in:
+    - core：Schedules（schedules 应答解码：available、canPause、tasks；时间规则与下次运行文案（java.time，按手机时区与语言）；可暂停判定；按 Bot 与群聊分组；新建校验与 when 构造（at/daily/weekly/every）；schedule-* 请求体；慢端点不需要）；JUnit（SchedulesTest）
+    - app：SchedulesPage（分组列表、展开内容、暂停/恢复、删除确认、过滤某 Bot 与显示全部、DSH 未开启说明、远端不支持说明）、ScheduleCreatePage（对象选择、名称与内容、时间规则表单、日期与时刻选择器）、NativeShell 路由、TeamPage「定时任务」入口、BotDetailsPage「定时任务」行
+    - mock --manage 日程端点（各种时间规则、暂停与已结束任务、到点一次性任务不可暂停、canPause 与 available 开关）供模拟器验收；runSpike 对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记日程端点与 hello 例外；设备验收
+  out:
+    - 编辑已有任务的内容或时间（上游 schedule 端点不提供，由 Bot 自己的 schedule_edit 工具处理）；cron 与 rrule 规则的新建（网页端同样不提供）；在手机上开启 DSH 的 Automation tasks 插件
+unchanged_behavior:
+  - 团队页既有入口与 Bot 详情既有分组不变
+  - 远端不支持日程或 DSH 未开启 Automation tasks 时页面给出说明，其余功能照常
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-schedules

@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-schedules
+sections:
+  Implementation:
+    core-schedules:
+      text: core：Schedules（应答解码、时间规则与下次运行文案、可暂停判定、分组、新建校验与 when 构造、schedule-* 请求体）；JUnit（SchedulesTest）
+      status: complete
+    app-schedules:
+      text: app：SchedulesPage（分组列表、展开、暂停/恢复、删除确认、过滤与显示全部、未开启与不支持说明、前台 60 秒重读）、ScheduleCreatePage（对象、名称与内容、时间规则与日期时刻选择器）、NativeShell 路由、TeamPage 入口、BotDetailsPage「定时任务」行
+      status: complete
+    mock-schedules:
+      text: mock --manage：schedules（各时间规则、暂停/结束/逾期任务、canPause、available）、schedule-create/pause/delete（含校验与到点一次性任务不可暂停），调用记录只记参数键
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（schedules 应答键与计数，schedule-create/pause/delete 以不存在的对象或任务取错误应答），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：日程分组列表与时间规则、下次运行与逾期/暂停/结束、展开内容、暂停与恢复、删除确认、新建（一次/每天/每周/重复，本地校验）、Bot 详情入口与过滤、未开启与不支持说明
+      status: complete
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-schedules
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

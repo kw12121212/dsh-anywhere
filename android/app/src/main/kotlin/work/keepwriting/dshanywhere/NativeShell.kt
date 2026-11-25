@@ -174,6 +174,10 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object ProviderAdd : ShellPage
         /** Bot 模型批量切换。 */
         data object BotModels : ShellPage
+        /** 定时任务（dsbot-schedules）；[owner] 非空时只显示该 Bot 的任务。 */
+        data class Schedules(val owner: String?) : ShellPage
+        /** 新建定时任务；[start] 为预选的 Bot 或群聊。 */
+        data class ScheduleCreate(val start: String?) : ShellPage
     }
 
 @Composable
@@ -378,6 +382,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             },
                             onOpenBrowser = { connection.openBotBrowser(current.targetId) },
                             onOpenCapabilities = { connection.openBotCapabilities(current.targetId) },
+                            onOpenSchedules = { connection.openSchedules(current.targetId) },
                         )
                     }
                 }
@@ -504,6 +509,19 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                 // 添加成功后返回服务商列表（只在仍停留在添加页时）；返回后列表重读
                 current is ShellPage.ProviderAdd -> ProviderAddPage(connection.manageApi, onDone = { if (connection.page == current) connection.goBack() })
                 current is ShellPage.BotModels -> BotModelsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.Schedules -> SchedulesPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    filterOwner = current.owner,
+                    onCreate = { start -> connection.openScheduleCreate(start) },
+                )
+                // 创建成功后返回日程页（只在仍停留在新建页时）；返回后列表重读
+                current is ShellPage.ScheduleCreate -> ScheduleCreatePage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    start = current.start,
+                    onDone = { if (connection.page == current) connection.goBack() },
+                )
                 current is ShellPage.ImDetail -> ImDetailPage(
                     state = connection.stateSnapshot?.raw,
                     id = current.id,
@@ -557,6 +575,8 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onLocalAgents = { connection.openLocalAgents() },
                     // 模型与服务商（dsbot-models-providers）：不门控，页面按 providers 应答说明不支持
                     onModelProviders = { connection.openModelProviders() },
+                    // 定时任务（dsbot-schedules）：不门控，页面按 schedules 应答说明不支持或未开启
+                    onSchedules = { connection.openSchedules(null) },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -1291,6 +1311,10 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openProviderAdd() = push(ShellPage.ProviderAdd)
 
     fun openBotModels() = push(ShellPage.BotModels)
+
+    fun openSchedules(owner: String?) = push(ShellPage.Schedules(owner))
+
+    fun openScheduleCreate(start: String?) = push(ShellPage.ScheduleCreate(start))
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

@@ -73,6 +73,8 @@ fun TeamPage(
     onLocalAgents: (() -> Unit)? = null,
     /** 模型与服务商（dsbot-models-providers）：入口不门控；为 null 时不显示。 */
     onModelProviders: (() -> Unit)? = null,
+    /** 定时任务（dsbot-schedules）：入口不门控；为 null 时不显示。 */
+    onSchedules: (() -> Unit)? = null,
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -116,6 +118,9 @@ fun TeamPage(
                 }
                 if (showIm) {
                     TextButton(onClick = onIm) { Text(tr("IM 接入", "IM")) }
+                }
+                if (onSchedules != null) {
+                    TextButton(onClick = onSchedules) { Text(tr("定时任务", "Scheduled tasks")) }
                 }
                 if (onModelProviders != null) {
                     TextButton(onClick = onModelProviders) { Text(tr("模型与服务商", "Models & providers")) }

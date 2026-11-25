@@ -1,0 +1,29 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    scheduled-tasks:
+      strength: MUST
+      statement: 团队页提供「定时任务」入口进入日程页：按 Bot 与群聊分组列出团队的定时任务，每项显示名称、时间规则（一次及其时间、每天几点、每周几几点（工作日、周末与每天有简写）、每隔多久、cron 表达式，时区与手机不同时注明）、所在群聊、下次运行时间或已逾期、已暂停、已结束，点按可展开完整的任务内容；远端支持暂停时，进行中与已暂停的任务可暂停或恢复（到点的一次性任务不可暂停）；删除须二次确认。可新建定时任务：选择发送给哪个 Bot 或群聊，填写名称（不超过 120 字）与要做的事，时间规则为一次（将来的日期与时间）、每天（时刻）、每周（至少一天与时刻）或重复（每隔 N 分钟、小时或天，1 分钟到 7 天），每天与每周按手机当前时区；不满足时不能提交，服务端拒绝时显示原因。Bot 详情页提供「定时任务」行显示该 Bot 进行中的任务数，进入后只显示该 Bot 的任务并可切换为显示全部，新建时预选该 Bot。页面打开期间约每分钟刷新一次；写操作不自动重试，成功后与网页端一致；DSH 未开启 Automation tasks 时说明需在 DSH 设置的插件页开启，远端不支持时页面给出说明。
+      scenarios:
+        create-and-run:
+          - GIVEN: DSH 已开启 Automation tasks
+          - WHEN: 在 App 为某 Bot 新建一个每天 09:00 的任务，再新建一个几分钟后运行一次的任务
+          - THEN: 两个任务出现在该 Bot 分组下，分别显示每天 09:00 与一次及其时间和下次运行时间；一次性任务按时触发后 Bot 收到任务内容，列表显示已结束，网页端日程页一致
+        pause-resume-delete:
+          - GIVEN: 某 Bot 有一个每天运行的任务
+          - WHEN: 暂停该任务，再恢复，最后二次确认删除
+          - THEN: 暂停后显示已暂停，恢复后显示下次运行时间，删除须确认，确认后两端都不再显示
+        validation:
+          - GIVEN: 正在新建定时任务
+          - WHEN: 选择一次但不选将来的时间，或选择每周但不选任何一天，或不填名称
+          - THEN: 提交按钮不可用或在本地提示，不发送请求
+        automation-off:
+          - GIVEN: DSH 未开启 Automation tasks
+          - WHEN: 进入日程页
+          - THEN: 页面说明需要在 DSH 设置的插件页开启 Automation tasks，不显示新建入口
+  MODIFIED: {}
+  REMOVED: {}

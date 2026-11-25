@@ -1155,6 +1155,12 @@ data: {"revision":8}
     }))
     return
   }
+  if (manage && url.startsWith('/mock/schedules')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(manage.setSchedules(q)))
+    return
+  }
   if (manage && url.startsWith('/mock/providers')) {
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' })
