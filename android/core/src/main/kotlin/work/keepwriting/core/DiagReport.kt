@@ -61,15 +61,39 @@ object DiagText {
 
     private val URL_TOKEN = Regex("""https?://[^\s"'<>]+""")
     private val TOKEN_VALUE = Regex("""token=[^&\s"'<>]*""")
+    // JSON 字符串形态的凭据、密钥与口令字段（不区分大小写；匹配含转义引号的完整 JSON 字符串值）。
+    private val JSON_SECRET_FIELD = Regex(
+        """("(?:passphrase|secret|secretValue|secret_value|password|apiKey|api_key|clientSecret|client_secret|accessToken|access_token|refreshToken|refresh_token|token|authorization|cookie)"\s*:\s*)"(?:[^"\\]|\\.)*"""",
+        RegexOption.IGNORE_CASE,
+    )
+    // secret-set 载荷中的 value 字段（保留密钥名 name，仅脱敏 value）。
+    private val JSON_SECRET_SET_VALUE = Regex(
+        """("secret-set"[\s\S]*?"value"\s*:\s*)"(?:[^"\\]|\\.)*"""",
+        RegexOption.IGNORE_CASE,
+    )
+    // 键值形态的敏感字段（支持无引号、双引号与单引号包裹的值，如 passphrase="my pass"、DSH_SECRET_FOO='bar'、dsh-auth=xxx）。
+    private val KV_SECRET_VALUE = Regex(
+        """\b((?:DSH_SECRET_[A-Z0-9_]+|passphrase|secret|password|api_key|apiKey|clientSecret|client_secret|dsh-auth)\s*[=:]\s*)(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s&"',;}\]]+)""",
+        RegexOption.IGNORE_CASE,
+    )
+    // Authorization: Bearer / Basic 头。
+    private val AUTH_HEADER = Regex(
+        """\b(Authorization\s*:\s*(?:Bearer|Basic)\s+)[^\s"',;}\]]+""",
+        RegexOption.IGNORE_CASE,
+    )
 
     /**
      * 报告文本脱敏：URL 形态的片段经 [HarnessUrl.redact]（剥 token 参数、隐藏密码、
-     * 无法解析时不回显原文），残余的 token=值 一律把值替换为 ***——两条都做，
-     * 保证 token 查询参数的值绝不离开设备。
+     * 无法解析时不回显原文），残余的 token=值、JSON 密钥/口令字段、secret-set 的 value、
+     * 环境变量与键值形态的敏感字段一律把值替换为 ***，保证凭据、密钥与口令绝不离开设备。
      */
     fun sanitize(text: String): String {
-        val redacted = URL_TOKEN.replace(text) { HarnessUrl.redact(it.value) }
-        return TOKEN_VALUE.replace(redacted, "token=***")
+        val redactedUrls = URL_TOKEN.replace(text) { HarnessUrl.redact(it.value) }
+        val noJsonSecrets = JSON_SECRET_FIELD.replace(redactedUrls) { "${it.groupValues[1]}\"***\"" }
+        val noSecretSetValue = JSON_SECRET_SET_VALUE.replace(noJsonSecrets) { "${it.groupValues[1]}\"***\"" }
+        val noAuthHeader = AUTH_HEADER.replace(noSecretSetValue) { "${it.groupValues[1]}***" }
+        val noKvSecrets = KV_SECRET_VALUE.replace(noAuthHeader) { "${it.groupValues[1]}***" }
+        return TOKEN_VALUE.replace(noKvSecrets, "token=***")
     }
 
     /** breadcrumb 行：先脱敏再按行上限截断。 */

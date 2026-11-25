@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-secrets-settings
+approach:
+  - 密钥列表（state.secrets）与存储加密状态（state.secretStore）均由 DS-Bot 0.3.10 随 state 与 live 应答下发；0.3.10 hello capabilities 不含密钥管理能力名，因此团队页入口按 state.secrets 字段存在门控（与能力库、连接器、IM 一致），页内存储加密卡按 state.secretStore 字段存在显隐（旧远端缺该字段时优雅隐藏），并在 hello-capabilities 增补例外。
+  - 端点分工按 DS-Bot 0.3.10 secrets.js 与 client.js 实核落实：secret-set {name, value, purpose?, scope?} 用于设置页新增密钥与替换已有密钥的值（不改值时不调用）；secret-update {name, scope?, purpose?} 仅修改作用 Bot 与用途；secret-delete {name} 删除密钥；secret-store {} 读取存储状态（页面同时监听 state.secretStore，写操作成功后直接采纳返回或触发 state 增量同步）；secret-unlock {passphrase} 为当前进程解锁（不改磁盘文件，属 READS）；secret-encrypt {passphrase} 把明文文件原子改写为加密信封；secret-decrypt {passphrase} 验证口令后写回明文，同时作为锁定状态下的恢复路径（在已加密与已锁定两种形态下均提供，提交前二次确认）。
+  - '纯逻辑下沉 core SecretsSettings：负责 state.secrets/secretStore 与 secret-store 应答解码、名称规范化（去首尾空白、去 $/$env: 与 DSH_SECRET_ 前缀、空白与连字符转下划线并大写，校验 ^[A-Z][A-Z0-9_]{0,63}$）、密钥值校验（去首尾空白后 4–16384 字符）、口令校验（不去空白，8–1024 字符）、作用 Bot 摘要与时间文案（注入 now 与 zone）、只读判断与 7 个端点请求体构造。同时扩展 core DiagText.sanitize，对 JSON 与键值形式的 secret/passphrase/password/apiKey/api_key/DSH_SECRET_* 敏感字段做统一脱敏并以 JUnit 锁定。'
+  - app 侧新增 ShellPage.Secrets 与 SecretsPage.kt，复用 ConnectorPages.kt 的 SecretField（不回显密码键盘、关闭自动更正）与 SecureWhileShown（表单显示期间按窗口计数加 FLAG_SECURE，禁止截屏与最近任务预览），同步改造 PendingDockViews.kt 的 SecretBody 共用 SecretField、SecureWhileShown 与 SecretsSettings 校验。所有写操作经 NativeShellConnection.manageAction 发出、不自动重试，成功后由 state 增量同步刷新；口令与密钥值在提交成功后立即清空状态，不进日志、诊断上报、剪贴板与持久存储。
+decisions:
+  data-presence-gating:
+    decision: 密钥入口以 state.secrets 字段存在门控，存储加密卡以 state.secretStore 字段存在显隐，并在 hello-capabilities 增补例外
+    rationale: DS-Bot 0.3.10 的 hello capabilities 不含密钥管理能力名，而 state 与 live 均直接携带 secrets 与 secretStore；按字段存在门控与能力库、连接器、IM 保持一致，也能兼容不含 secretStore 的旧版远端
+  secret-set-vs-update:
+    decision: 新增密钥与替换密钥值走 secret-set，修改作用 Bot 与用途走 secret-update
+    rationale: 核对上游 secrets.js 与 client.js 实证：secret-update 只接受 scope 与 purpose、不接收 value；secret-set 在带 name 时支持新增与替换值（不传 purpose/scope 时保留原有元数据）
+  decrypt-recovery-and-confirm:
+    decision: secret-decrypt 在已加密与已锁定两种状态下均提供入口（锁定态作为恢复路径），且执行前须二次确认；口令不做 trim
+    rationale: 上游 secrets.js 明确注释 secret-decrypt 也是锁定时的恢复路径，secrets-crypto.js 明确口令除文件末尾换行外空白字符有意义、cleanPassphrase 不做 trim；写回明文会降低落盘保护，计划变更明确要求二次确认
+  shared-secret-input-and-redaction:
+    decision: 设置页与聊天停靠区密钥请求卡共用 SecretField、SecureWhileShown 与 SecretsSettings 校验，并在 core DiagText.sanitize 覆盖密钥/口令字段脱敏
+    rationale: 满足计划变更与 security-secrets 标准要求：避免输入防截屏与脱敏逻辑分叉，且通过 core JUnit 把脱敏行为纳入完整回归门禁
+alternatives: []
+risks:
+  - 本机真实服务处于运行中且含用户真实密钥：只读探针仅调用 state/secret-store 并以不存在的密钥名与短口令探测写端点错误形态，绝不改动真实密钥或加密状态；完整增删改与加解锁流程在 mock --manage 上验收
+  - 密钥值与口令输入期间开启 FLAG_SECURE 会导致系统截屏返回黑屏：按 security-secrets 约定仅在表单展开期间启用 SecureWhileShown，列表态不常开 FLAG_SECURE，保证验收截图正常且表单输入受保护

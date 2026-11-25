@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-secrets-settings
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响范围：proposal 的 why。来源：计划变更 dsbot-secrets-settings。
+    answer: 用户在手机上无法查看、新增、修改、删除团队密钥，也无法查看存储加密模式或用口令加密、解锁与解密密钥库，只能回电脑网页端操作；且聊天密钥请求卡尚未与设置页共用防截屏敏感输入组件与 core 密钥脱敏测试。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响范围：delta spec 与验收。来源：里程碑 done_criteria「在密钥设置页新增、更新、删除密钥，值不回显、不进日志与诊断上报」「密钥页显示存储模式，用口令加密、解锁与解密后网页端状态一致，口令不回显、不入日志」。
+    answer: 在 App 密钥设置页可查看列表（不显示值）、新增密钥、编辑作用 Bot 与用途、替换密钥值、二次确认删除，以及查看存储模式并完成口令加密、解锁与二次确认解密，结果与网页端一致；敏感值与口令不回显、不入日志与诊断上报。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: 这次变更按哪种理解实施？
+    context: 影响范围：proposal 范围。来源：计划变更 details 与上游 DS-Bot 0.3.10 secrets.js/secrets-crypto.js/client.js 源码核对。
+    answer: 交付 Settings → Secrets 原生页（团队页入口按 state.secrets 门控）：新增与替换值走 secret-set，修改作用 Bot 与用途走 secret-update，删除走 secret-delete（二次确认），存储加密卡支持 secret-store/unlock/encrypt/decrypt（解密须二次确认且在锁定态亦可作为恢复路径）；聊天密钥请求卡共用 SecretField/SecureWhileShown，core DiagText.sanitize 覆盖密钥与口令脱敏。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响范围：unchanged 与评审。
+    answer: 绝不在 App 中回显、导出、持久化或记录任何密钥值与口令；团队页既有入口与聊天停靠区其余卡片不变；不修改服务端环境变量配置。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响范围：优先级。
+    answer: 依赖 dsbot-interactive-cards 已完成，roadmap-recommend 按里程碑与依赖顺序推荐 dsbot-secrets-settings 为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

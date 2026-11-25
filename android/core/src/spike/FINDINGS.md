@@ -515,3 +515,15 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 **源码核对（ds-bot 0.3.10 `src/host/schedules.js`、`channel.js`，client.js `useSchedules`/`timingText`/`nextText`/`canPauseTask`/`TaskRow2`/`TaskForm`/`SchedulesPage`/`BotSchedules`）**：
 - `schedule-create {target, title(1–120), prompt, when: {kind:'at', at(ISO，将来)} | {kind:'daily', time(HH:mm[:ss]), timeZone} | {kind:'weekly', time, timeZone, weekdays[1–7，至少一个]} | {kind:'every', minutes(1–10080)}}` → 返回最新 `schedules` 视图；`schedule-pause {sessionId, id, active}`（`canPause` 为真时可用，到点的一次性任务不可暂停）→ 返回最新视图；`schedule-delete {sessionId, id}` → 返回最新视图。`schedules` 在上游 `READS` 内。
 - 写端点成功应答、到点一次性任务不可暂停、`canPause` 与 `available` 开关及不支持降级由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-schedules.mjs`）覆盖；`/mock/schedules?enabled=0|1&available=0|1&canPause=0|1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键）。
+
+## 34. 密钥设置与落盘加密（2026-11-25，dsbot-secrets-settings）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesSecrets` 探针组，未改动用户真实密钥与存储文件）**：
+- `state` 顶层与 `live` 均携带 `secrets` 与 `secretStore`：`secrets` 数组 1 项，条目键集 `[createdAt, lastUsedAt, name, purpose, requestedBy, scope, updatedAt]`，不含 `value` 字段；`secretStore` 键 `[locked, mode, source]`，`mode=plaintext`、`locked=false`、`readOnly=false`。`hello` 的 `capabilities` 名单不含密钥管理能力名，客户端以 `state.secrets` 存在门控入口、以 `state.secretStore` 存在显隐落盘加密卡。
+- `secret-store {}`（上游 `READS`）→ 键 `[locked, mode, source]`，`mode=plaintext`、`locked=false`、`source=null`、`reason=null`，与 `state.secretStore` 一致。
+- 写端点错误形态（均 HTTP 200、`ok:false`、`error.code="bot/refused"`，均在任何写入前拒绝）：`secret-set` 短值 → `"A key must have at least 4 characters"`；`secret-set` 非法名 → `"A name uses capitals, digits, and underscores, and starts with a letter"`；`secret-update` 不存在的键 → `"No such key"`；`secret-delete` 不存在的键 → `"No such key"`；`secret-unlock` / `secret-encrypt` / `secret-decrypt` 短口令 → `"A passphrase has at least 8 characters."`。
+
+**源码核对（ds-bot 0.3.10 `src/host/secrets.js`、`secrets-crypto.js`、`channel.js`，client.js `SecretsPage`/`SecretRow`/`ScopeEditor`/`PurposeEditor`/`ValueEditor`/`AddSecret`/`SecretStoreCard`）**：
+- `secret-set` 承担两类写入：带 `requestId` 时为聊天停靠区密钥请求卡作答；带 `name` 时为设置页新增密钥（`{name, value, purpose?, scope?}`）或替换已有密钥的值（`{name, value}`，保留既有 `purpose` 与 `scope`）。`secret-update {name, scope?, purpose?}` 仅更新作用 Bot 与用途、不接收 `value`；`secret-delete {name}` 删除密钥。
+- 存储加密端点：`secret-unlock {passphrase}` 为当前进程解锁（不改文件，属 `READS`，只读宿主亦可解锁）；`secret-encrypt {passphrase}` 将明文文件原子改写为加密信封（已加密或只读宿主拒绝）；`secret-decrypt {passphrase}` 验证口令后写回明文，亦为锁定态的恢复路径（未加密或只读宿主拒绝）。口令长度 8–1024 且不做 trim（空白字符有意义）。
+- 写端点成功应答、锁定态、口令校验、只读宿主与无 `secrets`/`secretStore` 降级由 `node scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-secrets.mjs`）覆盖；`/mock/secrets?enabled=0|1&storeEnabled=0|1&readOnly=...&lock=1&reason=...&request=0|1&reset=1&resetCalls=1` 控制并返回调用记录（只记参数键，绝不输出值与口令）。

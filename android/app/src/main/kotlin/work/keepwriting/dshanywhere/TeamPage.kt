@@ -75,6 +75,9 @@ fun TeamPage(
     onModelProviders: (() -> Unit)? = null,
     /** 定时任务（dsbot-schedules）：入口不门控；为 null 时不显示。 */
     onSchedules: (() -> Unit)? = null,
+    /** 密钥设置（dsbot-secrets-settings）：远端 state 含 secrets 时显示入口。 */
+    showSecrets: Boolean = false,
+    onSecrets: () -> Unit = {},
     /** 团队分组（dsbot-sidebar-sections）。 */
     sections: List<TeamSections.Section> = emptyList(),
     onCreateSection: (name: String, onError: (String) -> Unit) -> Unit = { _, _ -> },
@@ -121,6 +124,9 @@ fun TeamPage(
                 }
                 if (onSchedules != null) {
                     TextButton(onClick = onSchedules) { Text(tr("定时任务", "Scheduled tasks")) }
+                }
+                if (showSecrets) {
+                    TextButton(onClick = onSecrets) { Text(tr("密钥", "Secrets")) }
                 }
                 if (onModelProviders != null) {
                     TextButton(onClick = onModelProviders) { Text(tr("模型与服务商", "Models & providers")) }

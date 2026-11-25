@@ -178,6 +178,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class Schedules(val owner: String?) : ShellPage
         /** 新建定时任务；[start] 为预选的 Bot 或群聊。 */
         data class ScheduleCreate(val start: String?) : ShellPage
+        /** 密钥设置与落盘加密（dsbot-secrets-settings）。 */
+        data object Secrets : ShellPage
     }
 
 @Composable
@@ -522,6 +524,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     start = current.start,
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
+                current is ShellPage.Secrets -> SecretsPage(connection.stateSnapshot?.raw, connection.manageApi)
                 current is ShellPage.ImDetail -> ImDetailPage(
                     state = connection.stateSnapshot?.raw,
                     id = current.id,
@@ -577,6 +580,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onModelProviders = { connection.openModelProviders() },
                     // 定时任务（dsbot-schedules）：不门控，页面按 schedules 应答说明不支持或未开启
                     onSchedules = { connection.openSchedules(null) },
+                    // 密钥设置（dsbot-secrets-settings）：state 含 secrets 时出现
+                    showSecrets = work.keepwriting.core.SecretsSettings.hasSecrets(connection.stateSnapshot?.raw),
+                    onSecrets = { connection.openSecrets() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
                     onCreateSection = { name, onErr ->
                         connection.manageAction("section:create", "section-save", work.keepwriting.core.TeamSections.Requests.create(name), {}, onErr)
@@ -1315,6 +1321,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openSchedules(owner: String?) = push(ShellPage.Schedules(owner))
 
     fun openScheduleCreate(start: String?) = push(ShellPage.ScheduleCreate(start))
+
+    fun openSecrets() = push(ShellPage.Secrets)
 
     /** 从子页面带回详情页的一次性提示（如「文件夹已保存，将在新分段继续」），主线程读写。 */
     var flash by mutableStateOf<String?>(null)

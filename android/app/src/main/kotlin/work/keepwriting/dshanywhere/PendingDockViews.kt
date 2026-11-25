@@ -162,7 +162,7 @@ private fun DockBody(
                 }
             }
             is PendingDock.Payload.Question -> QuestionBody(p, answer)
-            is PendingDock.Payload.Secret -> SecretBody(p, answer)
+            is PendingDock.Payload.Secret -> SecretBody(p, busy, answer)
             is PendingDock.Payload.View -> {
                 // show_view 卡片原生绘制（dsbot-rich-render）：校验不通过降级只读摘要；解码只在蓝图变化时做
                 val decoded = androidx.compose.runtime.remember(p.raw) { work.keepwriting.core.ViewCard.decode(p.sessionId, p.raw) }
@@ -249,31 +249,33 @@ private fun QuestionBody(p: PendingDock.Payload.Question, answer: (String, Strin
     }
 }
 
-/** 密钥请求：填写新值（不回显）或允许使用已保存的同名密钥；取消即拒绝。值不进日志。 */
+/** 密钥请求：与密钥设置页共用 SecretField、SecureWhileShown 与 core 校验；填写新值（不回显）或允许使用已保存的同名密钥；取消即拒绝。值不进日志。 */
 @Composable
-private fun SecretBody(p: PendingDock.Payload.Secret, answer: (String, String) -> Unit) {
+private fun SecretBody(p: PendingDock.Payload.Secret, busy: Boolean, answer: (String, String) -> Unit) {
     val R = PendingDock.Requests
     var value by remember(p.id) { mutableStateOf("") }
     Text(tr("请求密钥「${p.name}」", "Requests the key “${p.name}”"), style = MaterialTheme.typography.titleSmall)
     p.purpose?.let { Text(tr("用途：$it", "Purpose: $it"), style = MaterialTheme.typography.bodySmall) }
     if (p.kind != "allow") {
-        androidx.compose.material3.OutlinedTextField(
+        SecureWhileShown()
+        SecretField(
             value = value,
-            onValueChange = { value = it },
-            placeholder = { Text(tr("输入密钥值（不回显，至少 4 个字符）", "Enter the key (hidden, at least 4 characters)")) },
-            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            onChange = { value = it },
+            label = tr("输入密钥值（不回显，至少 4 个字符）", "Enter the key (hidden, at least 4 characters)"),
+            enabled = !busy,
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (p.kind == "allow") {
-            OutlinedButton(onClick = { answer("secret-allow", R.secretAllow(p.id)) }) { Text(tr("允许使用已保存的", "Allow the saved key")) }
+            OutlinedButton(enabled = !busy, onClick = { answer("secret-allow", R.secretAllow(p.id)) }) { Text(tr("允许使用已保存的", "Allow the saved key")) }
         } else {
-            // 上游 cleanValue 去首尾空白后至少 4 个字符（secrets.js MIN_VALUE）
-            OutlinedButton(onClick = { answer("secret-set", R.secretSet(p.id, value.trim())) }, enabled = value.trim().length >= 4) { Text(tr("提交", "Submit")) }
+            // 与密钥设置页共用 core SecretsSettings.valueProblem（trim 后 4..16384 字符）
+            OutlinedButton(
+                onClick = { answer("secret-set", R.secretSet(p.id, value.trim())) },
+                enabled = !busy && work.keepwriting.core.SecretsSettings.valueProblem(value) == null,
+            ) { Text(if (busy) tr("提交中…", "Submitting…") else tr("提交", "Submit")) }
         }
-        TextButton(onClick = { answer("secret-cancel", R.secretCancel(p.id)) }) { Text(tr("取消", "Cancel")) }
+        TextButton(enabled = !busy, onClick = { answer("secret-cancel", R.secretCancel(p.id)) }) { Text(tr("取消", "Cancel")) }
     }
 }
 

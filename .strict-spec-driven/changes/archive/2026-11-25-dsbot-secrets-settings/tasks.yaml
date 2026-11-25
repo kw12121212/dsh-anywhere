@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-secrets-settings
+sections:
+  Implementation:
+    core-secrets:
+      text: core：实现 SecretsSettings（state.secrets 与 state.secretStore 解码、名称规范化与校验、值与口令校验、作用范围与时间文案、secret-* 请求体）并扩展 DiagText 密钥与口令字段脱敏；补充 JUnit（SecretsSettingsTest 与 DiagReportingTest）
+      status: complete
+    app-secrets:
+      text: app：实现 SecretsPage（存储加密状态卡与加密/解锁/解密表单及二次确认、只读宿主提示、密钥列表不显示值、展开编辑作用 Bot 与用途/替换值/二次确认删除、新增密钥表单，使用 SecretField 与 SecureWhileShown）、更新 PendingDockViews 的 SecretBody 复用 SecretField/SecureWhileShown 与 core 校验、接入 NativeShell 路由与 TeamPage 入口
+      status: complete
+    mock-secrets:
+      text: mock --manage：实现 scripts/mock-dsh-secrets.mjs 并接入 mock-dsh-server.mjs，覆盖 state.secrets/secretStore 与 secret-store/set/update/delete/unlock/encrypt/decrypt（含锁定态、口令校验与只读宿主开关），调用记录只记参数键不记值与口令
+      status: complete
+    findings:
+      text: 对本机真实服务做只读探针（state.secrets、state.secretStore、secret-store 应答键及写端点非法参数错误形态，不改动真实密钥与存储模式），登记 FINDINGS 新节
+      status: complete
+  Testing:
+    core-junit:
+      text: core JUnit
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 :app 调试 APK
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 完整回归
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock --manage）：密钥列表不显示值、新增密钥、修改作用 Bot 与用途、替换值、二次确认删除、存储口令加密/锁定后解锁/二次确认解密（含锁定态恢复）、聊天密钥请求卡复用输入组件、只读宿主拒绝提示与无 secrets 降级
+      status: complete
+    strict-ready-verify:
+      text: strict ready 与 verify 通过
+      status: complete
+      command: strict-spec-cli verify dsbot-secrets-settings
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

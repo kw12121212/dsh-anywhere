@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-secrets-settings
+  status: proposed
+summary:
+  what:
+    - 团队页提供「密钥」入口进入原生密钥设置页：列表只显示密钥名称、用途、作用 Bot（所有 Bot / 指定 Bot / 无）及添加与最近使用时间，不显示密钥值；支持新增密钥（secret-set）、展开编辑作用 Bot 与用途（secret-update）、替换密钥值（secret-set）以及二次确认删除（secret-delete）
+    - 密钥存储加密状态卡：显示当前存储模式（明文 / 已加密 / 已锁定及锁定原因），支持用口令加密明文存储（secret-encrypt，需重复确认口令）、锁定状态下用口令为当前进程解锁（secret-unlock，文件不变），以及验证口令后写回明文（secret-decrypt，含锁定时的恢复路径，须二次确认）；只读宿主按服务端原因拒绝写入
+    - 敏感输入与脱敏统一：密钥值与口令一律使用不回显的 SecretField 并在表单显示期间启用 SecureWhileShown 禁止截屏与最近任务预览，聊天停靠区的密钥请求卡共用同一输入组件与校验规则；值与口令不写入日志、诊断上报、剪贴板与持久存储，core 诊断与日志脱敏对密钥及口令字段提供 JUnit 覆盖
+  why:
+    - 用户目前只能在电脑网页端管理团队密钥或为加密密钥库解锁，无法在手机上新增、轮换、收窄 Bot 权限、删除密钥，也无法在服务端重启后从手机输入口令解锁或开启/关闭落盘加密；同时需要把密钥请求卡与设置页的敏感输入及 core 脱敏规则收口统一
+scope:
+  in:
+    - core：SecretsSettings（state.secrets 与 state.secretStore 解码、名称规范化与校验、值与口令长度校验、作用范围与时间文案、secret-* 请求体）及 DiagText 密钥与口令脱敏规则扩展；JUnit（SecretsSettingsTest 与 DiagReportingTest 补充）
+    - app：SecretsPage（存储加密状态卡与加密/解锁/解密表单及二次确认、密钥列表与展开编辑/替换值/删除确认、新增密钥表单，复用 SecretField 与 SecureWhileShown）、PendingDockViews 的 SecretBody 复用 SecretField/SecureWhileShown 与 core 校验、NativeShell 路由、TeamPage「密钥」入口
+    - mock --manage 密钥端点（secrets、secretStore、secret-store/set/update/delete/unlock/encrypt/decrypt，含锁定态、口令校验与只读宿主模拟，调用记录只记参数键）供模拟器验收；runSpike 对本机真实服务只读探针并登记 FINDINGS；dsbot-api 技术标准登记密钥端点与 hello 例外；设备验收
+  out:
+    - 在 App 中回显或导出已保存的密钥明文；在手机本机持久化或缓存口令/密钥值；修改服务端环境变量 DS_BOT_SECRETS_PASSPHRASE_FILE 或服务启动配置
+unchanged_behavior:
+  - 团队页既有入口与排序、聊天停靠区其余卡片与作答语义不变
+  - 远端 state 不含 secrets 字段时不显示密钥入口；不含 secretStore 字段时隐藏存储加密卡、其余密钥列表与管理照常可用
+roadmap:
+  milestone: dsbot-native-integrations
+  planned_change: dsbot-secrets-settings

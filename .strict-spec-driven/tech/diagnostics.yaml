@@ -25,3 +25,10 @@ rules:
     rationale: 崩溃时进程即将死亡,网络发送不可靠也不安全;原子写与读取容忍是既有持久化标准对崩溃报告的直接适用。
     enforcement:
       method: test
+  diag-sanitize-secret-fields:
+    strength: SHOULD
+    statement: Android 端经 DiagText.sanitize 输出的诊断报告、堆栈与 breadcrumb 除剥离 URL token 外，还必须对 JSON 字段、键值与环境变量形态（含无引号、双引号与单引号包裹的值）及 Authorization 头中的密钥、口令、API key、cookie 等敏感值统一替换为 ***；后续变更如引入新的敏感请求字段名或凭据前缀，应同步补充到 DiagText.sanitize 并在 DiagReportingTest 中以正反例断言覆盖。
+    rationale: 仅靠业务代码不主动打印敏感字段无法防范异常堆栈、序列化片段或底层库错误把请求体/环境变量带入诊断上报；把脱敏清单收口在 core DiagText.sanitize 并纳入完整回归门禁，可为所有 Android 功能提供统一的纵深防御。
+    enforcement:
+      method: test
+      detail: core JUnit（DiagReportingTest）覆盖 URL token、JSON 凭据键、secret-set value、键值与环境变量（无引号及单/双引号包裹）及 Authorization 头脱敏，断言原值不出现且非敏感上下文（如密钥名）保留。

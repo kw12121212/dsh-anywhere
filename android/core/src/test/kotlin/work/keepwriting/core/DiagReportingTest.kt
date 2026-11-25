@@ -59,6 +59,35 @@ class DiagReportingTest {
     }
 
     @Test
+    fun sanitizeRedactsSecretsPassphrasesAndSecretSetPayloads() {
+        val jsonLine = """req {"endpoint":"secret-set","payload":{"name":"GITHUB_TOKEN","value":"ghp_live_99999"}} {"passphrase":"my \"quoted\" pass","apiKey":"sk-abc123","clientSecret":"cs-789","password":"pw 123"}"""
+        val out = DiagText.sanitize(jsonLine)
+        assertTrue(out.contains("GITHUB_TOKEN"))
+        assertFalse(out.contains("ghp_live_99999"))
+        assertFalse(out.contains("quoted"))
+        assertFalse(out.contains("sk-abc123"))
+        assertFalse(out.contains("cs-789"))
+        assertFalse(out.contains("pw 123"))
+
+        val kvLine = "env DSH_SECRET_OPENAI_KEY=sk-topsecret passphrase=open-sesame secret=s123 dsh-auth=cookie999 Authorization: Bearer eyJsecretToken"
+        val kvOut = DiagText.sanitize(kvLine)
+        assertTrue(kvOut.contains("DSH_SECRET_OPENAI_KEY=***"))
+        assertFalse(kvOut.contains("sk-topsecret"))
+        assertFalse(kvOut.contains("open-sesame"))
+        assertFalse(kvOut.contains("s123"))
+        assertFalse(kvOut.contains("cookie999"))
+        assertFalse(kvOut.contains("eyJsecretToken"))
+
+        val quotedKv = """sh: DSH_SECRET_OPENAI_KEY="sk-quoted \"val\" 1" passphrase="my space pass" secret='single-quoted-99' ok=keep"""
+        val quotedOut = DiagText.sanitize(quotedKv)
+        assertTrue(quotedOut.contains("DSH_SECRET_OPENAI_KEY=***"))
+        assertTrue(quotedOut.contains("ok=keep"))
+        assertFalse(quotedOut.contains("sk-quoted"))
+        assertFalse(quotedOut.contains("my space pass"))
+        assertFalse(quotedOut.contains("single-quoted-99"))
+    }
+
+    @Test
     fun truncateIsByteSafeForMultibyte() {
         val text = "密码密码密码" // 每字 3 字节
         assertEquals(6, DiagText.truncateBytes(text, 6).toByteArray(Charsets.UTF_8).size)
