@@ -27,3 +27,9 @@ android/app/libs/
 android/tstunnel/.gobin/
 # 模拟器/真机验收截图等本机证据（android-build-outside-gate：设备验收在回归之外）
 android/evidence/
+
+# macOS 原生工程（macos/，SwiftPM 构建与 Xcode 本地数据不入库）
+macos/**/.build/
+macos/**/.swiftpm/
+macos/**/xcuserdata/
+.DS_Store

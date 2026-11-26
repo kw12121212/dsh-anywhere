@@ -1,0 +1,29 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-scaffold
+approach:
+  - 'macos/ 分为两个独立 SwiftPM 包：macos/Core（swift-tools-version: 6.0，name: "Core"，库产品 DshCore，仅依赖 Foundation，零第三方依赖，可在 Linux Swift 6 工具链上直接运行 swift test --package-path macos/Core）与 macos/App（swift-tools-version: 6.0，platforms: [.macOS(.v14)]，本地路径依赖 ../Core 的可执行目标，SwiftUI App 入口与占位主窗口）。scripts/macos-package.mts 仅用 Node 22 内置模块与 scripts/package-version.mts，在 macOS 上执行通用二进制 release 构建（swift build --package-path macos/App -c release --arch arm64 --arch x86_64）、校验 lipo -archs 同时含 arm64 与 x86_64、从 package.json 注入 CFBundleShortVersionString/CFBundleVersion 生成 Info.plist、复用 build/icon.icns 写入 AppIcon.icns、写 PkgInfo、plutil -lint 校验、codesign --force --deep --sign - 临时签名并用 ditto -c -k --sequesterRsrc --keepParent 打为 .zip。package.yml 增加 package-macos-native job（if: github.ref_type != ''tag''）调用该脚本并上传 dsh-anywhere-macos-native artifact，不触碰 release.yml。'
+decisions:
+  swiftpm-executable-plus-package-script:
+    decision: 使用 SwiftPM 可执行目标 + scripts/macos-package.mts 组装 .app 与 .zip，而非 XcodeGen + xcodebuild
+    rationale: CI 无需 brew install xcodegen，零 .xcodeproj/xcuserdata 维护成本，后续里程碑新增 .swift 文件自动被 SwiftPM 发现，且在 Mac 上仍可直接用 Xcode 打开 macos/App/Package.swift。
+  swift-tools-6-0-cross-host:
+    decision: '两个 Package.swift 统一声明 swift-tools-version: 6.0，且 macos/Core/Package.swift 的 package name 设为 Core 与目录名一致'
+    rationale: 本机 Linux 为 Swift 6.4，GitHub Actions macos-latest 为 Xcode 16+（Swift 6.0+），6.0 可在两端无差异解析；目录名与 package name 一致可避免 SwiftPM 本地路径包身份冲突。
+  version-single-source-and-core-test:
+    decision: scripts/macos-package.mts 经 scripts/package-version.mts 读取仓库根 package.json 注入 CFBundleShortVersionString 与 CFBundleVersion（缺失或非 x.y.z 直接失败）；macos/Core 提供纯 Foundation 的 AppIdentity 与 VersionSpec（含 VersionSpecTests 读取仓库根 package.json 校验格式与派生公式）作为回归命令的首个真实 Swift 信号
+    rationale: 遵循 tech/packaging 版本单一来源规则，且让回归命令中的 swift test 校验真实契约而非空占位。
+  ci-native-job-excluded-from-release:
+    decision: 'package.yml 新增 package-macos-native job 并以 if: github.ref_type != ''tag'' 保护，上传独立 artifact 名 dsh-anywhere-macos-native，不修改 release.yml'
+    rationale: GitHub Actions 中 workflow_call 内 github.event_name 仍是调用方事件，唯有 github.ref_type != 'tag' 能在 release.yml（仅 v* tag 触发）复用 package.yml 时准确跳过原生 job，防止 release.yml 的 download-artifact 将原生产物混入 Release 与 SHA256SUMS。
+  no-delta-spec:
+    decision: 本变更为纯工程脚手架与技术标准变更，不产生 specs/ delta-spec 也不产生 scenes/ delta-scene（场景先导路由确认无新增用户操作流）
+    rationale: 占位窗口无业务交互行为可入主规格，完整 macOS 外壳与连接主规格由后续功能变更建立。
+alternatives:
+  - option: 使用 XcodeGen（project.yml）生成 .xcodeproj 并由 xcodebuild 打包
+    reason: CI 需每次安装第三方 xcodegen 工具且需维护工程模板文件，不如 SwiftPM 可执行目标配合零依赖 Node 打包脚本简洁稳定。
+risks:
+  - WSL/Linux 无法编译 SwiftUI：macos/App 的编译与运行只能由 GitHub Actions macos-latest 与用户 Mac 验收，须保持 App 入口极简并严格遵循 Swift 6 并发规则与 macOS 14 API
+  - 'GitHub Actions macos-latest 的 Swift 次版本可能低于本机 Linux Swift 6.4：Package.swift 必须钉在 swift-tools-version: 6.0 且不使用 6.1+ 专有语法'

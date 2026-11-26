@@ -1,0 +1,42 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: macos-client
+standard:
+  title: macOS 原生客户端工程约定
+  category: tooling
+operations:
+  ADDED:
+    macos-package-layout:
+      strength: MUST
+      statement: 'macos/Core 是纯 Foundation 的独立 Swift Package（swift-tools-version: 6.0，package 名 Core，库产品 DshCore，平台声明 macOS 14，零第三方依赖，不引用 AppKit、SwiftUI、Combine、FoundationNetworking 等 Apple 专有或跨平台差异大的框架，可在 Linux 直接运行 swift test）；macos/App 是 SwiftUI 可执行目标（以本地路径 ../Core 依赖 DshCore），不提交 .xcodeproj 或 xcuserdata，由 scripts/macos-package.mts 在 macOS 上组装通用二进制（arm64 + x86_64）未签名 .app。'
+      rationale: 里程碑决定 macOS 原生端与 Electron、Android 并存且门禁分层：Core 保持纯 Foundation 且无外部依赖是「Linux 本机 swift test 可进完整回归」的结构前提；SwiftPM 配合零依赖脚本避免 CI 安装第三方工程生成工具与 xcuserdata 污染。
+      enforcement:
+        method: review
+        detail: 评审检查 macos/Core/Package.swift 的 swift-tools-version 6.0、name Core、零第三方依赖、Sources/DshCore 仅 import Foundation，以及 macos/App 仅通过 ../Core 依赖 DshCore 且无 .xcodeproj/xcuserdata 入库
+    pure-logic-in-macos-core:
+      strength: SHOULD
+      statement: macOS 原生功能中不依赖 Apple 框架的协议、解析与状态机逻辑（URL 校验与 token 剥离、DS-Bot API、SSE 解析、feed 同步、版本比对、mux 帧编解码等）应下沉到 macos/Core 并以 swift test 覆盖，macos/App 只保留界面与系统集成；不下沉时 design.yaml 必须说明理由。
+      rationale: macos/Core 是唯一进本地完整回归的 Swift 测试面：纯逻辑留在 macos/App 会失去 Linux 门禁回归保护，也无法在无 Xcode 环境复现协议行为。
+      enforcement:
+        method: review
+        detail: 评审检查 macos/App 新增逻辑是否可下沉到 macos/Core 并附 XCTest 用例
+      exceptions:
+        - 依赖 SwiftUI、AppKit、URLSession、Keychain、文件存储或 NSOpenPanel 等 Apple 框架的装配与界面代码
+    macos-core-tests-in-regression:
+      strength: MUST
+      statement: macos/Core 的测试必须以 swift test --package-path macos/Core 接入 config.yaml review_evidence.project_regression.command 的完整回归命令（本机 Linux Swift 工具链可直接执行，不依赖 macOS 或 Xcode）；Swift 代码不设覆盖率门槛（review_evidence.coverage.scope 维持 src/**/*.ts 与 scripts/**/*.mts）。
+      rationale: 纯 Foundation Core 测试进本地回归能在 Linux 开发机拦截协议与版本公式回退，同时维持 Node 覆盖率门禁口径不被非 Node 代码稀释或破坏。
+      enforcement:
+        method: test
+        detail: config.yaml 回归命令逐字包含 swift test --package-path macos/Core，由 scripts/workflows.test.mts 断言锁定；门禁实际执行作为归档证据
+    macos-app-build-and-ci:
+      strength: MUST
+      statement: 'macos/App 的编译打包与 Mac 真机验收不得进入 config.yaml 本地完整回归命令；CI 仅在 .github/workflows/package.yml 通过独立 package-macos-native job 调用 node scripts/macos-package.mts 在 macos-latest 构建未签名通用二进制 .app 并上传工作流 artifact（dsh-anywhere-macos-native），且必须以 if: github.ref_type != ''tag'' 在 Release 期间跳过，发布切换里程碑前不得混入 Release 与 SHA256SUMS。'
+      rationale: WSL/Linux 无 Xcode 与 SwiftUI SDK，App 构建进本地门禁会导致非 macOS 开发机无法跑通回归；同时发布切换前 Electron dmg 仍是正式发布包，必须防止原生产物在 release.yml 复用 package.yml 时污染 Release。
+      enforcement:
+        method: test
+        detail: 'scripts/workflows.test.mts 断言 package.yml 包含 package-macos-native、if: github.ref_type != ''tag''、node scripts/macos-package.mts 与 dsh-anywhere-macos-native，且 release.yml 不含原生产物；scripts/macos-package.test.mts 断言打包脚本组装逻辑'
+  MODIFIED: {}
+  REMOVED: {}

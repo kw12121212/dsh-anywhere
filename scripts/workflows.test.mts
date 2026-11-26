@@ -75,6 +75,10 @@ describe('config.yaml 完整回归口径', () => {
     expect(regressionCommand()).toContain('android/gradlew -p android/core test')
   })
 
+  it('回归命令尾部包含 macOS Core Swift 测试段（tech/macos-client 的 macos-core-tests-in-regression）', () => {
+    expect(regressionCommand()).toContain('swift test --package-path macos/Core')
+  })
+
   it('android/gradlew 在 git 索引中可执行（100755），回归命令末段可直接运行', () => {
     // Windows 提交不保留可执行位：100644 会让 Linux/macOS 上的回归命令以 permission denied 失败。
     const entry = execFileSync('git', ['ls-files', '-s', 'android/gradlew'], { cwd: repoRoot, encoding: 'utf8' })
@@ -117,6 +121,28 @@ describe('package.yml', () => {
     ]) {
       expect(workflow).not.toContain(forbidden)
     }
+  })
+
+  it('包含 macOS 原生 .app 预览打包 job 且 Release tag 期间跳过', () => {
+    const workflow = repoFile('.github', 'workflows', 'package.yml')
+    const release = repoFile('.github', 'workflows', 'release.yml')
+    for (const fragment of [
+      'package-macos-native:',
+      "if: github.ref_type != 'tag'",
+      'runs-on: macos-latest',
+      'node scripts/macos-package.mts',
+      'name: dsh-anywhere-macos-native',
+      'dist/macos-native/dsh-anywhere_*_macos_native_app.zip'
+    ]) {
+      expect(workflow).toContain(fragment)
+    }
+    // 打包逻辑集中在 scripts/macos-package.mts，不得在工作流内直接复制 swift build / codesign / ditto 命令。
+    for (const forbidden of ['swift build', 'codesign', 'xcodebuild', 'ditto']) {
+      expect(workflow).not.toContain(forbidden)
+    }
+    // Release 期间只发布 Electron 四类安装包，不得混入原生产物。
+    expect(release).not.toContain('macos-native')
+    expect(release).not.toContain('macos_native')
   })
 })
 

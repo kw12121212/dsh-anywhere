@@ -57,3 +57,30 @@ jobs:
             dist/*.deb
             dist/*_installer.exe
           if-no-files-found: error
+
+  # macOS 原生工程预览构建（仅非 tag 运行产出工作流 artifact，不进 Release；
+  # release.yml 经 workflow_call 复用本工作流时 github.ref_type == 'tag' 会跳过此 job）。
+  package-macos-native:
+    name: Package (macOS native)
+    if: github.ref_type != 'tag'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Build native macOS .app
+        run: node scripts/macos-package.mts
+      - name: Upload native macOS artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dsh-anywhere-macos-native
+          retention-days: 3
+          path: dist/macos-native/dsh-anywhere_*_macos_native_app.zip
+          if-no-files-found: error

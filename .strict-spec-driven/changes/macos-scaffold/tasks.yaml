@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-scaffold
+sections:
+  Implementation:
+    macos-core-package:
+      text: '建立 macos/Core 纯 Foundation Swift Package：Package.swift（swift-tools-version: 6.0、name: "Core"、库 DshCore、platforms: [.macOS(.v14)]、零依赖）、Sources/DshCore/AppIdentity.swift、Sources/DshCore/VersionSpec.swift（纯 Foundation 校验 x.y.z 与解析 package.json）、Tests/DshCoreTests/VersionSpecTests.swift（XCTest 读取仓库根 package.json 断言版本合法与派生公式一致，并断言 AppIdentity 常量）'
+      status: complete
+    macos-app-scaffold:
+      text: '建立 macos/App SwiftUI 可执行目标：Package.swift（swift-tools-version: 6.0、platforms: [.macOS(.v14)]、本地依赖 ../Core）、Sources/DshAnywhereApp/DshAnywhereApp.swift（@main SwiftUI App 入口与 WindowGroup）、Sources/DshAnywhereApp/ContentView.swift（占位主窗口，显示 AppIdentity.displayName、包内 CFBundleShortVersionString 版本与占位说明）'
+      status: complete
+    macos-package-script:
+      text: 编写 scripts/macos-package.mts（仅用 Node 22 内置模块与 scripts/package-version.mts：校验 darwin 平台、读 package.json version、调用 swift build --package-path macos/App -c release --arch arm64 --arch x86_64 与 --show-bin-path、校验 lipo -archs 含 arm64 与 x86_64、组装 dist/macos-native/DSH Anywhere.app 的可执行文件/AppIcon.icns/PkgInfo/Info.plist、plutil -lint、codesign 临时签名、ditto 打包 dsh-anywhere_<version>_macos_native_app.zip）及 Vitest 单测 scripts/macos-package.test.mts
+      status: complete
+    ci-package-workflow:
+      text: '更新 .github/workflows/package.yml 新增 package-macos-native job（if: github.ref_type != ''tag''、runs-on: macos-latest、Node 22 运行 node scripts/macos-package.mts、上传 dsh-anywhere-macos-native artifact，Electron 三平台 job 与 release.yml 保持不变），并更新 scripts/workflows.test.mts（断言 package.yml 原生 job 正负向规则、release.yml 不含原生产物、以及 config.yaml 回归命令包含 swift test --package-path macos/Core）'
+      status: complete
+    regression-gate-config:
+      text: 通过 strict-spec-cli config-edit 更新 .strict-spec-driven/config.yaml：review_evidence.project_regression.command 尾部追加 && swift test --package-path macos/Core，context 补充 macOS 原生工程说明（macos/Core 进回归、macos/App 与真机验收出门禁、Swift 不设覆盖率门槛），coverage.scope 保持不变
+      status: complete
+    gitignore-macos:
+      text: 更新 .gitignore 追加 macos/**/.build/、macos/**/.swiftpm/、macos/**/xcuserdata/ 与 .DS_Store，确保本地 swift test 后 git status 保持干净
+      status: complete
+    docs-macos-sections:
+      text: 同步 AGENTS.md（技术栈、常用命令与完整回归命令追加 macOS 原生部分）与 README.md（新增 macOS 原生客户端工程与测试/构建说明章节）
+      status: complete
+  Testing:
+    workflow-lint-and-structure:
+      text: 运行 actionlint 校验工作流 YAML，并运行 Vitest 校验工作流结构与 macOS 打包脚本单测
+      status: complete
+      command: actionlint .github/workflows/package.yml && npx vitest run scripts/workflows.test.mts scripts/macos-package.test.mts
+    unit-test-suite:
+      text: 运行全量 Vitest 单测与 macos/Core Swift 测试
+      status: complete
+      command: npm run test && swift test --package-path macos/Core
+  Verification:
+    full-regression:
+      text: 在本地逐字运行更新后的 config.yaml 完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+    macos-ci-and-device-acceptance:
+      text: 变更分支推送后经 gh workflow run package.yml --ref dev 触发 Package (macOS native) job，确认产出 dsh-anywhere-macos-native artifact 且在用户 Mac 上按 README 绕过 Gatekeeper 打开显示占位窗口与正确版本号（需人工推送与 Mac 验收）
+      status: pending
+    ready-verify:
+      text: 运行 strict-spec-cli ready macos-scaffold && strict-spec-cli verify macos-scaffold 确认全部任务与工件就绪
+      status: pending
+      command: strict-spec-cli ready macos-scaffold && strict-spec-cli verify macos-scaffold
+testing_gates:
+  validation_task: workflow-lint-and-structure
+  unit_test_task: unit-test-suite

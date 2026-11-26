@@ -1,0 +1,36 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-scaffold
+  status: proposed
+summary:
+  what:
+    - 建立 macos/ 原生工程骨架与门禁接入：纯 Foundation 的 macos/Core Swift Package（库 DshCore，Linux 可直接运行 swift test）与 macos/App SwiftUI 占位应用（最低 macOS 14）；通过 scripts/macos-package.mts 在构建期从仓库根 package.json 读取 version 注入 CFBundleShortVersionString 与 CFBundleVersion，沿用显示名 DSH Anywhere、bundle id work.keepwriting.dsh-anywhere 与 build/icon.icns 组装通用二进制（arm64 + x86_64）未签名 .app 及 .zip；.github/workflows/package.yml 新增 package-macos-native job（macos-latest，上传工作流 artifact，Release tag 期间跳过）并更新 scripts/workflows.test.mts 结构断言；config.yaml 完整回归命令追加 swift test --package-path macos/Core；新增 tech/macos-client 技术标准并扩展 tech/packaging 版本单一来源规则覆盖 macOS 原生端；同步 .gitignore、AGENTS.md 与 README.md。
+  why:
+    - macos-native-foundation 里程碑其余 5 个 planned change 及其后的 macos-native-chat、macos-native-manage、macos-native-release 全部直接或间接依赖 macos-scaffold；只有先确立 macos/Core 纯逻辑测试门禁、macos/App 工程形态、版本单一来源与 CI 原生 .app 构建链路，后续协议重写与界面交付才能推进。
+scope:
+  in:
+    - macos/Core（Package.swift、DshCore 的 AppIdentity/VersionSpec 与 DshCoreTests）
+    - macos/App（Package.swift、SwiftUI App 入口与占位主窗口）
+    - scripts/macos-package.mts 及 Vitest 单测 scripts/macos-package.test.mts
+    - .github/workflows/package.yml 新增原生 macOS 构建 job 与 scripts/workflows.test.mts 断言更新
+    - .strict-spec-driven/config.yaml 回归命令与 context
+    - .strict-spec-driven/changes/macos-scaffold/tech/（新建 macos-client、更新 packaging）
+    - .gitignore、AGENTS.md 与 README.md
+  out:
+    - 内置 Tailscale、tsnet、SOCKS5 分流与任何 VPN/Network Extension
+    - DS-Bot 协议实现（macos-core-protocol）与网络、会话、设置、界面功能（后续变更交付）
+    - Release 切换与自更新（macos-native-release）
+    - Electron 三平台（含 dist:mac）与 Android 端任何行为或发布流程改动
+    - iOS/iPadOS 与 Windows/Linux 原生客户端
+unchanged_behavior:
+  - Electron 桌面端全部主规格行为与三平台打包产出不变
+  - release.yml 在 v* tag 发布时仍只发布 Electron 四类安装包与 SHA256SUMS，不混入原生 macOS 产物
+  - package.json 仍为全仓库唯一版本登记处
+  - Android android/gradlew -p android/core test 回归段与 80% 行覆盖率门槛范围（src/**/*.ts 与 scripts/**/*.mts）不变，Swift 代码不设覆盖率门槛
+  - .github/workflows/ 仍仅包含 package.yml、release.yml 与 artifact-cleanup.yml
+roadmap:
+  milestone: macos-native-foundation
+  planned_change: macos-scaffold

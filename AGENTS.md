@@ -17,6 +17,10 @@ dsh-anywhere 是一个多平台（Windows / macOS / Linux）桌面客户端，�
   - versionName 构建期读取仓库根 `package.json` 的 version，versionCode 按 `MAJOR*10000+MINOR*100+PATCH` 派生；Gradle 中无第二个版本号
   - debug 与 release 统一用 `~/.config/dsh-anywhere/keys/` 下不入库的专用 release keystore 签名（`scripts/android-keystore.mts` 生成；`DSH_KEYSTORE_PROPS` 可指向配置），出包任务缺 keystore 即失败并提示
   - Android 约定见 `.strict-spec-driven/tech/android-client.yaml`：core 的 JUnit 测试进完整回归命令（只需 JDK 17+）；`:app`/AAR 构建与设备验收不进回归命令也不上 GitHub Actions
+- macOS 原生客户端（`macos/`，SwiftPM 双包工程）
+  - `macos/Core` 是纯 Foundation 的独立 Swift Package（库产品 `DshCore`，零第三方依赖，可在 Linux 上运行 `swift test --package-path macos/Core`），协议、解析与状态机纯逻辑下沉于此
+  - `macos/App` 是 SwiftUI 应用（最低 macOS 14，依赖 `../Core`），由 `scripts/macos-package.mts` 在 macOS 上组装通用二进制（`arm64` + `x86_64`）未签名 `.app`，版本号构建期读取仓库根 `package.json` 写入 `Info.plist`
+  - macOS 原生约定见 `.strict-spec-driven/tech/macos-client.yaml`：Core 的 `swift test` 进完整回归命令；`:App` 构建由 `package.yml` 的 `package-macos-native` job 产出工作流 artifact（不进 Release）且不进本地回归，Swift 代码不设覆盖率门槛
 
 ## 约定与约束
 
@@ -41,12 +45,14 @@ npm run dist:win   # 打包 Windows NSIS 安装包（dist:mac / dist:linux 同�
 node scripts/android-keystore.mts   # 生成 Android 统一签名 keystore（一次性，不入库，请自行备份）
 android/gradlew -p android/core test          # core 纯 JVM 模块 JUnit 测试（只需 JDK 17+）
 android/gradlew -p android assembleDebug      # 构建 :app 调试 APK（需 Android SDK 与 keystore）
+swift test --package-path macos/Core          # macOS DshCore 纯 Foundation 测试（Linux/macOS 可运行）
+node scripts/macos-package.mts                # 在 macOS 上组装通用二进制未签名 .app 与 .zip
 ```
 
-完整回归（安装依赖 + 类型检查 + 构建 + 覆盖率门槛 80% + 端到端 + Android core JVM 测试）在本地执行，以 `.strict-spec-driven/config.yaml` 中的 `review_evidence.project_regression.command` 为准：
+完整回归（安装依赖 + 类型检查 + 构建 + 覆盖率门槛 80% + 端到端 + Android core JVM 测试 + macOS DshCore 测试）在本地执行，以 `.strict-spec-driven/config.yaml` 中的 `review_evidence.project_regression.command` 为准：
 
 ```bash
-npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
 ```
 
 回归测试不上 GitHub Actions；CI 只做打包：push 到 `main` 触发 Package 工作流（`package.yml`，三平台打包并上传产物），打 `v*` tag 触发 Release 工作流（`release.yml`，复用打包并发布）。Linux 上本地跑端到端需要 Xvfb 显示服务器与可用的 Electron 沙箱。

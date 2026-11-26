@@ -56,3 +56,14 @@ android/gradlew -p android/core test       # 只跑 core 纯 JVM 测试（无需
 ```
 
 debug 与 release 构建统一使用同一份专用 release keystore 签名（`DSH_KEYSTORE_PROPS` 环境变量可指向已有配置）；keystore 缺失时出包构建失败并提示生成方法。Android 构建不上 GitHub Actions；签名 APK 的本地构建与 Release 上传流程由后续变更交付（规划见 android-release）。
+
+## macOS 原生客户端
+
+`macos/` 下是 Swift + SwiftUI 原生客户端工程（`macos/Core` 为纯 Foundation 的 `DshCore` 包，`macos/App` 为最低支持 macOS 14 的 SwiftUI 应用）：
+
+```bash
+swift test --package-path macos/Core   # 运行纯 Foundation Core 测试（Linux / macOS 均可执行）
+node scripts/macos-package.mts         # 在 macOS 上构建通用二进制（arm64 + x86_64）未签名 .app 与 .zip
+```
+
+当前基础设施阶段 GitHub Release 仍发布 Electron macOS 安装包（`dmg`）；原生 `.app` 仅在非 tag 触发的 `Package` 工作流中作为工作流 artifact（`dsh-anywhere-macos-native`）构建产出，下载解压后首次打开同样需按上文 Gatekeeper 绕过步骤放行。

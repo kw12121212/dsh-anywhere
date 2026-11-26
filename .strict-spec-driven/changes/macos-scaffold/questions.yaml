@@ -1,0 +1,60 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-scaffold
+open: []
+resolved:
+  - id: macos-stack
+    question: macOS 原生版用什么技术？
+    context: 里程碑 intake 问题 macos-stack 已确认（2026-11-22）：决定代码复用方式、工程结构与回归命令。
+    answer: Swift + SwiftUI 原生，协议逻辑用 Swift 重写，与 Kotlin 版共享测试向量。
+    status: resolved
+    answered_by: roadmap
+  - id: macos-tailscale
+    question: macOS 端是否内置 Tailscale？
+    context: 里程碑 intake 问题 macos-tailscale 已确认（2026-11-22）：决定网络层是否需要 SOCKS5 分流与隧道管理。
+    answer: 不内置，依赖系统 Tailscale 客户端。
+    status: resolved
+    answered_by: roadmap
+  - id: macos-min-version
+    question: 最低支持的 macOS 版本？
+    context: 里程碑 intake 问题 macos-min-version 建议默认 macOS 14（Sonoma），若需覆盖 12/13 须在 macos-scaffold 提案前告知；未提出更改。
+    answer: 最低 macOS 14（Sonoma），可使用 Observation 与 NavigationSplitView/inspector 等 SwiftUI API。
+    status: resolved
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 今天仓库只有 Electron 桌面端与 Android 原生端，macos/ 下没有任何 Swift 工程骨架：macos-native-foundation 里程碑其余 5 个 planned change 及其后的 macos-native-chat/manage/release 全部因依赖未满足而无法开工。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 仓库 macos/ 下存在可于本机 Linux 通过 swift test --package-path macos/Core 校验版本单一来源与身份常量的纯 Foundation DshCore 包（并已接入 config.yaml 完整回归命令），且 GitHub Actions package.yml 的 package-macos-native job 能构建出包含正确版本与图标的通用二进制未签名 DSH Anywhere.app 供用户在 Mac 上打开显示占位主窗口。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: macos-native-foundation 里程碑已立项，其余全部 macOS 原生 planned change 直接或间接依赖 macos-scaffold，必须先落地工程骨架、门禁测试与 CI 原生 .app 构建链路。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不内置 Tailscale/tsnet/SOCKS5；不实现 DS-Bot 协议或业务界面；不修改 Electron dist:mac、release.yml 发布产物及 Android 任何行为；不做 iOS/iPadOS 或 Windows/Linux 原生端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 planned change macos-scaffold 定义执行：只建立 SwiftPM 双包骨架（Core + App）、通用二进制 .app 组装脚本、Package 工作流原生 job、config.yaml 回归命令追加、技术标准 macos-client 与 packaging 扩展，以及 .gitignore/AGENTS.md/README.md 文档同步。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
