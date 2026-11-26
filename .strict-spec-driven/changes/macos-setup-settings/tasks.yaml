@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-setup-settings
+sections:
+  Implementation:
+    core-diagnostics-endpoint-and-migration:
+      text: 在 macos/Core/Sources/DshCore/ 新增 DiagnosticsEndpointConfig.swift（仅接受 https 无 query 端点、内置 Json 解析与 0600 临时文件原子写入/容错三态读取）与 ElectronConfigMigrator.swift（仅原生 config.json 缺失时按候选目录只读迁移干净 harness URL 与合法 https 诊断端点，不改 Electron 文件、不迁移 cookie）
+      status: complete
+    core-session-controller-settings-and-migration:
+      text: 扩展 macos/Core/Sources/DshCore/MacosSessionController.swift：在 MacosSessionSnapshot 新增 migratedFromElectron/migratedDiagnosticsEndpoint；在 init 注入可选 electronConfigDirectories 并在 start() 触发一次性只读迁移；新增 SettingsSaveOutcome 与 saveSettingsUrl(_:) 实现设置窗口保存策略（在线且地址未变无 token 跳过重连、非在线未变触发重连、新地址或含 token 先探测/按需一次建会话再原子落盘并无需重启生效、失败不回显 token 且保留旧配置与原界面）
+      status: complete
+    core-setup-settings-migration-tests:
+      text: 在 macos/Core/Tests/DshCoreTests/ 新增 SetupSettingsMigrationTests.swift，覆盖 DiagnosticsEndpointConfig 校验/原子写/容错读、ElectronConfigMigrator 双候选目录优先级/剥离 token/只读不改源/不迁 cookie/损坏容错/已有原生配置（含损坏）不覆盖、控制器迁移后无 cookie 自动进带迁移提示重认证页、以及 saveSettingsUrl 全部路径
+      status: complete
+    macos-app-setup-settings-ui:
+      text: 在 macos/App/Sources/DshAnywhereApp/ 新增 SettingsView.swift（独立草稿与实时校验、保存/取消、连接状态概要与关于 DSH Anywhere 入口/标准关于面板）；更新 DshAnywhereApp.swift 注册 Settings 场景（⌘,）；更新 AppSessionModel.swift 注入 Electron 候选目录并暴露 saveSettingsUrl；更新 ContentView.swift 完善首次设置页文案与实时校验、迁移后重认证提示，并将修改地址按钮统一接入 @Environment(\.openSettings)
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: 运行 macos/Core Swift 单元测试确认首次设置、设置保存策略、诊断端点与 Electron 只读迁移及既有测试全部通过
+      status: complete
+      command: swift test --package-path macos/Core
+    node-typecheck-and-package-tests:
+      text: 运行 TypeScript 类型检查与打包/工作流脚本测试确认既有桌面与打包契约未受影响
+      status: complete
+      command: npm run typecheck && npx vitest run scripts/macos-package.test.mts scripts/workflows.test.mts
+  Verification:
+    full-regression:
+      text: 在本地运行 .strict-spec-driven/config.yaml 完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+    macos-ci-and-device-acceptance:
+      text: 按用户确认的 macos-app-acceptance-gate 方案完成 macOS CI 编译与 Mac 真机核对（全新 Mac 首次设置、已装 Electron 版的 Mac 自动带入地址并显示重认证页、设置窗口 ⌘, 修改地址无需重启生效）
+      status: pending
+    ready-verify:
+      text: 运行 strict-spec-cli ready macos-setup-settings && strict-spec-cli verify macos-setup-settings 确认产物、场景覆盖与门禁全部通过
+      status: pending
+      command: strict-spec-cli ready macos-setup-settings && strict-spec-cli verify macos-setup-settings
+testing_gates:
+  validation_task: node-typecheck-and-package-tests
+  unit_test_task: swift-core-tests

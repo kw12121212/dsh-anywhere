@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-setup-settings
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: macos-session-transport 已打通原生会话与传输底层，但当前 macos/App 只有主窗口内联表单，缺少完整的首次启动初始化引导体验、标准 macOS Settings 窗口（⌘,，查看/修改地址与连接状态、关于入口），也无法从已装原版 Electron DSH Anywhere 自动带入已保存的 harness URL 与诊断端点，从 Electron 版切换的用户仍需手动翻找并重输地址。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 全新 Mac 首次启动原生端显示带实时校验的首次设置页，提交后剥离 token 原子保存并建立会话进入主窗口；已装 Electron 版的 Mac 首次启动自动只读带入干净 harness URL 与合法 https 诊断端点（不改 Electron 原文件、不迁 cookie）并进入带迁移提示的本地重新认证页；用户在任意界面可通过 ⌘, 打开标准设置窗口查看与修改地址、查看连接状态与关于信息，修改地址保存后无需重启立即生效。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 macos-session-transport 已归档，macos-setup-settings 是 macos-native-foundation 里程碑按依赖顺序推荐的下一个就绪计划变更，直接解锁后续 macos-shell-window 与 macos-diagnostics。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不修改或删除原版 Electron DSH Anywhere 目录及其文件，不迁移 Electron cookie；不实现设置窗口中的诊断上报端点编辑 UI 与崩溃/错误上报逻辑（留给 macos-diagnostics）；不实现 NavigationSplitView 三栏主窗口与窗口位置尺寸记忆（留给 macos-shell-window）；不实现自更新与 Release 切换；不内置 Tailscale，不改 Electron、Android 或 CI 工作流。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 macos-native-foundation 里程碑与 macos-setup-settings 计划变更唯一解读：在 DshCore 下沉 https 诊断端点持久化、Electron 只读双候选目录迁移与设置保存策略并在 Linux 覆盖测试，在 macos/App 装配标准 SwiftUI Settings 场景（⌘,）与首次设置/迁移提示视图，并新增场景 macos-setup-and-settings 与 macos-app 三条 MUST 需求。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: macos-app-acceptance-gate
+    question: 本机为 Linux（无 Xcode/macOS SDK），macos/App 的 SwiftUI 首次设置页、标准 Settings 窗口（⌘,）编译与 Mac 真机核对（全新 Mac 首次设置、Electron 配置迁移进重认证页、修改地址无需重启生效）应作为本次归档前置门禁，还是在推送后异步验证？
+    context: 影响范围：Verification 任务（macos-ci-and-device-acceptance）、macos-app 主规格新增三条 MUST 需求的独立评审证据判定（strict-spec-review 要求 MUST 项有充分证据）以及本次变更的归档时机。本机 Linux 只能运行 macos/Core 的 swift test 与完整本地回归，无法本地编译或运行 macos/App 的 SwiftUI 界面。选项 A（推荐，与上一变更 macos-session-transport 一致）：在 Linux 完成全部代码、DshCore 全链路单测与完整项目回归后，先在归档前暂停，由您提交推送触发 GitHub Actions package-macos-native 构建出 .app 并在 Mac 上逐项核对首次设置、Electron 迁移与设置窗口（⌘,）修改地址，确认通过后再执行归档。选项 B：在 Linux 完成全部代码、以 DshCore 完整迁移/设置策略单测 + 本地完整回归作为替代验收证据直接归档，CI 编译与 Mac 真机核对留待您推送后异步验证（若发现问题另立修复变更）。
+    answer: 选择方案 A：在 Linux 完成全部代码、DshCore 全链路单测与完整项目回归后，先在归档前暂停，由用户提交推送触发 GitHub Actions package-macos-native 构建出 .app 并在 Mac 上逐项核对全新 Mac 首次设置、已装 Electron 版的 Mac 自动带入地址并显示重认证页、设置窗口（⌘,）修改地址无需重启生效，确认通过后再执行归档。
+    status: resolved
+    answered_by: human

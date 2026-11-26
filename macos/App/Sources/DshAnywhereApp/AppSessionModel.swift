@@ -16,6 +16,7 @@ final class AppSessionModel {
         let baseSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
         let dataDir = baseSupport.appendingPathComponent("DSH Anywhere Native", isDirectory: true)
+        let electronDirs = ElectronConfigMigrator.defaultElectronDirectories(applicationSupportDirectory: baseSupport)
         let configStore = HarnessConfigStore(directory: dataDir)
         let cookieStore = SessionCookieStore(directory: dataDir)
         let probeTransport = UrlSessionHttpTransport(requestTimeout: 10, resourceTimeout: 10)
@@ -28,6 +29,7 @@ final class AppSessionModel {
             probeTransport: probeTransport,
             apiTransport: apiTransport,
             sseStream: sseStream,
+            electronConfigDirectories: electronDirs,
             onSnapshot: { [weak self] next in
                 Task { @MainActor [weak self] in
                     self?.applySnapshot(next)
@@ -81,15 +83,16 @@ final class AppSessionModel {
         }
     }
 
+    func saveSettingsUrl(_ raw: String) async -> SettingsSaveOutcome {
+        await controller.saveSettingsUrl(raw)
+    }
+
     private func applySnapshot(_ next: MacosSessionSnapshot) {
         guard next != snapshot else { return }
-        let wasEditing = snapshot.editingAddress
         let previousScreen = snapshot.screen
         snapshot = next
 
-        if !wasEditing && next.editingAddress {
-            urlInput = next.cleanUrl ?? ""
-        } else if next.screen == .authExpired && (previousScreen != .authExpired || (wasEditing && !next.editingAddress)) {
+        if next.screen == .authExpired && previousScreen != .authExpired {
             urlInput = ""
         } else if next.screen == .connected && (HarnessUrl.hasToken(urlInput) || urlInput.isEmpty) {
             urlInput = next.cleanUrl ?? ""

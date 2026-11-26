@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-setup-settings
+approach:
+  - 1. 纯逻辑下沉 DshCore：新增 DiagnosticsEndpointConfig.swift（仅接受 https://、无 query、拒绝 userInfo、小写主机/去默认 443 端口/去片段/空路径补 /、内置 Json 解析与 0600 原子落盘容错读）与 ElectronConfigMigrator.swift（注入 nativeDirectory 与 electronDirectories 列表，仅当原生 config.json 为 .missing 时执行一次只读迁移，绝不修改 Electron 目录也不迁移 cookie）；在 MacosSessionController 增加可选 electronConfigDirectories 与 saveSettingsUrl(_ rawUrl:) -> SettingsSaveOutcome，全部由 Linux swift test 覆盖。
+  - '2. 标准 macOS Settings 场景与主窗口解耦：在 DshAnywhereApp 注册 SwiftUI Settings { SettingsView(model: model) }（自动提供 ⌘, 快捷键、应用菜单项与单窗口聚焦）；SettingsView 维护独立 @State var draftUrl 与错误信息，不与主窗口首次设置/重认证输入框共享状态；保存返回 .saved/.unchanged 时自行关闭，.failed 时保持打开并展示不含 token 的可读错误；ContentView 的「修改地址」按钮经 macOS 14 @Environment(\.openSettings) 打开设置窗口，确保主窗口页面不受影响。'
+  - 3. Electron 目录双候选只读探测与一次性触发：AppSessionModel 传入 [Application Support/DSH Anywhere, Application Support/dsh-anywhere]（优先匹配打包产物目录，兼容 package.json name 目录）；原生目录已有有效或损坏 config.json 时绝不触发迁移，防止损坏配置被静默覆盖或用户后续清除诊断端点后被 Electron 旧文件回灌；迁移带入地址后因无原生 cookie，启动自然进入带迁移说明的 .authExpired 重新认证页。
+decisions:
+  pure-migration-and-settings-policy-in-dshcore:
+    decision: 将 DiagnosticsEndpointConfig、ElectronConfigMigrator 与 MacosSessionController.saveSettingsUrl 全部放入 DshCore 并通过目录/传输注入在 Linux 测试。
+    rationale: 遵循 tech/macos-client 的 pure-logic-in-macos-core 与 dshcore-foundation-json-and-concurrency，使用内置 Json 而非 JSONSerialization。
+  native-dir-isolation-and-dual-electron-candidates:
+    decision: 原生数据继续保存在 ~/Library/Application Support/DSH Anywhere Native/，首次启动缺失原生 config.json 时按 [DSH Anywhere, dsh-anywhere] 顺序只读探测 Electron 目录。
+    rationale: 遵循 tech/macos-client 的 macos-app-network-and-storage-boundary 与 tech/state-persistence 的 separate-state-files/atomic-tolerant-state-read，兼顾 electron-builder productName 与 package.json name 两种 userData 目录。
+  migrate-only-when-native-config-missing:
+    decision: 仅当原生 config.json 为 .missing 时执行迁移，原生 config.json 为 .ok 或 .invalid 时均跳过迁移，且 diagnostics.json 仅在本次迁移且原生尚无该文件时写入。
+    rationale: 保证损坏原生配置仍提示无效、且用户后续在 macos-diagnostics 清除端点后不会被 Electron 旧文件回灌。
+  swiftui-settings-scene-with-isolated-draft:
+    decision: 采用 SwiftUI 标准 Settings 场景与 @Environment(\.openSettings)，设置窗口维护独立草稿并按 saveSettingsUrl 返回的 SettingsSaveOutcome 决定关闭或保窗报错。
+    rationale: 与 settings-window 规格的聚焦、取消无副作用、在线未改不重连、失败保窗不含 token 语义一致，且避免 SwiftUI 状态污染主窗口。
+alternatives:
+  - option: 在主窗口内用 sheet/内联覆盖表单充当设置界面
+    reason: 无法提供标准 macOS ⌘, 独立设置窗口、打开设置会遮挡主窗口且不符合计划变更的 Settings 场景要求。
+  - option: 同时迁移 Electron Chromium Cookie 数据库
+    reason: Chromium cookie 使用平台加密存储且与原生 0600 私有存储格式不兼容，计划变更明确要求不迁移 cookie 并引导重新认证。
+risks:
+  - Linux 环境无 Xcode/SwiftUI SDK，无法在本地编译运行 SettingsView、Settings 场景与 @Environment(\.openSettings)，必须严格遵守 macOS 14 / Swift 6.0 严格并发规则并通过 GitHub Actions package-macos-native 与真机核对验证。
+  - 用户 Mac 上原版 Electron 的 userData 可能位于 DSH Anywhere 或 dsh-anywhere，已通过按序双候选只读探测降低漏迁风险。

@@ -1,0 +1,73 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: macos-app
+operations:
+  ADDED:
+    first-run-setup-and-live-validation:
+      strength: MUST
+      statement: 首次启动且原生 config.json 缺失（且未命中可迁移的 Electron 配置）时，主窗口显示首次设置界面（含欢迎说明、粘贴提示、地址输入框与提交按钮，且不显示配置无效提示）；若原生 config.json 损坏或地址无效，则显示首次设置界面并提示已有配置无效（不得触发迁移）。用户输入时实时校验：空值或非法地址禁用提交并展示固定原因（不含输入原文或 token）；提交合法地址后剥离 token 原子保存干净地址并用原始输入建立会话进入主窗口；保存或探测失败时停留在首次设置界面并展示不含 token 的错误信息。
+      scenarios:
+        fresh-launch-shows-setup-with-live-validation:
+          - GIVEN: 原生数据目录与 Electron 目录均无已保存配置
+          - WHEN: 启动 macOS 原生应用并分别输入空值、ftp://dsh.example.test/?token=abc123 与 http://127.0.0.1:13080/?token=abc123
+          - THEN: 首次打开显示欢迎说明且无配置无效提示；非法输入禁用提交且提示不含 abc123；合法输入启用提交且不显示错误
+        corrupt-native-config-shows-invalid-notice:
+          - GIVEN: 原生 config.json 内容损坏或包含非法地址 ftp://dsh.example.test/，且 Electron 目录存在另一份有效配置
+          - WHEN: 启动 macOS 原生应用
+          - THEN: 主窗口显示首次设置界面并提示已有配置无效，不触发 Electron 迁移覆盖
+        submit-valid-token-url-saves-clean-and-connects:
+          - GIVEN: 首次设置界面已打开且远端 dsh 服务可达
+          - WHEN: 用户粘贴 http://127.0.0.1:13080/?token=abc123 并提交
+          - THEN: config.json 原子保存为 http://127.0.0.1:13080/（不含 abc123），建连一次建立会话并进入主窗口在线状态
+        submit-failure-stays-on-setup-without-token:
+          - GIVEN: 首次设置界面已打开，配置目录不可写或探测失败
+          - WHEN: 用户提交 http://127.0.0.1:13080/?token=abc123
+          - THEN: 主窗口停留在首次设置界面并显示可读错误，错误信息中不含 abc123
+    macos-settings-window:
+      strength: MUST
+      statement: 应用提供标准 macOS Settings 窗口（⌘, 及应用菜单设置入口），与主窗口独立维护编辑草稿：打开时显示当前已保存干净地址、连接状态概要与关于 DSH Anywhere 入口，重复打开聚焦已有窗口且不影响主窗口；编辑时实时校验并禁用无效保存；点击保存时，若当前在线且地址未改动且未输入 token 则直接关闭设置窗口不重连，否则先探测（含 token 时按需一次建会话）再原子保存干净地址、关闭窗口并无需重启立即生效；取消或保存失败不修改已保存配置与主窗口，失败时设置窗口保持打开并显示不含 token 的错误信息。
+      scenarios:
+        open-settings-shows-clean-url-status-and-about:
+          - GIVEN: 已保存 https://dsh.example.test/ 且主窗口正处于在线状态
+          - WHEN: 用户按下 ⌘, 或选择设置入口，随后再次触发设置入口
+          - THEN: 标准设置窗口打开并显示 https://dsh.example.test/、当前连接状态与关于入口；再次触发只聚焦已有设置窗口，主窗口保持在线不受影响
+        settings-live-validation-and-cancel-preserves-state:
+          - GIVEN: 设置窗口已打开并把地址改为空值或 ftp://dsh.example.test/
+          - WHEN: 查看保存按钮状态并最终点击取消或关闭窗口
+          - THEN: 非法输入期间保存按钮不可用且显示原因；取消或关闭后原配置与主窗口保持不变
+        settings-save-new-url-reconnects-without-restart:
+          - GIVEN: 当前已保存 https://a.example.test/，用户在设置窗口粘贴 http://127.0.0.1:13080/?token=def456
+          - WHEN: 点击保存
+          - THEN: 探测并一次性建会话后 config.json 原子更新为 http://127.0.0.1:13080/（不含 def456），设置窗口关闭，主窗口无需重启即切换到新会话在线状态
+        settings-save-unchanged-online-skips-reload:
+          - GIVEN: 已保存 https://dsh.example.test/ 且主窗口正处于在线连接状态
+          - WHEN: 用户在设置窗口不修改地址、不带 token 直接点击保存
+          - THEN: 设置窗口关闭，且不中断或重建当前在线连接
+        settings-save-failure-keeps-window-open-without-token:
+          - GIVEN: 设置窗口已打开且目标地址探测失败或配置目录不可写
+          - WHEN: 用户输入 http://127.0.0.1:13080/?token=abc123 并点击保存
+          - THEN: 设置窗口保持打开并显示不含 abc123 的错误提示，原已保存配置与主窗口连接不受影响
+    electron-config-migration:
+      strength: MUST
+      statement: 仅当原生 config.json 缺失时，客户端按只读方式扫描同机原版 Electron 配置目录（~/Library/Application Support/DSH Anywhere/ 与 ~/Library/Application Support/dsh-anywhere/），迁移其中有效的 harness URL（剥离可能残留的 token）至原生 config.json，并在原生 diagnostics.json 尚不存在时迁移合法的 https 诊断端点（非法或非 https 端点忽略且不阻断）；迁移过程中不修改、覆盖或删除 Electron 目录中的任何文件，也不迁移 Chromium cookie，随后自动进入带迁移提示的本地重新认证页引导重新认证；当原生 config.json 已存在（无论有效或损坏）时绝不触发迁移。
+      scenarios:
+        migrate-harness-url-and-diagnostics-readonly:
+          - GIVEN: 原生目录尚无 config.json，Electron 目录中存在含 https://dsh.example.test/?token=old_tok 的 config.json 与含 https://diag.example.ts.net:18790 的 diagnostics.json
+          - WHEN: 启动 macOS 原生客户端
+          - THEN: 原生 config.json 写入干净地址 https://dsh.example.test/，原生 diagnostics.json 写入 https://diag.example.ts.net:18790/，Electron 目录下所有文件保持只读未变
+        migrated-launch-enters-reauth-without-cookie:
+          - GIVEN: 从 Electron 配置迁移了有效 harness URL，且原生存储没有对应 dsh-auth-* cookie
+          - WHEN: 启动流程继续建连检查
+          - THEN: 客户端不迁入 Chromium cookie，主界面自动进入本地重新认证页并展示已从 Electron 迁移地址、请粘贴新 dsh-url 重新认证的提示
+        existing-native-config-never-overwritten-by-electron:
+          - GIVEN: 原生目录已有有效 config.json（或已清除 diagnostics.json），而 Electron 目录仍有旧配置
+          - WHEN: 启动 macOS 原生客户端
+          - THEN: 跳过迁移，原生 config.json 不被覆盖且不重新写入 diagnostics.json
+        invalid-electron-diagnostics-ignored-safely:
+          - GIVEN: Electron 目录存在有效 config.json，但 diagnostics.json 内容损坏或为 http://insecure.test/
+          - WHEN: 启动 macOS 原生客户端
+          - THEN: 有效 harness URL 正常迁移并进入重新认证页，非法诊断端点被安全忽略且不写入原生 diagnostics.json
+  MODIFIED: {}
+  REMOVED: {}

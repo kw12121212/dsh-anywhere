@@ -20,6 +20,13 @@ public enum MacosScreen: Equatable, Sendable {
     case forbiddenHost
 }
 
+/// 设置窗口保存结果。
+public enum SettingsSaveOutcome: Equatable, Sendable {
+    case saved
+    case unchanged
+    case failed(String)
+}
+
 /// macOS 原生会话可观察快照（供 SwiftUI 主线程视图镜像渲染）。
 public struct MacosSessionSnapshot: Equatable, Sendable {
     public var screen: MacosScreen
@@ -37,6 +44,8 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
     public var isSubmitting: Bool
     public var formError: String?
     public var editingAddress: Bool
+    public var migratedFromElectron: Bool
+    public var migratedDiagnosticsEndpoint: Bool
 
     public init(
         screen: MacosScreen = .setup(invalidConfig: false),
@@ -53,7 +62,9 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         roomCount: Int = 0,
         isSubmitting: Bool = false,
         formError: String? = nil,
-        editingAddress: Bool = false
+        editingAddress: Bool = false,
+        migratedFromElectron: Bool = false,
+        migratedDiagnosticsEndpoint: Bool = false
     ) {
         self.screen = screen
         self.status = status
@@ -70,6 +81,8 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         self.isSubmitting = isSubmitting
         self.formError = formError
         self.editingAddress = editingAddress
+        self.migratedFromElectron = migratedFromElectron
+        self.migratedDiagnosticsEndpoint = migratedDiagnosticsEndpoint
     }
 }
 
@@ -104,6 +117,7 @@ public actor MacosSessionController {
     private let probeTransport: any HttpTransport
     private let apiTransport: any HttpTransport
     private let sseStream: any SseStream
+    private let electronConfigDirectories: [URL]
     private let sleepMs: @Sendable (Int64) async throws -> Void
     private let onSnapshot: @Sendable (MacosSessionSnapshot) -> Void
 
@@ -127,6 +141,7 @@ public actor MacosSessionController {
         probeTransport: any HttpTransport,
         apiTransport: any HttpTransport,
         sseStream: any SseStream,
+        electronConfigDirectories: [URL] = [],
         sleepMs: @escaping @Sendable (Int64) async throws -> Void = { ms in
             try await Task.sleep(nanoseconds: UInt64(max(ms, 0)) * 1_000_000)
         },
@@ -137,6 +152,7 @@ public actor MacosSessionController {
         self.probeTransport = probeTransport
         self.apiTransport = apiTransport
         self.sseStream = sseStream
+        self.electronConfigDirectories = electronConfigDirectories
         self.sleepMs = sleepMs
         self.onSnapshot = onSnapshot
     }
@@ -147,7 +163,21 @@ public actor MacosSessionController {
 
     public func start() {
         cookieStore.load()
-        switch configStore.load() {
+        var migratedFromElectron = false
+        var migratedDiagnostics = false
+        var configLoad = configStore.load()
+        if case .missing = configLoad, !electronConfigDirectories.isEmpty {
+            let migration = ElectronConfigMigrator.migrateIfNeeded(
+                nativeDirectory: configStore.directory,
+                electronDirectories: electronConfigDirectories
+            )
+            if migration.didMigrateHarnessUrl {
+                migratedFromElectron = true
+                migratedDiagnostics = migration.migratedDiagnosticsEndpoint != nil
+                configLoad = configStore.load()
+            }
+        }
+        switch configLoad {
         case .missing:
             stopActiveTask()
             resetSyncCursor()
@@ -160,6 +190,8 @@ public actor MacosSessionController {
             emitSnapshot()
         case .ok(let cleanUrl):
             resetSyncCursor()
+            snapshot.migratedFromElectron = migratedFromElectron
+            snapshot.migratedDiagnosticsEndpoint = migratedDiagnostics
             launchConnect(cleanUrl: cleanUrl, preserveSyncCursor: false, skipInitialProbe: false)
         }
     }
@@ -184,6 +216,71 @@ public actor MacosSessionController {
         snapshot.formError = nil
         emitSnapshot()
 
+        let hasToken = HarnessUrl.hasToken(trimmed)
+        switch await probeEstablishAndSave(cleanUrl: cleanUrl, trimmedInput: trimmed, hasToken: hasToken) {
+        case .failure(.message(let message)):
+            snapshot.isSubmitting = false
+            snapshot.formError = message
+            emitSnapshot()
+        case .success(let probeStatusCode):
+            applySavedConnection(cleanUrl: cleanUrl, hasToken: hasToken, probeStatusCode: probeStatusCode)
+        }
+    }
+
+    /// 从标准设置窗口保存 harness 地址：
+    /// - 在线且地址未变（不带 token）时直接返回 `.unchanged`，不中断或重建连接；
+    /// - 非在线状态下地址未变（不带 token）时触发重连并返回 `.saved`；
+    /// - 地址变更或带 token 时先探测（并按需建立一次会话）再原子保存，无需重启即生效；
+    /// - 任一步失败均保留旧配置与主窗口状态，返回不含 token 的可读错误信息。
+    public func saveSettingsUrl(_ rawUrl: String) async -> SettingsSaveOutcome {
+        guard !snapshot.isSubmitting else {
+            return .failed("正在保存，请稍候")
+        }
+        let trimmed = rawUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanUrl: String
+        do {
+            cleanUrl = try HarnessUrl.normalize(trimmed)
+        } catch let err as HarnessUrl.ValidationError {
+            return .failed(ConnectionCopy.urlErrorText(err.category))
+        } catch {
+            return .failed(ConnectionCopy.urlErrorText(.malformed))
+        }
+
+        let previous = configStore.load()
+        let hasToken = HarnessUrl.hasToken(trimmed)
+        if case .ok(let savedUrl) = previous, savedUrl == cleanUrl, !hasToken {
+            if snapshot.screen == .connected && snapshot.status == .online {
+                return .unchanged
+            }
+            snapshot.formError = nil
+            snapshot.editingAddress = false
+            launchConnect(cleanUrl: cleanUrl, preserveSyncCursor: false, skipInitialProbe: false)
+            return .saved
+        }
+
+        snapshot.isSubmitting = true
+        emitSnapshot()
+
+        switch await probeEstablishAndSave(cleanUrl: cleanUrl, trimmedInput: trimmed, hasToken: hasToken) {
+        case .failure(.message(let message)):
+            snapshot.isSubmitting = false
+            emitSnapshot()
+            return .failed(message)
+        case .success(let probeStatusCode):
+            applySavedConnection(cleanUrl: cleanUrl, hasToken: hasToken, probeStatusCode: probeStatusCode)
+            return .saved
+        }
+    }
+
+    private enum SaveStageFailure: Error {
+        case message(String)
+    }
+
+    private func probeEstablishAndSave(
+        cleanUrl: String,
+        trimmedInput: String,
+        hasToken: Bool
+    ) async -> Result<Int, SaveStageFailure> {
         // 提交前先对干净地址做 10s 可达性探测，不可达不覆盖现有配置。
         var probeHeaders: [(name: String, value: String)] = []
         if let host = HarnessUrl.hostHeader(cleanUrl) {
@@ -194,42 +291,34 @@ public actor MacosSessionController {
             probeResponse = try await probeTransport.send(HttpRequest(method: "GET", url: cleanUrl, headers: probeHeaders))
         } catch {
             let reason = NetErrorClassifier.classify(error)
-            snapshot.isSubmitting = false
-            snapshot.formError = "\(ConnectionCopy.probeReasonTitle(reason))：\(ConnectionCopy.probeHint(forCleanUrl: cleanUrl))"
-            emitSnapshot()
-            return
+            return .failure(.message("\(ConnectionCopy.probeReasonTitle(reason))：\(ConnectionCopy.probeHint(forCleanUrl: cleanUrl))"))
         }
 
-        let hasToken = HarnessUrl.hasToken(trimmed)
         if hasToken {
             let establisher = SessionEstablisher(transport: apiTransport, cookieStore: cookieStore)
-            switch await establisher.establish(tokenUrl: trimmed) {
+            switch await establisher.establish(tokenUrl: trimmedInput) {
             case .ok:
                 break
             case .rejected(let status):
-                snapshot.isSubmitting = false
-                snapshot.formError = status == 403
+                let msg = status == 403
                     ? "Host 未受信任，请在 DSH 主机的 dsh web --trusted-host 参数中加入当前主机名"
                     : "未能建立会话，请确认 dsh-url 输出的地址仍有效后重试"
-                emitSnapshot()
-                return
+                return .failure(.message(msg))
             case .networkError(let reason):
-                snapshot.isSubmitting = false
-                snapshot.formError = "\(ConnectionCopy.probeReasonTitle(reason))：\(ConnectionCopy.probeHint(forCleanUrl: cleanUrl))"
-                emitSnapshot()
-                return
+                return .failure(.message("\(ConnectionCopy.probeReasonTitle(reason))：\(ConnectionCopy.probeHint(forCleanUrl: cleanUrl))"))
             }
         }
 
         do {
             _ = try configStore.save(cleanUrl)
         } catch {
-            snapshot.isSubmitting = false
-            snapshot.formError = "保存配置失败，请检查应用数据目录权限"
-            emitSnapshot()
-            return
+            return .failure(.message("保存配置失败，请检查应用数据目录权限"))
         }
 
+        return .success(probeResponse.statusCode)
+    }
+
+    private func applySavedConnection(cleanUrl: String, hasToken: Bool, probeStatusCode: Int) {
         resetSyncCursor()
         snapshot.cleanUrl = cleanUrl
         snapshot.editingAddress = false
@@ -239,8 +328,10 @@ public actor MacosSessionController {
         snapshot.versionBannerDismissed = false
         snapshot.errorReason = nil
         snapshot.errorHint = nil
+        snapshot.migratedFromElectron = false
+        snapshot.migratedDiagnosticsEndpoint = false
 
-        if !hasToken && probeResponse.statusCode == 403 {
+        if !hasToken && probeStatusCode == 403 {
             stopActiveTask()
             setForbiddenHostScreen()
             return

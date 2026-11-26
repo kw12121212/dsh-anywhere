@@ -10,5 +10,9 @@ struct DshAnywhereApp: App {
             ContentView(model: model)
         }
         .defaultSize(width: 960, height: 640)
+
+        Settings {
+            SettingsView(model: model)
+        }
     }
 }

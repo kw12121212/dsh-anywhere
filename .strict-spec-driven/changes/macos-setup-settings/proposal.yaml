@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-setup-settings
+  status: proposed
+summary:
+  what:
+    - 在 macOS 原生客户端补齐首次启动设置页（实时校验与原子保存）、标准 macOS Settings 设置窗口（⌘,，支持查看与修改 harness 地址、展示连接状态与关于入口，修改后无需重启生效）以及首次启动从原版 Electron DSH Anywhere 只读迁移已保存 harness URL 与合法 https 诊断端点（不迁移 cookie，自动进入带迁移提示的本地重新认证页）；纯校验、存储与迁移逻辑全部下沉 macos/Core（DshCore）并在 Linux 以 XCTest 覆盖，同步新增场景 macos-setup-and-settings 与主规格 macos-app 的三条需求。
+  why:
+    - macos-session-transport 已建立原生传输与会话主干，但当前 macos/App 尚无独立的标准 macOS 设置窗口（⌘,）、完整的首次启动引导体验，也无法为从 Electron 版切换过来的 Mac 用户自动带入既有 harness 地址与诊断端点；完成 macos-setup-settings 后用户可在全新 Mac 与已装 Electron 版的 Mac 上顺畅完成初始化与设置修改，并为后续 macos-shell-window 与 macos-diagnostics 做好基础。
+scope:
+  in:
+    - macos/Core（DshCore）：新增 DiagnosticsEndpointConfig（https 诊断端点校验、内置 Json 解析与 0600 原子落盘/容错读取）与 ElectronConfigMigrator（仅原生 config.json 缺失时只读扫描 ~/Library/Application Support/DSH Anywhere/ 与 dsh-anywhere/，迁移干净 harness URL 与合法 https 诊断端点，不改 Electron 文件、不迁移 cookie）；扩展 MacosSessionController（启动迁移编排、MacosSessionSnapshot 迁移标记、SettingsSaveOutcome 与 saveSettingsUrl 设置保存语义：在线未改无 token 不重连，否则探测/按需建会话/原子保存/无需重启切换）及完整 XCTest 覆盖
+    - macos/App：新增标准 Settings 场景与 SettingsView（⌘, 打开/聚焦，实时校验与保存/取消、当前连接状态概要、关于 DSH Anywhere 信息与标准关于面板入口）；完善 ContentView 首次设置页（欢迎说明、无效配置提示、占位提示与开始使用按钮）与迁移后重新认证页提示；将顶部与错误/重认证/403 页的修改地址入口改用 @Environment(\.openSettings) 打开标准设置窗口以保持主窗口不受影响
+    - .strict-spec-driven/changes/macos-setup-settings/scenes/macos/macos-setup-and-settings.yaml 与 specs/macos-app.yaml：登记首次设置、标准设置窗口与 Electron 只读迁移的可观察场景与主规格需求
+  out:
+    - 设置窗口中的诊断上报端点编辑 UI 与崩溃/错误上报逻辑（由 macos-diagnostics 承接，本变更仅将 Electron 合法诊断端点迁移落盘至原生 diagnostics.json）
+    - 自更新源设置项与 Release 切换（由 macos-native-release 承接）
+    - NavigationSplitView 三栏主窗口外壳、自定义视图菜单/⌘R 快捷键与窗口位置尺寸记忆（由 macos-shell-window 承接）
+    - 内置 Tailscale/tsnet/SOCKS5 分流、Electron 桌面端、Android 客户端与 CI 工作流的任何改动
+unchanged_behavior:
+  - 原版 Electron DSH Anywhere 目录（~/Library/Application Support/DSH Anywhere/ 与 dsh-anywhere/）及其配置文件、cookie 数据库绝对只读，不被原生端修改、覆盖或删除
+  - macos-session-transport 已建立的会话建立、同源隔离、0600 cookie 持久化、401/403/错误页、SSE 退避补齐与版本提示条行为保持不变
+  - macos/Core（DshCore）保持纯 Foundation 零第三方依赖、不使用 JSONSerialization、无直接网络 IO、满足 Swift 6 Sendable 并在 Linux swift test 直接通过
+  - Electron 三平台客户端、Android 客户端与 config.yaml 完整回归命令及 80% Node 覆盖率门禁范围不变
+roadmap:
+  milestone: macos-native-foundation
+  planned_change: macos-setup-settings

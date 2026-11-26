@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var model: AppSessionModel
+    @Environment(\.openSettings) private var openSettings
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
@@ -41,11 +42,11 @@ struct ContentView: View {
                     model.retry()
                 }
                 .disabled(model.snapshot.isSubmitting)
-                Button("修改地址") {
-                    model.openEditAddress()
-                }
-                .disabled(model.snapshot.isSubmitting)
             }
+            Button("设置…") {
+                openSettings()
+            }
+            .disabled(model.snapshot.isSubmitting)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -70,80 +71,72 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if model.snapshot.editingAddress {
-            addressFormView(
-                title: "修改 Harness 地址",
-                subtitle: "输入新的 dsh-url 输出地址或干净地址，验证可达后生效。",
-                submitLabel: "保存",
-                showCancel: true
-            )
-        } else {
-            switch model.snapshot.screen {
-            case .setup(let invalidConfig):
-                addressFormView(
-                    title: "首次连接设置",
-                    subtitle: invalidConfig
-                        ? "已有配置无效或已损坏，请重新粘贴 dsh-url 输出的地址。"
-                        : "请粘贴 DSH 主机上运行 dsh-url 输出的带 token 地址。",
-                    submitLabel: "连接",
-                    showCancel: false
-                )
-            case .connecting:
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("正在连接…")
-                        .font(.headline)
-                    if let cleanUrl = model.snapshot.cleanUrl {
-                        Text(cleanUrl)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(32)
-            case .connected:
-                VStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.green)
-                    Text(AppIdentity.displayName)
-                        .font(.title2.weight(.semibold))
-                    if let cleanUrl = model.snapshot.cleanUrl {
-                        Text(cleanUrl)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("会话已建立，SSE 实时同步在线（revision \(model.snapshot.stateRevision ?? "-") · Bot \(model.snapshot.botCount) · 群聊 \(model.snapshot.roomCount)）")
+        switch model.snapshot.screen {
+        case .setup(let invalidConfig):
+            firstRunSetupView(invalidConfig: invalidConfig)
+        case .connecting:
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("正在连接…")
+                    .font(.headline)
+                if let cleanUrl = model.snapshot.cleanUrl {
+                    Text(cleanUrl)
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(32)
-            case .error(let reason):
-                errorView(reason: reason)
-            case .authExpired:
-                reauthView
-            case .forbiddenHost:
-                forbiddenHostView
             }
+            .padding(32)
+        case .connected:
+            VStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.green)
+                Text(AppIdentity.displayName)
+                    .font(.title2.weight(.semibold))
+                if let cleanUrl = model.snapshot.cleanUrl {
+                    Text(cleanUrl)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Text("会话已建立，SSE 实时同步在线（revision \(model.snapshot.stateRevision ?? "-") · Bot \(model.snapshot.botCount) · 群聊 \(model.snapshot.roomCount)）")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(32)
+        case .error(let reason):
+            errorView(reason: reason)
+        case .authExpired:
+            reauthView
+        case .forbiddenHost:
+            forbiddenHostView
         }
     }
 
-    private func addressFormView(
-        title: String,
-        subtitle: String,
-        submitLabel: String,
-        showCancel: Bool
-    ) -> some View {
+    private func firstRunSetupView(invalidConfig: Bool) -> some View {
         let liveError = HarnessUrl.errorCategory(model.urlInput).map(ConnectionCopy.urlErrorText)
         let isValidInput = liveError == nil
 
         return VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-            Text(subtitle)
+            Text("欢迎使用 \(AppIdentity.displayName)")
+                .font(.title2.weight(.semibold))
+
+            if invalidConfig {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("已有配置无效或已损坏，请重新填写地址。")
+                        .font(.callout)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            Text("请粘贴在 DSH 主机上运行 dsh-url 或 dsh web 输出的地址，系统会仅保存去掉 token 的干净地址。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
-            TextField("粘贴 dsh-url 输出的地址", text: $model.urlInput)
+            TextField("粘贴 dsh-url 或 dsh web 输出的地址", text: $model.urlInput)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
                     if isValidInput && !model.snapshot.isSubmitting {
@@ -163,18 +156,11 @@ struct ContentView: View {
             }
 
             HStack {
-                Button(model.snapshot.isSubmitting ? "正在验证…" : submitLabel) {
+                Button(model.snapshot.isSubmitting ? "正在连接…" : "开始使用") {
                     model.submitUrl()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!isValidInput || model.snapshot.isSubmitting)
-
-                if showCancel {
-                    Button("取消") {
-                        model.cancelEditAddress()
-                    }
-                    .disabled(model.snapshot.isSubmitting)
-                }
             }
         }
         .frame(maxWidth: 460, alignment: .leading)
@@ -205,7 +191,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 Button("修改地址") {
-                    model.openEditAddress()
+                    openSettings()
                 }
             }
         }
@@ -220,6 +206,25 @@ struct ContentView: View {
         return VStack(alignment: .leading, spacing: 14) {
             Text("需要重新认证")
                 .font(.title3.weight(.semibold))
+
+            if model.snapshot.migratedFromElectron {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                        .foregroundStyle(.blue)
+                    Text("已从原版 \(AppIdentity.displayName) 自动带入连接地址\(model.snapshot.migratedDiagnosticsEndpoint ? "与诊断上报端点" : "")。出于安全隔离，会话凭据未迁移，请粘贴新的 dsh-url 地址完成重新认证。")
+                        .font(.callout)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            if let cleanUrl = model.snapshot.cleanUrl {
+                Text("当前地址：\(cleanUrl)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Text("当前 dsh 会话已失效或未建立。请在 DSH 主机上运行 dsh-url 获取新的带 token 地址并粘贴到下方，无需重启即可恢复。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -251,7 +256,7 @@ struct ContentView: View {
                 .disabled(!isValidInput || model.snapshot.isSubmitting)
 
                 Button("修改地址") {
-                    model.openEditAddress()
+                    openSettings()
                 }
                 .disabled(model.snapshot.isSubmitting)
             }
@@ -282,7 +287,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 Button("修改地址") {
-                    model.openEditAddress()
+                    openSettings()
                 }
             }
         }
