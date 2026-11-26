@@ -154,7 +154,7 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .frame(width: 520, minHeight: 420)
+        .frame(minWidth: 520, idealWidth: 520, maxWidth: 520, minHeight: 420)
         .background(SettingsWindowAccessor(box: windowBox))
         .onAppear {
             draftUrl = model.snapshot.cleanUrl ?? ""
