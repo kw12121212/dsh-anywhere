@@ -49,6 +49,11 @@ areas:
       title: 客户端错误上报诊断
       status: draft
       path: .strict-spec-driven/scenes/diagnostics/report-client-errors.yaml
+  macos:
+    macos-connect-and-session:
+      title: macOS 原生客户端连接、会话建立与断线恢复
+      status: draft
+      path: .strict-spec-driven/scenes/macos/macos-connect-and-session.yaml
   release:
     release-new-version:
       title: 发布新版本

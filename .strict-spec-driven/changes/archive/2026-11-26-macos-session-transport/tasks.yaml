@@ -39,10 +39,10 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
     macos-ci-and-device-acceptance:
       text: 按用户确认的 macos-app-acceptance-gate 方案完成 macOS CI 编译与里程碑完成标准第 3、4 条核对
-      status: pending
+      status: complete
     ready-verify:
       text: 运行 strict-spec-cli ready macos-session-transport && strict-spec-cli verify macos-session-transport 确认产物、场景覆盖与门禁全部通过
-      status: pending
+      status: complete
       command: strict-spec-cli ready macos-session-transport && strict-spec-cli verify macos-session-transport
 testing_gates:
   validation_task: node-validation-and-package-tests

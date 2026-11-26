@@ -24,6 +24,9 @@ specs:
   - id: load-failure
     title: 加载失败
     path: .strict-spec-driven/specs/load-failure.yaml
+  - id: macos-app
+    title: macOS 原生 App
+    path: .strict-spec-driven/specs/macos-app.yaml
   - id: main-window
     title: 主窗口
     path: .strict-spec-driven/specs/main-window.yaml

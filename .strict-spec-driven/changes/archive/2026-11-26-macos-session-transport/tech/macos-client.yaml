@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: macos-client
+operations:
+  ADDED:
+    macos-app-network-and-storage-boundary:
+      strength: SHOULD
+      statement: macos/App 私有配置与会话数据必须存放在 ~/Library/Application Support/DSH Anywhere Native/（与 Electron 的 DSH Anywhere/ 目录隔离，会话 cookie 文件权限 0600）；全部原生网络请求必须使用禁用系统 cookie 与自动重定向的 ephemeral URLSession 并经 DshCore 源隔离策略（OriginScopedHttpTransport/OriginHeaderPolicy）发出，SSE 长连接须按原始字节 0x0A 切分保留空行（禁止使用 AsyncBytes.lines）；Info.plist 开启 NSAppTransportSecurity.NSAllowsArbitraryLoads 以支持用户配置的 http harness 地址，同时在传输层强制限定已保存源。
+      rationale: macos-session-transport 确立了后续全部 macos-native-* 变更共用的数据目录隔离、ephemeral URLSession、无系统 cookie 干扰与原始字节 SSE 分帧边界；未签名 ad-hoc 构建的 Keychain 会触发重复授权，0600 私有文件与目录隔离既防覆盖 Electron 配置又支持后续迁移，ATS 配合传输层源隔离避免 Tailscale/MagicDNS http 地址被 -1022 阻断。
+      enforcement:
+        method: review
+        detail: 评审检查 macos/App 数据目录名、ephemeral URLSession 配置（httpShouldSetCookies=false、禁用自动重定向）、不使用 AsyncBytes.lines、以及所有网络出口经 OriginScopedHttpTransport/OriginHeaderPolicy
+  MODIFIED: {}
+  REMOVED: {}
