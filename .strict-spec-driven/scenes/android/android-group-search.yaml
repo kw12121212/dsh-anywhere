@@ -1,0 +1,62 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: android-group-search
+  title: 在群聊页搜索历史消息并查看命中详情
+area: android
+status: draft
+actors:
+  - name: 用户
+    role: 在 Android 手机端查找群聊历史消息的团队成员
+  - name: 远端 DS-Bot 服务
+    role: 保存群账本并提供 group-search 只读搜索接口的服务端
+preconditions:
+  - App 已连接到 DS-Bot 0.3.10 及以上远端服务并打开某个群的群聊页
+main_flow:
+  open-search:
+    action: 用户点按群聊页工具行的「搜索」，进入全屏群内搜索页，输入框获得焦点，显示「搜索这个群的消息 · 至少输入两个字」的提示
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: group-search
+  type-query:
+    action: 用户输入至少 2 个字符的关键词，App 防抖后经 group-search 发起搜索并显示搜索中，结果按新到旧列出，每条显示发言者、时间与高亮关键词的片段及命中计数
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: group-search
+  load-more:
+    action: 还有更早命中时，用户点「加载更多」，App 以最旧命中的 seq 继续分页，把更早的命中追加在已有结果后且不重复
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: group-search
+  open-hit:
+    action: 用户点按某条结果，搜索页显示该消息的发言者、时间、高亮关键词的全文与前后各一条消息；点「返回结果」或系统返回键回到结果列表
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: group-search
+exception_flows:
+  short-query:
+    trigger: 输入不足 2 个字符
+    steps:
+      show-hint:
+        action: 搜索页显示至少输入两个字符的提示，不发起搜索，不显示旧结果
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: group-search
+  no-hits:
+    trigger: 关键词在该群中没有命中
+    steps:
+      show-empty:
+        action: 搜索页显示「没有找到消息」及换个词试试的提示
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: group-search
+  search-failed:
+    trigger: group-search 返回失败（如群已不存在 bot/not-found）或网络失败
+    steps:
+      show-reason:
+        action: 搜索页显示服务端返回的原因或可读的网络失败提示，不崩溃，修改关键词可重新搜索；加载更多失败时在页脚显示原因并保留已有结果
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: group-search

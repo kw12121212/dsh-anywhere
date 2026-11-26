@@ -73,6 +73,8 @@ fun RoomChatPage(
     media: ChatMedia? = null,
     /** 打开群详情页（dsbot-folders）。 */
     onOpenDetails: () -> Unit = {},
+    /** 打开群内搜索页（dsbot-group-search）。 */
+    onOpenSearch: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(roomId)
@@ -288,6 +290,7 @@ fun RoomChatPage(
         }
         // 工具行可横向滚动：窄屏英文界面下五个按钮放不下（dsbot-folders 新增「详情」）
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = onOpenSearch) { Text(tr("搜索", "Search")) }
             TextButton(onClick = { controller.showProgress() }) { Text(tr("进度", "Progress")) }
             TextButton(onClick = { controller.showStats(memberIds, members) }, enabled = members.isNotEmpty()) { Text(tr("统计", "Stats")) }
             TextButton(onClick = { showGoalDialog = true }) { Text(tr("目标", "Goal")) }
@@ -561,7 +564,7 @@ private fun MessageBubble(
 }
 
 /** 成员名颜色（与团队页 colorOf 同款映射的群聊内副本；未知色键与 null 走默认蓝/主题色）。 */
-private fun speakerColor(name: String): androidx.compose.ui.graphics.Color = when (name) {
+internal fun speakerColor(name: String): androidx.compose.ui.graphics.Color = when (name) {
     "blue" -> androidx.compose.ui.graphics.Color(0xFF1E88E5)
     "green" -> androidx.compose.ui.graphics.Color(0xFF43A047)
     "violet" -> androidx.compose.ui.graphics.Color(0xFF8E24AA)

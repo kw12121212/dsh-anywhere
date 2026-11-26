@@ -1,0 +1,35 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-group-search
+  status: proposed
+summary:
+  what:
+    - 群聊页新增群内搜索入口：调用 DS-Bot 0.3.10 的 group-search {roomId, query, before?, offset?}，按网页端 GroupSearch 的行为（至少 2 个字符、输入防抖、结果按新到旧、每条显示发言者、时间与关键词高亮片段，「加载更多」以最旧命中的 seq 作 before 向更早分页并按 seq 去重）在手机上显示搜索结果
+    - 以只读探针实测 group-search 应答形态（命中、无命中、空查询、未知群 bot/not-found、分页 hasMore），登记 FINDINGS 新节与 dsbot-api 技术标准；请求体构造、应答解码、分页游标、去重、片段截取与高亮区间计算放 core 并以 JUnit 与脱敏夹具覆盖
+    - 点按命中项与网页端一致在搜索页内打开命中详情：发言者、时间、全文高亮与「此消息前后」各一条上下文，可返回结果列表；不跳转到群聊位置（hit-open-target 已决定）
+  why:
+    - 里程碑 dsbot-native-parity 要求原生界面覆盖 DS-Bot 0.3.10 网页端经 /api/bot 可达的全部群聊功能，群内搜索是网页端已有、手机端缺失的能力；在手机上翻找长群聊的历史消息目前只能逐页上翻
+    - group-search 端点尚未在本项目实测登记，需要以实测与源码核对确定其形态并作为单一事实来源，供后续桌面原生端复用
+scope:
+  in:
+    - core：GroupSearch 纯逻辑——请求体（roomId、query、before 或 offset）、应答 {results[{seq, time, text, botId?, name?, before?, after?}], hasMore} 解码、加载更多游标（最旧命中 seq 为整数时用 before，否则用 offset=已有条数）、按 seq 去重合并、查询词切分（小写、按空白切分、去重）、180 字符片段截取（命中词前留 60 字符并加省略号）与高亮区间、发言者解析（无 botId 为「你」，有 botId 时名册优先、条目 name 后备、都缺为「某个 Bot」）
+    - spike：runSpike 新增只读 ProbesGroupSearch 探针组（group-search 为只读端点），只记键集、计数与错误形态，不记群名、成员名与正文；脱敏夹具经 Sanitize.json 写出
+    - mock：scripts/mock-dsh-server.mjs 增加 group-search 应答（多页命中、无命中、未知群错误），供模拟器验收
+    - delta-spec：android-dsbot 新增 group-search 要求；delta-tech：dsbot-api 新增 group-search-endpoint-0310 规则
+    - app：群聊页工具行新增「搜索」入口与全屏群内搜索页（输入框、清空、提示文案、搜索中、无结果、错误按服务端 message 显示、命中计数与加载更多），切换查询时丢弃过期应答；点按命中项在搜索页内打开命中详情
+  out:
+    - 团队页跨 Bot 与会话的全局搜索（网页端 CommandPalette，既有 team-search 要求不变）
+    - 私聊页内搜索（0.3.10 未提供私聊搜索端点）
+    - 群待办、群目标任务备注与取消、后台任务等同里程碑其他计划变更
+    - 在 group-search 之外自建本地全文索引或离线搜索
+    - 从搜索命中跳转并定位到群聊中的该条消息（命中 seq 为群账本序号，与 room-chat 条目编号不同；网页端同样不跳转）
+unchanged_behavior:
+  - 群聊页的分页、更早消息、发送、@ 提及、停止群/成员、room-progress、群目标与轮次呈现行为不变
+  - 团队页搜索框（team-search）按名称与最近消息过滤的行为不变
+  - 写操作约定不变：本变更只调用只读的 group-search，不引入写端点
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-group-search

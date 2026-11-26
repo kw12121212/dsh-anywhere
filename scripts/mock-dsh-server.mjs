@@ -8,6 +8,7 @@ import { writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
 import { createManageTeam } from './mock-dsh-manage.mjs'
 import { createBotTasks } from './mock-dsh-bot-tasks.mjs'
+import { handleGroupSearch } from './mock-dsh-group-search.mjs'
 
 function argValue(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -425,6 +426,13 @@ const server = createServer((req, res) => {
       if (endpoint === 'update-check' && !manageMode) {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, value: { current: '9.9.9', dsh: { current: '9.9.9' } } }))
+        return
+      }
+      // 群内搜索（dsbot-group-search）：所有模式下可用，群账本与分页语义见 mock-dsh-group-search.mjs
+      if (endpoint === 'group-search') {
+        const payload = (() => { try { return JSON.parse(body).payload ?? {} } catch { return {} } })()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(handleGroupSearch(payload)))
         return
       }
       if (manageMode) {

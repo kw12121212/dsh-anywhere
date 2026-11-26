@@ -195,6 +195,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object DsbotDiagnostics : ShellPage
         /** Bot 后台任务详情（dsbot-bot-task-detail）：从私聊后台任务条进入，分页看步骤与输出并可向运行中任务追问。 */
         data class BotTaskDetail(val botId: String, val taskId: String) : ShellPage
+        /** 群内搜索（dsbot-group-search）：从群聊页进入，搜索群历史消息并查看命中详情。 */
+        data class GroupSearch(val roomId: String) : ShellPage
     }
 
 @Composable
@@ -324,6 +326,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             },
                             media = connection.media,
                             onOpenDetails = { connection.openDetails(current.targetId) },
+                            onOpenSearch = { connection.openGroupSearch(current.targetId) },
                         )
                     } else {
                         LaunchedEffect(entry?.working) { connection.chatController.syncWorking(entry?.working ?: false) }
@@ -588,6 +591,14 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                         media = connection.media,
                         onOpenLink = { url, chooser -> connection.openChatLink(linkContext, url, chooser) },
                         onSyncState = { connection.syncStateQuiet() },
+                        onBack = { if (connection.page == current) connection.goBack() },
+                    )
+                }
+                current is ShellPage.GroupSearch -> key(current) {
+                    GroupSearchPage(
+                        roomId = current.roomId,
+                        state = connection.stateSnapshot?.raw,
+                        api = connection.manageApi,
                         onBack = { if (connection.page == current) connection.goBack() },
                     )
                 }
@@ -1421,6 +1432,8 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openDsbotDiagnostics() = push(ShellPage.DsbotDiagnostics)
 
     fun openBotTaskDetail(botId: String, taskId: String) = push(ShellPage.BotTaskDetail(botId, taskId))
+
+    fun openGroupSearch(roomId: String) = push(ShellPage.GroupSearch(roomId))
 
     /** 后台任务详情最新页单飞读取器（dsbot-bot-task-detail）。 */
     val botTaskReadStore = BotTaskReadStore()

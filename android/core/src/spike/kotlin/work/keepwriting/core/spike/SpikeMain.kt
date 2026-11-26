@@ -261,6 +261,9 @@ fun main() {
     // ---- 5p. 电脑操控设置（dsbot-computer-settings）：state.computer/computer-system-status 只读 + 写端点错误形态（不开关、不重试） ----
     ProbesComputer { endpoint, payload -> post(endpoint, payload) }.run(stateVal, firstBotId)
 
+    // ---- 5q. 群内搜索（dsbot-group-search）：group-search 只读形态 + 分页 + 未知群错误 ----
+    ProbesGroupSearch { endpoint, payload -> post(endpoint, payload) }.run(stateVal)
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。

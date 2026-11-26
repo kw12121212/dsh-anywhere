@@ -1,0 +1,39 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-group-search
+approach:
+  - 先核对后实现：以 ds-bot 0.3.10 源码（src/host/channel.js group-search 分支：roomOf 或 pastOwners 解析群、未知群 fail('Unknown group chat','bot/not-found')；src/host/group-search.js searchGroupBook：SEARCH_MAX=20、TERMS_MAX=8、QUERY_MAX=200、按新到旧、全部词须命中、before/offset 分页、hasMore 仅在确有下一条命中时为真、无 text 记录跳过；client.js src/client/group-search.js GroupSearch：MIN_QUERY=2、DEBOUNCE_MS=220、SNIPPET_CHARS=180、termsOf/marked/snippetOf/authorOf、loadMore 与 seq 去重、Detail 视图）为依据，再以 runSpike 只读探针对本机真实群实测并登记
+  - 纯逻辑下沉 core（新建 GroupSearch.kt）：请求体构造、应答解码、加载更多游标、去重合并、查询词切分、片段截取与高亮区间、发言者解析，均以 JUnit 和实测脱敏夹具覆盖；app 只做 Compose 呈现与调用编排，经既有 dsbot-api-client 发出请求（只读、不重试），查询变化时以代次丢弃过期应答
+  - 群聊页工具行（进度、统计、目标等同排的文字按钮，可横向滚动）加「搜索」进入全屏搜索页（ShellPage.GroupSearch，沿用设置子页全屏页约定，系统返回键在详情时先回结果列表）；点按命中项在搜索页内打开命中详情，文案随 App 语言切换中英文，与网页端文案对齐
+decisions:
+  follow-web-search-semantics:
+    decision: 搜索交互与网页端 GroupSearch 一致：至少 2 个字符才发请求、220ms 防抖、首屏不带分页参数、加载更多以最旧命中 seq 为 before（seq 非整数时用 offset=已有条数）并按 seq 去重、片段 180 字符、发言者名册优先
+    rationale: 验收标准是与网页端同一关键词结果一致；沿用上游客户端常量与算法（upstream-client-algorithm-parity）可避免两端命中顺序、分页边界与片段截取不一致
+  search-logic-in-core:
+    decision: 分页游标、去重、查询词切分、片段截取与高亮区间计算放 core 的 GroupSearch，以 JUnit 覆盖
+    rationale: 计划变更明确要求分页游标与高亮片段处理放 core；core 为纯 JVM 模块，可在完整回归命令中测试，app 层无单元测试覆盖
+  readonly-probe:
+    decision: spike 探针只调用 group-search（上游 READS 内的只读端点），只记键集、计数与错误形态
+    rationale: 遵守 spike-write-probes-non-mutating 与 spike-probe-precondition；群消息正文与成员名属用户数据，不得进入 FINDINGS 与夹具
+  hit-detail-not-jump:
+    decision: 点按命中项在搜索页内打开命中详情（全文高亮、before/after 上下文、返回结果），不在群聊中定位
+    rationale: 人工决定（hit-open-target 选 A）；与网页端 Detail 视图一致，且命中 seq 与 room-chat 条目编号不同，近似匹配有误配风险
+  stale-results-hidden:
+    decision: 修改关键词后、新应答到达前不再显示旧查询的结果，显示「搜索中…」
+    rationale: 网页端在防抖期间仍显示旧结果，但旧结果的高亮与新关键词不一致，手机屏幕小更易误读；spec 规定旧结果不再显示，属有意的细微差异
+  no-gating-on-demand:
+    decision: 群聊页「搜索」入口不按 hello capabilities 门控，搜索页按 group-search 应答降级（未知端点提示此远端版本不支持、Unknown group chat 提示找不到这个群聊、其他失败显示服务端原因、网络失败可读提示），并在 dsbot-api hello-capabilities 登记例外
+    rationale: 上游 0.3.10 mobile.js CAPABILITIES 不含群搜索能力名、state 也无对应字段，按 hello 门控会让入口永远隐藏；group-search 为只读端点，旧远端上失败只影响搜索页本身，按 on-demand-page-degrade 以应答降级对其他功能无影响
+  page-state-in-core:
+    decision: 搜索页显示哪种状态（输入提示、搜索中、失败、无结果、结果列表）、结果与失败是否属于当前查询、能否加载更多及页面文案由 core GroupSearch.display/loadMoreCursor/Copy 决定并以 JUnit 覆盖，app 只按状态渲染
+    rationale: 修改关键词后隐藏旧结果与旧错误、失败后改词可重新搜索、加载更多失败保留结果、中英文案切换都是 spec 要求，:app 无单元测试面；下沉 core 后可回归拦截（pure-logic-in-core，评审 M2）
+alternatives:
+  - option: 手机端拉取 room-chat 全部历史后在本地做全文过滤
+    reason: 需要逐页下载整个群会话，流量与耗时随群规模增长，且与服务端 searchGroupBook 的账本范围、命中规则不一致，无法保证与网页端结果相同
+  - option: 以 group-search 命中的 seq 直接匹配 room-chat 条目 id 定位跳转
+    reason: 源码核对显示命中 seq 是群账本序号，room-chat 条目 id 为各会话分段内的事件 seq 或 callId:index，两套编号不同，直接匹配会定位错误；是否以及如何跳转见 hit-open-target 问题
+risks:
+  - 本机真实群的消息量可能不足以触发 hasMore 分页；此时分页形态按源码核对登记并由 mock 多页夹具覆盖，FINDINGS 区分实测与源码核对
+  - 命中正文、上下文与成员名属用户数据：探针、夹具、日志与诊断上报不得包含原文，夹具须经 Sanitize.json 脱敏

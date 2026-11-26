@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-group-search
+open: []
+resolved:
+  - id: requirement-problem
+    question: 现在具体出了什么问题，影响谁？
+    context: 影响：proposal 的 why。来源：计划变更 dsbot-group-search 与里程碑 dsbot-native-parity。
+    answer: 手机端群聊没有群内搜索，查找历史消息只能逐页上翻；网页端 0.3.10 已提供 group-search，里程碑要求原生界面覆盖网页端经 /api/bot 可达的全部群聊功能。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: 怎样可观察地证明问题已解决？
+    context: 影响：验收与 Verification 任务。来源：计划变更 details 的验收条件与里程碑 done_criteria。
+    answer: 群聊页可搜索历史消息，结果列表显示发言者、时间与高亮片段，与网页端同一关键词结果一致，并能打开命中消息；group-search 应答形态实测登记到 dsbot-api 与 FINDINGS。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: 为什么现在做？
+    context: 影响：优先级。来源：roadmap-recommend 脚本推荐。
+    answer: 前置依赖 dsbot-group-chat 已归档，strict-spec-cli roadmap-recommend 按路线图顺序推荐 dsbot-group-search 为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: 哪些必须明确不改变？
+    context: 影响：scope.out 与 unchanged_behavior。来源：里程碑 scope 与计划变更范围。
+    answer: 群聊页既有分页、发送、提及、停止、room-progress、群目标与轮次呈现不变；团队页 team-search 不变；群待办、群目标任务备注与取消、全局搜索不在本变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: hit-open-target
+    question: 点按群内搜索的命中项后，手机端应该落到哪里：与网页端一致打开命中详情，还是按路线图原设想跳转到群聊中该消息？
+    context: 影响：proposal 范围、delta spec 场景、实施文件（RoomChatPage/RoomChatController 与新搜索页）、测试与验收标准（里程碑 done_criteria 写的是「可查到并跳转到命中消息」）。依据：ds-bot 0.3.10 client.js GroupSearch 点按命中项打开 Detail 视图——显示发言者、时间、全文高亮与「此消息前后」各一条上下文，并有「返回结果」，网页端并不跳转到聊天位置；group-search 命中携带的 seq 是群账本序号，而 room-chat 条目 id 是各会话分段内的事件 seq 或 callId:index，两套编号不同，无法精确定位。选项：A（推荐）与网页端一致，搜索页内打开命中详情（全文高亮加前后上下文），不跳转；验收按与网页端一致判定，里程碑「跳转」理解为打开命中消息。B 跳转到群聊中该消息：按时间、发言者与文本近似匹配 room-chat 条目，必要时向前分页加载，找不到时提示并退回命中详情；工作量与误配风险较高。C 同时提供：默认显示命中详情，详情页再给「在群聊中定位」按钮（尽力匹配，找不到时提示）。
+    answer: 选 A：与网页端一致，点按命中项在搜索页内打开命中详情——发言者、时间、全文高亮与「此消息前后」各一条上下文，提供「返回结果」；不跳转到群聊位置。里程碑与计划变更中的「跳转到命中消息」按「打开命中消息」理解，验收以与网页端一致判定。
+    status: resolved
+    kind: requirement
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 群内搜索按网页端 0.3.10 GroupSearch 的语义实现：结果列表 + 命中详情（全文高亮与前后上下文），不在群聊中定位跳转；路线图的「跳转到命中位置」理解为打开命中消息查看。
+    status: resolved
+    kind: requirement
+    answered_by: human

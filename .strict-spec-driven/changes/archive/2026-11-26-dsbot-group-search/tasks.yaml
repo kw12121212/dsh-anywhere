@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-group-search
+sections:
+  Implementation:
+    findings:
+      text: runSpike 新增 ProbesGroupSearch 只读探针组：对本机真实群调用 group-search（命中查询、无命中查询、空白查询回 {results:[],hasMore:false}、未知群 bot/not-found、before 与 offset 分页、hasMore），只记键集、计数、类型与错误形态，不记群名、成员名与正文；登记 FINDINGS.md 新节并区分实测与源码核对，用 Sanitize.json 写出 group-search 脱敏夹具
+      status: complete
+    core-group-search:
+      text: core：新建 GroupSearch.kt——searchRequest(roomId, query, before?/offset?) 请求体、decode 应答（results 各项 seq/time/text/botId/name/before/after，hasMore 仅 true 为真，畸形字段降级）、nextPage 游标（最旧命中 seq 为整数用 before，否则 offset=已有条数）、merge 按 seq 去重、termsOf、snippetOf（180 字符、命中词前 60 字符、省略号）、高亮区间、authorOf（无 botId 为「你」，名册优先、name 后备、「某个 Bot」）；查询少于 2 个字符不发请求
+      status: complete
+    core-group-search-tests:
+      text: core：编写 GroupSearchTest，以实测脱敏夹具与源码核对形态断言请求体字面值、解码与降级、游标选择、去重合并、片段截取边界、多词与正则特殊字符高亮、发言者解析（含名册优先）与最短查询长度
+      status: complete
+    app-group-search:
+      text: app：群聊页工具行新增「搜索」入口与全屏群内搜索页——输入框与清空、少于 2 字符提示、220ms 防抖、搜索中、无结果、错误按服务端 message 显示、命中行（发言者、时间、高亮片段）、命中计数与加载更多（加载失败在页脚显示）、查询变化以代次丢弃过期应答；中英文案随 App 语言切换
+      status: complete
+    app-hit-open:
+      text: app：点按命中项在搜索页内打开命中详情——发言者、时间、全文关键词高亮、「此消息前后」各一条上下文（before/after 存在时显示，同样高亮）与「返回结果」按钮，系统返回键先回结果列表；修改关键词时关闭详情；不跳转到群聊位置
+      status: complete
+    mock-group-search:
+      text: mock：scripts/mock-dsh-server.mjs 增加 group-search 应答（多页命中带 hasMore 与 before 分页、带 before/after 上下文、无命中、未知群 bot/not-found），供模拟器验收
+      status: complete
+    delta-registered:
+      text: 确认 delta-spec android-dsbot group-search 与 delta-tech dsbot-api group-search-endpoint-0310 与实测结论和最终实现一致，按实测更新形态与实测/源码核对界定
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: '设备验收（Windows 侧模拟器 + mock，有条件时对照真实服务）：同一群同一关键词在网页端与手机端的命中条数、顺序、发言者与时间一致，加载更多后结果一致，点按命中项显示全文高亮与前后上下文并可返回结果列表；验收后恢复 App 地址并移除端口转发。记录（2026-11-26，Windows 侧模拟器 Medium_Phone_API_36.1 / emulator-5554，mock 127.0.0.1:13190 + adb reverse，英文界面）：群聊页工具行「Search」进入搜索页，提示「Search this group’s messages · Type at least two characters」；输入 1 个字符不发请求；输入 release 防抖后只发 1 次请求，结果新到旧、成员名按名册取色、用户行显示 You、时间为 Today/Yesterday 标签、长消息片段带前导省略号、关键词高亮；Load more 依次 before=39、before=16，计数 20→40→54 后按钮消失；点按命中显示全文与前后各一条（57、59），系统返回键与「Back to results」均回到原 54 条列表；无命中显示 No messages found；清空恢复提示；多词 deploy saturday 5 条；停掉 mock 后显示「Search failed: network unavailable, try again」不崩溃。真实服务对照以 ProbesGroupSearch 实测（FINDINGS 第 42 节）与 group-search-page1.json 夹具 JUnit 代替。验收中 adb 客户端堆积挂起一次，按 lesson kill-server 后恢复。验收后 App 地址保持原值 127.0.0.1:13190、端口转发已移除、模拟器已关闭。审查修复后复测（2026-11-26，同一模拟器，中文界面）：提示「搜索这个群的消息 · 至少输入两个字」、占位「在 项目群 里搜索消息」；release 得「20 条结果」与「加载更多」，时间为今天/昨天、用户行为「你」；详情页显示「返回结果」与「这条消息的前后」；查询追加 x 时详情关闭并显示「没有找到消息 · 换个词试试」，删去 x 后重新请求回到 20 条；停掉 mock 后点「加载更多」，页脚红字「搜索失败：网络不可用，请重试」，原 20 条保留、按钮仍可重试；首屏请求失败时整页显示同一失败文案。复测中 adb reverse 指向已关闭的 WSL 端口会拖死 adb 服务端，移除端口转发后请求立即失败、复测通过（环境问题，非应用行为）。复测后语言恢复「跟随系统」、App 地址保持 127.0.0.1:13190、端口转发已移除、模拟器已关机、临时 APK 已删除'
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict ready 与 verify 校验变更产物结构与任务覆盖
+      status: complete
+      command: strict-spec-cli verify dsbot-group-search
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

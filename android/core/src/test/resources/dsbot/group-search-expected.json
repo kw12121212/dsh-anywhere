@@ -1,0 +1,558 @@
+[
+ {
+  "query": "deploy",
+  "text": "Deploy window confirmed for Saturday; DEPLOY again",
+  "terms": [
+   "deploy"
+  ],
+  "snippet": "Deploy window confirmed for Saturday; DEPLOY again",
+  "textRanges": [
+   [
+    0,
+    6
+   ],
+   [
+    38,
+    44
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    6
+   ],
+   [
+    38,
+    44
+   ]
+  ]
+ },
+ {
+  "query": "  Deploy　计划  deploy DEPLOY ",
+  "text": "计划：deploy 与 Deploy 计划",
+  "terms": [
+   "deploy",
+   "计划"
+  ],
+  "snippet": "计划：deploy 与 Deploy 计划",
+  "textRanges": [
+   [
+    0,
+    2
+   ],
+   [
+    3,
+    9
+   ],
+   [
+    12,
+    18
+   ],
+   [
+    19,
+    21
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    2
+   ],
+   [
+    3,
+    9
+   ],
+   [
+    12,
+    18
+   ],
+   [
+    19,
+    21
+   ]
+  ]
+ },
+ {
+  "query": "a.b (x) [y]",
+  "text": "a.b then axb (x) [y] \\d",
+  "terms": [
+   "a.b",
+   "(x)",
+   "[y]"
+  ],
+  "snippet": "a.b then axb (x) [y] \\d",
+  "textRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    13,
+    16
+   ],
+   [
+    17,
+    20
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    13,
+    16
+   ],
+   [
+    17,
+    20
+   ]
+  ]
+ },
+ {
+  "query": "ab abc cd",
+  "text": "abcd abc ab cd",
+  "terms": [
+   "ab",
+   "abc",
+   "cd"
+  ],
+  "snippet": "abcd abc ab cd",
+  "textRanges": [
+   [
+    0,
+    2
+   ],
+   [
+    2,
+    4
+   ],
+   [
+    5,
+    7
+   ],
+   [
+    9,
+    11
+   ],
+   [
+    12,
+    14
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    2
+   ],
+   [
+    2,
+    4
+   ],
+   [
+    5,
+    7
+   ],
+   [
+    9,
+    11
+   ],
+   [
+    12,
+    14
+   ]
+  ]
+ },
+ {
+  "query": "release",
+  "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaRELEASEbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "terms": [
+   "release"
+  ],
+  "snippet": "…aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaRELEASEbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb…",
+  "textRanges": [
+   [
+    100,
+    107
+   ]
+  ],
+  "snippetRanges": [
+   [
+    61,
+    68
+   ]
+  ]
+ },
+ {
+  "query": "release",
+  "text": "RELEASEbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "terms": [
+   "release"
+  ],
+  "snippet": "RELEASEbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb…",
+  "textRanges": [
+   [
+    0,
+    7
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    7
+   ]
+  ]
+ },
+ {
+  "query": "release",
+  "text": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccrelease",
+  "terms": [
+   "release"
+  ],
+  "snippet": "…ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccrelease",
+  "textRanges": [
+   [
+    300,
+    307
+   ]
+  ],
+  "snippetRanges": [
+   [
+    61,
+    68
+   ]
+  ]
+ },
+ {
+  "query": "alpha beta",
+  "text": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbetaccccccccccccccccccccccccccccccccccccccccccccccccccalphacccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "terms": [
+   "alpha",
+   "beta"
+  ],
+  "snippet": "…ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbetaccccccccccccccccccccccccccccccccccccccccccccccccccalphaccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc…",
+  "textRanges": [
+   [
+    200,
+    204
+   ],
+   [
+    254,
+    259
+   ]
+  ],
+  "snippetRanges": [
+   [
+    61,
+    65
+   ],
+   [
+    115,
+    120
+   ]
+  ]
+ },
+ {
+  "query": "none",
+  "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "terms": [
+   "none"
+  ],
+  "snippet": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
+  "textRanges": [],
+  "snippetRanges": []
+ },
+ {
+  "query": "short",
+  "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "terms": [
+   "short"
+  ],
+  "snippet": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "textRanges": [],
+  "snippetRanges": []
+ },
+ {
+  "query": "发布",
+  "text": "背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。这里提到发布窗口需要再确认一次。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。",
+  "terms": [
+   "发布"
+  ],
+  "snippet": "…。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。背景说明。这里提到发布窗口需要再确认一次。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细节。补充细…",
+  "textRanges": [
+   [
+    204,
+    206
+   ]
+  ],
+  "snippetRanges": [
+   [
+    61,
+    63
+   ]
+  ]
+ },
+ {
+  "query": "kelvin",
+  "text": "temperature 5Kelvin and kelvin",
+  "terms": [
+   "kelvin"
+  ],
+  "snippet": "temperature 5Kelvin and kelvin",
+  "textRanges": [
+   [
+    13,
+    19
+   ],
+   [
+    24,
+    30
+   ]
+  ],
+  "snippetRanges": [
+   [
+    13,
+    19
+   ],
+   [
+    24,
+    30
+   ]
+  ]
+ },
+ {
+  "query": "straße",
+  "text": "STRASSE straße Straße",
+  "terms": [
+   "straße"
+  ],
+  "snippet": "STRASSE straße Straße",
+  "textRanges": [
+   [
+    8,
+    14
+   ],
+   [
+    15,
+    21
+   ]
+  ],
+  "snippetRanges": [
+   [
+    8,
+    14
+   ],
+   [
+    15,
+    21
+   ]
+  ]
+ },
+ {
+  "query": "ſun",
+  "text": "SUN sun ſun",
+  "terms": [
+   "ſun"
+  ],
+  "snippet": "SUN sun ſun",
+  "textRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    4,
+    7
+   ],
+   [
+    8,
+    11
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    4,
+    7
+   ],
+   [
+    8,
+    11
+   ]
+  ]
+ },
+ {
+  "query": "i̇",
+  "text": "İstanbul i̇stanbul",
+  "terms": [
+   "i̇"
+  ],
+  "snippet": "İstanbul i̇stanbul",
+  "textRanges": [
+   [
+    9,
+    11
+   ]
+  ],
+  "snippetRanges": [
+   [
+    9,
+    11
+   ]
+  ]
+ },
+ {
+  "query": "😀 ok",
+  "text": "hi 😀 there OK ok zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz😀",
+  "terms": [
+   "😀",
+   "ok"
+  ],
+  "snippet": "hi 😀 there OK ok zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz…",
+  "textRanges": [
+   [
+    3,
+    5
+   ],
+   [
+    12,
+    14
+   ],
+   [
+    15,
+    17
+   ],
+   [
+    218,
+    220
+   ]
+  ],
+  "snippetRanges": [
+   [
+    3,
+    5
+   ],
+   [
+    12,
+    14
+   ],
+   [
+    15,
+    17
+   ]
+  ]
+ },
+ {
+  "query": "a b",
+  "text": "a b a b",
+  "terms": [
+   "a",
+   "b"
+  ],
+  "snippet": "a b a b",
+  "textRanges": [
+   [
+    0,
+    1
+   ],
+   [
+    2,
+    3
+   ],
+   [
+    4,
+    5
+   ],
+   [
+    6,
+    7
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    1
+   ],
+   [
+    2,
+    3
+   ],
+   [
+    4,
+    5
+   ],
+   [
+    6,
+    7
+   ]
+  ]
+ },
+ {
+  "query": "﻿bom",
+  "text": "bom ﻿bom",
+  "terms": [
+   "bom"
+  ],
+  "snippet": "bom ﻿bom",
+  "textRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    5,
+    8
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    5,
+    8
+   ]
+  ]
+ },
+ {
+  "query": "ΣΑΣ",
+  "text": "σας ΣΑΣ σαΣ",
+  "terms": [
+   "σας"
+  ],
+  "snippet": "σας ΣΑΣ σαΣ",
+  "textRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    4,
+    7
+   ],
+   [
+    8,
+    11
+   ]
+  ],
+  "snippetRanges": [
+   [
+    0,
+    3
+   ],
+   [
+    4,
+    7
+   ],
+   [
+    8,
+    11
+   ]
+  ]
+ }
+]

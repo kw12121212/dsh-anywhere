@@ -47,7 +47,7 @@ categories:
     ds-bot-delta-tech-hello-capabilities-f433e4:
       title: 按字段存在门控 DS-Bot 新入口时，必须同时在 delta-tech 里给 hello-capabilities 增补例外
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/api/ds-bot-delta-tech-hello-capabilities-f433e4.yaml
     client-js-f3169a:
       title: 按网页端 client.js 规划原生端能力前，先看手机端端点是否已在服务端展开，并按上游渲染组件核对显示取值
@@ -212,7 +212,7 @@ categories:
     app-d432a7:
       title: 留在 :app 的纯解析逻辑会让渲染行为缺陷零回归拦截
       status: active
-      occurrences: 2
+      occurrences: 3
       path: .strict-spec-driven/lessons/testing/app-d432a7.yaml
     electron-e2e-window-open-execution-context-was-d-cc60b5:
       title: Electron e2e「window.open 不弹出新窗口」偶发 Execution context was destroyed，与被测改动无关时整体重跑一次
@@ -348,7 +348,7 @@ categories:
     windows-adb-adb-devices-device-adb-shell-kill-se-bc6520:
       title: Windows 侧 adb 服务端卡死：adb devices 显示 device 但 adb shell 全部挂起，先 kill-server 再判断模拟器
       status: active
-      occurrences: 2
+      occurrences: 3
       path: .strict-spec-driven/lessons/tooling/windows-adb-adb-devices-device-adb-shell-kill-se-bc6520.yaml
     runspike-401-dsh-web-https-dsh-url-http-fe7536:
       title: runSpike 全部 401 时先查 dsh-web 打印的地址协议：改为 https 后 dsh-url 仍返回旧的 http 地址

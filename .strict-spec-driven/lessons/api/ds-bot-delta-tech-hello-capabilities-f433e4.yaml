@@ -8,7 +8,7 @@ lesson:
 category: api
 status: active
 created_at: '2026-11-24T07:11:37.189Z'
-updated_at: '2026-11-24T07:11:37.189Z'
+updated_at: '2026-11-26T03:10:59.103Z'
 context: dsbot-api 的 hello-capabilities 是 MUST：0.3.10 起的新端点与字段一律以 hello capabilities 为可用依据，App 新入口一律经 capabilities.has 判定；例外只逐条登记在该规则的 exceptions 中。
 observation: dsbot-capabilities 按 state.capabilities 字段存在门控能力入口（hello 名单没有能力库项），delta-tech 只新增了端点规则，没有 MODIFIED hello-capabilities；独立评审指出，归档后标准里会出现两条互相矛盾的 MUST，后续评审会按 hello-capabilities 判定违规。
 takeaway: 设计里一旦选择 data-presence-gating（不经 capabilities.has），提案时就在 delta-tech 中用 MODIFIED 完整复刻 hello-capabilities（statement、rationale、method、detail、全部既有 exceptions），并追加本变更的字段与写端点例外，引用本变更的设计决策；不要只新增端点规则。
@@ -17,3 +17,6 @@ occurrences:
   - origin: dsbot-capabilities
     date: '2026-11-24'
     evidence: '评审 MUST FIX 1：changes/dsbot-capabilities/tech/dsbot-api.yaml 原为 MODIFIED: {}；修复后 MODIFIED hello-capabilities 携带聊天条与能力库两条 exceptions，strict verify 通过。'
+  - origin: dsbot-group-search
+    date: '2026-11-26'
+    evidence: 2026-11-26 dsbot-group-search：群聊页「搜索」入口按需调用 group-search（0.3.10 CAPABILITIES 不含、state 无字段，不门控按应答降级），提案与实现都漏了 hello-capabilities 例外与 no-gating 设计决策，由独立评审 M1 发现后补 delta-tech MODIFIED hello-capabilities（第 15 条例外）与 design no-gating-on-demand——不门控的按需端点同样需要登记例外

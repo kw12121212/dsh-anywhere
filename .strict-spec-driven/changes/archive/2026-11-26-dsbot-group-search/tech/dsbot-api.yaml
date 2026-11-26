@@ -1,0 +1,51 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    group-search-endpoint-0310:
+      strength: MUST
+      statement: 群内搜索端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，上游 READS 内的只读端点）：group-search {roomId, query, before?(整数，群账本 seq), offset?(正整数)} → {results[{seq, time?, text, botId?, name?, before?{seq,time?,text,botId?,name?}, after?{…}}], hasMore}；roomId 经 roomOf 或 pastOwners 解析（已归档旧群 id 可用），未知群回 {ok:false, error:{code:bot/not-found, message:Unknown group chat}}；服务端按新到旧、查询小写按空白切分去重（最多 8 词、查询截 200 字符）且全部词须命中，每页最多 20 条，无 text 的记录跳过，hasMore 仅在确有更早命中时为 true，空白查询回 {results:[], hasMore:false}；time 与邻居可缺，用户自己的消息带 name（记录的 who）但不带 botId。客户端必须：与网页端 GroupSearch 一致——去首尾空白后少于 2 个字符不发请求、首屏不带分页参数、加载更多以已有结果中最旧命中 seq 为 before（seq 非整数时用 offset=已有条数）并按 seq 去重合并、查询变化时丢弃过期应答、以 botId 键是否存在区分自己与成员；命中的 seq 是群账本序号，与 room-chat 条目 id（会话事件 seq 或 callId:index）不是同一编号，不得直接用作 room-chat 定位键；命中正文、上下文与成员名不写入日志、诊断上报与探针输出。
+      rationale: group-search 首次核对与接入；登记端点形态、分页与去重语义以及 seq 编号差异，作为手机端与后续桌面原生端的单一事实来源，避免误用 seq 定位群聊条目
+      enforcement:
+        method: test
+        detail: core JUnit（GroupSearchTest）以实测脱敏夹具 group-search-page1.json 与源码核对形态锁定请求体字面值、应答解码与畸形降级（缺 time/邻居、非整数 seq、hasMore 非布尔）、before/offset 游标选择、seq 去重合并、180 字符片段截取与高亮区间（不区分大小写、正则特殊字符按字面）、发言者（无 botId 为「你」、名册优先、「某个 Bot」）、失败文案与最短查询长度、页面显示判定（输入提示/搜索中/失败/无结果/结果，旧查询的结果与失败不显示，加载更多失败保留结果）、加载更多守卫、页内与跨页 seq 去重与中英文案；查询词、片段与高亮区间对 group-search-ref.mjs 在 node 中执行上游 client.js src/client/group-search.js 原文生成的 group-search-expected.json 全量比对（upstream-client-algorithm-parity，故意把片段前导改为 59 时 4 项失败）；DsbotFixturesTest 校验夹具无凭据且内容键为占位符；实测登记见 FINDINGS 第 42 节（ProbesGroupSearch）；源码核对位置：ds-bot 0.3.10 src/host/channel.js（group-search 分支）、group-search.js（searchGroupBook、lineOf、SEARCH_MAX/TERMS_MAX/QUERY_MAX）、groups.js（groupSearch）、client.js src/client/group-search.js（GroupSearch、termsOf、marked、snippetOf、authorOf、loadMore、Detail）
+    spike-search-probe-synthetic-terms:
+      strength: SHOULD
+      statement: 取证探针调用搜索类只读端点（如 group-search，以及后续的全局搜索、记忆搜索）时，查询词应只用常见单字符（如 e、的）或不可能命中的合成串，不从群、会话或记忆正文中取词；探针输出只记键集、计数、类型与错误形态，命中页经 Sanitize.json 脱敏后才写成夹具
+      rationale: 从用户数据取查询词等于把正文片段写进探针输出、FINDINGS 与命令历史；常见单字符足以在真实数据上触发多页命中与 hasMore 分页（dsbot-group-search 的 ProbesGroupSearch 以 e/的 取得 20 条首页与两页分页证据）
+      enforcement:
+        method: review
+        detail: 评审检查新增搜索类探针的查询词来源是否为常量或合成串、输出是否只含形态信息、夹具是否经 Sanitize.json
+      examples:
+        good:
+          - ProbesGroupSearch 以 listOf("e", "的") 与 zzqxjv-spike-none 作查询词，只打印键集、计数与 seq 单调性
+        bad:
+          - 先读 room-chat 取某条消息的首个词作为查询词，或把命中的 text 打印到探针输出
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+        - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
+        - DeepSeek 服务（deepseek-services、deepseek-services-config、deepseek-synthesize）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无完整服务状态视图，入口不门控，页面按 deepseek-services 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试（dsbot-deepseek-services 设计决策 no-gating-on-demand，按 deepseek-services-endpoints-0310 与 on-demand-page-degrade）
+        - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
+        - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
+        - 群内搜索（group-search）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无群搜索项）、state 中也无对应字段，按需只读端点，群聊页「搜索」入口不门控，搜索页按 group-search 应答降级——未知端点（bot/not-found 且 message 含 Unknown endpoint）显示此远端版本不支持群内搜索、Unknown group chat 显示找不到这个群聊、其他失败显示服务端原因、网络失败给可读提示（dsbot-group-search 设计决策 no-gating-on-demand，按 group-search-endpoint-0310 与 on-demand-page-degrade）
+  REMOVED: {}

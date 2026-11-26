@@ -200,6 +200,7 @@ class DsbotFixturesTest {
             "bot-task-read-steps.json",
             "deepseek-services.json",
             "room-chat-rounds.json",
+            "group-search-page1.json",
         )
         for (name in names) {
             val text = fixture(name)
@@ -219,6 +220,7 @@ class DsbotFixturesTest {
             "bot-task-read-steps.json",
             "deepseek-services.json",
             "room-chat-rounds.json",
+            "group-search-page1.json",
         )) {
             assertContentRedacted(parse(name), inContent = false, name)
         }

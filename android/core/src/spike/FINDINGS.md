@@ -656,3 +656,20 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - `computer-permission` 没有无效参数可用（非法值回落成 `accessibility`），探针只在同一轮 `computer-system-status` 回 `value:null`（宿主无系统权限服务）时才发，否则跳过，避免在 macOS 桌面宿主上弹出真实授权框。
 - `computer-system-status` 在 READS 内，其余 computer-* 为写端点（只读宿主 `bot/read-only`）。macOS 权限形态取自提供方 `cuaAccess.systemStatus()`，本机无法实测；网页端按 `perms[key]?.state ?? perms[key]` 判 `granted`/`true`，客户端按同两种形态容错（待 macOS 宿主实测）。
 - 界面验收由 `scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-manage.mjs` 扩展 computer-*，`/mock/computer?host=…` 切换宿主形态）覆盖开关、级别、撤销、重试、macOS 权限、宿主不支持、最小视图与只读宿主。
+
+## 42. 群内搜索（2026-11-26，dsbot-group-search）
+
+**实测（只读，本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesGroupSearch` 探针组；`group-search` 在上游 `READS` 内；只记键集、计数、类型与错误形态，不记群名、成员名与正文；查询词只用常见单字符 `e`/`的` 与不可能命中的合成串，不从群消息取词；遵守 `spike-write-probes-non-mutating`）**：
+- 未知群 `{roomId:"spike-none", query:"e"}` → HTTP 200、`ok:false`、`bot/not-found`、`"Unknown group chat"`。
+- 空白查询 `"   "` 与无命中查询 → `ok:true`、`{results:[], hasMore:false}`（顶层键仅 `[hasMore, results]`）。
+- 命中（2 个真实群）：群 A `的` 1 条，命中键 `[botId, name, seq, text]`——**无 `time`、无 `before`/`after`**（上游 `lineOf` 只在记录有对应字段时带键，邻居记录无 text 时不带邻居）；群 B `e`/`的` 各 20 条且 `hasMore:true`，命中键 `[after, before, botId, name, seq, text, time]`，`before`/`after` 键 `[botId, name, seq, text, time]`，`time` 为毫秒数，`seq` 全为整数且严格递减（新到旧）。
+- **用户自己的消息带 `name`（记录的 `who`）但不带 `botId`**（`的` 查询 20 条中 19 条带 `botId`、20 条带 `name`）——网页端 `authorOf` 以 `botId === undefined` 判为「你」，客户端同判。
+- 分页：以首页最旧 seq 作 `before` 与以 `offset:20` 取第二页，两页 seq 序列完全相同、与首页无重叠、全部小于该 seq，`hasMore` 仍为 true。
+- 脱敏夹具：`android/core/src/test/resources/dsbot/group-search-page1.json`（群 B 首页 20 条，经 `Sanitize.json` 写出；`text`/`name` 与 `after` 内的 `botId` 为占位符）。
+
+**源码核对（ds-bot 0.3.10 `src/host/channel.js` `group-search` 分支、`group-search.js` `searchGroupBook`/`lineOf`、`groups.js` `groupSearch`、`client.js` `src/client/group-search.js` `GroupSearch`/`termsOf`/`marked`/`snippetOf`/`authorOf`/`Detail`）**：
+- `roomId` 经 `rt.roomOf(id) ?? rt.roomOf(rt.pastOwners.get(id)?.roomId)` 解析，已归档旧群 id 可用；未知群 `fail('Unknown group chat', 'bot/not-found')`。
+- 服务端：查询小写、截 200 字符、按空白切分去重、最多 8 词，全部词须出现在记录的搜索文本中；按新到旧、每页最多 20 条；无 text 的记录跳过；`before`（整数 seq）只取更旧记录，`offset`（正整数）跳过前 N 条命中；`hasMore` 仅在第 21 条命中存在时为 true。
+- 命中的 `seq` 是**群账本**序号；room-chat 条目 id 是各会话分段内的事件 seq 或 `callId:index`，两套编号不同，不能用作群聊定位键。网页端点按命中项打开 `Detail`（发言者、时间、全文高亮、「这条消息的前后」各一条、「返回结果」），不跳转到聊天位置——客户端同样处理（hit-open-target 人工决定）。
+- 网页端交互常量：`MIN_QUERY=2`（`query.trim()` 长度）、`DEBOUNCE_MS=220`、`SNIPPET_CHARS=180`（首个命中词前留 60 字符，截断侧加 `…`）；`termsOf` 小写按 `\s+` 切分去重，`marked` 以查询词交替正则 `giu` 在原文上高亮；加载更多以最旧命中 seq 为 `before`（非整数时 `offset=已有条数`），并按 seq 去重合并；时间用 `clockLabel`（今天/昨天 + 时刻，其余带星期的月日）。
+- 界面验收由 `scripts/mock-dsh-server.mjs` 的 group-search 应答覆盖（多页命中、上下文、无命中、未知群）。
