@@ -1,0 +1,42 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-settings-overview
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: DS-Bot 0.3.10 网页端 Settings 首页提供 Overview 概览页汇总团队成员、模型、连接、工具、近 7 天用量、定时任务、外观及各设置页实时状态；Android 原生端已补齐各设置子页，但缺少总览与状态汇总入口，用户需逐页点开才能看到缺 key 告警、可用模型数或更新提示。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: Android 团队页提供「概览」入口打开原生全屏概览页，按 DS-Bot 0.3.10 OverviewPage 呈现需要处理告警、团队 Bot 槽位、6 个状态汇总磁贴与分组设置页面列表（含实时状态徽标），点按各项跳转到对应原生页，不支持的字段与端点逐项隐藏，派生纯逻辑在 android/core 以 JUnit 覆盖且完整回归通过。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 dsbot-system-about 与 dsbot-usage 已归档，strict-spec-cli roadmap-recommend 推荐 dsbot-settings-overview 为 dsbot-native-parity 里程碑的下一个可执行变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不新增 /api/bot 端点；不修改 App 级 SettingsScreen、团队页既有入口与搜索/未读、既有设置子页语义；不实现设置搜索、导览 Tour、手机配对、浏览器站点授权、Classic Agent 模式与 DSH 引擎内部槽位页；不在概览页内联编辑 API key。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 DS-Bot 0.3.10 client.js OverviewPage 与 settings.js 的数据源与派生规则实现原生概览页（近 7 天用量复用 usage 端点与 UsageStore，state.phone 与 state.prefs.effects 仅作只读摘要展示），入口放在 TeamPage 操作行首位并保持既有子页入口。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

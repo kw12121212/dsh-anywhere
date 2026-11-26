@@ -54,6 +54,8 @@ fun TeamPage(
     isUnread: (TeamHome.Entry) -> Boolean = { false },
     /** 新建 Bot（dsbot-bot-manage）。 */
     onNewBot: () -> Unit = {},
+    /** Settings 概览页（dsbot-settings-overview）；为 null 时不显示（默认参数，供预览等调用方）。 */
+    onOverview: (() -> Unit)? = null,
     /** 新建群聊（dsbot-group-manage）。 */
     onNewRoom: () -> Unit = {},
     /** 团队工作区（dsbot-folders）。 */
@@ -117,6 +119,9 @@ fun TeamPage(
         if (team != null) {
             // 入口按钮可横向滚动：窄屏上放不下时不挤压
             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onOverview != null) {
+                    TextButton(onClick = onOverview) { Text(tr("概览", "Overview")) }
+                }
                 TextButton(onClick = onNewBot) { Text(tr("＋ 新建 Bot", "+ New Bot")) }
                 TextButton(onClick = onNewRoom) { Text(tr("＋ 新建群聊", "+ New group")) }
                 TextButton(onClick = { sectionError = null; creatingSection = true }) { Text(tr("＋ 新建分组", "+ New section")) }

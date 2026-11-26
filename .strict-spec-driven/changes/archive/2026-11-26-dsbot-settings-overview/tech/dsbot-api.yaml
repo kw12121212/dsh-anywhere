@@ -1,0 +1,42 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    settings-overview-sources-0310:
+      strength: MUST
+      statement: 原生 Settings 概览页（dsbot-settings-overview）不新增 /api/bot 端点，全部内容由既有 state/live 字段与既有按需只读端点派生：Attention 与 Models 磁贴取 state.models、state.bots[]（model/appliedModel）与 providers 应答；Team 槽位（TEAM_SLOTS=6，超 5 个 Bot 显示前 4 个）取 state.bots[]、state.mainBotIds[]、state.rooms[]；Connect 磁贴取 state.connectors（mail.accounts 与 state!=off 的 connectors）、state.im.connections、state.phone（仅只读计数 phone.on && status=='online' && phones[].connected，不提供配对操作）；Tools 磁贴取 state.capabilities[]、state.browser、state.computer.enabled、state.secrets[]；近 7 天用量磁贴调用全团队 usage（带手机时区，按 Usage.preset('7d') 聚合并复用 UsageStore 单飞缓存，不用按单 Bot 的 usage-summary），usage.scanning 为真且页面前台可见时每 3 秒轮询；定时任务磁贴调用 schedules（统计 status=='active' 与最早 scheduledAt）；外观磁贴取 state.prefs（theme/accent/layout/effects，其中 effects 仅只读展示）；分组设置列表徽标另取 state.sections、state.privateArchives、state.capabilityStatuses、state.imStatus、state.mcp、state.secretStore.locked 与 update-check（复用连接期缓存并在手动刷新时重读）。
+      rationale: 对照 DS-Bot 0.3.10 client.js（src/client/settings-overview.js 与 settings.js）核对后发现：网页端 useWeek 调用全团队 usage 而非 usage-summary，Connect 磁贴统计只读 state.phone，Appearance 磁贴读取 prefs.effects；将精确数据来源锁定在技术标准可避免后续变更误用端点或误删只读兼容字段。
+      enforcement:
+        method: test
+        detail: core JUnit（SettingsOverviewTest）以真实夹具（state-full.json、usage-view.json、update-check.json）与合成用例验证全部字段解码、7 日聚合、只读 phone/effects 兼容与不支持项隐藏；FINDINGS.md 第 45 节登记 0.3.10 client.js 逐行核对记录。
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+        - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
+        - DeepSeek 服务（deepseek-services、deepseek-services-config、deepseek-synthesize）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无完整服务状态视图，入口不门控，页面按 deepseek-services 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试（dsbot-deepseek-services 设计决策 no-gating-on-demand，按 deepseek-services-endpoints-0310 与 on-demand-page-degrade）
+        - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
+        - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
+        - 群内搜索（group-search）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无群搜索项）、state 中也无对应字段，按需只读端点，群聊页「搜索」入口不门控，搜索页按 group-search 应答降级——未知端点（bot/not-found 且 message 含 Unknown endpoint）显示此远端版本不支持群内搜索、Unknown group chat 显示找不到这个群聊、其他失败显示服务端原因、网络失败给可读提示（dsbot-group-search 设计决策 no-gating-on-demand，按 group-search-endpoint-0310 与 on-demand-page-degrade）
+        - 'MCP 访问（live mcp 视图及其写端点 mcp-set、mcp-client-add、mcp-client-update、mcp-client-remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 MCP 访问项），channel.js live() 始终下发 mcp: rt.mcpView()，按 mcp-access-endpoints-0310 以 state.mcp 字段存在显隐入口，不经 capabilities.has 判定（dsbot-mcp-access 设计决策 data-presence-gating）'
+        - 群共享待办与任务看板（state 的 rooms[].todos、rooms[].tasks 及其写端点 room-todo、task-note、task-cancel）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无待办或任务看板项），且两字段只在群首次有待办或任务后才下发，按 room-board-endpoints-0310 以字段存在或 hello 握手成功（非 LEGACY）显示入口，不经 capabilities.has 判定，端点回 Unknown endpoint 时显示此远端版本不支持（dsbot-room-todos-tasks 设计决策 data-presence-gating）
+        - Settings 概览页（state.phone 只读计数、state.prefs.effects 只读摘要，以及组合既有 state/live 字段与按需只读端点 providers/usage/schedules/update-check）：0.3.10 的 hello capabilities 不含概览能力名，入口不门控，页内按字段存在与按需端点 bot/not-found 应答逐项隐藏不支持的磁贴与分组行，不经 capabilities.has 判定（dsbot-settings-overview 设计决策 overview-no-gating-and-per-item-degrade，按 settings-overview-sources-0310）
+  REMOVED: {}

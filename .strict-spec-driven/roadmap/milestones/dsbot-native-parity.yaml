@@ -38,7 +38,7 @@ dependencies:
 risks:
   - MCP 客户端令牌与 DeepSeek key 属敏感值：令牌只在新建应答中出现一次，必须不入日志、诊断上报与持久存储，剪贴板需清理
   - 电脑操控与 General 高级项部分依赖桌面界面或 dsh 配置，经 /api/bot 可能不可达；不可达项在提案阶段确认后降级为只读或移出范围
-status: proposed
+status: complete
 notes:
   - 来源：2026-11-24 对照 DS-Bot 0.3.10（npm 最新版仍为 0.3.10）channel.js 端点清单与 client.js Settings 页面列表（overview、general、appearance、bots、groups、schedules、usage、models、bot-models、local-agents、deepseek-services、connectors、im、phone、mcp、computer、browser、capabilities、secrets、about、feedback）盘点出的缺口
   - stop-chat 在 hello capabilities 中声明但 0.3.10 client.js 未调用，私聊停止沿用既有 stop-member-work，不单独规划

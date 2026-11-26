@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED:
+    settings-overview:
+      strength: MUST
+      statement: 团队页提供「概览」入口进入原生全屏「概览」页，对照 DS-Bot 0.3.10 网页端 Settings → Overview 汇总团队与设置状态并支持直接跳转：(1) 需要处理：当模型服务商缺 API key 且有 Bot 正在使用时逐条提醒（显示服务商名与在用 Bot 名称，点按跳模型与服务商页），否则在需添加可用模型时引导去模型与服务商页，或在仍有模型缺 key 时引导去 Bot 模型页；(2) 团队：显示 Bot 与群聊总数（点按回团队页）及至多 6 个槽位（超出时显示前 4 个 Bot、剩余数与「全部 Bot」及「新建 Bot」入口），每个 Bot 显示头像色（含 Main 标记与缺 key 红点）、名称与当前模型行，点按进入该 Bot 详情页；(3) 状态汇总磁贴：模型（可用模型数、可用服务商芯片、缺 key 芯片与本地 Agent 计数，跳模型与服务商或 Bot 模型页）、连接（已连接邮箱+非关闭连接器+IM+在线手机数与芯片，state 不含 connectors/im/mcp 时隐藏）、工具（能力数与浏览器/电脑操控/密钥芯片，state 不含对应字段且浏览器关闭时隐藏）、近 7 天用量（调用全团队 usage 显示近 7 天总 token、今日 token 与 7 日柱状图，scanning 为真且页面前台可见时约每 3 秒静默轮询、离开或退后台立即停止，usage 不支持时隐藏）、定时任务（进行中任务数与最近一次运行提示，schedules 不支持时隐藏）与外观（当前主题名称、浅深配色色块与气泡/平铺及动画效果摘要，跳团队偏好页）；(4) 分组设置页面列表：按常规与外观、模型、团队、连接、工具、用量与关于列出各已有原生页面并显示实时状态摘要与徽标（如需要处理、出错、待允许、待批准、已开启/已关闭、已锁定、有更新等），点按跳对应原生页面，对应字段未下发或按需端点返回 bot/not-found 时该行隐藏；按需读取（providers/usage/schedules/update-check）失败时对应区块降级显示占位或保留缓存、不阻塞其他区块且不自动重试，点按页顶「刷新」重读全部按需数据；所有敏感凭据与密钥不在概览页输入也不写入日志与诊断上报，文案随 App 语言切换中英文。
+      scenarios:
+        overview-matches-web:
+          - GIVEN: 团队已连接 DS-Bot 0.3.10，含多名 Bot、已连接与缺 key 的服务商、连接器/IM/能力/定时任务与近 7 天用量
+          - WHEN: 在团队页点按「概览」进入原生概览页
+          - THEN: 页面显示需要处理告警、团队槽位与计数、6 个状态汇总磁贴（数字、芯片、7 日柱状图与主题色块）以及分组设置列表状态徽标，各项汇总结果与网页端 Overview 一致
+        tiles-and-rows-navigate:
+          - GIVEN: 概览页已显示需要处理告警、Bot 槽位、6 个汇总磁贴与分组列表
+          - WHEN: 分别点按缺 key 告警、某个 Bot、模型磁贴、用量磁贴、关于 DS Bot 行并随后按系统返回键
+          - THEN: 依次进入模型与服务商页、该 Bot 详情页、模型页、用量页、关于 DS Bot 页，按返回键回到概览页并保持可操作
+        legacy-remote-hides-unsupported:
+          - GIVEN: 远端为旧版 DS-Bot（state 不含 connectors/im/mcp/capabilities/computer/secrets 且 browser 为 false），且 providers/usage/schedules 返回 bot/not-found
+          - WHEN: 打开概览页
+          - THEN: 连接与工具磁贴及不支持的磁贴/分组行自动隐藏，其余团队、常规与外观、模型、关于等区块照常显示且无错误页
+        ondemand-failure-keeps-state:
+          - GIVEN: 概览页打开时 usage 或 schedules 请求因网络中断失败
+          - WHEN: 等待首读结束随后恢复网络并点按页顶「刷新」
+          - THEN: 失败期间近 7 天显示「–」、基于 state 的区块照常显示与跳转且不自动重试；点按「刷新」后重新读取并更新为完整统计
+        scanning-poll-stops-on-leave:
+          - GIVEN: usage 应答中 scanning 为 true
+          - WHEN: 停留在概览页观察随后返回团队页或切到后台
+          - THEN: 在前台可见时约每 3 秒静默重读一次 usage 并更新柱图，离开页面或进入后台后立即停止轮询
+  MODIFIED: {}
+  REMOVED: {}

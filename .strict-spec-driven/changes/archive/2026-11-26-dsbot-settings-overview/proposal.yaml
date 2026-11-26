@@ -1,0 +1,31 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-settings-overview
+  status: proposed
+summary:
+  what:
+    - 在 Android 原生 DS-Bot 界面新增 Settings 概览页（团队状态汇总与原生设置子页快捷跳转），对照 DS-Bot 0.3.10 client.js OverviewPage，各项状态汇总派生逻辑下沉到 android/core 并以 JUnit 覆盖，复用既有端点而不新增后端接口。
+  why:
+    - 完成 dsbot-native-parity 里程碑规划的概览缺口，让手机端用户可在同一页面总览模型告警、团队成员与模型、模型/连接/工具/近 7 天用量/定时任务/外观汇总及各设置子页当前状态并直达对应原生页面。
+scope:
+  in:
+    - TeamPage 操作行新增首位「概览 / Overview」入口并打开全屏 ShellPage.SettingsOverview
+    - 对照 DS-Bot 0.3.10 client.js OverviewPage 呈现 Attention 需要处理告警（缺 key 服务商与使用 Bot、需添加服务商、需要 API key）、Team 团队 Bot 概览槽位与计数、6 个状态汇总磁贴（模型、连接、工具、近 7 天用量柱图、定时任务、外观色板）以及分组设置列表含实时状态徽标与更新提示
+    - 各项点按跳转到对应原生页面（模型与服务商、Bot 模型批量切换、本地 Agent、DeepSeek 服务、定时任务、团队偏好、团队工作区、分组管理、连接器、IM 接入、MCP 访问、电脑操控、能力、密钥、用量、关于 DS Bot、反馈与诊断、已删除私有 Bot、Bot 详情、新建 Bot 或返回团队页）
+    - 按字段存在与按需端点 bot/not-found 对不支持的磁贴与分组行逐项隐藏，并妥善降级（如 usage.scanning==true 时前台可见每 3 秒静默轮询，离开或退后台停止）
+    - android/core 新增 SettingsOverview.kt 纯 JVM 状态汇总派生与 NavTarget 定义，并由 SettingsOverviewTest 覆盖；FINDINGS.md 登记 0.3.10 Overview 数据来源核对结果
+  out:
+    - 不新增 /api/bot 后端端点；不实现网页端设置搜索（Ctrl+K）与导览 Tour
+    - 不实现手机配对（phone-*）、浏览器站点授权（browser-allow）、Classic Agent 模式切换与 DSH 引擎内部槽位页（state.phone 仅作 Connect 磁贴只读计数与芯片显示）
+    - 不在概览页内联编辑 API key，缺 key 告警点按跳转到既有模型与服务商页或 Bot 模型页
+unchanged_behavior:
+  - App 级设置页（harness 地址、Tailscale、手机本机外观与语言、应用内提醒、诊断上报、App 自更新）及顶栏「设置」入口不变
+  - 团队页既有全部入口、分组列表、搜索、未读计算与私聊/群聊导航不变
+  - 既有各原生设置子页功能与门控语义不变
+  - 敏感信息（API key、密钥、令牌等）绝不写入日志、诊断上报、剪贴板或持久化存储
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-settings-overview

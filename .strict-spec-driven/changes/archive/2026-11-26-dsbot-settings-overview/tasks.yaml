@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-settings-overview
+sections:
+  Implementation:
+    findings-register:
+      text: 对照 DS-Bot 0.3.10 client.js（src/client/settings-overview.js 与 settings.js）逐项核对 Overview 页的数据来源与派生规则，在 android/core/src/spike/FINDINGS.md 新增第 45 节登记实查结论（如 useWeek 调 usage 而非 usage-summary、state.phone 只读计数与 state.prefs.effects 只读摘要）。
+      status: complete
+    core-settings-overview:
+      text: core：新增 SettingsOverview.kt（pure JVM，零 android.* 依赖），复用既有 ModelProviders、BotManage、ConnectorSettings、ImBridges、McpAccess、CapabilityLibrary、ComputerSettings、SecretsSettings、TeamPrefs、TeamSections、Usage、Schedules 与 DsbotSystem 解码/格式化逻辑，实现状态汇总派生（alerts、team、6 个磁贴、分组设置列表与徽标）、NavTarget 与 bot/not-found 降级判定。
+      status: complete
+    core-settings-overview-tests:
+      text: core：新增 SettingsOverviewTest.kt JUnit 单元测试，覆盖真实脱敏夹具（state-full.json、usage-view.json、update-check.json）与合成用例：Attention 三分支优先级、Team 槽位截断与 modelLine、6 磁贴计数/芯片/柱高、分组列表徽标（capabilityStatuses、imStatus、mcp、secretStore.locked、update.available）、旧远端/缺字段/bot/not-found 逐项隐藏、畸形输入容错及中英文切换。
+      status: complete
+    app-settings-overview:
+      text: app：新增 SettingsOverviewPage.kt 全屏原生页面（需要处理告警、团队成员网格、2 列状态汇总磁贴含近 7 天柱图与主题色板、分组设置列表与徽标、按需并行读取 providers/usage/schedules/update-check、代次号防乱序、scanning 前台 3 秒轮询、中英文切换）；更新 TeamPage.kt 在操作行首位添加「概览 / Overview」入口；更新 NativeShell.kt 新增 ShellPage.SettingsOverview、跳转路由、lastUpdate 缓存与 trimUsageCache 栈内保留，并在 AboutDsBotPage.kt 回写手动检查到的更新状态。
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译与资源无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 在模拟器 Medium_Phone_API_36.1 (emulator-5554) + 本地 mock-dsh-server.mjs (--manage --port 13190) 上实测最终源码构建的 debug APK：TeamPage 操作栏首位显示 Overview 并可进入完整 SettingsOverviewPage；验证团队槽位 (6 bots/4 展示/+2 All Bots/+ New Bot)、6 张状态概览磁贴 (Models 5、Connect 6、Tools 4、Last 7 days 5.31M/Today 477K、Scheduled tasks 3 active + Overdue、Appearance Paper/Bubbles)、分组设置列表与徽标及逐项跳转返回；验证 mock/usage|schedules|providers?enabled=0 降级隐藏与 ?enabled=1 刷新恢复；验证 System default 与 简体中文 切换即时生效；logcat 无 dsb_/token 泄漏且已清理 adb reverse 与 mock 进程
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict verify 校验全部变更产物结构、场景覆盖与门禁状态
+      status: complete
+      command: strict-spec-cli verify dsbot-settings-overview
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

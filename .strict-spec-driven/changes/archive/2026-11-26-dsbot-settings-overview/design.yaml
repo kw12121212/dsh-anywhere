@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-settings-overview
+approach:
+  - 遵循 tech/android-client 的 pure-logic-in-core：在 android/core 新增纯 JVM SettingsOverview.kt，复用 ModelProviders、BotManage、ConnectorSettings、ImBridges、McpAccess、CapabilityLibrary、ComputerSettings、SecretsSettings、TeamPrefs、TeamSections、Usage、Schedules、DsbotSystem 解码与格式化能力，统一派生 Snapshot（alerts、team、6 个磁贴、分组设置列表与状态徽标）和类型安全 NavTarget，由 SettingsOverviewTest JUnit 覆盖（含真实脱敏夹具）。
+  - App 层在 NativeShell.kt 新增 ShellPage.SettingsOverview，在 TeamPage.kt 顶栏操作行首位添加「概览 / Overview」入口（保留既有全部入口）；新增 SettingsOverviewPage.kt 全屏原生页面，由 stateSnapshot 实时驱动并按需并行读取 providers、usage（复用 UsageStore 单飞缓存并在 trimUsageCache 中保留概览页栈内缓存）、schedules 与 update-check（复用 NativeShellConnection.lastUpdate 并在手动刷新或缺失时读取）；使用请求代次号丢弃乱序应答，usage.scanning 为真且页面前台可见时每 3 秒单飞刷新。
+  - 对照 DS-Bot 0.3.10 client.js（src/client/settings-overview.js 与 src/client/settings.js）逐项核对数据来源并登记到 FINDINGS.md 与 dsbot-api 技术标准；不新增端点且不写用户真实数据。
+decisions:
+  overview-placement:
+    decision: 将 DS-Bot Settings 概览放在 TeamPage 顶栏操作行首位「概览」入口打开的全屏 ShellPage.SettingsOverview，不改动 App 级 SettingsScreen 与团队页既有入口按钮。
+    rationale: android-app 的 settings-page 已绑定顶栏「设置」打开 App 级连接/本机设置页，且 android-dsbot 多条既有需求依赖团队页上的既有入口；放在操作行首位既符合「原生 Settings 首页加概览」且不破坏任何已有入口与回归场景。
+  usage-endpoint-not-summary:
+    decision: 「近 7 天」用量磁贴调用全团队 usage 端点并复用 Usage.summarize(view, Usage.preset("7d")) 与 UsageStore 单飞缓存，而不使用 usage-summary。
+    rationale: 实查 DS-Bot 0.3.10 client.js 的 useWeek 发现其调用全团队 usage 端点计算 7 日柱状图与总量；usage-summary 仅按单个 botId 统计，且复用 UsageStore 可避免与用量页重复并发请求。
+  overview-no-gating-and-per-item-degrade:
+    decision: 概览页入口不经 hello capabilities 门控，页内按 state/live 字段存在（connectors、im、mcp、capabilities、computer、secrets、browser）与按需端点 bot/not-found 应答逐项隐藏不支持的磁贴与分组行；state.phone 仅做只读计数与芯片展示（不提供手机配对入口），state.prefs.effects 仅做只读摘要展示；同步在 delta-tech 的 hello-capabilities 登记例外。
+    rationale: DS-Bot 0.3.10 CAPABILITIES 不含概览能力名，概览页由多个既有字段与按需端点组合而成；逐项降级保证旧远端（如 0.3.6）或未启用插件时只隐藏不支持项而不报错，同时满足 lesson ds-bot-delta-tech-hello-capabilities-f433e4。
+  no-inline-key-editor:
+    decision: 「需要处理」中的缺 API key 告警不在概览页内联渲染密钥输入框，点按跳转到既有 ModelProvidersPage（或 BotModelsPage）。
+    rationale: 手机端输入与保存 API key 已有模型与服务商页负责，内置 FLAG_SECURE、校验与日志脱敏；跳转复用可避免在概览页重复敏感输入面。
+  reuse-connection-update-check:
+    decision: 在 NativeShellConnection.checkVersion 解析 update-check 时顺带缓存 lastUpdate（DsbotSystem.Update），供概览页立即显示「有更新」徽标并减少重复首读；AboutDsBotPage 与概览页刷新后同步更新该缓存。
+    rationale: 连接建立时已请求过 update-check，复用缓存可避免每次进入概览页都等待慢速外部注册表检查才显示更新徽标，同时不引入额外请求。
+alternatives:
+  - option: 将原生概览页替换团队页既有横向入口按钮
+    reason: 会改变现有 TeamPage 入口布局并影响既有自动化验收与 unchanged_behavior，留待确认无冲突后再评估，本次仅新增首位入口。
+  - option: 进入概览页时额外调 usage-summary 汇总所有 Bot
+    reason: usage-summary 为按单 Bot 查询，无法覆盖团队房间/Agent 且请求次数随 Bot 数线性增长，与 0.3.10 client.js useWeek 的 usage 单请求语义不符。
+risks:
+  - 概览页同时读取 providers、usage、schedules 与 update-check（其中 providers/update-check 属慢端点），须使用请求代次号与单飞防止慢应答覆盖新状态或占用读取池。
+  - state.phone 在仅通过 dsh URL 连接的场景下可能处于关闭或未连接状态，Connect 磁贴须以字段可选解码并在无连接器/IM/MCP 字段时隐藏整个 Connect 磁贴。

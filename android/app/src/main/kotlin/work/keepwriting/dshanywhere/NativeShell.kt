@@ -201,6 +201,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class GroupSearch(val roomId: String) : ShellPage
         /** 群共享待办与任务看板（dsbot-room-todos-tasks）：从群聊页工具行进入。 */
         data class RoomBoard(val roomId: String) : ShellPage
+        /** Settings 概览页（dsbot-settings-overview）：团队状态汇总与各原生设置子页跳转。 */
+        data object SettingsOverview : ShellPage
     }
 
 @Composable
@@ -585,6 +587,16 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     visible = connection.resumed && !connection.covered,
                     online = connection.status == DsbotConnection.Status.ONLINE,
                     onDiagnostics = { if (connection.page == current) connection.openDsbotDiagnostics() },
+                    onUpdateLoaded = { connection.cacheUpdate(it) },
+                )
+                current is ShellPage.SettingsOverview -> SettingsOverviewPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    usageStore = connection.usageStore,
+                    cachedUpdate = connection.lastUpdate,
+                    onUpdateLoaded = { connection.cacheUpdate(it) },
+                    visible = connection.resumed && !connection.covered,
+                    onNavigate = { target -> navigateOverview(connection, target) },
                 )
                 current is ShellPage.DsbotDiagnostics -> DsbotDiagnosticsPage(connection.manageApi)
                 current is ShellPage.BotTaskDetail -> key(current) {
@@ -645,6 +657,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onOpenChat = { id -> connection.openChat(id ?: "unknown") },
                     isUnread = { e -> connection.isUnread(e, open = false) },
                     onNewBot = { connection.openNewBot() },
+                    onOverview = { connection.openSettingsOverview() },
                     onNewRoom = { connection.openNewRoom() },
                     // 团队的 DSH Agent（dsbot-member-agents）：只在远端声明 agents 能力时出现
                     agents = if (connection.capabilities.has(work.keepwriting.core.DshAgents.CAPABILITY)) work.keepwriting.core.DshAgents.agents(connection.stateSnapshot?.raw) else emptyList(),
@@ -704,6 +717,32 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
         if (showSidePanel) {
             SideChatPanel(controller = connection.sideChatController, onDismiss = { showSidePanel = false })
         }
+    }
+}
+
+private fun navigateOverview(connection: NativeShellConnection, target: work.keepwriting.core.SettingsOverview.NavTarget) {
+    when (target) {
+        work.keepwriting.core.SettingsOverview.NavTarget.TeamHome -> connection.goHome()
+        work.keepwriting.core.SettingsOverview.NavTarget.NewBot -> connection.openNewBot()
+        is work.keepwriting.core.SettingsOverview.NavTarget.BotDetails -> connection.openDetails(target.botId)
+        work.keepwriting.core.SettingsOverview.NavTarget.TeamPrefs -> connection.openTeamPrefs()
+        work.keepwriting.core.SettingsOverview.NavTarget.TeamWorkspace -> connection.openFolderPick(FolderTarget.Team)
+        work.keepwriting.core.SettingsOverview.NavTarget.SectionsManage -> connection.openSectionsManage()
+        work.keepwriting.core.SettingsOverview.NavTarget.ModelProviders -> connection.openModelProviders()
+        work.keepwriting.core.SettingsOverview.NavTarget.BotModels -> connection.openBotModels()
+        work.keepwriting.core.SettingsOverview.NavTarget.LocalAgents -> connection.openLocalAgents()
+        work.keepwriting.core.SettingsOverview.NavTarget.DeepSeekServices -> connection.openDeepSeekServices()
+        work.keepwriting.core.SettingsOverview.NavTarget.Schedules -> connection.openSchedules(null)
+        work.keepwriting.core.SettingsOverview.NavTarget.PrivateArchives -> connection.openPrivateArchives()
+        work.keepwriting.core.SettingsOverview.NavTarget.Connectors -> connection.openConnectors()
+        work.keepwriting.core.SettingsOverview.NavTarget.Im -> connection.openIm()
+        work.keepwriting.core.SettingsOverview.NavTarget.McpAccess -> connection.openMcpAccess()
+        work.keepwriting.core.SettingsOverview.NavTarget.ComputerSettings -> connection.openComputerSettings()
+        work.keepwriting.core.SettingsOverview.NavTarget.Capabilities -> connection.openCapabilities()
+        work.keepwriting.core.SettingsOverview.NavTarget.Secrets -> connection.openSecrets()
+        work.keepwriting.core.SettingsOverview.NavTarget.Usage -> connection.openUsage(null)
+        work.keepwriting.core.SettingsOverview.NavTarget.AboutDsBot -> connection.openAboutDsBot()
+        work.keepwriting.core.SettingsOverview.NavTarget.Diagnostics -> connection.openDsbotDiagnostics()
     }
 }
 
@@ -1436,8 +1475,12 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     val usageStore = UsageStore()
 
     fun trimUsageCache() {
-        if (page !is ShellPage.Usage && backStack.none { it is ShellPage.Usage }) usageStore.clear()
+        val keep = page is ShellPage.Usage || page is ShellPage.SettingsOverview ||
+            backStack.any { it is ShellPage.Usage || it is ShellPage.SettingsOverview }
+        if (!keep) usageStore.clear()
     }
+
+    fun openSettingsOverview() = push(ShellPage.SettingsOverview)
 
     fun openScheduleCreate(start: String?) = push(ShellPage.ScheduleCreate(start))
 
@@ -1745,18 +1788,31 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
         }
     }
 
+    /** 最近一次 update-check 读到的远端完整更新视图（供概览页显示更新徽标并减少重复首读）。 */
+    var lastUpdate by mutableStateOf<work.keepwriting.core.DsbotSystem.Update?>(null)
+        private set
+
+    fun cacheUpdate(update: work.keepwriting.core.DsbotSystem.Update) {
+        lastUpdate = update
+    }
+
     private fun checkVersion(clean: String) {
         // update-check 读不到 → remote 为 null（UNKNOWN：不按版本提示）
+        var decodedUpdate: work.keepwriting.core.DsbotSystem.Update? = null
         val remote = try {
             val res = graph.nativeSession.apiRequest(
                 "POST", DsbotApi.url(clean, "/api/bot"),
                 "application/json", DsbotApi.buildRequest("update-check").toByteArray(),
             )
             (DsbotApi.parseResponse(res.status, res.bodyText()) as? DsbotApi.Result.Ok)
-                ?.let { DsbotVersions.fromUpdateCheck(it.value) }
+                ?.let {
+                    decodedUpdate = work.keepwriting.core.DsbotSystem.decodeUpdate(it.value)
+                    DsbotVersions.fromUpdateCheck(it.value)
+                }
         } catch (_: Exception) {
             null
         }
+        lastUpdate = decodedUpdate
         lastRemoteVersion = remote
         readCapabilities(clean)
     }

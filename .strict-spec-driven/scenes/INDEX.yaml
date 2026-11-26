@@ -40,6 +40,10 @@ areas:
       title: 在手机端管理 DS-Bot MCP 访问
       status: draft
       path: .strict-spec-driven/scenes/android/android-mcp-access.yaml
+    android-settings-overview:
+      title: 在团队页进入原生设置概览总览团队状态并跳转对应设置页
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-settings-overview.yaml
   diagnostics:
     report-client-errors:
       title: 客户端错误上报诊断

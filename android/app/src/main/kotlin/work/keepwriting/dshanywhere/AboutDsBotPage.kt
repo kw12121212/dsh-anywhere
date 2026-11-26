@@ -59,7 +59,13 @@ private fun failedOf(r: DsbotApi.Result): SysLoad.Failed = when (r) {
 private enum class InstallTarget { BOT, DSH }
 
 @Composable
-fun AboutDsBotPage(api: ManageApi, visible: Boolean, online: Boolean, onDiagnostics: () -> Unit) {
+fun AboutDsBotPage(
+    api: ManageApi,
+    visible: Boolean,
+    online: Boolean,
+    onDiagnostics: () -> Unit,
+    onUpdateLoaded: (DsbotSystem.Update) -> Unit = {},
+) {
     val context = LocalContext.current
     var load by remember { mutableStateOf<SysLoad<DsbotSystem.Update>>(SysLoad.Loading) }
     var stars by remember { mutableStateOf<Int?>(null) }
@@ -78,7 +84,10 @@ fun AboutDsBotPage(api: ManageApi, visible: Boolean, online: Boolean, onDiagnost
         now = System.currentTimeMillis()
         val decoded = (r as? DsbotApi.Result.Ok)?.let { DsbotSystem.decodeUpdate(it.value) }
         when {
-            decoded != null -> load = SysLoad.Ok(decoded)
+            decoded != null -> {
+                load = SysLoad.Ok(decoded)
+                onUpdateLoaded(decoded)
+            }
             // 安装中轮询失败（DS-Bot 重装时宿主短暂卸载）不报错，保持安装中显示，连接恢复后按重读结果显示
             quiet -> {}
             else -> load = failedOf(r)
@@ -142,6 +151,7 @@ fun AboutDsBotPage(api: ManageApi, visible: Boolean, online: Boolean, onDiagnost
                 gen[0]++
                 now = System.currentTimeMillis()
                 load = SysLoad.Ok(next)
+                onUpdateLoaded(next)
             } else {
                 // 应答缺视图（宿主不提供 dsh 更新等）：按 update-check 重读
                 read(fresh = false)

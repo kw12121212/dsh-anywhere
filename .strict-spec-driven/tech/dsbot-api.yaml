@@ -90,6 +90,7 @@ rules:
       - 群内搜索（group-search）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无群搜索项）、state 中也无对应字段，按需只读端点，群聊页「搜索」入口不门控，搜索页按 group-search 应答降级——未知端点（bot/not-found 且 message 含 Unknown endpoint）显示此远端版本不支持群内搜索、Unknown group chat 显示找不到这个群聊、其他失败显示服务端原因、网络失败给可读提示（dsbot-group-search 设计决策 no-gating-on-demand，按 group-search-endpoint-0310 与 on-demand-page-degrade）
       - 'MCP 访问（live mcp 视图及其写端点 mcp-set、mcp-client-add、mcp-client-update、mcp-client-remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 MCP 访问项），channel.js live() 始终下发 mcp: rt.mcpView()，按 mcp-access-endpoints-0310 以 state.mcp 字段存在显隐入口，不经 capabilities.has 判定（dsbot-mcp-access 设计决策 data-presence-gating）'
       - 群共享待办与任务看板（state 的 rooms[].todos、rooms[].tasks 及其写端点 room-todo、task-note、task-cancel）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无待办或任务看板项），且两字段只在群首次有待办或任务后才下发，按 room-board-endpoints-0310 以字段存在或 hello 握手成功（非 LEGACY）显示入口，不经 capabilities.has 判定，端点回 Unknown endpoint 时显示此远端版本不支持（dsbot-room-todos-tasks 设计决策 data-presence-gating）
+      - Settings 概览页（state.phone 只读计数、state.prefs.effects 只读摘要，以及组合既有 state/live 字段与按需只读端点 providers/usage/schedules/update-check）：0.3.10 的 hello capabilities 不含概览能力名，入口不门控，页内按字段存在与按需端点 bot/not-found 应答逐项隐藏不支持的磁贴与分组行，不经 capabilities.has 判定（dsbot-settings-overview 设计决策 overview-no-gating-and-per-item-degrade，按 settings-overview-sources-0310）
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
@@ -416,3 +417,10 @@ rules:
     enforcement:
       method: test
       detail: core JUnit 对入口判定覆盖三种情形：字段存在（含空对象/空数组）显示、字段缺失且 hello 非 LEGACY 显示、字段缺失且 LEGACY 不显示（如 RoomBoardTest 的入口按字段存在或 hello 握手显示）；评审核对新入口的门控来源是否为懒创建字段
+  settings-overview-sources-0310:
+    strength: MUST
+    statement: 原生 Settings 概览页（dsbot-settings-overview）不新增 /api/bot 端点，全部内容由既有 state/live 字段与既有按需只读端点派生：Attention 与 Models 磁贴取 state.models、state.bots[]（model/appliedModel）与 providers 应答；Team 槽位（TEAM_SLOTS=6，超 5 个 Bot 显示前 4 个）取 state.bots[]、state.mainBotIds[]、state.rooms[]；Connect 磁贴取 state.connectors（mail.accounts 与 state!=off 的 connectors）、state.im.connections、state.phone（仅只读计数 phone.on && status=='online' && phones[].connected，不提供配对操作）；Tools 磁贴取 state.capabilities[]、state.browser、state.computer.enabled、state.secrets[]；近 7 天用量磁贴调用全团队 usage（带手机时区，按 Usage.preset('7d') 聚合并复用 UsageStore 单飞缓存，不用按单 Bot 的 usage-summary），usage.scanning 为真且页面前台可见时每 3 秒轮询；定时任务磁贴调用 schedules（统计 status=='active' 与最早 scheduledAt）；外观磁贴取 state.prefs（theme/accent/layout/effects，其中 effects 仅只读展示）；分组设置列表徽标另取 state.sections、state.privateArchives、state.capabilityStatuses、state.imStatus、state.mcp、state.secretStore.locked 与 update-check（复用连接期缓存并在手动刷新时重读）。
+    rationale: 对照 DS-Bot 0.3.10 client.js（src/client/settings-overview.js 与 settings.js）核对后发现：网页端 useWeek 调用全团队 usage 而非 usage-summary，Connect 磁贴统计只读 state.phone，Appearance 磁贴读取 prefs.effects；将精确数据来源锁定在技术标准可避免后续变更误用端点或误删只读兼容字段。
+    enforcement:
+      method: test
+      detail: core JUnit（SettingsOverviewTest）以真实夹具（state-full.json、usage-view.json、update-check.json）与合成用例验证全部字段解码、7 日聚合、只读 phone/effects 兼容与不支持项隐藏；FINDINGS.md 第 45 节登记 0.3.10 client.js 逐行核对记录。
