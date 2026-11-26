@@ -59,36 +59,47 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             Form {
                 Section("连接地址") {
-                    TextField("粘贴 dsh-url 或 dsh web 输出的地址", text: $draftUrl)
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField(
+                            "",
+                            text: $draftUrl,
+                            prompt: Text("粘贴 dsh-url 或 dsh web 输出的地址")
+                        )
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
                         .onSubmit {
                             if isValidInput && !isSaving {
                                 submit()
                             }
                         }
 
-                    if !draftUrl.isEmpty, let liveError {
-                        Text(liveError)
+                        if !draftUrl.isEmpty, let liveError {
+                            Text(liveError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        if let saveError {
+                            Text(saveError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        Text("保存时会自动剥离 token 参数，仅保留干净地址。")
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(.secondary)
                     }
-                    if let saveError {
-                        Text(saveError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    Text("保存时会自动剥离 token 参数，仅保留干净地址。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 Section("连接状态") {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(statusColor(model.snapshot.status))
-                            .frame(width: 9, height: 9)
-                        Text(ConnectionCopy.statusText(model.snapshot.status))
-                            .font(.subheadline.weight(.medium))
+                    LabeledContent("当前状态") {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(statusColor(model.snapshot.status))
+                                .frame(width: 9, height: 9)
+                            Text(ConnectionCopy.statusText(model.snapshot.status))
+                                .font(.subheadline.weight(.medium))
+                        }
                     }
 
                     if let cleanUrl = model.snapshot.cleanUrl {
@@ -143,7 +154,7 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .frame(width: 480)
+        .frame(width: 520, minHeight: 420)
         .background(SettingsWindowAccessor(box: windowBox))
         .onAppear {
             draftUrl = model.snapshot.cleanUrl ?? ""
