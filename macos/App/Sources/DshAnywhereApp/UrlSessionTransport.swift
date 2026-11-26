@@ -162,12 +162,13 @@ final class UrlSessionSseStream: SseStream, Sendable {
         guard let target = URL(string: url) else {
             throw TransportError(.other)
         }
-        var urlRequest = URLRequest(url: target)
-        urlRequest.httpMethod = "GET"
-        urlRequest.httpShouldHandleCookies = false
+        var mutableRequest = URLRequest(url: target)
+        mutableRequest.httpMethod = "GET"
+        mutableRequest.httpShouldHandleCookies = false
         for header in headers {
-            urlRequest.setValue(header.value, forHTTPHeaderField: header.name)
+            mutableRequest.setValue(header.value, forHTTPHeaderField: header.name)
         }
+        let urlRequest = mutableRequest
 
         let gate = SseOpenGate()
         let (stream, continuation) = AsyncThrowingStream<String, Error>.makeStream()
