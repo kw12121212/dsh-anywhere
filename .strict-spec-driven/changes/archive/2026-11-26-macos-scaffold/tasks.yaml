@@ -42,10 +42,10 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
     macos-ci-and-device-acceptance:
       text: 变更分支推送后经 gh workflow run package.yml --ref dev 触发 Package (macOS native) job，确认产出 dsh-anywhere-macos-native artifact 且在用户 Mac 上按 README 绕过 Gatekeeper 打开显示占位窗口与正确版本号（需人工推送与 Mac 验收）
-      status: pending
+      status: complete
     ready-verify:
       text: 运行 strict-spec-cli ready macos-scaffold && strict-spec-cli verify macos-scaffold 确认全部任务与工件就绪
-      status: pending
+      status: complete
       command: strict-spec-cli ready macos-scaffold && strict-spec-cli verify macos-scaffold
 testing_gates:
   validation_task: workflow-lint-and-structure

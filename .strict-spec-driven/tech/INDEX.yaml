@@ -35,6 +35,10 @@ standards:
     title: Go 包布局
     category: architecture
     path: .strict-spec-driven/tech/go-package-layout.yaml
+  - id: macos-client
+    title: macOS 原生客户端工程约定
+    category: tooling
+    path: .strict-spec-driven/tech/macos-client.yaml
   - id: packaging
     title: 安装包打包
     category: tooling
