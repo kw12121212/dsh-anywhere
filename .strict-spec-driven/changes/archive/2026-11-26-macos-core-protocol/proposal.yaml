@@ -1,0 +1,27 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-core-protocol
+  status: proposed
+summary:
+  what:
+    - 在 macos/Core（DshCore 纯 Foundation Swift 6 包）中实现 DS-Bot 协议层与解码模型，并将 DS-Bot 脱敏夹具迁移至仓库根共享 testdata/ 目录以供 Kotlin 与 Swift 测试共用。
+  why:
+    - macOS 原生版后续界面与网络传输（macos-session-transport、macos-setup-settings、macos-shell-window 及对话/管理里程碑）需要一个纯 Foundation、可在 Linux 上跑通 swift test 并与 Android core/tech/dsbot-api 保持行为一致的协议核心；共享夹具目录为语言无关 JSON 路径，同时服务 Android、macOS 与后续 Windows 原生实现。
+scope:
+  in:
+    - 1. 将 android/core/src/test/resources/dsbot 与 dsbot-source 迁至仓库根 testdata/dsbot 与 testdata/dsbot-source，并配置 android/core/build.gradle.kts test sourceSet 继续读取。
+    - 2. 在 macos/Core/Sources/DshCore/ 仅用 Foundation（零第三方依赖、无网络 IO）实现：Json/JsonString、HarnessUrl、HarnessConfigStore、SessionAuth、SessionCookies、SetupCheck、Transport 抽象（HttpTransport/SseStream/DsbotTransportClient）、DsbotApi、DsbotModels、SseParser、DsbotHello 与 Capabilities、DsbotVersions、FeedSync、DsbotConnection、WsFrameCodec、DshMux 与 AttachmentMessages、I18n、WorkPhrase、TeamSections、TeamPreview、TeamHome、Cards、ChatRender、MarkdownParse、RoomChat、SideChat、BotStatsText。
+    - 3. 在 macos/Core/Tests/DshCoreTests/ 移植对应 android/core JUnit 断言语义，直接读取 testdata/harness-url-vectors.json 与 testdata/dsbot/* 夹具。
+    - 4. 通过 delta-tech 将 dsbot-api 技术标准中 fixtures-sanitized 例外路径与 upstream-client-algorithm-parity 夹具路径更新为 testdata/dsbot*。
+  out:
+    - macos/App 的 SwiftUI 界面、URLSession 具体传输实现、Keychain/Cookie 落盘、窗口与设置页面；内置 Tailscale/tsnet/SOCKS5 分流；Electron、Android 功能逻辑及 Release 打包流程改动。
+unchanged_behavior:
+  - Electron 桌面端、Android :app 与 android/core 全部既有行为与回归测试通过状态不变。
+  - macos/Core 纯 Foundation 约束、VersionSpec 单源版本公式与 AppIdentity 常量不变。
+  - macos/App 占位外壳与 scripts/macos-package.mts 打包脚本行为不变。
+roadmap:
+  milestone: macos-native-foundation
+  planned_change: macos-core-protocol

@@ -35,12 +35,12 @@ rules:
   fixtures-sanitized:
     strength: MUST
     statement: core 测试夹具必须来自真实响应的脱敏副本：token、cookie、密钥字段替换为占位值，对话内容为合成文本，结构与字段形态原样保留；每个夹具必须能被夹具加载校验测试解析
-    rationale: SSE 解析、增量同步与错误码映射的 JUnit 需要真实结构而非编造样本，同时仓库不得含私人内容与凭据
+    rationale: SSE 解析、增量同步与错误码映射的 JUnit/XCTest 需要真实结构而非编造样本，同时仓库不得含私人内容与凭据
     enforcement:
       method: test
       detail: 脱敏实现必须命中内容键后递归进内容区：区域内所有字符串叶节点（含嵌套对象与字符串数组的每个元素）一律替换占位符——卡片类内容（如问答卡的 options/selected）不是平铺字符串，仅按固定键清单平铺替换必漏（dsbot-api-spike 评审实证：role/why/purpose/question 对象曾整体漏过）。夹具校验测试按同一语义断言内容键值为占位符形态，测试键清单与脱敏键清单保持同步。
     exceptions:
-      - android/core/src/test/resources/dsbot-source/ 下的源码核对样本：只用于真实服务尚无样本的字段（chat-bars-fields-0310），必须与真实夹具目录 dsbot/ 分开、由该目录 README 标注来源与替换义务、内容全部为合成文本；同一字段一旦取得真实样本须改为 dsbot/ 下的脱敏夹具并删除对应样本
+      - testdata/dsbot-source/ 下的源码核对样本：只用于真实服务尚无样本的字段（chat-bars-fields-0310），必须与真实夹具目录 testdata/dsbot/ 分开（供 Kotlin、Swift 等多端共享读取）、由该目录 README 标注来源与替换义务、内容全部为合成文本；同一字段一旦取得真实样本须改为 testdata/dsbot/ 下的脱敏夹具并删除对应样本
   secrets-env-gated:
     strength: MUST
     statement: spike 与验证工具的带 token 地址等敏感输入一律经环境变量传入；命令行参数、输出、dump 与仓库内容中不得出现 token、cookie 或密钥
@@ -296,16 +296,16 @@ rules:
       detail: core JUnit（UsageTest）覆盖 usage 与 usage-summary 解码与缺损降级、各预设与自定义范围的分桶与上期对比、系列取前 7 与合并、排行、命中率与百分比、紧凑数字、热力图分级、请求体字面值，并以同一数据对照网页端算法的数字；源码核对位置：ds-bot 0.3.10 src/host/usage.js（usageView、hourKeys）、mobile.js（usageSummary、totals）、channel.js（usage 分发与 READS）、client.js（src/client/usage-data.js 的 RANGES/spanRange/spanBuckets/bucketsOf/spanOf/summarize/compact/percent2/hitRate，usage-page.js 的 UsagePage/Stats/Chart/Heat/Profile/kindLabel/ownerFace）
   upstream-client-algorithm-parity:
     strength: SHOULD
-    statement: 原生端复刻上游网页端在客户端完成的计算（分桶、汇总、排行、数字与百分比文案等）且验收口径为「与网页端数字一致」时，期望值应由仓库内的生成脚本在 node 中直接截取并执行对应基准版本 client.js 的模块原文、对同一夹具计算得出；生成脚本与期望 JSON 和夹具放在 android/core/src/test/resources/dsbot/ 下，core JUnit 逐项全量比对；手写或转述的期望值不作为一致性证据
+    statement: 原生端复刻上游网页端在客户端完成的计算（分桶、汇总、排行、数字与百分比文案等）且验收口径为「与网页端数字一致」时，期望值应由仓库内的生成脚本在 node 中直接截取并执行对应基准版本 client.js 的模块原文、对同一夹具计算得出；生成脚本与期望 JSON 和夹具放在 testdata/dsbot/ 下，core 单元测试逐项全量比对；手写或转述的期望值不作为一致性证据
     rationale: dsbot-usage 的分桶、上期对比与紧凑数字规则细节多（周一起算、月界截断、toFixed 舍入、previous 窗口），转述极易出错；直接执行上游原文生成期望值可排除转述误差，基准版本升级时重跑脚本即可发现口径漂移
     enforcement:
       method: test
-      detail: 评审核对生成脚本截取的模块边界与基准版本（如 usage-ref.mjs 截取 // src/client/usage-data.js 至 // src/client/usage-page.js），期望 JSON 与夹具同时提交，JUnit 对每个范围/输入全量比对；并以一次故意改坏口径确认比对能失败
+      detail: 评审核对生成脚本截取的模块边界与基准版本（如 usage-ref.mjs 截取 // src/client/usage-data.js 至 // src/client/usage-page.js），期望 JSON 与夹具同时提交，JUnit/XCTest 对每个范围/输入全量比对；并以一次故意改坏口径确认比对能失败
     examples:
       good:
         - UsageTest 读取 usage-ref.mjs 生成的 usage-expected-*.json，对两套夹具 × 12 个范围比对桶键、各桶合计、堆叠、上期与排行
       bad:
-        - 测试里手抄几组「看起来对」的数字，或照 Kotlin 实现推算期望值
+        - 测试里手抄几组「看起来对」的数字，或照 Kotlin/Swift 实现推算期望值
   on-demand-poll-single-flight:
     strength: SHOULD
     statement: 按需读取且需要轮询的原生页面只在页面可见且 App 在前台时轮询，每轮等上一次应答后再排下一次；协程取消不会取消已发出的 ManageApi 读取，因此同一端点必须在连接层单飞（后到的读取等待在途应答），不得因页面切换、前后台切换或打开同类详情页而让同一端点同时有多个请求占用读取池；同一端点的总览页与详情页共享最近一次读取结果与用户选定的筛选状态，返回时先显示已有结果、不重置筛选

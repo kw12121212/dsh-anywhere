@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-core-protocol
+open: []
+resolved:
+  - id: macos-core-protocol-scope
+    question: DshCore 协议实现的技术栈、网络抽象边界与共享夹具位置如何确定？
+    context: 影响 proposal 范围、design 决策与测试资源路径。
+    answer: 由 macos-native-foundation 里程碑与 planned_change 已确认：DshCore 采用纯 Foundation Swift 6 重写协议层（无网络 IO 与 Apple 专有/第三方依赖），HTTP/SSE 通过协议注入，不内置 Tailscale，与 Android/后续 Windows 共享 testdata/ 下的 JSON 向量与脱敏夹具。
+    status: resolved
+    kind: technical
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 当前 macOS 原生客户端（macos/Core）仅有 AppIdentity 与 VersionSpec 骨架，尚无 DS-Bot 协议层（URL 校验、API 封装、SSE 解析、feed 同步、版本比对与 hello 能力位、mux 帧、团队与聊天渲染及卡片解码），导致后续 macos-session-transport、macos-setup-settings 等 macOS 原生页面开发与 Linux 回归无纯 Swift 协议核心可用；且 DS-Bot 脱敏夹具当前耦合在 android/core/src/test/resources/dsbot 下。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: swift test --package-path macos/Core 在 Linux 本机通过并覆盖全部协议模块与共享 testdata/ 向量和夹具；android/gradlew -p android/core test 在夹具迁入仓库根 testdata/dsbot 后依然全部通过；DshCore 保持纯 Foundation 零外部依赖。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 macos-scaffold 与 Android DS-Bot 0.3.10 基线里程碑已全部归档，macos-native-foundation 里程碑下的 macos-core-protocol 成为当前路线图唯一就绪的下一项工程前置。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不修改 Electron 桌面端行为、不修改 Android 客户端与核心业务行为、不在 DshCore 内置 Tailscale/tsnet 或任何网络 IO、不实现 macos/App SwiftUI 界面及持久化传输，也不改变 VersionSpec 与 macOS 打包脚本。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 macos-native-foundation 里程碑与 planned_change 唯一解读：在 macos/Core 纯 Foundation 库中以 Swift 6 重写协议层与解码模型（网络通过协议注入），并将共享脱敏夹具迁移至语言无关的 testdata/ 目录供多端读取，不改用户界面。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

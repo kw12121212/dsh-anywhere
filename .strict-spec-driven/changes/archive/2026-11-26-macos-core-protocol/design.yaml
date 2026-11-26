@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-core-protocol
+approach:
+  - 1. 共享夹具迁移：通过 git mv 将 dsbot 与 dsbot-source 移到仓库根 testdata/，在 android/core/build.gradle.kts 中将 ../../testdata 加入 test resources.srcDir，确保 Kotlin 侧 classpath 资源路径 /dsbot/... 与 /dsbot-source/... 零修改即通过，Swift 与后续 C# 可直接读仓库根 testdata/。
+  - 2. 纯 Foundation 无 IO 分层：Sources/DshCore/*.swift 仅 import Foundation，不引入 FoundationNetworking、CryptoKit、AppKit、SwiftUI 或 Combine；HTTP 与 SSE 抽象为 HttpTransport/SseStream 协议，WebSocket 仅提供纯 RFC 6455 帧编解码与纯 Swift SHA-1 握手校验，SetupCheck 仅保留 URL 校验、token 剥离、注入 probe 与 tailnet 提示（不内置隧道）。
+  - 3. 严格保序 JSON 与 Swift 6 并发安全：自研严格 RFC 8259 解析器（MAX_DEPTH=512，拒绝前导零与尾随字符）及保序 JsonObject（== 按字典语义比较，编码保持插入序），避免 Linux/macOS Foundation JSONSerialization 平台差异；公开类型遵循 Sendable，I18n 以 NSLock 保护语言状态，MarkdownParse 无全局可变状态。
+decisions:
+  shared-testdata-single-source:
+    decision: 将 DS-Bot 脱敏夹具与源码核对样本统一迁至仓库根 testdata/dsbot 与 testdata/dsbot-source，与 testdata/harness-url-vectors.json 同级。
+    rationale: macOS、Android 与后续 Windows 三端测试需要读取同一份语言无关 JSON 夹具与向量；通过 Gradle test resources.srcDir 复用 ../../testdata 可在零改动 Android 测试代码的前提下避免仓库内双份夹具漂移。
+  strict-ordered-json-in-core:
+    decision: 在 DshCore 实现独立的严格 Json 解析与编码器及保序 JsonObject，而不依赖 Foundation JSONSerialization。
+    rationale: JSONSerialization 在 Linux 与 macOS 对 Bool/NSNumber 桥接、数字原样保留（如 revision）及对象键序行为存在差异，且会接受部分非严格数字或丢弃顺序；独立解析器与 Kotlin Json.kt 完全对齐，确保 Cards 段落顺序与 DsbotModels 透传行为一致。
+  pure-foundation-no-network-io:
+    decision: DshCore 保持零网络 IO 与零 Apple 专有/第三方依赖，网络与存储通过 HttpTransport、SseStream、MuxTextSession 协议及目录 URL 注入。
+    rationale: 满足 tech/macos-client.yaml macos-package-layout MUST 规则及 Linux 本机直接运行 swift test 的回归门禁要求；macOS 不内置 Tailscale，因此 SetupCheck 不包含 Android 的 TunnelStateMachine，仅保留 tailnet 主机字面判定用于错误页提示检查系统 Tailscale。
+  swift6-concurrency-safety:
+    decision: DshCore 所有公开数据模型遵循 Sendable，I18n 使用 NSLock 保证线程安全，MarkdownParse 移除可变全局缓存。
+    rationale: Swift 6 语言模式下严格并发检查默认开启，保证并行单元测试与未来 SwiftUI 异步调用无数据竞争诊断。
+  no-delta-spec:
+    decision: 本变更仅在 macos/Core 实现纯 Foundation 协议核心与迁移共享测试夹具，不改变任何用户可观察行为或主规格要求，因此不创建 delta-spec。
+    rationale: 主规格仅描述外部可观察行为，macos/Core 的纯内部 Swift 实现与共享测试目录属于工程技术实现，符合 tech/macos-client.yaml 规则且通过 delta-tech 同步 tech/dsbot-api.yaml 夹具路径即可。
+alternatives: []
+risks:
+  - Linux 与 macOS Foundation 的 NSRegularExpression 或 String 编码边界可能存在细微差异，需在 Linux Swift 6.4 下通过全量向量和夹具测试充分覆盖。

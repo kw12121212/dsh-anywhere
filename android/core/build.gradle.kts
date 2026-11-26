@@ -40,6 +40,10 @@ tasks.test {
 // （tech 标准 secrets-env-gated：不打印、不入库）。无 DSH_SPIKE_TARGET 时
 // runSpike 以用法错误退出，对仓库零影响。
 sourceSets {
+    named("test") {
+        // 共享测试向量与 DS-Bot 脱敏夹具统一放在仓库根 testdata/，供 Android、macOS 与后续 Windows 共用。
+        resources.srcDir(file("../../testdata"))
+    }
     create("spike") {
         compileClasspath += sourceSets.main.get().output
         runtimeClasspath += sourceSets.main.get().output

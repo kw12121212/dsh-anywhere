@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-core-protocol
   milestone: macos-native-foundation
-status: planned
+status: complete
 summary: 在 DshCore 中用 Swift 重写协议层：harness URL 校验与 token 剥离、DS-Bot API 请求与错误码、SSE 解析、feed 同步与 revision 补齐、版本比对与 hello 能力位、dsh mux/JSON-RPC 帧、团队状态与聊天条目及卡片的解码模型，并与 Kotlin 版共享测试向量与夹具
 details: 以 android/core 对应文件为参照实现（HarnessUrl、SetupCheck、DsbotApi、DsbotModels、SseParser、FeedSync、DsbotVersions、DsbotConnection 中的纯逻辑部分、DshMux、WsClient 帧编解码、Json、Cards、ChatRender、MarkdownParse、TeamHome、RoomChat、SideChat、BotStatsText），以 tech/dsbot-api 为协议标准，在执行时已完成的 Android 里程碑所达到的基准版本（预期 DS-Bot 0.3.10 及之后）上实现。只用 Foundation（JSONSerialization/Codable、Data、String），不含网络 IO；传输抽象为协议（protocol HttpTransport / SseStream）供 App 注入。共享测试资产：把 harness URL 测试向量与 DS-Bot 脱敏夹具迁到两端都能读取的仓库路径（若 Android 侧已在 android/core 测试资源中，则移到共享目录并让 Kotlin 测试改读该路径，确保 Android 回归仍通过），Swift 测试读取同一文件。移植 android/core 中对应 JUnit 用例的断言语义。验收：swift test 在 Linux 通过并覆盖 URL 向量、SSE 分块与多行、feed 断线补齐、错误码映射、版本比对（含 UNKNOWN）、mux 帧往返、卡片深度与大小上限；android/gradlew -p android/core test 仍通过。 共享目录须同时供后续 windows-core-protocol 的 C# 测试读取（纯 JSON、路径与语言无关）。
 depends_on:

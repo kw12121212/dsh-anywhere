@@ -1,0 +1,50 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-core-protocol
+sections:
+  Implementation:
+    migrate-shared-testdata:
+      text: 将 android/core/src/test/resources/dsbot 与 dsbot-source 迁至仓库根 testdata/dsbot 与 testdata/dsbot-source，更新 android/core/build.gradle.kts test resources.srcDir 并验证 Android core JUnit 无回归
+      status: complete
+    impl-json-url-config-setup:
+      text: 在 macos/Core/Sources/DshCore/ 实现 Json/JsonString、HarnessUrl、HarnessConfigStore、SessionAuth、SessionCookies、SetupCheck 与 Transport 协议抽象（仅 import Foundation）
+      status: complete
+    impl-dsbot-api-sse-sync:
+      text: 在 macos/Core/Sources/DshCore/ 实现 DsbotApi、DsbotModels、SseParser、DsbotHello/Capabilities、DsbotVersions、FeedSync 与 DsbotConnection
+      status: complete
+    impl-mux-ws-attachments:
+      text: 在 macos/Core/Sources/DshCore/ 实现 WsFrameCodec（纯 RFC6455 帧编解码与纯 Swift SHA-1 握手校验）、DshMux 与 AttachmentMessages
+      status: complete
+    impl-team-chat-cards-markdown:
+      text: 在 macos/Core/Sources/DshCore/ 实现 I18n、WorkPhrase、TeamSections、TeamPreview、TeamHome、Cards、ChatRender、MarkdownParse、RoomChat、SideChat 与 BotStatsText
+      status: complete
+    add-dshcore-tests:
+      text: 在 macos/Core/Tests/DshCoreTests/ 编写完整 XCTest 套件，直接读取 testdata/harness-url-vectors.json 与 testdata/dsbot/*，覆盖 URL 向量、配置持久化、SSE、feed 同步、错误码、版本与能力位、mux 帧、卡片上限、Markdown、团队与群聊渲染、统计格式化
+      status: complete
+  Testing:
+    test-swift-core:
+      text: 运行 macos/Core 单元测试并确认全部通过
+      status: complete
+      command: swift test --package-path macos/Core
+    test-android-core:
+      text: 运行 android/core JUnit 测试确认共享 testdata 迁移无回归
+      status: complete
+      command: android/gradlew -p android/core test
+    test-node-validation:
+      text: 运行桌面端 TypeScript 类型检查与 Vitest 单元测试确认向量与工作流测试无回归
+      status: complete
+      command: npm run typecheck && npm run test
+  Verification:
+    verify-ready-and-strict:
+      text: 运行 strict-spec-cli ready 与 verify 校验变更产物结构与技术标准对齐
+      status: complete
+      command: strict-spec-cli verify macos-core-protocol
+    verify-full-regression-and-archive:
+      text: 完成独立代码评审、执行完整项目回归命令并归档 macos-core-protocol
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+testing_gates:
+  validation_task: test-node-validation
+  unit_test_task: test-swift-core

@@ -37,3 +37,10 @@ rules:
     enforcement:
       method: test
       detail: 'scripts/workflows.test.mts 断言 package.yml 包含 package-macos-native、if: github.ref_type != ''tag''、node scripts/macos-package.mts 与 dsh-anywhere-macos-native，且 release.yml 不含原生产物；scripts/macos-package.test.mts 断言打包脚本组装逻辑'
+  dshcore-foundation-json-and-concurrency:
+    strength: SHOULD
+    statement: macos/Core（DshCore）的协议报文 JSON 解析与保序透传必须使用内置 Json/JsonObject，不得依赖 Foundation.JSONSerialization（避免 Linux 与 macOS 在 Bool/数字桥接与键序上的差异）；全部网络传输与磁盘存储位置通过协议（HttpTransport/SseStream/MuxTextSession）或目录 URL 注入，禁止在 DshCore 内直接发起网络 IO；公开模型与协议类型必须满足 Swift 6 Sendable，状态同步使用 NSLock 且禁止引入无锁保护的全局可变缓存。
+    rationale: macos-core-protocol 已实证 JSONSerialization 在 Linux/macOS 间存在桥接与键序差异，且 swift test --package-path macos/Core 需在 Linux Swift 6 严格并发模式下无警告通过；后续 macos-session-transport 及管理端点移植都会沿用同一 JSON 模型、协议注入边界与并发安全规范。
+    enforcement:
+      method: review
+      detail: 评审检查 Sources/DshCore/*.swift 不在协议解析中使用 JSONSerialization、无直接网络 IO、公开类型遵循 Sendable 且无未加锁全局可变状态
