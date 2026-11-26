@@ -19,6 +19,11 @@ public struct HttpRequest: Equatable, Sendable {
         self.body = body
     }
 
+    public func header(_ name: String) -> String? {
+        let needle = name.lowercased()
+        return headers.first { $0.name.lowercased() == needle }?.value
+    }
+
     public static func == (lhs: HttpRequest, rhs: HttpRequest) -> Bool {
         lhs.method == rhs.method &&
             lhs.url == rhs.url &&

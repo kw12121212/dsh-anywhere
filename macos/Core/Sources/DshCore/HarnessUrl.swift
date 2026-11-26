@@ -170,6 +170,37 @@ public enum HarnessUrl: Sendable {
         return parts.host
     }
 
+    /// 提取规范化源 `scheme://host:effectivePort`（http 默认 80、https 默认 443；非法返回 `nil`）。
+    public static func canonicalOrigin(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let scheme = leadingScheme(in: trimmed)?.lowercased(),
+              scheme == "http" || scheme == "https",
+              !hasInvalidPercentEscape(trimmed),
+              let parts = parseHttpParts(trimmed, expectedScheme: scheme)
+        else {
+            return nil
+        }
+        let effectivePort = parts.port ?? (scheme == "https" ? 443 : 80)
+        return "\(parts.scheme)://\(parts.host):\(effectivePort)"
+    }
+
+    /// 提取与请求目标一致的 `Host` 请求头（默认端口省略，非默认端口附带 `:port`）。
+    public static func hostHeader(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let scheme = leadingScheme(in: trimmed)?.lowercased(),
+              scheme == "http" || scheme == "https",
+              !hasInvalidPercentEscape(trimmed),
+              let parts = parseHttpParts(trimmed, expectedScheme: scheme)
+        else {
+            return nil
+        }
+        if let port = parts.port {
+            let isDefault = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
+            return isDefault ? parts.host : "\(parts.host):\(port)"
+        }
+        return parts.host
+    }
+
     // MARK: - 内部解析辅助
 
     private struct ParsedHttpParts {

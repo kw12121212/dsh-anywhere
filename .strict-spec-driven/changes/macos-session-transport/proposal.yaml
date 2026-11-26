@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-session-transport
+  status: proposed
+summary:
+  what:
+    - 在 macos/Core（DshCore）补充纯 Foundation 的会话与传输编排层（含按 canonical origin 绑定的 0600 私有 cookie 存储 SessionCookieStore、RFC 3986 相对 Location 解析 HttpLocation、带 token 地址一次性建立会话与同源重定向 SessionEstablisher、源隔离与剥离 Origin/Sec-Fetch 头策略、NSError/POSIX 网络错误分类器 NetErrorClassifier、以及支持注入 HttpTransport/SseStream/时钟的全链路会话控制器 MacosSessionController）；在 macos/App 实现基于 ephemeral URLSession 的传输与 SSE 长连接（手动拦截重定向、原始字节按换行分帧喂入 SseParser）、App 失活/系统睡眠监听、以及带状态条/可关闭版本提示条/本地连接错误页（含 tailnet Tailscale 提示）/本地重新认证页/403 trusted-host 提示页与基础地址输入表单的 SwiftUI 视图；在 scripts/macos-package.mts 注入 NSAppTransportSecurity（NSAllowsArbitraryLoads）以允许用户配置的 http harness 地址，并在 App 层强制源隔离；新建主规格 macos-app 与场景 macos-connect-and-session 登记可观察行为。
+  why:
+    - macos-core-protocol 已完成纯协议模型与状态机，但 macos/App 目前仍是静态占位窗口，尚无法经系统网络建立 dsh 会话、持久化 cookie、调用 /api/bot 与订阅 SSE feed、在断网或 401 时给出本地错误/重认证体验；落地 macos-session-transport 后，后续 macos-setup-settings、macos-shell-window、macos-diagnostics 与整个 macos-native-chat 里程碑才能在其上构建完整界面。
+scope:
+  in:
+    - macos/Core（DshCore）：HarnessUrl.canonicalOrigin/hostHeader、HttpLocation、SessionCookieStore（按 host:port 绑定与 0600 原子落盘）、OriginScopedTransport/头策略、SessionEstablisher（单次 token 建会话与 <=5 次同源重定向）、NetErrorClassifier、MacosSessionController（探测/gate/401 重试一次/403/SSE 订阅与退避补齐/失活恢复保游标补齐/版本提示条）及完整 XCTest 覆盖
+    - macos/App：ephemeral URLSession 的 HttpTransport 与 SseStream 实现（禁用自动重定向与系统 HTTPCookieStorage、原始字节换行分帧）、系统睡眠/窗口隐藏生命周期监听、主视图状态条/版本提示条/连接错误页/重新认证页/403 提示页与基础地址输入表单（存 ~/Library/Application Support/DSH Anywhere Native/）
+    - scripts/macos-package.mts 与 scripts/macos-package.test.mts：Info.plist 声明 NSAppTransportSecurity（允许用户配置的 http harness 地址，由传输层做源隔离）
+    - .strict-spec-driven/changes/macos-session-transport/scenes/macos/macos-connect-and-session.yaml 与 specs/macos-app.yaml：新建 macos-app 主规格与对应场景
+  out:
+    - 内置 Tailscale、tsnet、SOCKS5 分流与任何 VPN/Network Extension（完全依赖系统 Tailscale 客户端）
+    - 完整首次设置引导页、标准 macOS Settings 窗口（⌘,）与从 Electron 版迁移配置（由下一变更 macos-setup-settings 承接）
+    - NavigationSplitView 三栏主窗口外壳、菜单栏快捷键与窗口位置尺寸记忆（由 macos-shell-window 承接）
+    - 诊断上报集成（由 macos-diagnostics 承接）、团队/聊天/管理业务界面与 Release 切换自更新
+    - Electron 桌面端、Android 客户端及 release.yml 的任何改动
+unchanged_behavior:
+  - Electron 三平台桌面客户端及 ~/Library/Application Support/DSH Anywhere/ 配置目录不被原生端读写或修改
+  - Android 客户端与 android/core 行为及测试不变
+  - macos/Core（DshCore）保持纯 Foundation 零第三方依赖、无直接网络 IO、Swift 6 严格并发安全，且 swift test --package-path macos/Core 可在 Linux 直接通过
+  - config.yaml 完整回归命令、80% Node 覆盖率门槛范围及 package.yml/release.yml 产物隔离规则不变
+roadmap:
+  milestone: macos-native-foundation
+  planned_change: macos-session-transport

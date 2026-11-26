@@ -1,0 +1,101 @@
+schema: strict-spec-driven/delta-scene/v1
+schema_version: 1
+artifact_type: delta_scene
+schema_file: templates/strict-spec-driven/schemas/delta-scene.yaml
+target_scene: macos-connect-and-session
+scene:
+  title: macOS 原生客户端连接、会话建立与断线恢复
+  area: macos
+  actors:
+    - name: 用户
+      role: 提供 dsh-url 输出的带 token 地址或干净地址，并在必要时触发重试、修改地址或关闭版本提示条
+    - name: DSH Anywhere (macOS)
+      role: 原生客户端，负责地址校验、可达性探测、会话建立与私有 cookie 持久化、API/SSE 通信、连接状态呈现与本地错误/重认证页
+    - name: 远端 dsh / DS-Bot 服务
+      role: 提供认证入口、/api/bot 端点与 /api/bot/feed SSE 事件流
+  preconditions:
+    - 用户已安装 macOS 14+ 原生版 DSH Anywhere
+    - 访问 tailnet 地址（*.ts.net、100.64.0.0/10 等）时，Mac 上已运行并登录系统 Tailscale 客户端
+operations:
+  ADDED:
+    exception_flows:
+      unreachable-error:
+        trigger: 探测阶段发生 DNS 解析失败、连接被拒绝、10 秒超时或 TLS 错误
+        steps:
+          show-error-and-recover:
+            action: 主界面显示本地错误页（含干净地址、分类原因、重试与修改地址按钮；tailnet 目标额外提示确认系统 Tailscale 已连接），点击重试在恢复可达后回到在线状态
+            covered_by:
+              - spec_id: macos-app
+                requirement_id: connection-error-page
+      session-expired:
+        trigger: 门禁、API 或 feed 返回 401，或当前目标源缺失 dsh-auth 会话 cookie
+        steps:
+          show-reauth-and-recover:
+            action: 401 场景自动重试一次仍失效或缺失 cookie 时主界面切换为本地重新认证页，用户粘贴新带 token 地址保存后无需重启即恢复在线
+            covered_by:
+              - spec_id: macos-app
+                requirement_id: session-expired-reauth
+      forbidden-host:
+        trigger: 远端因 Host 未列入 trusted-host 白名单而返回 403
+        steps:
+          show-forbidden-hint:
+            action: 主界面显示本地 trusted-host 配置提示页与修改地址入口，不显示 token 或 cookie
+            covered_by:
+              - spec_id: macos-app
+                requirement_id: forbidden-host-hint
+      version-mismatch:
+        trigger: 远端 DS-Bot/dsh 版本与已测基准不一致，或 hello 协商不出共同 api 版本
+        steps:
+          show-dismissible-banner:
+            action: 主界面显示包含远端版本信息的非阻塞版本提示条，用户可关闭本次提示且基础连接与同步仍可用
+            covered_by:
+              - spec_id: macos-app
+                requirement_id: version-banner
+      feed-dropped:
+        trigger: 在线状态下 SSE 长连接意外中断
+        steps:
+          backoff-reconnect-and-catchup:
+            action: 状态条切换为重连中并按指数退避自动重连，重连后按本地 revision 与 liveKey 补齐遗漏变更
+            covered_by:
+              - spec_id: macos-app
+                requirement_id: feed-status-and-lifecycle
+    main_flow:
+      paste-token-url:
+        action: 用户在客户端输入并提交 dsh-url 输出的带 token 地址
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: session-establish-and-persist
+      establish-and-persist:
+        action: 客户端对带 token 地址只发起一次原生认证请求（最多跟随 5 次同源重定向），将签发的 dsh-auth 会话 cookie 按目标源私有持久化，并仅保存去掉 token 的干净地址
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: session-establish-and-persist
+          - spec_id: macos-app
+            requirement_id: origin-scoped-transport-and-headers
+      probe-and-gate:
+        action: 客户端向已保存的干净地址发起可达性探测与会话门禁检查，携带持久化 cookie 与同源 Host 头且不发送跨站标记
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: origin-scoped-transport-and-headers
+      version-and-capabilities:
+        action: 客户端请求 update-check 与 hello 读取远端版本和能力集合并与已测基准比对
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: version-banner
+      subscribe-feed-online:
+        action: 客户端订阅 /api/bot/feed SSE 长连接并完成 state 同步，连接状态条由连接中切换为在线
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: feed-status-and-lifecycle
+      restart-keeps-session:
+        action: 用户退出并重新启动应用后，客户端复用私有持久化的 dsh-auth 会话直接进入在线状态，无需再次输入地址
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: session-establish-and-persist
+      sleep-or-hide-reconnect:
+        action: 所有窗口隐藏或系统休眠时客户端断开 SSE 订阅；恢复可见或唤醒后重新建连并按本地游标补齐期间状态变化
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: feed-status-and-lifecycle
+  MODIFIED: {}
+  REMOVED: {}

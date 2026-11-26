@@ -81,6 +81,7 @@ describe('macos-package', () => {
     expect(plist).toContain('<key>CFBundleShortVersionString</key>\n  <string>1.9.0</string>')
     expect(plist).toContain('<key>CFBundleVersion</key>\n  <string>1.9.0</string>')
     expect(plist).toContain('<key>LSMinimumSystemVersion</key>\n  <string>14.0</string>')
+    expect(plist).toContain('<key>NSAppTransportSecurity</key>\n  <dict>\n    <key>NSAllowsArbitraryLoads</key>\n    <true/>\n  </dict>')
     expect(plist).toContain('<key>NSHumanReadableCopyright</key>\n  <string>© 2026 Keepwriting</string>')
   })
 

@@ -1,0 +1,39 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-session-transport
+approach:
+  - 1. 纯 Foundation 编排下沉 DshCore：在 macos/Core/Sources/DshCore/ 补齐 HarnessUrl 的 canonical origin（scheme://host:effectivePort）与 Host 头提取、HttpLocation（RFC 3986 相对 Location 解析）、SessionCookieStore（按 origin 绑定 dsh-auth-* cookie，以 0600 权限临时文件原子落盘，覆盖描述屏蔽明文）、OriginScopedTransport（校验请求目标与已保存 harness 同源、注入 Host 与 Cookie、剥离 Origin/Referer/Sec-Fetch-*）、SessionEstablisher（单次请求带 token 地址、按次收集新鲜 dsh-auth-* 防陈旧 cookie 误判、仅跟随 <=5 次同源重定向）、NetErrorClassifier（基于 NSURLErrorDomain 与 POSIX 错误码纯数值映射 ProbeFailureReason）及 MacosSessionController（注入 HttpTransport/SseStream/配置存储/cookie 存储/退避时钟，统一编排探测、会话建立、gate 与 401 重试一次、403、SSE 订阅、退避重连、休眠唤醒保游标增量补齐、版本提示条）。
+  - 2. 极薄 macos/App URLSession 与 SwiftUI 装配层：macos/App 使用 ephemeral URLSessionConfiguration（httpShouldSetCookies = false、httpCookieStorage = nil、urlCache = nil）与自定义 URLSessionTaskDelegate（拦截重定向返回 nil，由 SessionEstablisher 显式控制同源重定向）；探测超时 10 秒，任何 HTTP 响应均判可达；SSE 长连接通过 URLSession.bytes(for:) 按原始 UTF-8 字节逐行缓冲并在 0x0A 切分（含空行）喂入 SseParser，绝不使用会吞掉空行的 AsyncBytes.lines；应用数据目录独立使用 ~/Library/Application Support/DSH Anywhere Native/，避免与 Electron 版冲突。
+  - 3. macOS 生命周期与 ATS 策略：在 macos/App 监听 NSWorkspace.willSleepNotification/didWakeNotification、NSApplication.didHideNotification/didUnhideNotification 与窗口最小化/关闭状态，所有窗口不可见或系统休眠时取消 SSE 订阅并保留同步游标，恢复可见/唤醒后重连按 since/liveKey 补齐；scripts/macos-package.mts 在 Info.plist 添加 NSAppTransportSecurity（NSAllowsArbitraryLoads = true）使 URLSession 可访问用户配置的 http://127.0.0.1:...、http://100.64.x.y:... 或 MagicDNS 短名地址，同时由 OriginScopedTransport 在代码层限定仅向已保存 harness 同源发请求。
+decisions:
+  orchestrator-in-dshcore:
+    decision: 将会话建立、cookie 持久存储、头策略、错误分类与连接/补齐状态机全部下沉 DshCore 并经协议注入。
+    rationale: 遵循 tech/macos-client 的 pure-logic-in-macos-core 与 dshcore-foundation-json-and-concurrency，使所有协议与状态流转均可在 Linux swift test 中以确定性单元测试覆盖，大幅降低无 Xcode 环境下的回归盲区。
+  cookie-store-0600-file:
+    decision: 使用 ~/Library/Application Support/DSH Anywhere Native/session-cookies 的 0600 权限私有文件（先创建 0600 临时文件写入再原子替换）按 canonical origin 存储 dsh-auth-* cookie，而非 macOS Keychain。
+    rationale: 未签名/ad-hoc 签名（codesign --sign -）的 .app 每次构建都会变更签名哈希，使用 Keychain 会导致每次构建反复弹出钥匙串授权框或读取失败；0600 私有文件在计划变更允许范围内、跨重建稳定、目录与 Electron 隔离，且可在 Linux DshCoreTests 中直接实测权限与原子落盘。
+  manual-same-origin-redirect-and-ephemeral-session:
+    decision: URLSession 采用 ephemeral 配置并关闭系统 cookie 存储与自动重定向，由 DshCore 的 SessionEstablisher 控制最多 5 次同源重定向，并按单次尝试独立收集新签发 dsh-auth-* cookie。
+    rationale: 满足 tech/dsbot-api auth-cookie-and-host 规则，防止系统 HTTPCookieStorage 干扰或跨源重定向泄露 cookie，且避免过期旧 cookie 导致无效 token 误判建立成功。
+  raw-byte-sse-framing:
+    decision: SSE 客户端使用 URLSession.AsyncBytes 按原始字节累积并在 \n（0x0A）切分（保留空行）后送入 SseParser，禁止使用 AsyncBytes.lines。
+    rationale: Foundation 的 AsyncBytes.lines 会跳过空行，而 SSE 协议以空行作为事件帧分隔符，使用 .lines 会导致事件帧无法派发。
+  ats-arbitrary-loads-with-origin-guard:
+    decision: 在 scripts/macos-package.mts 生成的 Info.plist 中开启 NSAppTransportSecurity.NSAllowsArbitraryLoads，并由 OriginScopedTransport 强制所有请求仅发往已配置 harness 源。
+    rationale: macOS ATS 默认阻断对 Tailscale 100.64.0.0/10、MagicDNS 短名等非 .local/非 RFC1918 明文 HTTP 地址的 URLSession 请求（-1022）；放开 ATS 并在传输层强制源隔离既保证 http harness 可用又防止明文泄露。
+  preserve-sync-cursor-on-inactive-resume:
+    decision: 应用失活（窗口全部隐藏或系统睡眠）时断开 SSE 保留 localRevision/liveKey，恢复活跃时重新探测/门禁并复用游标按 since/liveKey 增量补齐（仅在切换地址或重认证时重置游标）。
+    rationale: 遵循 tech/dsbot-api incremental-sync 与计划变更「应用失活时断开、恢复时补齐」语义，避免唤醒时无谓全量刷新，同时确保期间变更不遗漏。
+  inline-setup-reauth-bridge:
+    decision: 在 macos-setup-settings 交付标准 Settings 场景（⌘,）与 Electron 迁移前，ContentView 提供内联地址输入/修改与重新认证表单，复用同一 HarnessConfigStore 与 MacosSessionController。
+    rationale: 使本变更在用户 Mac 上即可独立完成里程碑完成标准第 3、4 条（首次粘贴带 token 地址、退出重开、失效重认证、错误页修改地址）核对，且零重复逻辑可直接被 macos-setup-settings 承接升级。
+alternatives:
+  - option: 使用 macOS Keychain 存储 dsh-auth-* cookie
+    reason: ad-hoc 签名 .app 每次构建变更签名哈希，会触发系统钥匙串弹窗或权限失效，且无法在 Linux swift test 中验证。
+  - option: 直接使用 URLSession.shared 与系统 HTTPCookieStorage 及默认重定向
+    reason: 无法保证仅保存 dsh-auth-* 且按 host:port 严格隔离，且自动重定向可能把 cookie 或 token 泄露给跨源目标并吞掉中间 302/303 的 Set-Cookie。
+risks:
+  - WSL/Linux 无法本地编译 SwiftUI 与 AppKit 代码，macos/App 需严格遵守 Swift 6.0 严格并发检查与 macOS 14 API，并在 GitHub Actions macos-latest 的 package-macos-native job 中验证编译通过。
+  - 不同 dsh/DS-Bot 版本在 401/303 建会话与 /api/bot/feed 保活帧上存在细节差异，需以 testdata/dsbot 脱敏夹具为契约并在用户 Mac 连接真实 tailnet dsh 核对。

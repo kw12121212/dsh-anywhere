@@ -1,0 +1,108 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: macos-app
+spec:
+  title: macOS 原生 App
+  path: .strict-spec-driven/specs/macos-app.yaml
+operations:
+  ADDED:
+    session-establish-and-persist:
+      strength: MUST
+      statement: 在 macOS 原生客户端提交带 token 的 harness 地址后，应用只向该带 token 地址发起一次原生建立会话请求（仅在同源 scheme/host/port 下跟随不超过 5 次重定向），取得 dsh-auth-* 会话 cookie 后将其按目标源隔离并仅当前用户可读地持久化到应用私有存储，配置中只保存去掉 token 的干净地址；带 token 地址与 cookie 值不写入配置、界面文本或日志；退出并重启应用后直接复用已持久化会话进入在线状态。
+      scenarios:
+        first-token-url-establishes-once:
+          - GIVEN: macOS 原生客户端尚未保存配置，dsh 服务可凭一次带 token 请求签发 dsh-auth 会话 cookie（含同源 303 重定向）
+          - WHEN: 用户粘贴 dsh-url 输出的带 token 地址并提交
+          - THEN: 客户端只请求一次该带 token 地址即建立会话，配置仅保存去掉 token 的干净地址，token 不出现在配置与任何界面文本中，状态进入在线
+        restart-keeps-session:
+          - GIVEN: 用户已在 macOS 原生客户端成功建立会话
+          - WHEN: 退出并重新启动应用
+          - THEN: 客户端无需重新输入地址或重新认证，直接以已保存干净地址与持久化会话进入在线状态
+        cross-origin-redirect-does-not-leak-cookie:
+          - GIVEN: 建立会话请求返回指向不同源的 302/303 重定向
+          - WHEN: 客户端处理该重定向响应
+          - THEN: 客户端不跟随跨源重定向、不向跨源目标发送任何 cookie 或 token，且不将此前残留的旧 cookie 误判为建会话成功
+    origin-scoped-transport-and-headers:
+      strength: MUST
+      statement: macOS 原生客户端的全部探测、会话、/api/bot 与 /api/bot/feed 网络请求直接通过系统网络栈发出（不内置 Tailscale、tsnet 或任何本地代理），请求目标严格限定为已保存 harness 的同源地址，携带与目标一致的 Host 头及当前源对应的 dsh-auth-* cookie，且不发送 Origin、Referer 或跨站 Fetch 标记头。
+      scenarios:
+        api-and-feed-carry-cookie-and-host:
+          - GIVEN: macOS 原生客户端已保存 harness 地址并持有对应的 dsh-auth 会话 cookie
+          - WHEN: 客户端向 /api/bot 与 /api/bot/feed 发起请求
+          - THEN: 请求命中已保存源，携带匹配的 Host 与 Cookie 头，且请求头中不含 Origin、Referer 与 Sec-Fetch-* 字段；不同源地址不共用会话 cookie
+        system-network-without-builtin-tailscale:
+          - GIVEN: 用户通过系统 Tailscale 客户端接入 tailnet 上的 dsh 地址（如 *.ts.net 或 100.64.0.0/10）
+          - WHEN: macOS 原生客户端发起连接与同步
+          - THEN: 客户端直接使用系统网络栈访问该地址并正常工作，不启动任何内置隧道或本地代理端口
+    session-expired-reauth:
+      strength: MUST
+      statement: 当远端对干净地址的门禁检查、/api/bot 或 /api/bot/feed 返回 401 会话失效（门禁阶段先自动重试一次仍为 401），或当前目标源在私有存储中缺少 dsh-auth-* 会话 cookie 时，客户端不进入空白或假在线状态，而是显示本地重新认证页（说明运行 dsh-url 获取新带 token 地址并粘贴，不含旧 token 或 cookie 原文）；用户粘贴新的带 token 地址并提交后，无需重启应用即重建会话并恢复在线。
+      scenarios:
+        expired-401-shows-reauth-page:
+          - GIVEN: macOS 原生客户端已保存干净地址，远端返回 401 会话失效
+          - WHEN: 应用启动探测或在线订阅期间触发 401
+          - THEN: 门禁先重试一次仍 401 后主界面显示本地重新认证页，给出运行 dsh-url 的提示与输入入口，不显示 401 原文、token 或 cookie
+        missing-cookie-shows-reauth-page:
+          - GIVEN: macOS 原生客户端已保存干净地址，但私有存储中没有该源的有效 dsh-auth 会话 cookie
+          - WHEN: 启动应用或准备建立连接
+          - THEN: 主界面显示本地重新认证页，引导用户粘贴新的带 token 地址
+        reauth-recovers-without-restart:
+          - GIVEN: 主界面正显示本地重新认证页
+          - WHEN: 用户粘贴新的带有效 token 地址并提交
+          - THEN: 应用无需重启即建立新会话、只保留干净地址，主界面恢复在线状态
+    connection-error-page:
+      strength: MUST
+      statement: 连接探测（默认 10 秒超时；任何 HTTP 响应视为可达）遇到 DNS 解析失败、连接被拒绝、超时或 TLS 安全连接失败时，主界面显示按原因分类的本地错误页：展示不含 token 的干净地址、对应原因说明、以及「重试」与「修改地址」入口；若目标主机为 tailnet 地址（*.ts.net、100.64.0.0/10、fd7a:115c:a1e0::/48 或单标签 MagicDNS 主机名），错误页额外提示确认系统 Tailscale 客户端已连接；点击「重试」在服务恢复后自动回到在线状态，点击「修改地址」可修改当前配置地址。
+      scenarios:
+        refused-and-dns-error-page:
+          - GIVEN: 已保存 http://127.0.0.1:13080/ 无服务监听，或保存了无法解析的域名
+          - WHEN: 启动应用或执行探测
+          - THEN: 主界面显示本地错误页，分别说明「连接被拒绝」或「无法解析主机名」，展示不含 token 的干净地址及「重试」「修改地址」按钮
+        tailnet-failure-shows-tailscale-hint:
+          - GIVEN: 已保存 *.ts.net 或 100.64.x.y 的 tailnet 地址且当前不可达
+          - WHEN: 触发连接探测失败
+          - THEN: 本地错误页在原因说明之外额外显示「请确认系统 Tailscale 已连接」提示
+        retry-recovers-when-service-back:
+          - GIVEN: 主界面显示本地错误页，随后 dsh 服务或系统 Tailscale 恢复可用
+          - WHEN: 用户点击错误页上的「重试」
+          - THEN: 客户端重新探测并验证会话，恢复进入在线状态与正常连接状态条
+        tls-and-timeout-error-page:
+          - GIVEN: 已保存的 https 地址证书不受信任，或目标主机 10 秒内未完成响应
+          - WHEN: 执行连接探测
+          - THEN: 本地错误页分别显示安全连接（TLS）失败或连接超时的说明，并提供重试与修改地址入口
+    forbidden-host-hint:
+      strength: MUST
+      statement: 当远端对已保存 harness 源返回 403（Host 未列入 dsh trusted-host 白名单）时，主界面显示本地提示页说明需要在 DSH 主机将当前访问主机名加入 trusted-host（--trusted-host 参数），并提供修改地址或重试入口，不显示 token 与 cookie。
+      scenarios:
+        forbidden-403-shows-trusted-host-hint:
+          - GIVEN: 已保存地址的 Host 未在 dsh 服务的 trusted-host 白名单中，门禁或 API 返回 403
+          - WHEN: 应用连接该地址
+          - THEN: 主界面显示本地 trusted-host 配置提示页与修改地址入口，不显示 token 或 cookie
+    feed-status-and-lifecycle:
+      strength: MUST
+      statement: 会话通过后客户端订阅 /api/bot/feed SSE 事件流并在顶部状态条显示连接中、在线与重连状态：断线时按指数退避（1s 起步、封顶 60s）重连并按本地 revision 与 liveKey 调用 state 增量补齐；当应用所有窗口隐藏或系统进入睡眠时主动断开 feed 订阅并保留当前同步游标，应用重新可见或系统唤醒时重新探测门禁与订阅并按保留游标补齐期间状态。
+      scenarios:
+        online-and-backoff-reconnect:
+          - GIVEN: 客户端已建立有效会话并进入在线状态，随后 SSE 流意外断开
+          - WHEN: 服务端短暂中断后恢复
+          - THEN: 状态条依次呈现连接中、在线、重连中，在断线期间按指数退避重连，恢复后发送已记录的 since/liveKey 补齐变更并回到在线
+        inactive-disconnects-and-resumes-catchup:
+          - GIVEN: 客户端在线并已同步至某一 revision
+          - WHEN: 系统进入睡眠或所有窗口隐藏，随后唤醒或恢复显示
+          - THEN: 失活期间断开 SSE 订阅；恢复活跃后重新检查并订阅 feed，携带先前的 revision 与 liveKey 补齐期间更新
+    version-banner:
+      strength: MUST
+      statement: 连接建立时读取远端 update-check 与 hello 能力集合，与已测基准（DS-Bot 0.3.10、dsh 0.2.2-rc.3）及共同 api 版本比对：版本或能力版本不一致时在主界面顶部显示提示条（展示远端版本号并说明部分功能可能受限，但当前连接仍尽力可用），用户可点击关闭本次提示；版本匹配或远端未返回版本信息时不显示版本提示条。
+      scenarios:
+        mismatch-shows-dismissible-banner:
+          - GIVEN: 远端返回与基准不一致的 DS-Bot/dsh 版本或不支持的 hello api 版本
+          - WHEN: 连接建立完成
+          - THEN: 主界面顶部显示版本提示条且不影响连接状态；用户点击关闭后本次会话期内不再显示该提示条
+        matched-or-unknown-hides-banner:
+          - GIVEN: 远端返回与基准一致的版本（0.3.10 与 0.2.2-rc.3）或缺失版本字段
+          - WHEN: 连接建立完成
+          - THEN: 主界面不显示版本提示条
+  MODIFIED: {}
+  REMOVED: {}

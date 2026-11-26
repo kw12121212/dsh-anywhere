@@ -90,6 +90,11 @@ export function renderInfoPlist(options: InfoPlistOptions): string {
   <string>${escapeXml(version)}</string>
   <key>LSMinimumSystemVersion</key>
   <string>${escapeXml(minSystemVersion)}</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSHumanReadableCopyright</key>

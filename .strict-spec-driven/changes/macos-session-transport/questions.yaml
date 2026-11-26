@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-session-transport
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 当前 macOS 原生客户端仅完成 DshCore 纯协议库与静态占位窗口，尚无 URLSession 传输层、dsh 会话建立与持久化、连接探测错误页、401 重新认证、SSE feed 同步与版本提示条，Mac 用户无法实际连上 dsh/DS-Bot 服务，后续设置页与原生界面也无法建立连接。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 用户在 macOS 原生版中粘贴 dsh-url 带 token 地址后经一次原生请求建立会话、仅保存干净地址且 cookie 私有持久化跨重启保持在线；会话失效显示本地重新认证页且粘贴新地址无需重启即恢复；断网/DNS/拒绝/超时/TLS 失败显示按原因分类的本地错误页（tailnet 地址附提示检查系统 Tailscale）；feed 前台实时同步、断线指数退避重连、失活断开恢复补齐；远端版本不一致显示可关闭提示条；且上述纯逻辑在 Linux swift test --package-path macos/Core 完整通过。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 macos-core-protocol 已归档，macos-session-transport 是 macos-native-foundation 里程碑中下一个就绪的关键链路变更，直接解锁 macos-setup-settings、macos-shell-window 及后续聊天界面里程碑。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 不内置 Tailscale/tsnet/SOCKS5 或任何 VPN/代理；不实现完整首次设置页、标准 macOS Settings 场景（⌘,）与 Electron 配置迁移（留给 macos-setup-settings）；不实现 NavigationSplitView 三栏主窗口与菜单/窗口状态记忆（留给 macos-shell-window）；不改 Electron 桌面端、Android 客户端及 release.yml 发布流程。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按 macos-native-foundation 里程碑与 macos-session-transport 计划变更唯一解读：在 DshCore 下沉全部可测会话/传输/同步编排逻辑并在 Linux 覆盖测试，在 macos/App 实现极薄 URLSession/SwiftUI/生命周期装配层，并新建 macos-app 主规格登记连接、会话、错误页与版本提示的可观察行为。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: macos-app-acceptance-gate
+    question: 本机为 Linux（无 Xcode/macOS SDK），macos/App 的编译与 Mac 真机核对（里程碑完成标准第 3、4 条）应作为本次归档前置门禁，还是在推送后异步验证？
+    context: 影响范围：Verification 任务（macos-ci-and-device-acceptance）、macos-app 主规格 MUST 条目的独立评审判定（strict-spec-review 要求 MUST 项有充分证据）以及本次变更的归档时机。当前环境仅能运行 macos/Core 的 Linux swift test 与完整本地回归，无法本地编译或运行 macos/App 的 URLSession/SwiftUI 界面。选项 A（推荐）：在 Linux 完成全部代码、DshCore 全链路单测与完整项目回归后，先在归档前暂停，由您提交推送触发 GitHub Actions package-macos-native 构建出 .app 并在 Mac 上逐项核对里程碑完成标准第 3、4 条，确认通过后再执行归档（保证真实编译与真机行为 100% 验证）。选项 B：在 Linux 完成全部代码、以 DshCore 注入传输的全链路测试 + scripts/macos-package.test.mts + 本地完整回归作为本次替代验收证据直接归档，CI 编译与 Mac 真机核对留待您推送后异步验证（若发现问题另立修复变更）。
+    answer: 选择方案 A：在 Linux 完成全部代码、DshCore 全链路单测与完整项目回归后，先在归档前暂停，由用户提交推送触发 GitHub Actions package-macos-native 构建出 .app 并在 Mac 上逐项核对里程碑完成标准第 3、4 条，确认通过后再执行归档。
+    status: resolved
+    answered_by: human

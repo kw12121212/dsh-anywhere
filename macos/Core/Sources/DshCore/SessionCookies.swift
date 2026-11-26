@@ -2,7 +2,7 @@ import Foundation
 
 /// dsh 会话 cookie 的解析、筛选与序列化（与 `SessionCookies.kt` 对齐；cookie 值不写入任何日志）。
 public enum SessionCookies: Sendable {
-    public struct Cookie: Equatable, Sendable {
+    public struct Cookie: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
         public let name: String
         public let value: String
         public let attrs: [String: String]
@@ -12,10 +12,71 @@ public enum SessionCookies: Sendable {
             self.value = value
             self.attrs = attrs
         }
+
+        public var description: String { "Cookie(\(name)=***)" }
+        public var debugDescription: String { description }
     }
 
     public static func isAuthCookie(_ name: String) -> Bool {
         name.hasPrefix("dsh-auth-")
+    }
+
+    /// 拆分被 HTTP 响应合并成单个逗号分隔字符串的 `Set-Cookie` 头，保留 `Expires=Wed, 21 Oct ...` 中的日期逗号。
+    public static func splitSetCookieHeader(_ combined: String) -> [String] {
+        let attrNames: Set<String> = [
+            "expires", "max-age", "domain", "path", "samesite", "secure", "httponly", "partitioned",
+        ]
+        var result: [String] = []
+        var start = combined.startIndex
+        var idx = combined.startIndex
+
+        while idx < combined.endIndex {
+            if combined[idx] == "," {
+                let afterComma = combined.index(after: idx)
+                let rest = combined[afterComma...]
+                let trimmedStart = rest.drop { $0 == " " || $0 == "\t" }
+                if let candidateName = leadingTokenBeforeEquals(in: trimmedStart),
+                   !attrNames.contains(candidateName.lowercased()) {
+                    let piece = String(combined[start..<idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !piece.isEmpty {
+                        result.append(piece)
+                    }
+                    start = trimmedStart.startIndex
+                    idx = start
+                    continue
+                }
+            }
+            idx = combined.index(after: idx)
+        }
+
+        let tail = String(combined[start...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty {
+            result.append(tail)
+        }
+        return result
+    }
+
+    private static func leadingTokenBeforeEquals(in text: Substring) -> String? {
+        var idx = text.startIndex
+        while idx < text.endIndex {
+            let scalar = text.unicodeScalars[idx]
+            if scalar == "=" {
+                return idx > text.startIndex ? String(text[..<idx]) : nil
+            }
+            if isCookieTokenScalar(scalar) {
+                idx = text.index(after: idx)
+            } else {
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private static func isCookieTokenScalar(_ s: UnicodeScalar) -> Bool {
+        let v = s.value
+        guard v > 0x20 && v < 0x7F else { return false }
+        let separators = "()<>@,;:\\\"/[]?={}"
+        return !separators.unicodeScalars.contains(s)
     }
 
     public static func parseSetCookie(_ line: String) -> Cookie? {

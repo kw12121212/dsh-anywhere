@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-session-transport
+sections:
+  Implementation:
+    core-origin-cookies-location:
+      text: 在 macos/Core/Sources/DshCore/ 补充 HarnessUrl.canonicalOrigin/hostHeader、HttpLocation（RFC 3986 相对引用解析）与 SessionCookieStore（按 canonical origin 绑定 dsh-auth-* cookie、0600 权限临时文件原子落盘、屏蔽日志/描述输出）
+      status: complete
+    core-session-establish-and-transport:
+      text: 在 macos/Core/Sources/DshCore/ 实现 OriginScopedTransport（限定已保存源、自动补 Host 与 Cookie、剥离 Origin/Referer/Sec-Fetch-*）、SessionEstablisher（单次请求带 token 地址、按次收集新鲜 dsh-auth-*、仅跟随 <=5 次同源重定向）与 NetErrorClassifier（NSURLErrorDomain/POSIX 错误码映射 ProbeFailureReason 及错误页/提示文案）
+      status: complete
+    core-session-controller:
+      text: 在 macos/Core/Sources/DshCore/ 实现 MacosSessionController（支持 HttpTransport/SseStream/存储/退避时钟注入，编排首次或重认证保存带 token 地址、启动探测、401 自动重试一次与缺失 cookie 分流、403 trusted-host 分流、SSE 订阅与指数退避增量补齐、应用失活断开与恢复保游标补齐、版本与 hello 能力位比对及可关闭本次的版本提示条）
+      status: complete
+    core-session-transport-tests:
+      text: 在 macos/Core/Tests/DshCoreTests/ 新增 SessionTransportTests.swift，覆盖 canonical origin、0600 cookie 持久存储与跨源隔离、一次性 token 建会话（含 303 同源重定向、跨源截断、陈旧 cookie 不误判成功、token 不落 config.json 与不回显）、头策略剥离 Origin/Sec-Fetch-*、错误分类与 tailnet 提示、401/403/重认证无重启恢复、SSE 退避补齐、失活保游标恢复及版本提示条关闭
+      status: complete
+    macos-app-urlsession-and-views:
+      text: 在 macos/App/Sources/DshAnywhereApp/ 实现 UrlSessionTransport.swift（ephemeral URLSession、禁用自动重定向与系统 cookie、10s 探测超时、原始字节换行分帧 SSE 流）、AppLifecycleMonitor.swift（系统睡眠/唤醒与窗口隐藏/可见监听）、AppSessionModel.swift（@Observable 主线程桥接与 ~/Library/Application Support/DSH Anywhere Native/ 存储目录），并更新 ContentView.swift 与 DshAnywhereApp.swift 呈现状态条、可关闭版本提示条、本地连接错误页（含 tailnet 提示与重试/修改地址）、本地重新认证页、403 trusted-host 提示页、连接中/在线占位视图与基础地址表单
+      status: complete
+    macos-package-ats:
+      text: 更新 scripts/macos-package.mts 在 renderInfoPlist 注入 NSAppTransportSecurity（NSAllowsArbitraryLoads = true），并同步 scripts/macos-package.test.mts 断言
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: 运行 macos/Core Swift 单元测试确认所有新增与既有协议/会话/传输用例通过
+      status: complete
+      command: swift test --package-path macos/Core
+    node-validation-and-package-tests:
+      text: 运行 TypeScript 类型检查与打包脚本/工作流 Vitest 单测
+      status: complete
+      command: npm run typecheck && npx vitest run scripts/macos-package.test.mts scripts/workflows.test.mts
+  Verification:
+    full-regression:
+      text: 在本地运行 .strict-spec-driven/config.yaml 完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+    macos-ci-and-device-acceptance:
+      text: 按用户确认的 macos-app-acceptance-gate 方案完成 macOS CI 编译与里程碑完成标准第 3、4 条核对
+      status: pending
+    ready-verify:
+      text: 运行 strict-spec-cli ready macos-session-transport && strict-spec-cli verify macos-session-transport 确认产物、场景覆盖与门禁全部通过
+      status: pending
+      command: strict-spec-cli ready macos-session-transport && strict-spec-cli verify macos-session-transport
+testing_gates:
+  validation_task: node-validation-and-package-tests
+  unit_test_task: swift-core-tests
