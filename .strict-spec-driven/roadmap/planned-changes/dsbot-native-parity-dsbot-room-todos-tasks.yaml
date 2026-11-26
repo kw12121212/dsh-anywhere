@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-room-todos-tasks
   milestone: dsbot-native-parity
-status: planned
+status: complete
 summary: 群待办与群目标任务：勾选、删除与清理已完成待办，为群目标任务写备注与取消任务
 details: 群聊页的待办与群目标进度：room-todo {roomId, id, done?} 勾选/取消、{action:remove, id} 删除、{action:clear} 清理已完成（返回 {item|removed, todos}；未知群回 room/not-found）；群目标任务 task-note {roomId, id, text} 写备注、task-cancel {roomId, id} 取消（二次确认；拒绝回 bot/refused 显示原因）。群目标阶段进度条已由 dsbot-chat-bars-0310 提供，本变更在其任务行上加操作。room.todos 与任务字段形态在本变更实测登记。验收：各操作与网页端一致并经 feed 同步。
 depends_on:

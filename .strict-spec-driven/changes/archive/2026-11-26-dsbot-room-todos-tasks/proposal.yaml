@@ -1,0 +1,34 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-room-todos-tasks
+  status: proposed
+summary:
+  what:
+    - 群聊页新增「待办与任务」：显示群的共享待办（state 的 rooms[].todos，未完成在前、按创建时间排序，显示未完成数）与群任务看板（rooms[].tasks，成员各自登记的任务：进行中/待审核/受阻在前，已结束的收在「历史」中），布局与文案对齐网页端 0.3.10 群概览的 Shared to-do 与 Tasks 两节
+    - 共享待办可勾选/取消勾选（room-todo {roomId,id,done}）、删除单条（{roomId,id,action:remove}）、清理已完成（{roomId,action:clear}，仅有已完成项时显示）；未完成的群任务可写备注（task-note {roomId,id,text}，服务端同时以用户身份在群里发出「@负责成员 备注」）与取消（task-cancel {roomId,id}，二次确认）；拒绝时显示服务端原因，结果经 feed 与网页端同步
+    - 以不改写用户数据的探针实测 room-todo、task-note、task-cancel 的错误形态与 rooms[].todos/tasks 字段键集，登记 FINDINGS 新节与 dsbot-api 技术标准；请求体构造、待办与任务的解码、排序、状态文案、受阻原因与按钮显隐判定放 core 并以 JUnit 与脱敏夹具覆盖
+  why:
+    - 里程碑 dsbot-native-parity 要求原生界面覆盖 DS-Bot 0.3.10 网页端经 /api/bot 可达的全部功能；网页端群概览已有共享待办与任务看板，手机端目前既看不到群待办，也看不到成员在群里登记的任务，更无法勾选待办、给任务补充说明或取消跑偏的任务，只能回到电脑上操作
+    - room-todo、task-note、task-cancel 与 rooms[].todos/tasks 尚未在本项目核对登记；源码核对显示计划变更所说的「群目标任务」实为群任务看板（rooms[].tasks），与 dsbot-chat-bars-0310 的群目标阶段进度条不是同一数据，需要以实测与源码核对确定形态作为单一事实来源
+scope:
+  in:
+    - core：新建 RoomBoard 纯逻辑——room-todo 三种请求体与 task-note/task-cancel 请求体、rooms[].todos 解码（id、text、done、createdAt、createdBy?、doneAt?、doneBy?）与网页端一致的排序和未完成计数、rooms[].tasks 解码（id、botId、goal、status、startedAt、updatedAt、progress?、result?、reason?、blocked{cause,code?,status?}?、notes[{text}]?）与开放/历史划分（active/review/blocked 为开放，按 startedAt 排序，历史倒序）、状态与受阻原因中英文案、备注输入去空白后为空不发送；字段缺失或畸形降级为不显示
+    - spike：runSpike 新增 ProbesRoomBoard 只读/零改写探针组——读取 state 中 rooms[].todos 与 rooms[].tasks 的键集与计数；对未知群调用 room-todo 取 room/not-found；对真实群以不存在的待办 id 调用 room-todo（勾选与删除）、以不存在的任务 id 调用 task-note 与 task-cancel 取错误形态；只在该群没有已完成待办时才探测 clear（removed:0 不落盘）；不记群名、待办正文、任务目标与备注；脱敏夹具经 Sanitize.json 写出
+    - mock：scripts/mock-dsh-server.mjs 增加 rooms[].todos 与 rooms[].tasks 样例及 room-todo、task-note、task-cancel 应答（含 bot/refused 与 room/not-found），写操作后经 feed 推送状态变化，供模拟器验收
+    - delta-spec：android-dsbot 新增群共享待办与任务看板要求；delta-tech：dsbot-api 新增 room-board-endpoints-0310 规则并在 hello-capabilities 登记例外
+    - app：群聊页工具行新增「待办与任务」入口（该群带 todos/tasks 字段或远端完成 hello 握手时显示，带未完成待办与开放任务计数；board-placement 选 A）与全屏「待办与任务」页面（共享待办：勾选、删除、清理已完成、空状态提示「还没有共享待办，可以让群里的 Bot 添加」；任务看板：成员名与标识、状态、开始时间、目标、进度、受阻原因、结果或取消原因、最近一条备注，开放任务提供「写备注」与「取消」，历史可展开）；操作进行中禁用对应按钮，失败显示可读原因；文案随 App 语言切换中英文
+  out:
+    - 手动新增待办：0.3.10 没有用户侧新增待办的端点（待办由群成员经 group_todo 工具添加），网页端同样只提示让 Bot 添加
+    - 群目标的草稿、控制与阶段视图（沿用既有群目标条与 goal-draft/goal-control 对话框，不改）
+    - 私聊页后台任务条与 Bot 后台任务详情（bot-tasks、bot-task-read/bot-task-send 已由 dsbot-chat-bars-0310 与 dsbot-bot-task-detail 提供）
+    - 群概览其余部分（成员工作状态、停止群工作等既有群聊页功能）的重排；群轮次、转述回复等同里程碑其他计划变更
+unchanged_behavior:
+  - 群聊页既有消息分页、发送、@ 提及、停止群/成员、room-progress、群目标条、群内搜索与轮次呈现行为不变
+  - 群详情页（资料、成员、回复方式、权限、工作文件夹、记忆、侧栏、删除）行为不变
+  - 写操作约定不变：经既有 dsbot-api-client 发出、不自动重试，成功后以 feed 刷新；远端为 0.3.6（hello 为 LEGACY 且不返回 todos/tasks 字段）时群聊页与现在一致，不出现入口、空白区或错误
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-room-todos-tasks

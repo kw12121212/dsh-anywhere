@@ -27,6 +27,7 @@ object Sanitize {
         "label", "caption", "transcript", "role", "why", "after", "old", "purpose", "detail",
         "url", "endpoint", "baseurl", "name", "title",
         "data", "dataurl", "audiobase64",
+        "progress", "result",
     )
 
     private const val PLACEHOLDER = "<redacted"

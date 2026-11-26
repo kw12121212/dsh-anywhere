@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: spike-sanitize-88b57d
+  title: spike 的 Sanitize 内容键按键名全局匹配：新增键前先查同名键在其他端点是不是系统文本
+category: api
+status: active
+created_at: '2026-11-26T07:12:46.073Z'
+updated_at: '2026-11-26T07:12:46.073Z'
+context: dsbot-room-todos-tasks 为任务看板夹具脱敏，把 progress、result、reason 加进 android/core/src/spike 的 Sanitize.CONTENT_KEYS，评审要求同步 DsbotFixturesTest.contentKeys
+observation: 同步测试键清单后，夹具测试立即在既有的 deepseek-services.json 上失败：speech.reason 是服务端的系统说明（This DSH has no speech-to-text service…），DeepSeek 服务页要原样显示它；Sanitize 按键名不分端点全局匹配，加 reason 会让以后导出的该夹具丢失这段协议证据，而在测试键未同步时这一误伤完全不可见
+takeaway: 往 Sanitize.CONTENT_KEYS 加键前，先 grep android/core/src/test/resources/dsbot 与上游源码中同名键在其他端点的含义；同名键在别处是系统文本或结构字段时，不加全局键，改为在对应探针导出前对该路径单独替换占位符（如 ProbesRoomBoard.redactTaskReasons）；测试 contentKeys 必须与 Sanitize 同一提交同步，否则误伤与漏脱敏都不会被发现
+applies_when: 修改 android/core/src/spike/.../Sanitize.kt 的 CONTENT_KEYS 或 CREDENTIAL_KEYS，或为新端点的夹具决定哪些字段要脱敏时
+occurrences:
+  - origin: dsbot-room-todos-tasks
+    date: '2026-11-26'
+    evidence: 2026-11-26：加入 reason 并同步 contentKeys 后 DsbotFixturesTest 报 deepseek-services.json.value.speech.reason 的内容值未脱敏；改为全局只加 progress/result、任务 reason 在 ProbesRoomBoard 导出时单独替换后 core 653 项通过

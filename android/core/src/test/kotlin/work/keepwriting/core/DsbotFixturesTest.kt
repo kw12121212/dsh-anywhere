@@ -23,6 +23,7 @@ class DsbotFixturesTest {
         "label", "caption", "transcript", "role", "why", "after", "old", "purpose", "detail",
         "url", "endpoint", "baseurl", "name", "title",
         "data", "dataurl", "audiobase64",
+        "progress", "result",
     )
 
     private fun fixture(name: String): String {
@@ -201,6 +202,8 @@ class DsbotFixturesTest {
             "deepseek-services.json",
             "room-chat-rounds.json",
             "group-search-page1.json",
+            "rooms-board-empty.json", "room-todo-unknown-room.json", "room-todo-refused.json",
+            "room-todo-clear-empty.json", "task-cancel-refused.json", "task-note-unknown-room.json",
         )
         for (name in names) {
             val text = fixture(name)
@@ -221,6 +224,8 @@ class DsbotFixturesTest {
             "deepseek-services.json",
             "room-chat-rounds.json",
             "group-search-page1.json",
+            "rooms-board-empty.json", "room-todo-unknown-room.json", "room-todo-refused.json",
+            "room-todo-clear-empty.json", "task-cancel-refused.json", "task-note-unknown-room.json",
         )) {
             assertContentRedacted(parse(name), inContent = false, name)
         }

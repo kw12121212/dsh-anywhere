@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-room-todos-tasks
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 手机端群聊既看不到群共享待办，也看不到成员在群里登记的任务，无法勾选/删除/清理待办、给任务写备注或取消任务；网页端 0.3.10 已提供这些操作，里程碑要求原生界面覆盖网页端经 /api/bot 可达的全部功能。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 群待办勾选、删除与清理已完成，群任务写备注与取消，结果均与网页端一致并经 feed 同步；room.todos 与任务字段形态实测登记到 dsbot-api 与 FINDINGS；完整回归命令通过。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置依赖 dsbot-chat-bars-0310 已归档，strict-spec-cli roadmap-recommend 按路线图顺序推荐 dsbot-room-todos-tasks 为下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 群目标的草稿/控制与阶段视图不变；私聊后台任务条与 Bot 后台任务详情不变；群聊页既有消息、停止、进度、搜索、轮次不变；手机配对、浏览器授权、Classic Agent 等里程碑 scope.out 项不做；手动新增待办无上游端点，不做。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 计划变更明确列出 room-todo（勾选/删除/清理）与 task-note/task-cancel 端点，「群目标任务」指 task-note/task-cancel 所操作的群任务看板条目（rooms[].tasks），而非群目标阶段；本变更显示共享待办与任务看板并提供上述操作，入口位置见 board-placement。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: board-placement
+    question: 手机端的共享待办与任务看板放在哪里：群聊页工具行进入的全屏「待办与任务」页，还是群详情页新增两节？
+    context: 影响：proposal 范围中的 app 入口、delta spec 场景措辞、实施文件（RoomChatPage 工具行与新 RoomBoard 页，或 GroupPages.kt 的 RoomDetailsPage）、设备验收步骤。依据：网页端 0.3.10 把 Shared to-do 与 Tasks 放在群聊右侧的群概览面板（GroupOverview，与成员状态、群目标同栏），不在群设置表单里；计划变更原文写「群聊页的待办与群目标进度」，且「在群目标阶段进度条的任务行上加操作」——源码核对显示任务看板 rooms[].tasks 与群目标阶段 rooms[].goal.stages 是不同数据，阶段行无任务 id，故无论选哪项都需新增独立的任务看板呈现。选项：A（推荐）群聊页工具行（与进度、统计、目标、搜索同排）新增「待办与任务」按钮，有未完成待办或开放任务时带计数，进入全屏页，上为共享待办、下为任务看板，与网页端群概览两节顺序一致，聊天中一键可达；B 在群详情页（资料、成员、回复方式……之间）新增「共享待办」「任务」两节，入口更深但不增加群聊页按钮；C 同时提供：工具行按钮进入全屏页，群详情页再加一行跳转到同一页。
+    answer: 选 A：群聊页工具行（与进度、统计、目标、搜索同排）新增「待办与任务」按钮，有未完成待办或开放任务时带计数，进入全屏页 ShellPage.RoomBoard，上为共享待办、下为任务看板，与网页端群概览两节顺序一致；群详情页不改。
+    status: resolved
+    answered_by: human

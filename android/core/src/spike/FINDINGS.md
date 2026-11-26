@@ -688,3 +688,20 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 四个写端点均不在 `READS` 内（只读宿主 `bot/read-only`），都 `await reconcile()` 后返回新视图；`mcp-client-add` 返回 `{...视图, token}`，`token = "dsb_" + base64url(32 字节随机)`，只出现在这一次应答中。
 - `mcp-client-add {name, bots?, rooms?}`：名称 trim 后 `slice(0, 60)`；`bots` 缺省为非私有 Main Bot，`rooms` 缺省为空。`mcp-client-update {id, name?, bots?, rooms?}`：`bots` 过滤掉不存在与私有 Bot，`rooms` 过滤掉不存在的群，未给的键保持原值。网页端新建只发 `{name}`，删除无确认，复制令牌后显示令牌省略的 `DSBOT_MCP_TOKEN=… npx -p ds-bot ds-bot-mcp --url <url>` 命令示例。
 - MCP 服务只监听电脑本机 `127.0.0.1`（「Only programs on this computer can connect」）；成功形态（开关、端口、新建含令牌、改范围、删除）未在本机真实宿主上实测——开启或新建会改写用户真实 `mcp.json` 并开端口——由源码核对与 mock（`scripts/mock-dsh-mcp.mjs`，`/mock/mcp?…` 切换端口占用与只读宿主）覆盖。
+
+## 44. 群共享待办与任务看板（2026-11-26，dsbot-room-todos-tasks）
+
+**实测（本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesRoomBoard` 探针组；只记键集、计数、类型与错误形态，不记群名、待办正文、任务目标、进度、结果与备注；写端点只用未知群、不存在的待办/任务 id，`action:clear` 只在目标群没有已完成待办时探测，均在 `rt.save()` 前返回、不改写真实数据）：**
+
+- `state.rooms[]` 展开房间对象：本机唯一的群在 `ProbesRoomBoard` 首次运行前读取的 state 中即带 `tasks:{}`（空对象，由上游其他路径经 `tasksOf` 的 `??=` 懒创建），**不带 `todos`**——两字段都只在首次用到后才出现，客户端不能把「字段缺失」当作远端不支持（夹具 `rooms-board-empty.json`）。
+- **探针副作用**：上游 `taskNote`/`taskCancel` 在报 `No such task.` 之前先执行 `tasksOf(room)`（`room.tasks ??= {}`），对没有 `tasks` 字段的群调用会在内存里补上 `tasks:{}` 并在下次 `rt.save()` 落盘；`ProbesRoomBoard` 因此只在目标群已带 `tasks` 字段时发出这两个探针（本机群已带该字段，未产生改写）。`room-todo` 的三个分支只读 `room.todos ?? []`，无此副作用。
+- `room-todo {roomId:"spike-none", …}` → HTTP 200、`ok:false`、`room/not-found`、`Unknown group chat`（夹具 `room-todo-unknown-room.json`）。
+- 真实群 + 不存在的待办 id：`room-todo {roomId, id, done:true}` 与 `{roomId, id, action:"remove"}` → `ok:false`、**`bot/refused`**、`That to-do is no longer on the list.`（上游 `setRoomTodoDone`/`removeRoomTodo` 抛出的 Error 经统一失败分支映射为 `bot/refused`，不是 `room/not-found`；夹具 `room-todo-refused.json`）。
+- 真实群（无已完成待办）`room-todo {roomId, action:"clear"}` → `ok:true`、`{removed:0, todos:[]}`；`removed` 是数量而非条目数组（夹具 `room-todo-clear-empty.json`）。
+- `task-note` / `task-cancel`：未知群 → `bot/refused`、`No such group.`（夹具 `task-note-unknown-room.json`）；真实群不存在的任务 id → `bot/refused`、`No such task.`（`task-note` 空白备注时同样先报 `No such task.`，id 校验先于备注校验；夹具 `task-cancel-refused.json`）。
+
+**源码核对、未在本机产生成功样本**（本机无待办与任务；待办只能由群成员经 `group_todo` 工具添加、任务只能由成员登记，取样需让 Bot 在用户真实群里工作，不属零成本可撤销的触发途径；ds-bot 0.3.10 `src/host/channel.js`、`roster.js`、`tasks.js`、`client.js` `src/client/group-settings.js`/`task-board.js`）：
+
+- 待办条目 `{id(UUID), text, done, createdAt, createdBy?, doneAt?, doneBy?}`，最多 `ROOM_TODO_MAX` 条；`room-todo {roomId, id, done?}` 不带 `done` 时翻转，带布尔时设为该值（重复设同值不报错、不落盘）；成功应答 `{item, todos}`（clear 为 `{removed, todos}`）。网页端 `GroupTodos` 按「未完成在前、再按 createdAt」排序，勾选发 `done: !item.done`，「Clear completed」仅在有已完成项时显示，三种写失败都静默吞掉。
+- 任务对象 `rooms[].tasks[taskId]={id(t_+8 位十六进制), botId, goal, status, startedAt, updatedAt, progress, result?, reason?, blocked?{cause, code?, status?, from}, notes?[{text, by, at}]}`；`status ∈ active|review|blocked`（开放）与 `done|cancelled`（历史）。网页端 `TaskBoard` 开放任务按 `startedAt` 升序、历史倒序默认收起，只显示最近一条备注，开放任务才有「Add a note」「Cancel」（3 秒内再点一次确认）；受阻原因按 `blocked.cause`：`stopped`→Stopped by the user、`restarted`→Not updated after a restart、其余→Its model call failed (code status)。
+- `task-note {roomId, id, text}`：备注 trim 后截 `NOTE_MAX=500`，空备注回 `bot/refused`、`Write a note first.`；成功时追加到 `task.notes` 并以用户身份向群发 `@成员名 备注`，应答为完整 `view()`。`task-cancel {roomId, id}`：已结束任务回 `bot/refused`、`That task is already finished.`；成功时 `status=cancelled`、删除 `blocked`，应答为完整 `view()`。

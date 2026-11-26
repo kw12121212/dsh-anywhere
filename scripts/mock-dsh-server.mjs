@@ -9,6 +9,7 @@ import { deflateSync } from 'node:zlib'
 import { createManageTeam } from './mock-dsh-manage.mjs'
 import { createBotTasks } from './mock-dsh-bot-tasks.mjs'
 import { handleGroupSearch } from './mock-dsh-group-search.mjs'
+import { createRoomBoard } from './mock-dsh-room-board.mjs'
 
 function argValue(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -139,6 +140,21 @@ const barTasks = createBotTasks({
   },
   botExists: (id) => id === 'bot-1' || id === 'bot-2',
 })
+// 群共享待办与任务看板（dsbot-room-todos-tasks）：--chat-bars 的 room-1 带 todos 与 tasks；task-note 以用户身份
+// 向群追加「@成员 备注」（room-chat 末尾显示并经 feed message 推送）
+const barRoomLines = []
+const roomBoard = createRoomBoard({
+  bump: () => {
+    bars.revision++
+    setTimeout(() => feedClients.forEach((write) => write(`event: revision\ndata: ${JSON.stringify({ revision: bars.revision })}\n\n`)), 50)
+  },
+  botName: (id) => ({ 'bot-1': '研究主管', 'bot-2': '运维值班' })[id],
+  pushRoomLine: (roomId, text) => {
+    const item = { kind: 'user', text, time: Date.now(), turn: 2, seq: 100 + barRoomLines.length }
+    barRoomLines.push(item)
+    setTimeout(() => feedClients.forEach((write) => write(`event: message\ndata: ${JSON.stringify({ sessionId: roomId, roomId, item })}\n\n`)), 80)
+  },
+})
 function chatBarsState() {
   const tasks = barTasks.tasksViewOf('bot-1')
   const asks = {}
@@ -151,10 +167,10 @@ function chatBarsState() {
       { id: 'bot-2', name: '运维值班', color: 'green', role: '运维', sessionId: 's-bot-2', parts: ['part-0'],
         ...(bars.resumed ? {} : { blocked: { code: 'QUOTA', provider: 'deepseek-official', status: 402, at: 5 } }) },
     ],
-    rooms: [{ id: 'room-1', name: '项目群', color: 'violet', members: ['bot-1', 'bot-2'], sessionId: 'room-1',
+    rooms: [roomBoard.decorate({ id: 'room-1', name: '项目群', color: 'violet', members: ['bot-1', 'bot-2'], sessionId: 'room-1',
       goal: { id: 'goal-1', status: 'active', title: '发布 2.0 版本', current: 1, stages: [
         { id: 's1', title: '需求确认', status: 'passed' }, { id: 's2', title: '实现与联调', status: 'active' },
-        { id: 's3', title: '测试', status: 'pending' }, { id: 's4', title: '发布', status: 'pending' }] } }],
+        { id: 's3', title: '测试', status: 'pending' }, { id: 's4', title: '发布', status: 'pending' }] } })],
     sections: [],
     work: { bots: { 'bot-1': { since: 1, tool: 'web_search', target: 'example.com' } }, agents: {},
       rooms: { 'room-1': [{ botId: 'bot-2', since: 1, tool: 'bash', said: '正在跑回归测试。' }] }, approvals: [] },
@@ -662,6 +678,12 @@ const server = createServer((req, res) => {
         res.end(JSON.stringify(out))
         return
       }
+      if (chatBars && ['room-todo', 'task-note', 'task-cancel'].includes(endpoint)) {
+        const parsed = (() => { try { return JSON.parse(body).payload ?? {} } catch { return {} } })()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(roomBoard.handle(endpoint, parsed, chatBarsState)))
+        return
+      }
       if (chatBars && ['computer-app-answer', 'computer-stop', 'resume'].includes(endpoint)) {
         console.log('  chat-bars write:', endpoint, body)
         if (endpoint === 'computer-app-answer') bars.answered.add(/"id":"([^"]+)"/.exec(body)?.[1])
@@ -769,6 +791,7 @@ const server = createServer((req, res) => {
               { kind: 'bot', botId: 'bot-2', name: '运维值班', color: 'green', text: '[demo 视频文件](/home/wx766/.dsh/bot/workspace/deliverables/demo.mp4)', turn: 1, seq: 5 },
               { kind: 'pass', botId: 'bot-1' },
               { kind: 'checkpoint', turn: 1 },
+              ...(chatBars ? barRoomLines : []),
             ],
           },
         }))

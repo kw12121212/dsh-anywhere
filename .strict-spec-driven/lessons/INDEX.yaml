@@ -54,6 +54,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/api/client-js-f3169a.yaml
+    spike-sanitize-88b57d:
+      title: spike 的 Sanitize 内容键按键名全局匹配：新增键前先查同名键在其他端点是不是系统文本
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/api/spike-sanitize-88b57d.yaml
   architecture:
     dom-2a8261:
       title: 向第三方页面注入的全局点击拦截脚本容易漏掉 DOM 变体并与页面处理器冲突
@@ -353,7 +358,7 @@ categories:
     windows-adb-adb-devices-device-adb-shell-kill-se-bc6520:
       title: Windows 侧 adb 服务端卡死：adb devices 显示 device 但 adb shell 全部挂起，先 kill-server 再判断模拟器
       status: active
-      occurrences: 3
+      occurrences: 4
       path: .strict-spec-driven/lessons/tooling/windows-adb-adb-devices-device-adb-shell-kill-se-bc6520.yaml
     runspike-401-dsh-web-https-dsh-url-http-fe7536:
       title: runSpike 全部 401 时先查 dsh-web 打印的地址协议：改为 https 后 dsh-url 仍返回旧的 http 地址

@@ -1,0 +1,49 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-room-todos-tasks
+sections:
+  Implementation:
+    findings:
+      text: runSpike 新增 ProbesRoomBoard 零改写探针组：读取 state 中各群 rooms[].todos 与 rooms[].tasks 的键集、计数、类型与 status 分布；对未知群调用 room-todo 取 room/not-found；对真实群以不存在的待办 id 调用 room-todo（勾选与 action:remove）、以不存在的任务 id 调用 task-note 与 task-cancel 取错误码与形态；仅在目标群没有已完成待办时探测 action:clear（removed:0）；不记群名、待办正文、任务目标、进度与备注；登记 FINDINGS.md 新节并区分实测与源码核对，有数据时用 Sanitize.json 写出 rooms-board 脱敏夹具
+      status: complete
+    core-room-board:
+      text: core：新建 RoomBoard.kt——todoCheck(roomId,id,done)/todoRemove/todoClear/taskNote(roomId,id,text)/taskCancel 请求体；decodeTodos（id、text、done 仅 true 为真、createdAt、createdBy?、doneAt?、doneBy?，畸形条目丢弃）与网页端一致排序（未完成在前再按 createdAt）、未完成/已完成计数；decodeTasks（rooms[].tasks 对象各值：id、botId、goal、status、startedAt、updatedAt、progress?、result?、reason?、blocked?、notes?）与 open/past 划分（active/review/blocked 为开放、按 startedAt 升序，历史倒序）；状态文案与受阻原因（stopped/restarted/模型失败 code+status）中英文案；按钮显隐（清理已完成仅有已完成项、开放任务才可写备注与取消）；备注去空白后为空不发送；入口计数与字段存在判定；页面文案
+      status: complete
+    core-room-board-tests:
+      text: core：编写 RoomBoardTest，以源码核对形态与实测脱敏夹具断言请求体字面值、解码与畸形降级（缺字段、done 非布尔、tasks 非对象、未知 status）、排序与开放/历史划分、计数、受阻原因与状态中英文案、按钮显隐、备注校验与入口显示判定；DsbotFixturesTest 覆盖新夹具无凭据且内容键为占位符
+      status: complete
+    mock-room-board:
+      text: mock：新增 scripts/mock-dsh-room-board.mjs 并接入 mock-dsh-server.mjs——群状态带 todos（未完成与已完成各若干）与 tasks（active/review/blocked/done/cancelled 各一，含 progress、blocked、result、reason 与 notes）；room-todo 勾选/删除/清理、task-note（追加备注并在群里追加「@成员 备注」用户消息）、task-cancel 按上游语义改写状态并经 feed 推送；不存在的 id 回 bot/refused 或 room/not-found，供模拟器验收
+      status: complete
+    app-room-board:
+      text: app：群聊页工具行新增「待办与任务」入口（该群带 rooms[].todos/rooms[].tasks 字段或远端完成 hello 握手时显示，带未完成待办与开放任务计数）与全屏 RoomBoard 页（ShellPage.RoomBoard，board-placement 选 A）：共享待办节（未完成数、勾选、删除、仅有已完成项时显示清理已完成、空状态提示）；任务节（开放数、每行成员标识与名称、状态、开始时间、目标、进度、受阻原因、结果或取消原因、最近一条备注；开放任务的「写备注」输入框与发送、「取消」经确认对话框；历史默认收起可展开）；操作中禁用对应按钮，失败在页顶显示可读原因；系统返回键回群聊页；中英文案随 App 语言切换
+      status: complete
+    delta-registered:
+      text: 确认 delta-spec android-dsbot group-todos-tasks 与 delta-tech dsbot-api room-board-endpoints-0310、hello-capabilities 例外与实测结论和最终实现一致，按实测更新形态与实测/源码核对界定
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: '设备验收（Windows 侧模拟器 + mock，有条件时对照真实服务的只读显示）：群聊页显示「待办与任务」入口与计数；待办勾选、取消勾选、删除与清理已完成后列表与网页端（mock）一致并经 feed 同步；任务看板开放/历史划分、状态、受阻原因与最近备注与网页端一致；写备注后任务显示该备注且群里出现「@成员 备注」消息；取消任务经确认后移入历史显示已取消；拒绝时显示服务端原因；停掉 mock 时显示可读失败提示不崩溃；验收后恢复 App 地址、移除端口转发并关闭模拟器。记录（2026-11-26，Windows 侧模拟器 Medium_Phone_API_36.1 / emulator-5554，mock --chat-bars 127.0.0.1:13090 + adb reverse，以 mock state 作网页端对照）：群聊页工具行「To-dos & tasks 5」（2 条未完成待办 + 3 个开放任务）进入全屏页；共享待办未完成在前、已完成划线，「2 open」与「Clear completed」；勾选「确认发布窗口」后变「1 open」并排到未完成项之后（已完成项间按创建时间），mock state 同步为 [x]；删除一条与「Clear completed」后 mock 与页面均只剩未完成项且「Clear completed」消失；任务按 startedAt 排列，阻塞任务显示「Its model call failed (QUOTA 402)」与「Note: 先跑核心模块」；「Add a note」输入并发送后编辑框收起、任务显示「Note: add known issues first」、mock 任务 notes 同步，返回群聊页（系统返回键）出现「@研究主管 add known issues first」且入口计数变 4；取消阻塞任务时确认框点「Keep it」不发请求（mock 无 task-cancel 调用），确认后开放数 3→2、「History (3)」，展开后历史倒序、无操作按钮、显示结果与取消原因、受阻原因消失；手机打开取消确认框后先在服务端取消同一任务，再在手机确认，页顶显示「That task is already finished.」且该任务刷新进历史；删光待办与取消全部开放任务后显示「No shared to-dos yet. Ask a Bot in this group to add one.」与「No task is running in this group.」；切换简体中文后入口「待办与任务」、「共享待办 · 2 项未完成 · 清除已完成」、「进行中/阻塞/待审」、「补一句/取消/要补什么？/发送」、「模型调用失败（QUOTA 402）」「备注：…」与网页端 zh 文案一致；移除端口转发后勾选待办，页顶显示「网络错误，请稍后重试」、待办状态不变、不崩溃。真实服务对照以 ProbesRoomBoard 实测（FINDINGS 第 44 节）与实测错误夹具 JUnit 代替（本机真实群无待办与任务，取样需让 Bot 在用户真实群里工作）。验收中停 mock 后 adb reverse 指向已关闭端口拖死 Windows 侧 adb 服务端（kill-server 无效，taskkill 结束 adb.exe 后恢复，环境问题，非应用行为）。验收后语言恢复「跟随系统」、App 地址保持原值 127.0.0.1:13090、端口转发已移除、临时 APK 已删除、mock 已停止；模拟器在验收前即已运行，保持运行未关闭。评审修复后复测（2026-11-26，同一模拟器，mock --chat-bars --delay 4000 让每个应答延迟 4 秒，补评审 M2「操作进行中按钮不可重复点按」证据，APK 含评审修复）：在看板页对同一待办勾选框 0.1 秒内连点 3 次，mock 只收到 1 次 room-todo；连点后立即在设备上截图，该行勾选框与删除按钮均为灰色禁用、其他行正常，应答与 state 刷新后恢复可用。复测中模拟器负载 5.9，打开设置时出现一次系统「应用无响应」对话框（发生在设置页、与看板无关，按 lesson 视为模拟器过载，点 Wait 后恢复）。复测后先移除端口转发再停 mock（避免 adb 再被拖死），App 地址保持 127.0.0.1:13090、语言跟随系统、临时 APK 与截图已删除，模拟器保持运行'
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict ready 与 verify 校验变更产物结构与任务覆盖
+      status: complete
+      command: strict-spec-cli verify dsbot-room-todos-tasks
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

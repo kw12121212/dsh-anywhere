@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-11-23T15:35:45.672Z'
-updated_at: '2026-11-26T05:31:02.781Z'
+updated_at: '2026-11-26T07:12:54.566Z'
 context: dsbot-bot-manage 模拟器验收：经 /mnt/c 下的 adb.exe 安装 APK 与取 loadavg
 observation: adb devices 列出 emulator-5554 device，但 adb shell/install 任何命令都无输出直至超时；tasklist 显示 299 个挂起的 adb.exe 客户端（其他进程每分钟轮询 dumpsys package com.google.android.gms 堆积而成），emu kill 无效。adb kill-server 重启服务端后设备先 offline/authorizing，wait-for-device 后 boot_completed=1、loadavg 0.5，安装与 uiautomator 恢复正常
 takeaway: adb 命令在 Windows 侧一律带 timeout 并以 < /dev/null 运行；adb shell 无响应而 devices 仍显示 device 时，先用 tasklist 看是否堆积大量 adb.exe，再 adb kill-server 并 wait-for-device，不要直接判定模拟器损坏或去杀 qemu；adb 服务端重启后旧的 adb reverse 仍列出但已失效，须 --remove-all 后重建；adb reverse 指向已关闭的 WSL 端口时，App 的请求会拖死 adb 服务端（约 10 秒后 shell 全部挂起），测网络失败应先移除端口转发再触发请求；截图用 screencap 到 /sdcard 再 pull，不要 exec-out 经过 tr 管道（会破坏 PNG）；杀 mock 不要用会匹配到自身命令行的 pkill -f；emu kill 无效时用 adb shell reboot -p 关机
@@ -23,3 +23,6 @@ occurrences:
   - origin: dsbot-group-search
     date: '2026-11-26'
     evidence: 2026-11-26 dsbot-group-search 设备验收：停掉 mock 后 uiautomator dump 与 screencap 挂起，tasklist 有 33 个 adb.exe；kill-server + taskkill adb.exe + start-server + wait-for-device 后恢复；另见被测 App 对已关闭的 WSL 端口要等读超时（约数十秒）才报网络失败，等待须用条件循环而非固定 sleep
+  - origin: dsbot-room-todos-tasks
+    date: '2026-11-26'
+    evidence: 2026-11-26 设备验收：停 mock 时 adb reverse 仍指向已关闭的 WSL 端口，adb.exe 的 reverse/shell 全部挂起，adb kill-server 本身也超时无效；tasklist 找到唯一的 adb.exe 后 taskkill /PID <pid> /F 强杀，再执行 adb devices 自动重启服务端后恢复。复测时改为先 adb reverse --remove-all 再停 mock，未再卡死

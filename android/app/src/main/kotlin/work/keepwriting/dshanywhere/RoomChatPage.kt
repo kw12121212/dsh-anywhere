@@ -75,6 +75,10 @@ fun RoomChatPage(
     onOpenDetails: () -> Unit = {},
     /** 打开群内搜索页（dsbot-group-search）。 */
     onOpenSearch: () -> Unit = {},
+    /** 远端 hello 为 LEGACY（0.3.6）：群无 todos/tasks 字段时不显示「待办与任务」入口（dsbot-room-todos-tasks）。 */
+    legacyHost: Boolean = true,
+    /** 打开群共享待办与任务看板（dsbot-room-todos-tasks）。 */
+    onOpenBoard: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     val jump = rememberJumpButton(roomId)
@@ -114,6 +118,8 @@ fun RoomChatPage(
             as? work.keepwriting.core.Json.Value.Object
     }
     val goal = remember(roomRaw) { work.keepwriting.core.ChatBars.goal(roomRaw) }
+    val showBoard = work.keepwriting.core.RoomBoard.supported(roomRaw, legacyHost)
+    val board = remember(roomRaw, work.keepwriting.core.I18n.lang) { work.keepwriting.core.RoomBoard.board(roomRaw) }
     val roomAsks = remember(state, roomId) { work.keepwriting.core.ChatBars.computerAsks(state, roomId = roomId) }
     val roomWork = remember(state, roomId) { work.keepwriting.core.ChatBars.roomWork(state, roomId) }
     val idToName = remember(memberIds, members) { memberIds.zip(members).toMap() }
@@ -291,6 +297,7 @@ fun RoomChatPage(
         // 工具行可横向滚动：窄屏英文界面下五个按钮放不下（dsbot-folders 新增「详情」）
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = onOpenSearch) { Text(tr("搜索", "Search")) }
+            if (showBoard) TextButton(onClick = onOpenBoard) { Text(work.keepwriting.core.RoomBoard.Copy.entryLabel(board)) }
             TextButton(onClick = { controller.showProgress() }) { Text(tr("进度", "Progress")) }
             TextButton(onClick = { controller.showStats(memberIds, members) }, enabled = members.isNotEmpty()) { Text(tr("统计", "Stats")) }
             TextButton(onClick = { showGoalDialog = true }) { Text(tr("目标", "Goal")) }

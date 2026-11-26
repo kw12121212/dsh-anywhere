@@ -1,0 +1,40 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-room-todos-tasks
+approach:
+  - 先核对后实现：以 ds-bot 0.3.10 源码（src/host/channel.js room-todo/task-note/task-cancel 分支与 view() 中 rooms 展开；roster.js setRoomTodoDone/removeRoomTodo/clearDoneRoomTodos、ROOM_TODO_MAX/ROOM_TODO_TEXT_MAX；tasks.js OPEN_STATUSES、taskNote/taskCancel、NOTE_MAX、blockedLine；client.js src/client/group-settings.js GroupTodos 与 src/client/task-board.js TaskBoard/TaskRow）为依据，再以 runSpike 零改写探针对本机真实服务实测错误形态与字段键集并登记 FINDINGS
+  - 纯逻辑下沉 core（新建 RoomBoard.kt）：请求体、todos/tasks 解码与降级、排序与开放/历史划分、状态与受阻原因文案、按钮显隐与备注校验、页面文案，均以 JUnit 和脱敏夹具覆盖；app 只做 Compose 呈现与调用编排，经既有 dsbot-api-client（ManageApi.action 的 inFlight 键）发出写请求、不重试，成功后以 feed 推送的 state 为准刷新
+  - 手机端入口与页面位置（board-placement 已决定选 A）：群聊页工具行新增「待办与任务」文字按钮，有未完成待办或开放任务时带计数，进入全屏页 ShellPage.RoomBoard，上半为共享待办、下半为任务看板，与网页端群概览两节顺序一致；群详情页不改
+decisions:
+  follow-web-board-semantics:
+    decision: 待办与任务看板的排序、显隐与交互与网页端 0.3.10 一致：待办未完成在前再按 createdAt；勾选发送目标值 done=!当前值；「清理已完成」仅在有已完成项时显示；任务以 active/review/blocked 为开放、按 startedAt 排序，已结束任务倒序收入历史（默认收起）；开放任务才有「写备注」「取消」；只显示最近一条备注；受阻原因按 blocked.cause（stopped/restarted/模型失败 code+status）给文案
+    rationale: 验收标准是各操作与网页端一致；沿用上游客户端规则可避免两端排序、显隐与文案分歧。这些是对少量条目的确定性排序、过滤与固定文案，不是 upstream-client-algorithm-parity 所指的分桶、汇总、排行与数字文案计算，且规则内嵌在 React 组件内无可截取的独立模块，故不建生成脚本，以源码核对（GroupTodos、TaskBoard、STATUS_KEY、blockedLine）手写期望值并在 JUnit 中锁定
+  board-logic-in-core:
+    decision: 请求体、解码、排序、开放/历史划分、状态与受阻文案、按钮显隐与备注校验放 core 的 RoomBoard，以 JUnit 覆盖
+    rationale: core 为纯 JVM 模块，进入完整回归命令；:app 无单元测试面，下沉后排序与降级规则可回归拦截（pure-logic-in-core）
+  zero-write-probes:
+    decision: spike 探针只读取 state 键集，并以未知群、不存在的待办 id、不存在的任务 id 调用写端点取错误形态；task-note/task-cancel 只在目标群已带 tasks 字段时探测；clear 仅在目标群没有已完成待办时探测；不对真实群做成功的勾选、删除、备注或取消
+    rationale: 遵守 spike-write-probes-non-mutating：源码核对显示 room-todo 的错误分支在 rt.save() 之前返回且只读 room.todos ?? []，clear 在 removed 为空时不落盘；但 taskNote/taskCancel 报 No such task. 前会执行 tasksOf(room)（room.tasks ??= {}），对无 tasks 字段的群会懒创建并在下次保存时落盘（评审 S1），故加字段存在前置；成功的 task-note 会以用户身份向群里发消息并唤起成员，不能在用户真实群上执行。成功形态由源码核对与 mock 覆盖，FINDINGS 区分实测与源码核对
+  cancel-confirm-dialog:
+    decision: 取消任务弹出确认对话框（说明取消后该成员停止这项工作），确认后才发送 task-cancel；删除单条待办与清理已完成不确认，与网页端一致
+    rationale: 计划变更要求取消任务二次确认；网页端以 3 秒内再点一次实现，手机误触概率更高，用系统对话框更明确；待办删除在网页端无确认，保持一致
+  write-errors-visible:
+    decision: 待办与任务写操作失败时在页面顶部显示可读原因（bot/refused 与 room/not-found 显示服务端 message，网络失败给通用提示），操作中禁用对应行按钮
+    rationale: 网页端对待办写失败静默吞掉错误，手机网络更不稳定，静默失败会让用户以为已勾选；显示原因属有意的细微差异，不改变成功语义
+  data-presence-gating:
+    decision: 入口在该群带 rooms[].todos 或 rooms[].tasks 字段时显示；字段都缺失时，远端完成 hello 握手（非 LEGACY）也显示入口（页面显示空待办提示与空任务看板），LEGACY 远端（如 0.3.6）且无字段时不显示；不按 hello capabilities 名单门控，并在 dsbot-api hello-capabilities 登记例外；端点回 Unknown endpoint 时显示此远端版本不支持
+    rationale: 上游 0.3.10 mobile.js CAPABILITIES 不含待办或任务看板能力名，按名单门控会让入口永远隐藏；源码核对显示 room.todos 与 room.tasks 只在首次添加后才出现（roster.js addRoomTodo 的 ??=、tasks.js tasksOf 的 ??=），从未用过的群不下发这两个字段，只按字段存在会让新群看不到网页端始终显示的空状态；以 hello 握手区分 0.3.10 与 0.3.6 可兼顾两者
+  board-entry-tool-row:
+    decision: 入口放群聊页工具行，进入全屏 RoomBoard 页；不在群详情页增加入口
+    rationale: 人工决定（board-placement 选 A）；与群内搜索入口约定一致，聊天中一键可达且能显示计数，群详情页保持为群设置表单
+alternatives:
+  - option: 把待办与任务挂在群目标条的阶段行上（按计划变更原文「在其任务行上加操作」）
+    reason: 源码核对显示 task-note/task-cancel 操作的是 rooms[].tasks 任务看板条目（t_ 开头 id），与 rooms[].goal.stages 阶段不是同一数据，阶段行没有可传给 task-cancel 的任务 id
+  - option: 手机端提供新增待办输入框
+    reason: 0.3.10 没有用户侧新增待办端点，room-todo 只支持勾选、删除与清理；自建会写入非上游路径并与网页端不一致
+risks:
+  - 本机真实群可能没有待办或任务数据，无法取得成功形态实样本；此时形态按源码核对登记并由 mock 夹具覆盖，FINDINGS 区分实测与源码核对
+  - 待办正文、任务目标、进度、结果与备注属用户数据：探针、夹具、日志与诊断上报不得包含原文，夹具须经 Sanitize.json 脱敏
+  - task-note 成功时服务端以用户身份在群里发出 @成员 消息并唤起该成员工作，属可观察副作用；验收只在 mock 或用户同意的测试群上执行成功路径

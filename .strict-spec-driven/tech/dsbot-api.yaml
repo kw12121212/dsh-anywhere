@@ -89,6 +89,7 @@ rules:
       - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
       - 群内搜索（group-search）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无群搜索项）、state 中也无对应字段，按需只读端点，群聊页「搜索」入口不门控，搜索页按 group-search 应答降级——未知端点（bot/not-found 且 message 含 Unknown endpoint）显示此远端版本不支持群内搜索、Unknown group chat 显示找不到这个群聊、其他失败显示服务端原因、网络失败给可读提示（dsbot-group-search 设计决策 no-gating-on-demand，按 group-search-endpoint-0310 与 on-demand-page-degrade）
       - 'MCP 访问（live mcp 视图及其写端点 mcp-set、mcp-client-add、mcp-client-update、mcp-client-remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 MCP 访问项），channel.js live() 始终下发 mcp: rt.mcpView()，按 mcp-access-endpoints-0310 以 state.mcp 字段存在显隐入口，不经 capabilities.has 判定（dsbot-mcp-access 设计决策 data-presence-gating）'
+      - 群共享待办与任务看板（state 的 rooms[].todos、rooms[].tasks 及其写端点 room-todo、task-note、task-cancel）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无待办或任务看板项），且两字段只在群首次有待办或任务后才下发，按 room-board-endpoints-0310 以字段存在或 hello 握手成功（非 LEGACY）显示入口，不经 capabilities.has 判定，端点回 Unknown endpoint 时显示此远端版本不支持（dsbot-room-todos-tasks 设计决策 data-presence-gating）
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
@@ -111,7 +112,7 @@ rules:
     rationale: 取证对象是用户在用的真实 Bot 团队，误写会造成不可逆的业务影响；错误形态已足以确定路由、信封与错误码，成功形态留给有明确撤销手段的消费方
     enforcement:
       method: review
-      detail: 评审检查 android/core/src/spike 探针的写端点 payload 只含不存在的 id 或无效参数，新增成功形态取证附带合成对象与清理步骤
+      detail: 评审检查 android/core/src/spike 探针的写端点 payload 只含不存在的 id 或无效参数，新增成功形态取证附带合成对象与清理步骤；写探针即使只用不存在的 id，也须核对上游在返回错误之前是否有会在下次保存时落盘的副作用（如 tasksOf 的 room.tasks ??= {} 懒创建），有则只在目标字段已存在时发出并在 FINDINGS 注明（dsbot-room-todos-tasks 评审实证：task-note/task-cancel 对无 tasks 字段的群会补出 tasks:{}）
     exceptions:
       - runSpike 的 DSH_SPIKE_SEND=1（默认关闭）向第一个主 Bot 发一条 hi 以取得 message/stream/notice 事件，这是既有的显式开关，不受本规则约束
   chat-bars-fields-0310:
@@ -401,3 +402,17 @@ rules:
       detail: 评审检查采用返回视图的页面（如 McpAccessPage 的 mcpBusy）是否以页面级在途判定禁用全部写控件
     exceptions:
       - dsbot-computer-settings 的 ComputerSettingsPage 早于本规则，仍按写操作分键在途；其 set-enabled/provider-retry 与 set-level/revoke-app 分属返回视图与等 feed 两类，后续修改该页时再对齐
+  room-board-endpoints-0310:
+    strength: MUST
+    statement: 群共享待办与任务看板（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，写端点不在 READS 内）：state 的 rooms[] 展开房间对象，rooms[].todos=[{id(UUID), text, done, createdAt, createdBy?, doneAt?, doneBy?}]（最多 ROOM_TODO_MAX 条）、rooms[].tasks={taskId(t_+8 位十六进制)→{id, botId, goal, status:active|review|blocked|done|cancelled, startedAt, updatedAt, progress, result?, reason?, blocked?{cause:stopped|restarted|模型失败, code?, status?, from}, notes?[{text, by, at}]}}，两字段都只在首次用到后才出现（实测：本机群在首次探测前即只带 tasks:{}、不带 todos）；room-todo {roomId, id, done?}（done 缺省时翻转）、{roomId, id, action:remove}、{roomId, action:clear} → {item, todos} 或 {removed(数量), todos}（实测：无已完成项时 clear 回 {removed:0, todos:[]} 且不落盘），未知群回 room/not-found「Unknown group chat」，不存在的待办 id 回 bot/refused「That to-do is no longer on the list.」（实测）；task-note {roomId, id, text}（备注截 NOTE_MAX=500 字符，成功后服务端以用户身份向群发「@成员名 备注」）与 task-cancel {roomId, id} → 完整 view()，未知群「No such group.」与不存在的任务「No such task.」回 bot/refused（实测，任务 id 校验先于空备注校验），已结束任务「That task is already finished.」与空备注「Write a note first.」同为 bot/refused（源码核对）。客户端必须：待办排序（未完成在前、再按 createdAt）、任务开放/历史划分（active/review/blocked 为开放、按 startedAt）、只显示最近一条备注与网页端一致；勾选发送明确的 done 目标值而非依赖翻转；不得把 todos/tasks 字段缺失当作远端不支持；task-cancel 前二次确认；写操作不自动重试、以 feed 推送的 state 为准刷新；待办正文、任务目标、进度、结果与备注不写入日志、诊断上报与探针输出
+    rationale: 群待办与任务看板首次核对与接入；登记字段形态、懒创建（字段可缺）、错误码差异（room-todo 未知群用 room/not-found、其余失败用 bot/refused）与 task-note 发群消息的副作用，作为手机端与后续桌面原生端的单一事实来源
+    enforcement:
+      method: test
+      detail: core JUnit（RoomBoardTest）以实测夹具（rooms-board-empty.json、room-todo-unknown-room.json、room-todo-refused.json、room-todo-clear-empty.json、task-cancel-refused.json、task-note-unknown-room.json）与源码核对形态锁定请求体字面值、todos/tasks 解码与畸形降级、排序与开放/历史划分、受阻原因与状态中英文案、按钮显隐与备注校验、入口显示判定与失败文案；DsbotFixturesTest 校验新夹具无凭据且内容键为占位符；实测登记见 FINDINGS 第 44 节（ProbesRoomBoard，零改写）；源码核对位置：ds-bot 0.3.10 src/host/channel.js（room-todo、task-note、task-cancel 分支，view() rooms 展开）、roster.js（addRoomTodo、setRoomTodoDone、removeRoomTodo、clearDoneRoomTodos）、tasks.js（OPEN_STATUSES、taskNote、taskCancel、NOTE_MAX、blockedLine）、client.js src/client/group-settings.js（GroupTodos）与 src/client/task-board.js（TaskBoard、TaskRow）
+  lazy-field-entry-gating:
+    strength: SHOULD
+    statement: 上游以 ??= 懒创建、只在首次用到后才下发的 state 字段（如 rooms[].todos、rooms[].tasks），客户端不应以「字段缺失」判定远端不支持而隐藏入口：入口在字段存在或 hello 握手成功（非 LEGACY）时显示，字段缺失按空数据呈现空状态；只有 LEGACY 远端且字段缺失时才隐藏
+    rationale: 懒创建字段在从未用过的对象上不存在，只按字段存在门控会让新对象永远看不到网页端始终显示的空状态与入口（dsbot-room-todos-tasks 实测：本机群只带 tasks:{}、不带 todos）；hello 握手可区分支持该功能的 0.3.10 与不支持的 0.3.6
+    enforcement:
+      method: test
+      detail: core JUnit 对入口判定覆盖三种情形：字段存在（含空对象/空数组）显示、字段缺失且 hello 非 LEGACY 显示、字段缺失且 LEGACY 不显示（如 RoomBoardTest 的入口按字段存在或 hello 握手显示）；评审核对新入口的门控来源是否为懒创建字段
