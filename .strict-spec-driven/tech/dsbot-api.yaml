@@ -86,6 +86,7 @@ rules:
       - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
       - DeepSeek 服务（deepseek-services、deepseek-services-config、deepseek-synthesize）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无完整服务状态视图，入口不门控，页面按 deepseek-services 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试（dsbot-deepseek-services 设计决策 no-gating-on-demand，按 deepseek-services-endpoints-0310 与 on-demand-page-degrade）
       - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
+      - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
@@ -344,3 +345,22 @@ rules:
         - RoomChat.renderRoom(page, RoomChat.roster(state)) 让 room-chat-rounds.json 中缺 color 的 35 条轮次发言全部取到名册色
       bad:
         - 直接用条目自带的 name/color，名称缺失时退回显示 botId（session-xxxx）
+  computer-settings-endpoints-0310:
+    strength: MUST
+    statement: '电脑操控设置端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权；channel.js 对 computer- 前缀分发到 computer/index.js computerEndpoint）：state.computer = {enabled: boolean, provider: {state: ''off''|''loading''|''ready''|''error''|''missing''|''occupied''|''unsupported'', name?, message?, install?: {packages[], command}}, macos: boolean, bots: {botId → {level: ''off''|''view''|''background''|''foreground'', apps: {appKey → {name, id?, grantedAt}}}}}（computer 模块缺失时为最小视图 {enabled:false}；level 缺省或未知按 background；provider 状态随 rt.save 进入新 revision）。写端点（非 READS，只读宿主回 bot/read-only）：computer-set-enabled {enabled} → 新 computer 视图（开启触发 ensureProvider，provider 先为 loading 再转 ready/missing/error/occupied/unsupported）；computer-set-level {botId, level} → true（未知 Bot 或非法级别抛错，经 errorCode 回 bot/refused；background 删除已存级别；off 中止该 Bot 在途调用并释放占用）；computer-revoke-app {botId, appKey} → true（同时清除该 Bot 各会话的本次允许与提供方匹配的持久授权）；computer-provider-retry {} → 新 computer 视图（会改写并保存 provider 状态，不得作为只读探测）；computer-permission {permission: ''accessibility''|''screenRecording''} → 提供方 requestPermission 结果（无 cuaAccess 时回 System permissions are not available here）。读端点（在 READS 内）：computer-system-status {} → 提供方 systemStatus() 或 null（无 cuaAccess 或失败），权限项形态为 perms[key].state===''granted'' 或 perms[key]===true。客户端必须：按 state.computer 字段存在显隐入口；按最小视图、provider.state=unsupported 与开启后组件无法装入（missing，或 error 且 message 恰为上游常量 "This DSH cannot load packages."——importPackage 的 bot/no-loader，整串相等比较）判定宿主不支持并显示说明而非报错，其他 error 与 occupied 属可重试的组件错误；不支持时仍列出各 Bot 级别与应用授权（最小视图除外）；set-enabled 与 provider-retry 直接采用返回视图，set-level 与 revoke-app 等 feed 刷新，写操作不自动重试；macOS 权限区仅在 macos 且 provider ready 时显示。实测与源码核对界定：state.computer 只读视图与 computer-system-status、computer-set-level/revoke-app 未知 Bot 及 computer-permission 无权限服务的错误形态（permission 探针只在同一轮 system-status 回 null 时才发）由本变更 ProbesComputer 对本机真实服务（Linux dsh Web 宿主）实测登记 FINDINGS 新节；开关、级别、撤销、重试的成功形态与 macOS 权限形态按 0.3.10 源码核对并由 mock 覆盖，不改动用户真实团队。'
+    rationale: 电脑操控设置首次被手机端消费：上游以 provider.state 表达宿主能力、各写端点返回形态不一（视图或 true）、provider-retry 有保存副作用、macOS 权限依赖桌面宿主组件，登记完整契约作为单一事实来源，防止把 provider-retry 当只读探测、误判宿主支持或对返回 true 的端点做错误的本地改写。
+    enforcement:
+      method: test
+      detail: core JUnit（ComputerSettingsTest）覆盖 state.computer 完整与最小视图解码、级别缺省与未知值、provider 状态派生与宿主支持判定、应用授权列表、system-status 权限两种形态与 null、各写端点请求体；源码核对位置：ds-bot 0.3.10 src/host/computer/index.js（computerEndpoint/setEnabled/setLevel/revokeApp/ensureProvider/computerView）、computer/catalog.js（LEVELS）、channel.js（view().computer、READS、computer- 分发、errorCode）、client.js（src/client/computer.js 的 LEVELS/PROVIDER_TEXT/ComputerPage/BotComputerCard）；FINDINGS 新节登记本机真实服务只读探针结果
+  spike-probe-precondition:
+    strength: MUST
+    statement: 取证探针对写端点取错误形态时，若该端点没有可用的无效参数路径（上游会把非法值回落成合法值，或不以 id 定位对象，如 computer-permission 回落 accessibility、computer-open-settings），必须先在同一轮用只读端点证明其背后的服务在该宿主上不存在（如 computer-system-status 回 value:null），满足前置条件才发出，否则跳过并在探针输出与 FINDINGS 中记录跳过原因；不得仅凭当前取证宿主恰好缺少该服务就无条件发出。
+    rationale: spike-write-probes-non-mutating 的「只用不存在的 id 或无效参数」前提在这类端点上不成立：本机 Linux 宿主因缺服务只返回错误，但同一探针在能力更强的宿主（如 macOS 桌面宿主）上重跑会弹出真实系统授权框或打开系统设置，产生用户可见的副作用（dsbot-computer-settings 评审发现）。
+    enforcement:
+      method: review
+      detail: 评审检查 android/core/src/spike 中每个写端点探针：参数要么是不存在的 id 或会在写入前被拒的非法值，要么带有同一轮只读前置判定且不满足时跳过并输出跳过原因（参照 ProbesComputer 的 computer-permission 探针）。
+    examples:
+      good:
+        - val noAccess = record("system-status", "computer-system-status", "{}") == Json.Value.NullValue; if (noAccess) record("permission-no-access", "computer-permission", ...) else info(..., "跳过：…")
+      bad:
+        - record("permission", "computer-permission", "{\"permission\":\"accessibility\"}")  // 无前置判定，在 macOS 宿主上会弹出真实授权框

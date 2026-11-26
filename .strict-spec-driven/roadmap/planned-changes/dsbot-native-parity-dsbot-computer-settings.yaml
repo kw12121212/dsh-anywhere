@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-computer-settings
   milestone: dsbot-native-parity
-status: planned
+status: complete
 summary: 电脑操控设置：开关电脑操控、调整每个 Bot 的操控级别、撤销应用授权并查看系统权限状态，按宿主能力降级
 details: Settings → Tools → Computer use 原生页：数据源为 state.computer（开关、提供方、各 Bot 级别与应用授权）；写操作 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry，computer-system-status 与 computer-permission 显示系统辅助功能/屏幕录制等权限状态（需在电脑上授权的项提示在电脑上完成）。dsh Web 宿主上 state.computer 为 {enabled:false} 或端点不可用：显示「此宿主不支持电脑操控」而非报错。聊天中的电脑操作请求与停止已由 dsbot-chat-bars-0310 完成，不变。参数与级别枚举以 0.3.10 computer/index.js 核对并在本变更实测登记。验收：桌面宿主上开关、改级别、撤销授权后两端一致；dsh Web 宿主显示降级提示。
 depends_on:

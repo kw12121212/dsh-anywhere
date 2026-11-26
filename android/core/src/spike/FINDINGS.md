@@ -636,3 +636,23 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 成员归属：网页端 post/relay/event 以 `roster.byId[botId]` 为先、条目 name/color 为后备（client.js 31309、31330）；实测群 B 的 35 条 bot 行中 27 条不带 `color`。客户端以 `state.bots` 名册为先（core `RoomChat.roster`/`speakerOf`），名称都缺时显示「某个 Bot」。
 - 残余差异：轮次发言的 `duration` 耗时标签（网页端 ≥1 秒显示）手机端不显示；room-chat 的 `event=schedule` 条目网页端显示「定时任务：…」，手机端沿用原始文本（不属本变更）。
 - 界面验收由 `scripts/mock-dsh-server.mjs --group-rounds` 覆盖：room-chat 回 0.3.10 形态（`running: true`、`speaking: "bot-2"`），条目含已结束轮次展开行（带 `duration`）、全部 9 种轮次事件与进行中轮次的 `live` 行。
+
+## 41. 电脑操控设置（2026-11-25，dsbot-computer-settings）
+
+**实测（只读/非变更，本机 dsh Web 宿主（Linux）+ DS-Bot 0.3.10，`runSpike` 的 `ProbesComputer` 探针组；只记键集、计数与错误形态，不记 Bot 名称、应用名与 id；遵守 `spike-write-probes-non-mutating`，不调用 `computer-set-enabled` 与 `computer-provider-retry`）**：
+- `state.computer` → 键 `[bots, enabled, macos, provider]`，`enabled=false`、`provider={state:"off"}`（仅 `state` 键）、`macos=false`，`bots` 12 条（与名册一致），条目键 `[apps, level]`，级别全部 `background`，授权总数 0——**dsh Web 宿主下发的是完整视图而非计划变更假设的 `{enabled:false}`**，关闭状态下无法从 state 区分桌面宿主与 Web 宿主。脱敏夹具沿用 `android/core/src/test/resources/dsbot/state-full.json`（已含同形 `computer`）。
+- `computer-system-status {}` → HTTP 200、`ok:true`、`value:null`（宿主无 `cuaAccess` 服务）。
+- 错误形态（均 HTTP 200、`ok:false`，抛错均早于写入与 `rt.save()`）：
+  - `computer-set-level {"botId":"spike-none","level":"view"}` → `bot/refused`、`"Unknown Bot"`
+  - `computer-set-level {botId:<真实 Bot>, level:"spike-bad"}` → `bot/refused`、`"Level must be one of off, view, background, foreground"`
+  - `computer-revoke-app {"botId":"spike-none","appKey":"spike"}` → `bot/refused`、`"Unknown Bot"`
+  - `computer-permission {"permission":"accessibility"}` → `bot/refused`、`"System permissions are not available here"`
+  - `computer-spike-none {}` → `bot/not-found`、`"Unknown endpoint spike-none"`（computer- 前缀分发到 computerEndpoint 的 default 分支）
+
+**源码核对（ds-bot 0.3.10 `src/host/computer/index.js` 1101–1354 行 `setEnabled`/`setLevel`/`revokeApp`/`computerEndpoint`/`computerView`、154–205 行 `ensureProvider`、`computer/catalog.js` 92 行 `LEVELS`、`channel.js` 134 行 `view().computer`、186 行 `READS`、883–885 行分发、39–42 行 `errorCode`，client.js `src/client/computer.js` `LEVELS`/`levelId`/`PROVIDER_TEXT`/`providerWorks`/`ComputerPage`/`BotComputerCard`）**：
+- `computer-set-enabled {enabled}` 与 `computer-provider-retry {}` 返回 `computerView()`；`computer-set-level` 与 `computer-revoke-app` 返回 `true`，均 `rt.save()` 产生新 revision（provider 状态变化同样保存）。`set-level` 的 `background` 删除已存级别（缺省即 background），`off` 中止该 Bot 在途调用并释放占用。
+- `provider.state` 取值 `off|loading|ready|error|missing|occupied|unsupported`；`missing` 带 `message` 与 `install{packages, command}`，`error` 带脱敏后的 `message`，`occupied`/`ready` 带 `name`。PROVIDER_PACKAGES 含 darwin/win32/linux，因此 Linux 宿主开启后多为 `missing`（未装 `@deepseek-ai/dsh-computer-use` 与提供方包）或无加载器时的 `error`（`This DSH cannot load packages.`），`unsupported` 只在其他平台出现。
+- 宿主支持判定（客户端 `ComputerSettings.View.hostUnsupported`）：最小视图、`unsupported`，以及开启后组件无法装入——`missing`，或 `error` 且 `message` 恰为上游常量 `"This DSH cannot load packages."`（`importPackage` 的 `bot/no-loader`，整串相等比较）；其他 `error` 与 `occupied` 属可重试的组件错误。
+- `computer-permission` 没有无效参数可用（非法值回落成 `accessibility`），探针只在同一轮 `computer-system-status` 回 `value:null`（宿主无系统权限服务）时才发，否则跳过，避免在 macOS 桌面宿主上弹出真实授权框。
+- `computer-system-status` 在 READS 内，其余 computer-* 为写端点（只读宿主 `bot/read-only`）。macOS 权限形态取自提供方 `cuaAccess.systemStatus()`，本机无法实测；网页端按 `perms[key]?.state ?? perms[key]` 判 `granted`/`true`，客户端按同两种形态容错（待 macOS 宿主实测）。
+- 界面验收由 `scripts/mock-dsh-server.mjs --manage`（`scripts/mock-dsh-manage.mjs` 扩展 computer-*，`/mock/computer?host=…` 切换宿主形态）覆盖开关、级别、撤销、重试、macOS 权限、宿主不支持、最小视图与只读宿主。

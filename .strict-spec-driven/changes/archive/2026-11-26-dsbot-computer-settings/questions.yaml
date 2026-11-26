@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-computer-settings
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 计划变更 summary/details 与里程碑 goal：对照 DS-Bot 0.3.10 网页端 Settings → Tools → Computer use 的缺口。
+    answer: 用户在手机端无法开关 DS-Bot 电脑操控、调整各 Bot 的操控级别、撤销已总是允许的应用授权或查看组件与系统权限状态，只能回到电脑网页端操作；聊天中的电脑操作请求卡已可在手机作答，但其背后的级别与授权无法在手机管理。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 里程碑 done_criteria 与计划变更验收条款。
+    answer: 桌面宿主上在手机端开关电脑操控、调整 Bot 级别与撤销应用授权后两端一致；dsh Web 宿主显示「此宿主不支持电脑操控」而非报错；完整回归命令通过。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: roadmap-recommend 脚本推荐结果。
+    answer: 前置依赖 dsbot-chat-bars-0310 与 dsbot-bot-manage 已归档，strict-spec-cli roadmap-recommend 按路线图顺序推荐 dsbot-computer-settings 为 dsbot-native-parity 里程碑的下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 计划变更 details「聊天中的电脑操作请求与停止已由 dsbot-chat-bars-0310 完成，不变」与里程碑 scope.out。
+    answer: 聊天中的电脑操作请求卡与停止操作电脑不变；Bot 详情页既有设置与团队页既有入口不变；不涉及浏览器站点授权、Classic Agent 模式切换与手机配对。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 计划变更 details 列出的端点与数据源。
+    answer: 按 DS-Bot 0.3.10 的 state.computer 与 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-system-status、computer-permission 实现原生电脑操控设置页（含 Bot 详情页电脑操控分节），宿主不支持按 provider.state 与最小视图降级显示说明；不实现接管/交还、截图与实时视图。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: web-consistency-evidence
+    question: 「手机端修改电脑操控设置后与网页端 Settings → Computer use 一致」在没有真实桌面宿主对照的情况下用什么作为证据？
+    context: 评审（新视角评审 MUST FIX 3）指出该 MUST 需求的两端一致性只有间接证据：手机端请求体与网页端 client.js 调用的端点和参数逐字一致（ComputerSettingsTest 字面量断言 + DS-Bot 0.3.10 源码核对），两端读同一个 state.computer，模拟器对 mock 验收全部通过；本机 dsh Web 宿主开启开关会加载组件并改动真实团队，AGENTS.md 禁止改动真实数据。影响：验收证据与归档门禁。选项：接受替代证据并归档（推荐）；由用户在桌面宿主上对照；在真实团队上做可撤销对照。
+    answer: 用户选择接受替代证据并归档：以请求体契约逐字一致 + 0.3.10 源码核对 + mock 设备验收作为两端一致的证据，归档摘要注明未做真实宿主对照。
+    status: resolved
+    kind: technical
+    answered_by: human

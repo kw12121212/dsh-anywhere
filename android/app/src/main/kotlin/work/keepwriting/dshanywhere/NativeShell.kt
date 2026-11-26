@@ -185,6 +185,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data class ScheduleCreate(val start: String?) : ShellPage
         /** 密钥设置与落盘加密（dsbot-secrets-settings）。 */
         data object Secrets : ShellPage
+        /** 电脑操控设置（dsbot-computer-settings）：总开关、操控组件、macOS 权限、各 Bot 级别与应用授权。 */
+        data object ComputerSettings : ShellPage
         /** 用量（dsbot-usage）：[focus] 为 owner:<key> 或 model:<key> 时为该对象的详情；带上一页的范围与分组方式。 */
         data class Usage(val focus: String?, val range: work.keepwriting.core.Usage.Range? = null, val by: work.keepwriting.core.Usage.By = work.keepwriting.core.Usage.By.BOT) : ShellPage
         /** 关于 DS Bot：远端版本、基准比对与更新（dsbot-system-about）。 */
@@ -403,6 +405,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                             // 用量摘要（dsbot-usage）：远端 hello 声明 usage-summary 时显示
                             showUsage = connection.capabilities.has(work.keepwriting.core.Usage.SUMMARY_CAPABILITY),
                             onOpenUsage = { connection.openUsage("owner:" + current.targetId) },
+                            onOpenComputer = { connection.openComputerSettings() },
                         )
                     }
                 }
@@ -549,6 +552,11 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
                 current is ShellPage.Secrets -> SecretsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.ComputerSettings -> ComputerSettingsPage(
+                    state = connection.stateSnapshot?.raw,
+                    api = connection.manageApi,
+                    visible = connection.resumed && !connection.covered,
+                )
                 // 用量（dsbot-usage）：页面可见（未被设置页覆盖）且 App 在前台时轮询；点按对象进入其详情
                 current is ShellPage.Usage -> key(current) {
                     UsagePage(
@@ -645,6 +653,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // 密钥设置（dsbot-secrets-settings）：state 含 secrets 时出现
                     showSecrets = work.keepwriting.core.SecretsSettings.hasSecrets(connection.stateSnapshot?.raw),
                     onSecrets = { connection.openSecrets() },
+                    // 电脑操控（dsbot-computer-settings）：state 含 computer 时出现
+                    showComputer = work.keepwriting.core.ComputerSettings.has(connection.stateSnapshot?.raw),
+                    onComputer = { connection.openComputerSettings() },
                     // 关于 DS Bot（dsbot-system-about）：不门控，页面按各端点应答降级
                     onAboutDsBot = { connection.openAboutDsBot() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
@@ -1403,6 +1414,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
     fun openScheduleCreate(start: String?) = push(ShellPage.ScheduleCreate(start))
 
     fun openSecrets() = push(ShellPage.Secrets)
+    fun openComputerSettings() = push(ShellPage.ComputerSettings)
 
     fun openAboutDsBot() = push(ShellPage.AboutDsBot)
 

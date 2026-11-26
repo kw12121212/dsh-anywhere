@@ -1,0 +1,50 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    computer-settings-endpoints-0310:
+      strength: MUST
+      statement: '电脑操控设置端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权；channel.js 对 computer- 前缀分发到 computer/index.js computerEndpoint）：state.computer = {enabled: boolean, provider: {state: ''off''|''loading''|''ready''|''error''|''missing''|''occupied''|''unsupported'', name?, message?, install?: {packages[], command}}, macos: boolean, bots: {botId → {level: ''off''|''view''|''background''|''foreground'', apps: {appKey → {name, id?, grantedAt}}}}}（computer 模块缺失时为最小视图 {enabled:false}；level 缺省或未知按 background；provider 状态随 rt.save 进入新 revision）。写端点（非 READS，只读宿主回 bot/read-only）：computer-set-enabled {enabled} → 新 computer 视图（开启触发 ensureProvider，provider 先为 loading 再转 ready/missing/error/occupied/unsupported）；computer-set-level {botId, level} → true（未知 Bot 或非法级别抛错，经 errorCode 回 bot/refused；background 删除已存级别；off 中止该 Bot 在途调用并释放占用）；computer-revoke-app {botId, appKey} → true（同时清除该 Bot 各会话的本次允许与提供方匹配的持久授权）；computer-provider-retry {} → 新 computer 视图（会改写并保存 provider 状态，不得作为只读探测）；computer-permission {permission: ''accessibility''|''screenRecording''} → 提供方 requestPermission 结果（无 cuaAccess 时回 System permissions are not available here）。读端点（在 READS 内）：computer-system-status {} → 提供方 systemStatus() 或 null（无 cuaAccess 或失败），权限项形态为 perms[key].state===''granted'' 或 perms[key]===true。客户端必须：按 state.computer 字段存在显隐入口；按最小视图、provider.state=unsupported 与开启后组件无法装入（missing，或 error 且 message 恰为上游常量 "This DSH cannot load packages."——importPackage 的 bot/no-loader，整串相等比较）判定宿主不支持并显示说明而非报错，其他 error 与 occupied 属可重试的组件错误；不支持时仍列出各 Bot 级别与应用授权（最小视图除外）；set-enabled 与 provider-retry 直接采用返回视图，set-level 与 revoke-app 等 feed 刷新，写操作不自动重试；macOS 权限区仅在 macos 且 provider ready 时显示。实测与源码核对界定：state.computer 只读视图与 computer-system-status、computer-set-level/revoke-app 未知 Bot 及 computer-permission 无权限服务的错误形态（permission 探针只在同一轮 system-status 回 null 时才发）由本变更 ProbesComputer 对本机真实服务（Linux dsh Web 宿主）实测登记 FINDINGS 新节；开关、级别、撤销、重试的成功形态与 macOS 权限形态按 0.3.10 源码核对并由 mock 覆盖，不改动用户真实团队。'
+      rationale: 电脑操控设置首次被手机端消费：上游以 provider.state 表达宿主能力、各写端点返回形态不一（视图或 true）、provider-retry 有保存副作用、macOS 权限依赖桌面宿主组件，登记完整契约作为单一事实来源，防止把 provider-retry 当只读探测、误判宿主支持或对返回 true 的端点做错误的本地改写。
+      enforcement:
+        method: test
+        detail: core JUnit（ComputerSettingsTest）覆盖 state.computer 完整与最小视图解码、级别缺省与未知值、provider 状态派生与宿主支持判定、应用授权列表、system-status 权限两种形态与 null、各写端点请求体；源码核对位置：ds-bot 0.3.10 src/host/computer/index.js（computerEndpoint/setEnabled/setLevel/revokeApp/ensureProvider/computerView）、computer/catalog.js（LEVELS）、channel.js（view().computer、READS、computer- 分发、errorCode）、client.js（src/client/computer.js 的 LEVELS/PROVIDER_TEXT/ComputerPage/BotComputerCard）；FINDINGS 新节登记本机真实服务只读探针结果
+    spike-probe-precondition:
+      strength: MUST
+      statement: 取证探针对写端点取错误形态时，若该端点没有可用的无效参数路径（上游会把非法值回落成合法值，或不以 id 定位对象，如 computer-permission 回落 accessibility、computer-open-settings），必须先在同一轮用只读端点证明其背后的服务在该宿主上不存在（如 computer-system-status 回 value:null），满足前置条件才发出，否则跳过并在探针输出与 FINDINGS 中记录跳过原因；不得仅凭当前取证宿主恰好缺少该服务就无条件发出。
+      rationale: spike-write-probes-non-mutating 的「只用不存在的 id 或无效参数」前提在这类端点上不成立：本机 Linux 宿主因缺服务只返回错误，但同一探针在能力更强的宿主（如 macOS 桌面宿主）上重跑会弹出真实系统授权框或打开系统设置，产生用户可见的副作用（dsbot-computer-settings 评审发现）。
+      enforcement:
+        method: review
+        detail: 评审检查 android/core/src/spike 中每个写端点探针：参数要么是不存在的 id 或会在写入前被拒的非法值，要么带有同一轮只读前置判定且不满足时跳过并输出跳过原因（参照 ProbesComputer 的 computer-permission 探针）。
+      examples:
+        good:
+          - val noAccess = record("system-status", "computer-system-status", "{}") == Json.Value.NullValue; if (noAccess) record("permission-no-access", "computer-permission", ...) else info(..., "跳过：…")
+        bad:
+          - record("permission", "computer-permission", "{\"permission\":\"accessibility\"}")  // 无前置判定，在 macOS 宿主上会弹出真实授权框
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+        - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
+        - DeepSeek 服务（deepseek-services、deepseek-services-config、deepseek-synthesize）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无完整服务状态视图，入口不门控，页面按 deepseek-services 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试（dsbot-deepseek-services 设计决策 no-gating-on-demand，按 deepseek-services-endpoints-0310 与 on-demand-page-degrade）
+        - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
+        - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
+  REMOVED: {}

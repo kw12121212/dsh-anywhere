@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-computer-settings
+  status: proposed
+summary:
+  what:
+    - 为 Android 原生 DS-Bot 新增「电脑操控」设置页：显示并切换团队电脑操控总开关、显示操控组件（provider）状态并可重试，逐个 Bot 调整操控级别（关闭/仅查看/后台/前台），查看并撤销各 Bot 的应用授权，在 macOS 桌面宿主上显示辅助功能与屏幕录制权限状态并可发起授权请求（需在电脑上完成），宿主不支持时显示「此宿主不支持电脑操控」降级而非报错。
+  why:
+    - 用户目前在手机端无法查看或修改 DS-Bot 电脑操控设置：不能开关电脑操控、调整某个 Bot 可以如何操作电脑、撤销已「总是允许」的应用授权，也看不到组件是否就绪或系统权限是否缺失，只能回到电脑网页端 Settings → Tools → Computer use 操作；聊天中的电脑操作请求卡已在手机端可用，但其背后的授权与级别无法在手机端管理。
+scope:
+  in:
+    - 团队页新增「电脑操控」入口，按远端 state.computer 字段存在显隐（旧远端无该字段时不显示），进入原生全屏「电脑操控」页，数据源为 state.computer（enabled、provider{state,name?,message?,install?}、macos、bots{botId→{level,apps}}）并随 feed 刷新
+    - 总开关经 computer-set-enabled {enabled} 修改，成功后直接采用返回视图；开启后按 provider.state 显示组件状态（loading 加载中、ready 就绪、error/missing/occupied 显示服务端原因并提供重试 computer-provider-retry，missing 同时显示服务端给出的安装命令文本）；provider 未就绪时提示 Bot 暂无电脑工具
+    - Bot 列表逐个显示操控级别并经 computer-set-level {botId, level} 切换（off/view/background/foreground，缺省或未知值按 background 显示），总开关关闭时级别选择禁用；每个 Bot 下列出 apps 应用授权（应用名），可经 computer-revoke-app {botId, appKey} 撤销（二次确认）；Bot 详情页在电脑操控开启时增加「电脑操控」分节，显示同一级别选择与应用授权撤销，关闭时说明需在电脑操控设置中开启
+    - macOS 宿主（computer.macos=true）且组件就绪时经 computer-system-status 读取并显示辅助功能（accessibility）与屏幕录制（screenRecording）权限是否已允许，未允许项提供「请求授权」经 computer-permission {permission} 在电脑上弹出系统授权并提示需在电脑上完成，完成后可刷新状态
+    - 宿主降级：state.computer 只有 {enabled:false}（无 provider 与 bots）或 provider.state 为 unsupported 时显示「此宿主不支持电脑操控」；开启后组件 missing 或无法加载时同样显示该提示及服务端原因，并保留关闭开关；只读宿主（bot/read-only）与其他写失败显示服务端原因，写操作单次发出、在途禁用、不自动重试
+    - core 新增纯 JVM ComputerSettings（state.computer 解码、级别枚举与缺省、provider 状态派生与宿主支持判定、应用授权列表、system-status 权限解码、各写端点请求体构造）及 JUnit；对本机真实服务做只读/非变更探针登记 FINDINGS 新节；mock 服务端补齐 computer-* 端点与宿主形态切换；在 dsbot-api 技术标准登记端点契约与 hello-capabilities 例外
+  out:
+    - 聊天中的电脑操作请求卡（computer-app-answer）与停止操作电脑（computer-stop）——已由 dsbot-chat-bars-0310 完成，不变
+    - 接管/交还电脑（computer-takeover/handback）、允许前台（computer-allow-foreground）、截图查看（computer-shot）、光标事件（computer-cursor-wait）、hold-answer 与 Bot 详情 Computer 实时视图标签页（不在本计划变更范围）
+    - computer-open-settings 打开电脑系统设置页（仅对电脑本机有意义）与在手机上安装操控组件（只显示服务端给出的命令文本，不执行安装）
+    - 浏览器站点授权 browser-allow、Classic Agent 模式切换（里程碑范围外）
+unchanged_behavior:
+  - 私聊与群聊中的电脑操作请求卡、「停止操作电脑」入口与工作短语行为不变
+  - Bot 详情页既有分节（名称、标签、指令、模型、思考强度、权限、外观、私有、Main Bot、置顶、隐藏等）与保存行为不变
+  - 团队页既有列表、分组、未读、搜索与其他设置入口不变；远端不返回 state.computer 时不出现电脑操控入口，其余功能照常
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-computer-settings

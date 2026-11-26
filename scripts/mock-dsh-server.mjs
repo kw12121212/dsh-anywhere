@@ -1216,6 +1216,12 @@ data: {"revision":8}
     res.end(JSON.stringify(manage.setSystem(q)))
     return
   }
+  if (manage && url.startsWith('/mock/computer')) {
+    const q = new URLSearchParams(url.split('?')[1] ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(manage.setComputer(q)))
+    return
+  }
   if (manage && url.startsWith('/mock/secrets')) {
     const q = new URLSearchParams(url.split('?')[1] ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' })

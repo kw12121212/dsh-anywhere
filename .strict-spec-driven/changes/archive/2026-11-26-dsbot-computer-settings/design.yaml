@@ -1,0 +1,33 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-computer-settings
+approach:
+  - 遵循 tech/android-client pure-logic-in-core：在 android/core 新增纯 JVM ComputerSettings，解码 state.computer（enabled、provider{state,name,message,install{command,packages}}、macos、bots{botId→{level,apps{appKey→{name,id?,grantedAt}}}}），级别枚举 off/view/background/foreground（缺省或未知按 background，对齐 0.3.10 catalog.js LEVELS 与 client.js levelId），provider 状态派生（loading/ready 视为可用，error/missing/occupied 可重试，unsupported 及无 provider/bots 的最小视图判定为宿主不支持），按 state.bots 顺序合并 Bot 名称与授权列表，解码 computer-system-status 的权限（perms[key].state==='granted' 或 perms[key]===true 视为已允许，null 视为不可用），构造 set-enabled/set-level/revoke-app/provider-retry/system-status/permission 请求体；所有解码对缺失与类型不符容错返回默认，由 ComputerSettingsTest JUnit 覆盖。
+  - App：新增 ShellPage.ComputerSettings 与 ComputerSettingsPage 全屏原生页（总开关、组件状态区与重试、macOS 权限区、Bot 级别列表与应用授权撤销），Bot 详情页（BotManagePages）在 computer.enabled 时增加「电脑操控」分节复用同一级别选择与授权撤销组件；团队页按 state.computer 字段存在显示入口。写操作经既有 NativeShellConnection api 通道单次发出、在途禁用、不自动重试：set-enabled 与 provider-retry 直接采用返回视图，set-level 与 revoke-app 返回 true 后等 feed 推送 revision 刷新；失败显示服务端原因（含只读宿主 bot/read-only）。
+  - 取证遵循 tech/dsbot-api spike-write-probes-non-mutating：ProbesComputer 只读实测 state.computer 与 computer-system-status，写端点只用不存在的 botId（set-level、revoke-app → Unknown Bot）与无系统权限服务下的 computer-permission 取错误形态；不调用 computer-set-enabled 与 computer-provider-retry（后者会改写 provider 状态并保存 state 产生新 revision）。成功形态按 0.3.10 源码（computer/index.js、catalog.js、channel.js、client.js ComputerPage/BotComputerCard）核对并由 mock 服务端覆盖，登记 FINDINGS 新节与 dsbot-api 端点契约。
+decisions:
+  data-presence-gating:
+    decision: 入口按 state.computer 字段存在显隐，不经 hello capabilities 门控，并在 delta-tech 的 hello-capabilities exceptions 登记
+    rationale: 0.3.10 mobile.js CAPABILITIES 无电脑操控能力名，而 channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}）；沿用 secrets、im、connectors 的字段存在门控先例，旧远端无该字段时自然隐藏，且按经验须同步更新 hello-capabilities 例外清单。
+  host-support-by-provider-state:
+    decision: 宿主是否支持电脑操控按 provider.state 判定：最小视图（无 provider 与 bots）或 unsupported 直接显示「此宿主不支持电脑操控」；关闭（off）时照常显示开关；开启后 missing 或无法加载显示同一提示与服务端原因并保留关闭开关
+    rationale: 实测本机 dsh Web 宿主 state.computer 为完整视图 {enabled:false, provider:{state:'off'}, macos:false, bots}，而非计划变更假设的仅 {enabled:false}；关闭状态下上游不暴露组件是否可装或宿主类型（hello 无宿主信号，Windows 桌面宿主 macos 同为 false），只有开启后 ensureProvider 才得出 unsupported/missing/error。按 provider.state 降级是唯一不猜测宿主类型、又满足「不报错而是说明不支持」的做法，且与网页端 PROVIDER_TEXT 语义一致。
+  write-feedback-per-endpoint:
+    decision: set-enabled 与 provider-retry 直接采用返回视图，set-level 与 revoke-app 成功后等 feed 刷新，不做本地乐观改写
+    rationale: 上游 setEnabled 与 provider-retry 返回 rt.computerView()，setLevel 与 revokeApp 只返回 true 但都会 rt.save() 产生新 revision；遵循 tech/dsbot-api manage-write-feedback 与里程碑「成功后以 feed 刷新」约定，避免本地状态与服务端不一致。
+  revoke-confirm:
+    decision: 撤销应用授权需二次确认
+    rationale: revokeApp 同时清除该 Bot 各会话的本次允许与提供方的持久授权记录，Bot 下次使用该应用需重新弹卡请求，属不可一键恢复的操作；与 Bot 删除、已删除私有 Bot 释放等破坏性操作的二次确认惯例一致。
+  permission-request-on-computer:
+    decision: macOS 权限项只在 computer.macos 且组件 ready 时显示；「请求授权」经 computer-permission 在电脑上弹出系统授权，手机端提示需在电脑上完成并提供刷新，不提供 computer-open-settings
+    rationale: 系统辅助功能与屏幕录制授权只能在电脑本机完成，与网页端 permRow 显示条件一致；open-settings 只是在电脑上打开系统设置，对手机用户无可见反馈，出于范围收敛不纳入。
+alternatives:
+  - option: 在关闭状态下按 computer.macos 判定宿主是否支持，非 macOS 宿主一律显示不支持
+    reason: Windows 与 Linux 桌面宿主同样有提供方包（PROVIDER_PACKAGES 含 win32/linux），macos=false 不代表不支持，会误伤 Windows 桌面宿主。
+  - option: 进入页面时先调用 computer-provider-retry 探测宿主能否加载组件
+    reason: provider-retry 会改写并保存 provider 状态、产生新 revision，属有副作用的写操作，不能作为只读探测。
+risks:
+  - macOS 宿主上 computer-system-status 与 computer-permission 的成功形态依赖 dsh-experimental-cua-macos 的 cuaAccess，本机 Linux 宿主无法实测；解码按 client.js permRow 的两种形态容错，成功形态由 mock 覆盖并在 FINDINGS 登记待实测。
+  - 电脑操控开关在真实宿主上开启会尝试加载组件并改变团队状态，验收需在桌面宿主或 mock 服务端进行；dsh Web 宿主只验证降级提示，不改动用户真实团队的开关与级别。

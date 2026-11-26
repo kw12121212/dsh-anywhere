@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-computer-settings
+sections:
+  Implementation:
+    findings:
+      text: 对本机真实服务运行只读/非变更探针（ProbesComputer：state.computer 视图、computer-system-status 只读应答、computer-set-level 与 computer-revoke-app 用不存在的 botId 取错误形态、computer-permission 在无系统权限服务时的错误形态；遵守 spike-write-probes-non-mutating，不调用 computer-set-enabled 与 computer-provider-retry），登记 android/core/src/spike/FINDINGS.md 新节并产出脱敏夹具；成功形态标注为 0.3.10 源码核对
+      status: complete
+    core-computer-settings:
+      text: core：新增 ComputerSettings（state.computer 解码、级别枚举与缺省 background、provider 状态派生与宿主支持判定、Bot 名称与应用授权合并、system-status 权限解码、set-enabled/set-level/revoke-app/provider-retry/system-status/permission 请求体构造），编写 ComputerSettingsTest JUnit 覆盖完整视图、最小视图 {enabled:false}、各 provider 状态、未知级别、畸形输入与权限两种形态
+      status: complete
+    app-computer-settings:
+      text: app：新增 ShellPage.ComputerSettings 与 ComputerSettingsPage 全屏原生页（总开关、组件状态与重试及安装命令文本、macOS 权限区与请求授权/刷新、Bot 级别选择、应用授权列表与二次确认撤销、宿主不支持降级、写操作在途禁用与服务端原因提示），团队页按 state.computer 字段存在显示入口，Bot 详情页在 computer.enabled 时增加「电脑操控」分节复用级别选择与授权撤销
+      status: complete
+    mock-computer:
+      text: mock：在 scripts/mock-dsh-manage.mjs 与 scripts/mock-dsh-server.mjs 新增 state.computer 与 computer-set-enabled、computer-set-level（非法级别与未知 Bot 报错）、computer-revoke-app、computer-provider-retry、computer-system-status、computer-permission，并提供宿主形态切换（macOS 就绪、Windows 就绪、missing、unsupported、最小视图、只读宿主）供设备验收
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译与资源无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（模拟器 + mock 服务端，有条件时对照桌面宿主）：从团队页进入电脑操控页，验证开关、改 Bot 级别、撤销应用授权后与网页端一致，组件 missing/error 时重试与原因提示，macOS 权限显示与请求授权提示，宿主不支持与最小视图显示「此宿主不支持电脑操控」而非报错，只读宿主显示原因，Bot 详情页电脑操控分节；对真实 dsh Web 宿主只读确认入口与关闭状态显示，不改动真实开关与级别
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict verify 校验全部变更产物结构、场景覆盖与门禁状态
+      status: complete
+      command: strict-spec-cli verify dsbot-computer-settings
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

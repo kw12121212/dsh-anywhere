@@ -1,0 +1,65 @@
+schema: strict-spec-driven/delta-scene/v1
+schema_version: 1
+artifact_type: delta_scene
+schema_file: templates/strict-spec-driven/schemas/delta-scene.yaml
+target_scene: android-computer-settings
+scene:
+  title: 在手机端管理 DS-Bot 电脑操控设置
+  area: android
+  actors:
+    - name: 用户
+      role: 在 Android 手机端管理 DS-Bot 团队电脑操控开关、Bot 级别与应用授权的团队成员
+    - name: 远端 DS-Bot 服务
+      role: 下发 state.computer 并提供 computer-* 设置端点的服务端
+  preconditions:
+    - App 已连接到远端 DS-Bot 服务且会话有效，远端 state 含 computer 字段
+operations:
+  ADDED:
+    exception_flows:
+      host-unsupported:
+        trigger: 远端只返回最小视图 {enabled:false}，或组件为平台不支持、未安装、无法加载
+        steps:
+          show-unsupported:
+            action: 页面显示「此宿主不支持电脑操控」及服务端原因而非错误页，开启状态下仍可关闭开关
+            covered_by:
+              - spec_id: android-dsbot
+                requirement_id: computer-settings
+      provider-error:
+        trigger: 开启后组件加载失败或被其他组件占用
+        steps:
+          retry:
+            action: 页面显示服务端原因与重试按钮，用户重试经 computer-provider-retry 单次提交，结果以返回视图显示
+            covered_by:
+              - spec_id: android-dsbot
+                requirement_id: computer-settings
+      write-refused:
+        trigger: 写操作被服务端拒绝（含只读宿主 bot/read-only）或网络失败
+        steps:
+          show-reason:
+            action: 页面显示服务端给出的原因，开关与级别保持原显示，不自动重试
+            covered_by:
+              - spec_id: android-dsbot
+                requirement_id: computer-settings
+    main_flow:
+      open-computer-page:
+        action: 用户从团队页进入原生「电脑操控」页，App 按 state.computer 显示总开关、组件状态与各 Bot 的操控级别和应用授权
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: computer-settings
+      toggle-and-level:
+        action: 用户打开或关闭总开关、切换某个 Bot 的操控级别，App 经 computer-set-enabled / computer-set-level 单次提交、在途禁用，成功后与网页端一致
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: computer-settings
+      revoke-grant:
+        action: 用户在电脑操控页或 Bot 详情页对某个已授权应用点撤销并确认，App 经 computer-revoke-app 提交，刷新后该授权消失
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: computer-settings
+      macos-permissions:
+        action: macOS 宿主组件就绪时，用户查看辅助功能与屏幕录制权限，对未允许项请求授权并按提示在电脑上完成后刷新
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: computer-settings
+  MODIFIED: {}
+  REMOVED: {}

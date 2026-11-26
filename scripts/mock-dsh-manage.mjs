@@ -14,6 +14,7 @@ import { createSystem } from './mock-dsh-system.mjs'
 import { createUsage } from './mock-dsh-usage.mjs'
 import { createBotTasks } from './mock-dsh-bot-tasks.mjs'
 import { createDeepSeekServices } from './mock-dsh-deepseek-services.mjs'
+import { createComputer } from './mock-dsh-computer.mjs'
 
 const MODELS = [
   { ref: 'deepseek/v4', provider: 'deepseek', providerName: 'DeepSeek', id: 'v4', name: 'DeepSeek V4', input: ['text'], reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
@@ -234,6 +235,8 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   // IM 接入（dsbot-im-bridges，见 mock-dsh-im.mjs）
   const im = createIm({ bump, botExists: (id) => Boolean(team.bots[id]), roomExists: (id) => Boolean(team.rooms[id]) })
   const botTasks = createBotTasks({ bump, botExists: (id) => Boolean(team.bots[id]) })
+  // 电脑操控设置（dsbot-computer-settings，见 mock-dsh-computer.mjs）：state.computer 与 computer-* 设置端点
+  const computer = createComputer({ bump, botIds: () => Object.keys(team.bots) })
 
   function view() {
     return {
@@ -263,6 +266,9 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
       ...conn.view(),
       ...im.view(),
       ...secrets.view(),
+      computer: computer.view(),
+      // /mock/computer?readOnly=… 同时体现在 state.readOnly（上游只有一个只读来源）
+      ...(computer.readOnly() !== null ? { readOnly: computer.readOnly() } : {}),
     }
   }
 
@@ -334,7 +340,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
   }
 
   function handle(endpoint, p) {
-    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail) ?? deepseekServices.handle(endpoint, p, ok, fail) ?? schedules.handle(endpoint, p, ok, fail) ?? secrets.handle(endpoint, p, ok, fail) ?? system.handle(endpoint, p, ok, fail) ?? usage.handle(endpoint, p, ok) ?? botTasks.handle(endpoint, p, ok, fail)
+    const connected = conn.handle(endpoint, p, ok, fail) ?? im.handle(endpoint, p, ok, fail) ?? localAgents.handle(endpoint, p, ok, fail) ?? providers.handle(endpoint, p, ok, fail) ?? deepseekServices.handle(endpoint, p, ok, fail) ?? schedules.handle(endpoint, p, ok, fail) ?? secrets.handle(endpoint, p, ok, fail) ?? system.handle(endpoint, p, ok, fail) ?? usage.handle(endpoint, p, ok) ?? botTasks.handle(endpoint, p, ok, fail) ?? computer.handle(endpoint, p, ok, fail)
     if (connected) return connected
     try {
       switch (endpoint) {
@@ -954,7 +960,7 @@ export function createManageTeam(pushRevision, pushLive = () => {}) {
     }
   }
 
-  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setDeepSeekServices: (params) => deepseekServices.set(params), setSchedules: (params) => schedules.set(params), setSecrets: (params) => secrets.set(params), setSystem: (params) => system.set(params), setUsage: (params) => usage.set(params), setBotTasks: (params) => botTasks.set(params), setProviders: (params) => {
+  return { handle, team, browser, setBrowser, setCapabilities, setConnectors: (params) => conn.set(params), setIm: (params) => im.set(params), setLocalAgents: (params) => localAgents.set(params), setDeepSeekServices: (params) => deepseekServices.set(params), setSchedules: (params) => schedules.set(params), setSecrets: (params) => secrets.set(params), setSystem: (params) => system.set(params), setUsage: (params) => usage.set(params), setBotTasks: (params) => botTasks.set(params), setComputer: (params) => computer.set(params), setProviders: (params) => {
       const out = providers.set(params)
       // ?block=<botId>&code=<失败代码>&provider=<id>：让该 Bot 处于模型失败阻塞（修复卡验收）；?unblock=<botId> 清除
       const block = params.get('block')
