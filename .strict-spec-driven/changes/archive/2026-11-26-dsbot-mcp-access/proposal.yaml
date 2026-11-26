@@ -1,0 +1,32 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: dsbot-mcp-access
+  status: proposed
+summary:
+  what:
+    - 为 Android 原生 DS-Bot 新增「MCP 访问」设置页：显示并切换团队 MCP 访问开关与端口、显示服务状态与本机访问地址，新增外部 MCP 客户端（新建时一次性显示令牌并可复制，剪贴板随后清理），逐个客户端修改名称与可访问的 Bot 和群，并在二次确认后删除客户端。
+  why:
+    - 用户目前在手机端无法查看或管理 DS-Bot 的 MCP 访问：不能开关让电脑上其他 Agent（Claude Desktop、Cursor、Codex、脚本）接入 DS-Bot 团队的 MCP 服务，也不能新建或吊销外部客户端令牌、调整其可访问的 Bot 与群，只能回到电脑网页端 Settings → Connect → MCP access 操作；吊销泄露的令牌或收窄范围在外出时尤其需要手机可达。
+scope:
+  in:
+    - 团队页新增「MCP 访问」入口，按远端 state.mcp 字段存在显隐（旧远端无该字段时不显示），进入原生全屏「MCP 访问」页；数据源为 state 中的 live mcp 视图（on、port、status、error、url、clients[{id,name,bots,rooms,createdAt,lastUsedAt}]），随 state 刷新
+    - 连接区：MCP 访问开关经 mcp-set {on}，端口输入经 mcp-set {port}（客户端先校验 1024–65535 整数，未改动时保存禁用）；状态说明按 error→服务端原因、关闭→其他 Agent 无法访问、status=on→已开启并显示本机地址 url、其余→连接中；提示只有运行 DS Bot 的电脑上的程序能连接
+    - 新增客户端：输入名称（去首尾空白后非空，≤60 字）经 mcp-client-add {name} 创建（范围缺省为服务端的非私有 Main Bot），成功后在页面内一次性显示返回的 dsb_ 令牌与「现在复制，只显示一次」提示、复制按钮（经 SensitiveClipboard 复制，由 ClipboardGuard 清理）以及令牌省略的 ds-bot-mcp 命令示例；令牌只存在于该次应答与页面内存状态，离开页面即丢弃，不入日志、诊断上报、持久存储与可保存的界面状态，显示期间窗口加 FLAG_SECURE
+    - 客户端列表：逐个显示名称与最近使用时间（无则显示可访问对象名称或「尚无」），可改名（mcp-client-update {id,name}），以勾选非私有 Bot 与群调整可访问范围（mcp-client-update {id,bots|rooms}），删除经二次确认后 mcp-client-remove {id}；已不存在或已转为私有的 Bot、已删除的群不显示名称
+    - 写操作单次发出、在途禁用、不自动重试，成功后直接采用返回视图（四个端点均返回 mcpView）；被拒绝（含只读宿主 bot/read-only、端口非法、名称为空、客户端不存在）时显示服务端原因且显示的设置不变
+    - core 新增纯 JVM McpAccess（state.mcp 解码与缺省、状态说明派生、端口校验、名称规整、范围候选与名称合并、勾选切换后的范围列表、四个写端点请求体构造、应答视图与一次性令牌分离、令牌脱敏）及 JUnit；对本机真实服务做只读/非变更探针登记 FINDINGS 新节；mock 服务端补齐 state.mcp 与 mcp-* 端点；在 dsbot-api 技术标准登记端点契约与 hello-capabilities 例外
+  out:
+    - 手机配对 phone-set/phone-pair/phone-pair-cancel/phone-remove（里程碑范围外）
+    - 在手机上作为 MCP 客户端连接 DS-Bot，或代用户在电脑上配置 Claude Desktop、Cursor 等客户端（服务只监听电脑本机 127.0.0.1）
+    - 新建客户端时一并选择范围（与网页端一致，先按缺省创建，再在列表中调整）
+    - 团队能力库中的 MCP 服务器与连接器中的「添加其他 MCP 服务器」（已由 dsbot-capabilities 与 dsbot-connectors-mail 完成，不变）
+unchanged_behavior:
+  - 团队页既有列表、分组、未读、搜索与其他设置入口不变；远端不返回 state.mcp 时不出现 MCP 访问入口，其余功能照常
+  - 能力库 MCP 服务器、连接器页「添加其他 MCP 服务器」与扫描导入行为不变
+  - 既有敏感剪贴板清理、SecretField 输入与诊断上报脱敏行为不变
+roadmap:
+  milestone: dsbot-native-parity
+  planned_change: dsbot-mcp-access

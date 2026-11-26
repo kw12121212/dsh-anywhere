@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: dsbot-mcp-access
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 计划变更 summary/details 与里程碑 goal：对照 DS-Bot 0.3.10 网页端 Settings → Connect → MCP access 的缺口。
+    answer: 用户在手机端无法开关 DS-Bot 的 MCP 访问、修改端口，也不能新建、改范围或删除外部 MCP 客户端（吊销令牌），只能回到电脑网页端操作。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 里程碑 done_criteria 与计划变更验收条款。
+    answer: 手机端可开关 MCP 访问并改端口；新建外部客户端时令牌只显示一次且可复制（剪贴板随后清理）；修改可访问范围与删除在两端一致；令牌不入日志与诊断上报；完整回归命令通过。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: roadmap-recommend 脚本推荐结果。
+    answer: 前置依赖 dsbot-bot-manage 与 dsbot-group-manage 已归档，strict-spec-cli roadmap-recommend 按路线图顺序推荐 dsbot-mcp-access 为 dsbot-native-parity 里程碑的下一个可执行计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 里程碑 scope.out 与既有 MCP 相关功能。
+    answer: 不涉及手机配对、浏览器站点授权与 Classic Agent 模式切换；能力库 MCP 服务器与连接器「添加其他 MCP 服务器」不变；团队页既有入口与敏感剪贴板、诊断脱敏行为不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 计划变更 details 列出的端点与令牌约束。
+    answer: 按 DS-Bot 0.3.10 的 live mcp 视图与 mcp-set、mcp-client-add、mcp-client-update、mcp-client-remove 实现原生 MCP 访问设置页；令牌只在新建结果中显示一次并可复制，删除需二次确认；不在手机上充当 MCP 客户端。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: real-host-consistency-evidence
+    question: 「手机端修改 MCP 访问设置后与网页端一致、删除后令牌失效、用令牌从外部 MCP 客户端连通」这几项 MUST 验收，在不改动真实宿主的情况下用什么作为证据？
+    context: 独立评审 MUST FIX M1：这些两端一致性要求目前只有间接证据——手机端请求体与网页端 client.js 的 mcpSet/mcpClientAdd/mcpClientUpdate/mcpClientRemove 调用逐字一致（McpAccessTest 字面量断言）、DS-Bot 0.3.10 mcp-server.js 源码核对、ProbesMcp 对本机真实服务的只读与写入前被拒探针、模拟器对 mock 的完整验收。在真实宿主上开启 MCP 访问或新建客户端会改写用户真实 DS-Bot 目录下的 mcp.json 并在电脑 127.0.0.1 开端口，AGENTS.md 禁止改动真实数据。影响：验收证据与归档门禁（不改实现与规范）。选项：(A 推荐) 接受替代证据并归档，归档摘要注明未做真实宿主对照；(B) 由用户在真实宿主上亲自做一次可撤销对照（临时开启 → 新建合成客户端 → ds-bot-mcp 连通 → 网页端核对 → 删除 → 关闭）；(C) 授权 agent 在真实宿主上执行 B 的可撤销往返并记录清理步骤。
+    answer: 用户选择接受替代证据并归档：以请求体与网页端 client.js 调用逐字一致（McpAccessTest 字面量断言）、DS-Bot 0.3.10 mcp-server.js 源码核对、ProbesMcp 对本机真实服务的只读与写入前被拒探针、模拟器对 mock 的完整设备验收作为两端一致、删除后令牌失效与外部客户端连通的证据；归档摘要注明未做真实宿主对照，未改动真实 mcp.json。
+    status: resolved
+    kind: technical
+    answered_by: human

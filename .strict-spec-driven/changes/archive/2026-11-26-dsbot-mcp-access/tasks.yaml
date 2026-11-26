@@ -1,0 +1,43 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: dsbot-mcp-access
+sections:
+  Implementation:
+    findings:
+      text: 对本机真实服务运行只读/非变更探针（ProbesMcp：state 中的 mcp 视图、mcp-set 非法端口且不带 on、mcp-client-add 空名称、mcp-client-update 与 mcp-client-remove 用不存在的 id 取错误形态；遵守 spike-write-probes-non-mutating，不发出任何会写 mcp.json 或开端口的请求），登记 android/core/src/spike/FINDINGS.md 新节并产出脱敏夹具；成功形态与令牌形态标注为 0.3.10 源码核对
+      status: complete
+    core-mcp-access:
+      text: core：新增 McpAccess（state.mcp 解码与缺省、状态说明派生、端口校验 1024–65535、名称规整 trim/非空/≤60、范围候选（非私有 Bot、全部群）与可访问名称合并、勾选切换、mcp-set/mcp-client-add/mcp-client-update/mcp-client-remove 请求体构造、add 应答拆分视图与一次性令牌且令牌 toString 脱敏），编写 McpAccessTest JUnit 覆盖完整视图、缺失字段缺省、error 与各 status、端口边界、名称边界、范围合并与私有 Bot 排除、请求体字面量、令牌分离与脱敏、畸形输入
+      status: complete
+    app-mcp-access:
+      text: app：新增 ShellPage.McpAccess 与 McpAccessPage 全屏原生页（连接区开关、端口输入与保存、状态说明与本机地址及仅本机可连提示；新增客户端区与一次性令牌卡——SensitiveClipboard 复制、SecureWhileShown、令牌省略的 ds-bot-mcp 命令示例、只放 remember 内存状态；客户端列表含最近使用、改名、Bot 与群范围勾选、二次确认删除；写操作在途禁用、采用返回视图、服务端原因提示），团队页按 state.mcp 字段存在显示入口
+      status: complete
+    mock-mcp:
+      text: mock：在 scripts/mock-dsh-manage.mjs 与 scripts/mock-dsh-server.mjs 新增 live mcp 视图与 mcp-set（端口校验）、mcp-client-add（空名称报错、缺省非私有 Main Bot、返回 dsb_ 令牌一次）、mcp-client-update（范围过滤私有 Bot 与不存在的群、未知 id 报错）、mcp-client-remove（未知 id 报错），并提供端口被占用与只读宿主形态切换供设备验收
+      status: complete
+  Testing:
+    core-junit:
+      text: 运行 Android core 纯 JVM 单元测试
+      status: complete
+      command: android/gradlew -p android/core test
+    app-build:
+      text: 构建 Android :app 调试 APK 确认编译与资源无误
+      status: complete
+      command: android/gradlew -p android assembleDebug
+    full-regression:
+      text: 运行完整项目级回归命令（含覆盖率门槛与 Android core JUnit）
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test
+  Verification:
+    device-acceptance:
+      text: 设备验收（API 31 模拟器 + mock 服务端）：从团队页进入 MCP 访问页，验证开关与改端口（含非法端口不发请求、端口被占用原因）、新建客户端后令牌只显示一次且可复制、离开 App 再回来剪贴板被清理、离开页面后令牌不再显示且 FLAG_SECURE 解除、刚新建的客户端被删除后令牌卡消失，改名与勾选范围后返回视图与服务端一致且候选不含私有 Bot，二次确认删除（取消不发请求），只读宿主显示原因且不显示令牌，logcat 中无 dsb_ 令牌。App 层对真实 dsh Web 宿主的只读确认未做（真实 dsh 已改为 HTTPS、模拟器无启动令牌），改由 ProbesMcp 对本机真实服务的只读与写入前被拒探针（FINDINGS 第 43 节）及真实夹具测试 McpAccessTest.decodesRealOffFixture 替代；未在真实宿主开启 MCP 访问或新建/删除客户端
+      status: complete
+    strict-ready-verify:
+      text: 执行 strict verify 校验全部变更产物结构、场景覆盖与门禁状态
+      status: complete
+      command: strict-spec-cli verify dsbot-mcp-access
+testing_gates:
+  validation_task: core-junit
+  unit_test_task: core-junit

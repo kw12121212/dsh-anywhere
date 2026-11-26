@@ -59,6 +59,19 @@ class DiagReportingTest {
     }
 
     @Test
+    fun sanitizeRedactsBareMcpClientTokens() {
+        val out = DiagText.sanitize("copied dsb_AbC-123_xyz0987654321 to clipboard; env DSBOT_MCP_TOKEN=dsb_Zz9_-Qq8ww and dsb_short")
+        assertFalse(out.contains("AbC-123_xyz0987654321"))
+        assertFalse(out.contains("Zz9_-Qq8ww"))
+        assertTrue(out.contains("copied dsb_*** to clipboard"))
+        assertTrue(out.contains("dsb_short")) // 太短不像令牌，保留
+        // 紧跟在下划线后（如 MY_TOKEN_dsb_…）同样脱敏；前面是字母数字（如 xdsb_…）不是令牌前缀
+        val glued = DiagText.sanitize("MY_TOKEN_dsb_Glued123456789 xdsb_NotAToken12345")
+        assertFalse(glued.contains("Glued123456789"))
+        assertTrue(glued.contains("xdsb_NotAToken12345"))
+    }
+
+    @Test
     fun sanitizeRedactsSecretsPassphrasesAndSecretSetPayloads() {
         val jsonLine = """req {"endpoint":"secret-set","payload":{"name":"GITHUB_TOKEN","value":"ghp_live_99999"}} {"passphrase":"my \"quoted\" pass","apiKey":"sk-abc123","clientSecret":"cs-789","password":"pw 123"}"""
         val out = DiagText.sanitize(jsonLine)

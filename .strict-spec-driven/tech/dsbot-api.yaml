@@ -88,6 +88,7 @@ rules:
       - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
       - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
       - 群内搜索（group-search）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无群搜索项）、state 中也无对应字段，按需只读端点，群聊页「搜索」入口不门控，搜索页按 group-search 应答降级——未知端点（bot/not-found 且 message 含 Unknown endpoint）显示此远端版本不支持群内搜索、Unknown group chat 显示找不到这个群聊、其他失败显示服务端原因、网络失败给可读提示（dsbot-group-search 设计决策 no-gating-on-demand，按 group-search-endpoint-0310 与 on-demand-page-degrade）
+      - 'MCP 访问（live mcp 视图及其写端点 mcp-set、mcp-client-add、mcp-client-update、mcp-client-remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 MCP 访问项），channel.js live() 始终下发 mcp: rt.mcpView()，按 mcp-access-endpoints-0310 以 state.mcp 字段存在显隐入口，不经 capabilities.has 判定（dsbot-mcp-access 设计决策 data-presence-gating）'
   endpoint-inventory-0310:
     strength: MUST
     statement: 0.3.10 新端点与事件（hello、notices、feed notice/room、avatar/image 与 avatars:'ref'、markdown-image、file-text、file-download 分块、bot-stop-task、computer-app-answer、computer-stop、learning-answer、connector-request-cancel、agent-chat/stop-agent、usage-summary、memory-add/memory-edit、schedule-pause、stage-image 与 send images）的请求/响应形状、错误码与经 dsh HTTP/SSE 是否可用，以 dsbot-baseline-0310 对真实服务的登记为准（android/core/src/spike/FINDINGS.md 第 12 节），登记须区分「实测」与「源码核对」；消费这些端点的变更以对应脱敏夹具为解码依据，只有源码核对、没有成功样本的形态，首个消费它的变更必须先对真实服务实测并补夹具，不得把源码核对的形态当作已实测
@@ -384,3 +385,19 @@ rules:
         - ProbesGroupSearch 以 listOf("e", "的") 与 zzqxjv-spike-none 作查询词，只打印键集、计数与 seq 单调性
       bad:
         - 先读 room-chat 取某条消息的首个词作为查询词，或把命中的 text 打印到探针输出
+  mcp-access-endpoints-0310:
+    strength: MUST
+    statement: 'MCP 访问端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权；channel.js 对 mcp-set/mcp-client-add/mcp-client-update/mcp-client-remove 先 rt.load() 再分发到 mcp-server.js rt.mcpEndpoint）：live().mcp = rt.mcpView() = {on: boolean, port: integer（缺省 8797）, status: ''off''|''on'', error: string|null（端口被占用为 Port N is in use，只读宿主开启时为只读原因）, url: ''http://127.0.0.1:<port>/mcp'', clients: [{id, name, bots: botId[], rooms: roomId[], createdAt, lastUsedAt: number|null}]}，不含令牌明文与哈希；该视图写入 DS-Bot 目录的 mcp.json（只存令牌 SHA-256），不调用 rt.save、不产生新 revision。写端点（非 READS，只读宿主回 bot/read-only）均在 reconcile 后返回新视图：mcp-set {on?, port?} 端口须为 1024–65535 整数否则在写入前抛 bot/invalid；mcp-client-add {name, bots?, rooms?} name trim 后截断 60、空则 bot/invalid，bots 缺省为非私有 Main Bot、rooms 缺省为空，应答为 {...视图, token}，token 为 dsb_ 前缀的一次性令牌且只出现在该应答中；mcp-client-update {id, name?, bots?, rooms?} 未知 id 抛 bot/invalid This MCP client does not exist，bots 过滤掉不存在与私有 Bot、rooms 过滤掉不存在的群；mcp-client-remove {id} 未知 id 同上。MCP 服务只监听电脑本机 127.0.0.1。客户端必须：按 state.mcp 字段存在显隐入口；四个写端点成功后直接采用返回视图；mcp-client-add 应答中的 token 只在内存中一次性显示，不写日志、诊断上报、持久存储或可保存的界面状态，复制走敏感剪贴板并清理；范围候选排除私有 Bot；写操作不自动重试。实测与源码核对界定：mcp 只读视图与 mcp-set 非法端口、mcp-client-add 空名称、mcp-client-update/remove 未知 id 的错误形态由本变更 ProbesMcp 对本机真实服务实测登记 FINDINGS 新节；开关、端口、新建（含 token）、改范围与删除的成功形态按 0.3.10 源码核对并由 mock 覆盖，不改动用户真实 mcp.json。'
+    rationale: MCP 访问首次被手机端消费：视图在 live 而非 state 存档、写端点不产生 revision、一次性令牌只出现在新建应答中且属敏感值，登记完整契约作为单一事实来源，防止客户端等 feed 刷新导致显示滞后、把令牌写入日志或持久状态，或在取证时误开真实端口。
+    enforcement:
+      method: test
+      detail: core JUnit（McpAccessTest）覆盖 mcp 视图解码与缺省、状态说明派生、端口与名称校验、范围候选排除私有 Bot、四个写端点请求体字面量、add 应答视图与令牌分离及令牌 toString 脱敏；源码核对位置：ds-bot 0.3.10 src/host/mcp-server.js（install/mcpView/mcpEndpoint/scope/clientOf）、channel.js（live().mcp、mcp-* 分发、READS）、client.js（src/client/mcp-page.js 的 OFF/statusText/McpPage/ScopePicker 与 live 合并）；FINDINGS 新节登记本机真实服务只读与写入前被拒探针结果
+  returned-view-single-busy:
+    strength: SHOULD
+    statement: 原生设置页若在写端点成功后直接采用应答返回的完整视图（而非等 feed 刷新），该页所有写操作应共用一个页面级在途状态：任一写操作在途时整页写控件禁用，与网页端单一 busy 一致；返回视图以 remember(state) 为键，下一份 state 到来时回落到 state 中的视图
+    rationale: 各写操作用独立在途键时，两个写操作可同时在途，后到达的应答可能生成于另一次写入之前；若其补拉 state 因 liveKey 未变返回 unchanged，页面会停在缺少另一次修改的旧视图上直到下一次 live 变化（dsbot-mcp-access 独立评审 S3）
+    enforcement:
+      method: review
+      detail: 评审检查采用返回视图的页面（如 McpAccessPage 的 mcpBusy）是否以页面级在途判定禁用全部写控件
+    exceptions:
+      - dsbot-computer-settings 的 ComputerSettingsPage 早于本规则，仍按写操作分键在途；其 set-enabled/provider-retry 与 set-level/revoke-app 分属返回视图与等 feed 两类，后续修改该页时再对齐

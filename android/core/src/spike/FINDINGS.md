@@ -673,3 +673,18 @@ defaultBotModel 经 resolveModel 解析、本地 Agent 拒绝「A local agent ca
 - 命中的 `seq` 是**群账本**序号；room-chat 条目 id 是各会话分段内的事件 seq 或 `callId:index`，两套编号不同，不能用作群聊定位键。网页端点按命中项打开 `Detail`（发言者、时间、全文高亮、「这条消息的前后」各一条、「返回结果」），不跳转到聊天位置——客户端同样处理（hit-open-target 人工决定）。
 - 网页端交互常量：`MIN_QUERY=2`（`query.trim()` 长度）、`DEBOUNCE_MS=220`、`SNIPPET_CHARS=180`（首个命中词前留 60 字符，截断侧加 `…`）；`termsOf` 小写按 `\s+` 切分去重，`marked` 以查询词交替正则 `giu` 在原文上高亮；加载更多以最旧命中 seq 为 `before`（非整数时 `offset=已有条数`），并按 seq 去重合并；时间用 `clockLabel`（今天/昨天 + 时刻，其余带星期的月日）。
 - 界面验收由 `scripts/mock-dsh-server.mjs` 的 group-search 应答覆盖（多页命中、上下文、无命中、未知群）。
+
+## 43. MCP 访问（2026-11-26，dsbot-mcp-access）
+
+**实测（本机 dsh Web 宿主 + DS-Bot 0.3.10，`runSpike` 的 `ProbesMcp` 探针组；只记键集、开关、端口、status 与错误形态，不记客户端名称、id 与范围；写端点只用在写入 `mcp.json` 之前就被拒的参数，遵守 `spike-write-probes-non-mutating`）**：
+- `state` 应答顶层带 live 字段 `mcp`（与 `connectors`、`imStatus` 同在 `live()` 中，随 `liveKey` 变化）：键 `[clients, error, on, port, status, url]`；本机 `on:false`、`port:8797`、`status:"off"`、`error:null`、`url` 主机 `127.0.0.1`、`clients:[]`——客户端条目不含 `token`/`hash`。
+- `mcp-set {port:80}`（不带 `on`）→ HTTP 200、`ok:false`、`bot/invalid`、`"The port must be a number from 1024 to 65535"`（端口校验先于写入）。
+- `mcp-client-add {name:"   "}` → `bot/invalid`、`"Give the client a name"`（名称校验先于生成令牌与写入）。
+- `mcp-client-update` / `mcp-client-remove` 不存在的 id → `bot/invalid`、`"This MCP client does not exist"`。
+- 脱敏夹具：`android/core/src/test/resources/dsbot/mcp-off.json`（本机关闭视图，原样无敏感值）。
+
+**源码核对（ds-bot 0.3.10 `src/host/mcp-server.js` `install`/`mcpView`/`mcpEndpoint`/`scope`/`clientOf`、`channel.js` `live().mcp` 与 `mcp-*` 分发、`client.js` `src/client/mcp-page.js` `OFF`/`statusText`/`McpPage`/`ScopePicker` 与 live 合并）**：
+- `mcp.json`（DS-Bot 目录，权限 600）存 `on`、`port`（缺省 8797）与客户端 `{id, name, hash(令牌 SHA-256), bots, rooms, createdAt, lastUsedAt?}`；`mcpView()` 只下发 `{id, name, bots, rooms, createdAt, lastUsedAt|null}`，`status` 只有 `off`/`on`，`error` 为端口占用（`Port N is in use`）、监听失败原因或开启状态下的只读原因。写端点不调用 `rt.save()`、不产生新 revision。
+- 四个写端点均不在 `READS` 内（只读宿主 `bot/read-only`），都 `await reconcile()` 后返回新视图；`mcp-client-add` 返回 `{...视图, token}`，`token = "dsb_" + base64url(32 字节随机)`，只出现在这一次应答中。
+- `mcp-client-add {name, bots?, rooms?}`：名称 trim 后 `slice(0, 60)`；`bots` 缺省为非私有 Main Bot，`rooms` 缺省为空。`mcp-client-update {id, name?, bots?, rooms?}`：`bots` 过滤掉不存在与私有 Bot，`rooms` 过滤掉不存在的群，未给的键保持原值。网页端新建只发 `{name}`，删除无确认，复制令牌后显示令牌省略的 `DSBOT_MCP_TOKEN=… npx -p ds-bot ds-bot-mcp --url <url>` 命令示例。
+- MCP 服务只监听电脑本机 `127.0.0.1`（「Only programs on this computer can connect」）；成功形态（开关、端口、新建含令牌、改范围、删除）未在本机真实宿主上实测——开启或新建会改写用户真实 `mcp.json` 并开端口——由源码核对与 mock（`scripts/mock-dsh-mcp.mjs`，`/mock/mcp?…` 切换端口占用与只读宿主）覆盖。

@@ -264,6 +264,9 @@ fun main() {
     // ---- 5q. 群内搜索（dsbot-group-search）：group-search 只读形态 + 分页 + 未知群错误 ----
     ProbesGroupSearch { endpoint, payload -> post(endpoint, payload) }.run(stateVal)
 
+    // ---- 5r. MCP 访问（dsbot-mcp-access）：live mcp 只读形态 + 写入前被拒的错误形态（不开关、不改端口、不新建客户端） ----
+    ProbesMcp { endpoint, payload -> post(endpoint, payload) }.run(stateVal)
+
     // ---- 6. send（可选）+ feed SSE 订阅 ----
     // feed 先在后台线程订阅，再 send——流式回复的 stream start/chunk/end 紧跟 send
     // 触发，订阅晚了就会错过；证据收齐（hello + stream + message/live）即提前收窗。

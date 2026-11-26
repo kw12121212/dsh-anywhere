@@ -1,0 +1,59 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: android-mcp-access
+  title: 在手机端管理 DS-Bot MCP 访问
+area: android
+status: draft
+actors:
+  - name: 用户
+    role: 在 Android 手机端开关 DS-Bot MCP 访问、管理外部 MCP 客户端令牌与可访问范围的团队成员
+  - name: 远端 DS-Bot 服务
+    role: 下发 live mcp 视图并提供 mcp-* 设置端点的服务端
+preconditions:
+  - App 已连接到远端 DS-Bot 服务且会话有效，远端 state 含 mcp 字段
+main_flow:
+  open-mcp-page:
+    action: 用户从团队页进入原生「MCP 访问」页，App 按 state.mcp 显示开关、端口、状态说明与本机地址和客户端列表
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: mcp-access-settings
+  toggle-and-port:
+    action: 用户切换 MCP 访问开关或修改端口并保存，App 经 mcp-set 单次提交、在途禁用，成功后采用返回视图，与网页端一致
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: mcp-access-settings
+  create-client:
+    action: 用户输入名称新建外部客户端，App 经 mcp-client-add 提交，在页面中一次性显示令牌并经敏感剪贴板复制，离开 App 后剪贴板被清理、离开页面后令牌不再显示
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: mcp-access-settings
+  edit-client:
+    action: 用户为某个客户端改名或勾选可访问的非私有 Bot 与群，App 经 mcp-client-update 提交，成功后列表显示新名称与范围
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: mcp-access-settings
+  remove-client:
+    action: 用户对某个客户端点删除并在确认框确认，App 经 mcp-client-remove 提交，客户端从列表消失且令牌失效
+    covered_by:
+      - spec_id: android-dsbot
+        requirement_id: mcp-access-settings
+exception_flows:
+  write-refused:
+    trigger: 写操作被服务端拒绝（只读宿主 bot/read-only、端口非法、名称为空、客户端不存在）或网络失败
+    steps:
+      show-reason:
+        action: 页面显示服务端给出的原因，开关、端口与客户端列表保持原显示，不显示令牌，不自动重试
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: mcp-access-settings
+  port-unavailable:
+    trigger: MCP 访问已开启但端口被电脑上其他程序占用
+    steps:
+      show-error:
+        action: 状态说明显示服务端给出的端口被占用原因，用户可改端口后保存重试
+        covered_by:
+          - spec_id: android-dsbot
+            requirement_id: mcp-access-settings

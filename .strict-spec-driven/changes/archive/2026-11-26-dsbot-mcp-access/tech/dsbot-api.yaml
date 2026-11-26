@@ -1,0 +1,49 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: dsbot-api
+operations:
+  ADDED:
+    mcp-access-endpoints-0310:
+      strength: MUST
+      statement: 'MCP 访问端点（DS-Bot 0.3.10，经 dsh 的 POST /api/bot，会话 cookie 鉴权；channel.js 对 mcp-set/mcp-client-add/mcp-client-update/mcp-client-remove 先 rt.load() 再分发到 mcp-server.js rt.mcpEndpoint）：live().mcp = rt.mcpView() = {on: boolean, port: integer（缺省 8797）, status: ''off''|''on'', error: string|null（端口被占用为 Port N is in use，只读宿主开启时为只读原因）, url: ''http://127.0.0.1:<port>/mcp'', clients: [{id, name, bots: botId[], rooms: roomId[], createdAt, lastUsedAt: number|null}]}，不含令牌明文与哈希；该视图写入 DS-Bot 目录的 mcp.json（只存令牌 SHA-256），不调用 rt.save、不产生新 revision。写端点（非 READS，只读宿主回 bot/read-only）均在 reconcile 后返回新视图：mcp-set {on?, port?} 端口须为 1024–65535 整数否则在写入前抛 bot/invalid；mcp-client-add {name, bots?, rooms?} name trim 后截断 60、空则 bot/invalid，bots 缺省为非私有 Main Bot、rooms 缺省为空，应答为 {...视图, token}，token 为 dsb_ 前缀的一次性令牌且只出现在该应答中；mcp-client-update {id, name?, bots?, rooms?} 未知 id 抛 bot/invalid This MCP client does not exist，bots 过滤掉不存在与私有 Bot、rooms 过滤掉不存在的群；mcp-client-remove {id} 未知 id 同上。MCP 服务只监听电脑本机 127.0.0.1。客户端必须：按 state.mcp 字段存在显隐入口；四个写端点成功后直接采用返回视图；mcp-client-add 应答中的 token 只在内存中一次性显示，不写日志、诊断上报、持久存储或可保存的界面状态，复制走敏感剪贴板并清理；范围候选排除私有 Bot；写操作不自动重试。实测与源码核对界定：mcp 只读视图与 mcp-set 非法端口、mcp-client-add 空名称、mcp-client-update/remove 未知 id 的错误形态由本变更 ProbesMcp 对本机真实服务实测登记 FINDINGS 新节；开关、端口、新建（含 token）、改范围与删除的成功形态按 0.3.10 源码核对并由 mock 覆盖，不改动用户真实 mcp.json。'
+      rationale: MCP 访问首次被手机端消费：视图在 live 而非 state 存档、写端点不产生 revision、一次性令牌只出现在新建应答中且属敏感值，登记完整契约作为单一事实来源，防止客户端等 feed 刷新导致显示滞后、把令牌写入日志或持久状态，或在取证时误开真实端口。
+      enforcement:
+        method: test
+        detail: core JUnit（McpAccessTest）覆盖 mcp 视图解码与缺省、状态说明派生、端口与名称校验、范围候选排除私有 Bot、四个写端点请求体字面量、add 应答视图与令牌分离及令牌 toString 脱敏；源码核对位置：ds-bot 0.3.10 src/host/mcp-server.js（install/mcpView/mcpEndpoint/scope/clientOf）、channel.js（live().mcp、mcp-* 分发、READS）、client.js（src/client/mcp-page.js 的 OFF/statusText/McpPage/ScopePicker 与 live 合并）；FINDINGS 新节登记本机真实服务只读与写入前被拒探针结果
+    returned-view-single-busy:
+      strength: SHOULD
+      statement: 原生设置页若在写端点成功后直接采用应答返回的完整视图（而非等 feed 刷新），该页所有写操作应共用一个页面级在途状态：任一写操作在途时整页写控件禁用，与网页端单一 busy 一致；返回视图以 remember(state) 为键，下一份 state 到来时回落到 state 中的视图
+      rationale: 各写操作用独立在途键时，两个写操作可同时在途，后到达的应答可能生成于另一次写入之前；若其补拉 state 因 liveKey 未变返回 unchanged，页面会停在缺少另一次修改的旧视图上直到下一次 live 变化（dsbot-mcp-access 独立评审 S3）
+      enforcement:
+        method: review
+        detail: 评审检查采用返回视图的页面（如 McpAccessPage 的 mcpBusy）是否以页面级在途判定禁用全部写控件
+      exceptions:
+        - dsbot-computer-settings 的 ComputerSettingsPage 早于本规则，仍按写操作分键在途；其 set-enabled/provider-retry 与 set-level/revoke-app 分属返回视图与等 feed 两类，后续修改该页时再对齐
+  MODIFIED:
+    hello-capabilities:
+      strength: MUST
+      statement: 0.3.10 起新增的端点、字段与 feed/notice 事件一律以 POST /api/bot hello 返回的 capabilities 名单为可用依据：名单未声明的能力视为不可用并隐藏对应入口；hello 不可用（不支持握手的旧版远端——0.3.10 对未知端点回 bot/not-found，0.3.6 对 hello 的应答未实测、按同一分支推断——以及任何读取失败）按 LEGACY 处理，只门控新能力、不门控 0.3.6 已有功能；hello 协商不出共同 api 版本（api 为 null 或高于客户端支持版本）按版本不一致降级；feed 首帧 hello 的 boot 变化或不再携带 boot 时重读能力集合；hello 与 feed hello 携带的 boot/seq 是 notices 补齐的游标来源
+      rationale: 上游 mobile.js 约定 api 只在旧客户端会误读应答时才变，其余新增一律登记在 CAPABILITIES 并要求客户端跳过未知项；按能力位而非版本号判定，才能同时兼容 0.3.6 与 0.3.10，并表达 dsh 宿主经 HTTP/SSE 下个别能力不可用的情况
+      enforcement:
+        method: test
+        detail: core JUnit（DsbotHelloTest）覆盖 hello 解码、未声明能力 has() 为 false、LEGACY 降级、api 兼容判定、重读判定（shouldReread）与提示条判定（DsbotVersions.banner）；App 新入口一律经 capabilities.has 判定
+      exceptions:
+        - 聊天条数据（bots[].tasks、bots[].blocked、computerLive、rooms[].goal、work）及其写端点 bot-stop-task、computer-app-answer、computer-stop、resume：0.3.10 的 hello capabilities 不含对应能力名，按 chat-bars-fields-0310 以字段存在显隐，不经 capabilities.has 判定（dsbot-chat-bars-0310 设计决策 data-presence-gating）
+        - 能力库（state.capabilities、state.bots[].capabilities 与 bots[].packs、live capabilityStatuses）及其写端点 capability-save、capability-delete、capability-approve、bot-capability：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无能力库项），按 capability-endpoints-0310 以 state.capabilities 字段存在显隐入口，不经 capabilities.has 判定（dsbot-capabilities 设计决策 data-presence-gating）
+        - 连接器与邮箱（live connectors、state.connectorRequests、state.mailRequests）及其写端点 connector-*、mail-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无连接器项），按 connector-endpoints-0310 以 state.connectors 字段存在显隐入口，不经 capabilities.has 判定（dsbot-connectors-mail 设计决策 data-presence-gating）
+        - IM 接入（state.im、live imStatus）及其写端点 im-*：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 IM 项），按 im-endpoints-0310 以 state.im 字段存在显隐入口，不经 capabilities.has 判定（dsbot-im-bridges 设计决策 data-presence-gating）
+        - 本地 Agent（local-agents、local-agent-refresh、local-agent-models、local-agent-add/update/remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无本地 Agent 项）、state 中也无对应字段，入口不门控，页面以 local-agents 应答降级——bot/not-found 显示此远端不支持、available=false 显示无法注册（dsbot-local-agents 设计决策 no-gating，按 local-agent-endpoints）
+        - 模型服务商（providers、provider-key/add/models/models-save/remove、models、efforts）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无服务商字段，入口不门控，页面以 providers 应答降级——bot/not-found 显示此远端不支持、available:false 显示此 DSH 无法设置模型服务商（dsbot-models-providers 设计决策 no-gating，按 provider-endpoints）
+        - 定时任务（schedules、schedule-create/pause/delete）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无日程字段，入口不门控，页面以 schedules 应答降级——bot/not-found 显示此远端不支持、available:false 显示需在 DSH 插件页开启 Automation tasks；暂停按应答 canPause 显隐（dsbot-schedules 设计决策 no-gating，按 schedule-endpoints 与 on-demand-page-degrade）
+        - 密钥设置（state.secrets、state.secretStore、live secrets/secretStore）及其写端点 secret-set、secret-update、secret-delete、secret-store、secret-unlock、secret-encrypt、secret-decrypt：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无密钥管理项），按 secret-endpoints-0310 以 state.secrets 字段存在显隐入口、以 state.secretStore 字段存在显隐存储口令加密卡，不经 capabilities.has 判定（dsbot-secrets-settings 设计决策 data-presence-gating）
+        - 关于 DS Bot 与诊断（update-check、update-install、dsh-update-install、repo-stars、diagnostics、diagnostics-log、diagnostics-clear）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无对应字段，且 update-check 自 0.3.2 起即为版本提示条数据源，入口不门控，页面以端点应答降级——bot/not-found 显示此远端不支持、读取失败显示原因并可重试（dsbot-system-about 设计决策 no-gating，按 system-endpoints-0310）
+        - 用量（usage）：0.3.10 的 hello capabilities 不含 usage 能力名、state 中也无用量字段，用量页入口不门控，页面以 usage 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试；Bot 详情的用量行使用已声明的 usage-summary 能力，仍经 capabilities.has 门控（dsbot-usage 设计决策 no-gating，按 usage-endpoints 与 on-demand-page-degrade）
+        - Bot 后台任务详情（bot-task-read、bot-task-send）：0.3.10 的 hello capabilities 不含对应能力名，入口位于按 state.bots[].tasks 字段存在显示的私聊后台任务条内，不经 capabilities.has 判定，详情页对 bot/not-found 等错误做可读降级（dsbot-bot-task-detail 设计决策 data-presence-gating，按 bot-task-detail-endpoints-0310）
+        - DeepSeek 服务（deepseek-services、deepseek-services-config、deepseek-synthesize）：0.3.10 的 hello capabilities 不含对应能力名、state 中也无完整服务状态视图，入口不门控，页面按 deepseek-services 应答降级——bot/not-found 显示此远端不支持、其他失败显示原因并可重试（dsbot-deepseek-services 设计决策 no-gating-on-demand，按 deepseek-services-endpoints-0310 与 on-demand-page-degrade）
+        - 团队偏好高级项（state.prefs 与 set-prefs 的 memoryAutoRecall、memoryLimits、backgroundAfterSec）：0.3.10 的 hello capabilities 不含对应能力名，且 state.prefs 默认值不落盘无法按字段存在门控，复用既有不门控的团队偏好页（set-prefs），旧远端拒绝时按服务端原因提示、忽略未知键时维持默认（dsbot-general-advanced 设计决策 hello-capabilities-exception，按 team-prefs-0310）
+        - 电脑操控设置（state.computer 及其写端点 computer-set-enabled、computer-set-level、computer-revoke-app、computer-provider-retry、computer-permission，读端点 computer-system-status）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无电脑操控项），channel.js view() 始终下发 computer（模块缺失时为 {enabled:false}），按 computer-settings-endpoints-0310 以 state.computer 字段存在显隐入口、以 provider.state 与最小视图判定宿主是否支持，不经 capabilities.has 判定（dsbot-computer-settings 设计决策 data-presence-gating 与 host-support-by-provider-state）
+        - 群内搜索（group-search）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无群搜索项）、state 中也无对应字段，按需只读端点，群聊页「搜索」入口不门控，搜索页按 group-search 应答降级——未知端点（bot/not-found 且 message 含 Unknown endpoint）显示此远端版本不支持群内搜索、Unknown group chat 显示找不到这个群聊、其他失败显示服务端原因、网络失败给可读提示（dsbot-group-search 设计决策 no-gating-on-demand，按 group-search-endpoint-0310 与 on-demand-page-degrade）
+        - 'MCP 访问（live mcp 视图及其写端点 mcp-set、mcp-client-add、mcp-client-update、mcp-client-remove）：0.3.10 的 hello capabilities 不含对应能力名（上游 mobile.js CAPABILITIES 无 MCP 访问项），channel.js live() 始终下发 mcp: rt.mcpView()，按 mcp-access-endpoints-0310 以 state.mcp 字段存在显隐入口，不经 capabilities.has 判定（dsbot-mcp-access 设计决策 data-presence-gating）'
+  REMOVED: {}

@@ -224,6 +224,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/mock-revision-revision-764395.yaml
+    must-mock-open-question-82a79a:
+      title: 真实宿主两端一致性 MUST 只能用 mock 替代时，提案阶段就开 open question 交人确认
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/must-mock-open-question-82a79a.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致

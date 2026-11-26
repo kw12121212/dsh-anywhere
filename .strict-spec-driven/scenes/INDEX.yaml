@@ -36,6 +36,10 @@ areas:
       title: 在群聊页搜索历史消息并查看命中详情
       status: draft
       path: .strict-spec-driven/scenes/android/android-group-search.yaml
+    android-mcp-access:
+      title: 在手机端管理 DS-Bot MCP 访问
+      status: draft
+      path: .strict-spec-driven/scenes/android/android-mcp-access.yaml
   diagnostics:
     report-client-errors:
       title: 客户端错误上报诊断

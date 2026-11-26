@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: must-mock-open-question-82a79a
+  title: 真实宿主两端一致性 MUST 只能用 mock 替代时，提案阶段就开 open question 交人确认
+category: testing
+status: active
+created_at: '2026-11-26T06:14:58.758Z'
+updated_at: '2026-11-26T06:14:58.758Z'
+context: dsbot-native-parity 里程碑的设置页变更（电脑操控、MCP 访问）都有「手机端修改后与网页端一致」这类 MUST 验收，而在真实宿主上执行写操作会改动用户真实团队或配置文件，AGENTS.md 禁止。
+observation: 两次都由实现 agent 在 design.yaml 里自行决定「验收在 mock 上完成」（dsbot-mcp-access 的 acceptance-on-mock），提案时未开问题；独立评审把该 MUST 判为证据无法证明（MUST FIX），归档被阻塞，到评审阶段才补开 open question 让用户在接受替代证据、用户自测、授权可撤销往返之间选择——两次用户都选了接受替代证据。
+takeaway: 凡 MUST 验收要求真实宿主上的写操作且项目禁止改动真实数据时，在提案 checkpoint 就生成 open question（选项：接受「请求体与网页端逐字一致 + 上游源码核对 + 只读探针 + mock 设备验收」替代证据 / 用户自测 / 授权可撤销往返），不要只写成 agent 自己的设计决策；这样评审不会因证据缺口阻塞归档，用户也在实现前就知道验收边界。
+applies_when: 生成或评审某个变更时，其 MUST 验收需要在真实 dsh/DS-Bot 宿主上做写操作（开关、新建、删除、授权）才能直接证明，而项目规则禁止改动真实数据
+occurrences:
+  - origin: dsbot-mcp-access
+    date: '2026-11-26'
+    evidence: dsbot-mcp-access 评审 M1（questions.yaml real-host-consistency-evidence，用户选接受替代证据）；先例 dsbot-computer-settings questions.yaml web-consistency-evidence（评审 MUST FIX 3，同样在评审阶段补问）

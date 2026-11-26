@@ -85,6 +85,9 @@ fun TeamPage(
     /** 电脑操控（dsbot-computer-settings）：远端 state 含 computer 时显示入口。 */
     showComputer: Boolean = false,
     onComputer: () -> Unit = {},
+    /** MCP 访问（dsbot-mcp-access）：远端 state 含 mcp 时显示入口。 */
+    showMcp: Boolean = false,
+    onMcp: () -> Unit = {},
     /** 关于 DS Bot（dsbot-system-about）：入口不门控；为 null 时不显示。 */
     onAboutDsBot: (() -> Unit)? = null,
     /** 团队分组（dsbot-sidebar-sections）。 */
@@ -142,6 +145,9 @@ fun TeamPage(
                 }
                 if (showComputer) {
                     TextButton(onClick = onComputer) { Text(tr("电脑操控", "Computer use")) }
+                }
+                if (showMcp) {
+                    TextButton(onClick = onMcp) { Text(tr("MCP 访问", "MCP access")) }
                 }
                 if (onModelProviders != null) {
                     TextButton(onClick = onModelProviders) { Text(tr("模型与服务商", "Models & providers")) }

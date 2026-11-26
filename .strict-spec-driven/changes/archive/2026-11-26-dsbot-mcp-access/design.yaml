@@ -1,0 +1,36 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: dsbot-mcp-access
+approach:
+  - 遵循 tech/android-client pure-logic-in-core：在 android/core 新增纯 JVM McpAccess，解码 state.mcp（on、port 缺省 8797、status off/on、error 可空、url、clients[{id,name,bots[],rooms[],createdAt,lastUsedAt 可空}]，缺失或类型不符容错为缺省值，对齐 0.3.10 client.js mcp-page.js 的 OFF 常量），派生状态说明（error→原因；!on→关闭；status=on→已开启并带 url；其余→连接中），端口校验（1024–65535 整数，与 mcp-server.js mcp-set 一致），名称规整（trim 后非空、截断 60），范围候选（非私有 Bot、全部群）与客户端可访问名称合并（按候选查名、缺失者略去），勾选切换后的新列表，构造 mcp-set {on}/{port}、mcp-client-add {name}、mcp-client-update {id,name}/{id,bots}/{id,rooms}、mcp-client-remove {id} 请求体，并把 mcp-client-add 应答拆成视图与一次性令牌（令牌类型 toString 脱敏）；由 McpAccessTest JUnit 覆盖。
+  - App：新增 ShellPage.McpAccess 与 McpAccessPage 全屏原生页（连接区开关与端口、状态说明与本机地址、新增客户端区与一次性令牌卡、客户端列表含改名、范围勾选与二次确认删除），团队页按 state.mcp 字段存在显示入口。写操作经既有 NativeShellConnection api 通道单次发出、在途禁用、不自动重试，成功后直接采用返回视图覆盖页面数据，失败显示服务端原因（含只读宿主 bot/read-only）。一次性令牌只放在页面 remember 内存状态（不用 rememberSaveable），离开页面即丢弃；复制经既有 SensitiveClipboard（EXTRA_IS_SENSITIVE + ClipboardGuard 清理），令牌卡显示期间以 SecureWhileShown 加 FLAG_SECURE；令牌不进日志、诊断上报与任何持久存储。
+  - 取证遵循 tech/dsbot-api spike-write-probes-non-mutating 与 spike-probe-precondition：ProbesMcp 只读实测 state 中的 mcp 视图，写端点只取在写入前被拒的错误形态——mcp-set 非法端口（{port:80}，不带 on，校验先于写入）、mcp-client-add 空名称、mcp-client-update 与 mcp-client-remove 用不存在的 id；不发出任何会写 mcp.json 或开端口的请求。成功形态（含 token）按 0.3.10 源码（src/host/mcp-server.js install/mcpView/mcpEndpoint、channel.js live().mcp 与 mcp-* 分发、client.js mcp-page.js McpPage 与 live 合并）核对并由 mock 服务端覆盖，登记 FINDINGS 新节与 dsbot-api 端点契约。
+decisions:
+  data-presence-gating:
+    decision: 入口按 state.mcp 字段存在显隐，不经 hello capabilities 门控，并在 delta-tech 的 hello-capabilities exceptions 登记
+    rationale: '0.3.10 mobile.js CAPABILITIES 无 MCP 访问能力名，而 channel.js live() 始终下发 mcp: rt.mcpView()；沿用 secrets、im、connectors、computer 的字段存在门控先例，旧远端无该字段时自然隐藏。'
+  adopt-returned-view:
+    decision: 四个写端点成功后都直接采用返回的 mcpView，不等 feed 推送，也不做本地乐观改写
+    rationale: 上游 mcpEndpoint 每个分支都 await reconcile() 后返回 rt.mcpView()，写的是 mcp.json 而不调用 rt.save()，不会产生新 revision；只等 feed 会让开关、端口与列表在 live 信号到来前显示旧值，直接采用返回视图既及时又与服务端一致。
+  token-once-in-memory:
+    decision: 一次性令牌只在新建应答中取出、放在页面内存状态显示一次，离开页面即丢弃；复制走 SensitiveClipboard，显示期间加 FLAG_SECURE；core 的令牌类型 toString 脱敏
+    rationale: 服务端只存令牌 SHA-256，令牌明文只出现在 mcp-client-add 应答里；里程碑风险要求令牌不入日志、诊断上报与持久存储且剪贴板需清理。rememberSaveable 会把令牌写进进程重建用的 Bundle，属持久化；toString 脱敏防止异常、日志或诊断意外打印令牌。
+  remove-confirm:
+    decision: 删除外部客户端需二次确认（网页端无确认）
+    rationale: 删除即吊销该客户端令牌，外部 Agent 立即无法访问，令牌无法找回只能新建再在电脑上重新配置；计划变更明确要求二次确认，且手机上误触概率高于桌面。
+  create-name-only:
+    decision: 新建客户端只发送名称，范围用服务端缺省（非私有 Main Bot），之后在列表中勾选调整
+    rationale: 与网页端 McpPage 的 mcpClientAdd({name}) 一致，缺省范围由服务端决定（只认 Main Bot 且排除私有 Bot），手机端不重复推导；新建后的范围调整走同一套勾选 UI，减少一个仅创建时使用的表单。
+  acceptance-on-mock:
+    decision: 设备验收在模拟器 + mock 服务端完成；对本机真实 dsh 宿主只做只读确认与写入前被拒的探针，不开启 MCP 访问、不新建或删除真实客户端
+    rationale: 开启 MCP 访问与新建客户端会改写用户真实 DS-Bot 目录下的 mcp.json 并在电脑上开端口，项目 AGENTS.md 禁止改动真实数据；两端一致性以请求体与网页端 client.js 调用逐字一致、0.3.10 源码核对与 mock 验收为证据。
+alternatives:
+  - option: 按 hello capabilities 门控 MCP 访问入口
+    reason: 0.3.10 的 CAPABILITIES 名单没有 MCP 项，按能力门控会让所有支持 MCP 访问的远端都隐藏入口。
+  - option: 把一次性令牌存入 rememberSaveable 或本地加密存储，便于旋转屏幕或返回后再复制
+    reason: 会把令牌写进 Bundle 或磁盘，违反令牌不入持久存储的里程碑风险约束；上游设计本就是只显示一次，丢失后删除并重建即可。
+risks:
+  - 外部 MCP 客户端用令牌连通的成功路径（ds-bot-mcp 经 127.0.0.1 端口调用工具）在不改动真实数据的前提下无法在本机真实宿主上验证；以源码核对与 mock 覆盖替代，归档摘要需注明。
+  - mcp 为 live 字段，开关后 status 可能短暂为 off/连接中再转 on（reconcile 串行），端口被占用时 error 为 Port N is in use；页面按返回视图与后续 state 刷新显示，需在 mock 中覆盖端口占用与只读宿主形态。

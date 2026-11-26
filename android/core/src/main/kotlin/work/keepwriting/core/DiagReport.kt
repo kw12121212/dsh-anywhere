@@ -82,6 +82,9 @@ object DiagText {
         RegexOption.IGNORE_CASE,
     )
 
+    // DS-Bot MCP 外部客户端令牌（dsb_ + base64url，dsbot-mcp-access）：不论出现在何种上下文都整段替换。
+    private val MCP_CLIENT_TOKEN = Regex("""(?<![A-Za-z0-9])dsb_[A-Za-z0-9_-]{8,}""")
+
     /**
      * 报告文本脱敏：URL 形态的片段经 [HarnessUrl.redact]（剥 token 参数、隐藏密码、
      * 无法解析时不回显原文），残余的 token=值、JSON 密钥/口令字段、secret-set 的 value、
@@ -93,7 +96,8 @@ object DiagText {
         val noSecretSetValue = JSON_SECRET_SET_VALUE.replace(noJsonSecrets) { "${it.groupValues[1]}\"***\"" }
         val noAuthHeader = AUTH_HEADER.replace(noSecretSetValue) { "${it.groupValues[1]}***" }
         val noKvSecrets = KV_SECRET_VALUE.replace(noAuthHeader) { "${it.groupValues[1]}***" }
-        return TOKEN_VALUE.replace(noKvSecrets, "token=***")
+        val noMcpTokens = MCP_CLIENT_TOKEN.replace(noKvSecrets, "dsb_***")
+        return TOKEN_VALUE.replace(noMcpTokens, "token=***")
     }
 
     /** breadcrumb 行：先脱敏再按行上限截断。 */

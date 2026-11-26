@@ -187,6 +187,8 @@ fun NativeShell(graph: AppGraph, onOpenSettings: () -> Unit, onNeedSetup: () -> 
         data object Secrets : ShellPage
         /** 电脑操控设置（dsbot-computer-settings）：总开关、操控组件、macOS 权限、各 Bot 级别与应用授权。 */
         data object ComputerSettings : ShellPage
+        /** MCP 访问（dsbot-mcp-access）：开关与端口、外部客户端令牌与可访问范围。 */
+        data object McpAccess : ShellPage
         /** 用量（dsbot-usage）：[focus] 为 owner:<key> 或 model:<key> 时为该对象的详情；带上一页的范围与分组方式。 */
         data class Usage(val focus: String?, val range: work.keepwriting.core.Usage.Range? = null, val by: work.keepwriting.core.Usage.By = work.keepwriting.core.Usage.By.BOT) : ShellPage
         /** 关于 DS Bot：远端版本、基准比对与更新（dsbot-system-about）。 */
@@ -555,6 +557,7 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     onDone = { if (connection.page == current) connection.goBack() },
                 )
                 current is ShellPage.Secrets -> SecretsPage(connection.stateSnapshot?.raw, connection.manageApi)
+                current is ShellPage.McpAccess -> McpAccessPage(connection.stateSnapshot?.raw, connection.manageApi)
                 current is ShellPage.ComputerSettings -> ComputerSettingsPage(
                     state = connection.stateSnapshot?.raw,
                     api = connection.manageApi,
@@ -667,6 +670,9 @@ private fun ShellScaffold(connection: NativeShellConnection, onOpenSettings: () 
                     // 电脑操控（dsbot-computer-settings）：state 含 computer 时出现
                     showComputer = work.keepwriting.core.ComputerSettings.has(connection.stateSnapshot?.raw),
                     onComputer = { connection.openComputerSettings() },
+                    // MCP 访问（dsbot-mcp-access）：state 含 mcp 时出现
+                    showMcp = work.keepwriting.core.McpAccess.has(connection.stateSnapshot?.raw),
+                    onMcp = { connection.openMcpAccess() },
                     // 关于 DS Bot（dsbot-system-about）：不门控，页面按各端点应答降级
                     onAboutDsBot = { connection.openAboutDsBot() },
                     sections = work.keepwriting.core.TeamSections.decode(connection.stateSnapshot?.raw),
@@ -1426,6 +1432,7 @@ class NativeShellConnection(private val graph: AppGraph) : DsbotConnection.Liste
 
     fun openSecrets() = push(ShellPage.Secrets)
     fun openComputerSettings() = push(ShellPage.ComputerSettings)
+    fun openMcpAccess() = push(ShellPage.McpAccess)
 
     fun openAboutDsBot() = push(ShellPage.AboutDsBot)
 

@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: dsbot-mcp-access
   milestone: dsbot-native-parity
-status: planned
+status: complete
 summary: MCP 访问：开关外部 MCP 访问与端口，新增、修改、删除外部客户端及其可访问的 Bot 与群
 details: Settings → Connect → MCP access 原生页：mcp-set {on?, port?(1024–65535)}；mcp-client-add {name(≤60), bots?, rooms?}（缺省为非私有 Main Bot）返回视图与一次性令牌 token（dsb_ 前缀），App 只在新建结果中显示一次并提供复制，剪贴板随后清理，令牌不入日志、诊断上报与持久存储；mcp-client-update {id, name?, bots?, rooms?}；mcp-client-remove {id}（二次确认）。应答为 rt.mcpView()（开关、端口、客户端列表，不含令牌明文），形态在本变更实测登记。请求体构造与令牌脱敏放 core 以 JUnit 覆盖。验收：新建客户端后用令牌从外部 MCP 客户端连通，修改范围与删除在两端一致。
 depends_on:
