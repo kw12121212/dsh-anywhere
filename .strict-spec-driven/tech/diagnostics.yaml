@@ -29,8 +29,8 @@ rules:
       method: test
   diag-sanitize-secret-fields:
     strength: SHOULD
-    statement: Android 端经 DiagText.sanitize 输出的诊断报告、堆栈与 breadcrumb 除剥离 URL token 外，还必须对 JSON 字段、键值与环境变量形态（含无引号、双引号与单引号包裹的值）及 Authorization 头中的密钥、口令、API key、cookie 等敏感值统一替换为 ***；后续变更如引入新的敏感请求字段名或凭据前缀，应同步补充到 DiagText.sanitize 并在 DiagReportingTest 中以正反例断言覆盖。
-    rationale: 仅靠业务代码不主动打印敏感字段无法防范异常堆栈、序列化片段或底层库错误把请求体/环境变量带入诊断上报；把脱敏清单收口在 core DiagText.sanitize 并纳入完整回归门禁，可为所有 Android 功能提供统一的纵深防御。
+    statement: android/core 与 macos/Core 的 DiagText.sanitize 维护同一份敏感值正则清单（URL token、JSON 密钥/口令字段、secret-set value、键值与环境变量形态、Authorization 头、dsb_ 前缀令牌），任何一端新增敏感请求字段名或凭据前缀时必须同步另一端，并在两端各自的正反例测试中断言原值不出现且非敏感上下文保留（如密钥名）；Electron 桌面基线（地址脱敏 + token 不出现）不因此抬高。
+    rationale: 同一脱敏清单自 macos-diagnostics 起存在 Kotlin 与 Swift 两份实现，单端补字段而另一端遗漏会造成跨端泄漏面不一致；把同步义务收口进规则并以两端正反例测试锁定，延续 android/electron 双实现时代以测试向量防漂移的做法。
     enforcement:
       method: test
-      detail: core JUnit（DiagReportingTest）覆盖 URL token、JSON 凭据键、secret-set value、键值与环境变量（无引号及单/双引号包裹）及 Authorization 头脱敏，断言原值不出现且非敏感上下文（如密钥名）保留。
+      detail: 两端测试各自覆盖：android/core 的 DiagReportingTest 与 macos/Core 的 DiagnosticsTests 均断言 URL token、JSON 凭据键、secret-set value、键值/环境变量（无引号及单/双引号包裹）与 Authorization 头脱敏后原值不出现且非敏感上下文保留。

@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-diagnostics
   milestone: macos-native-foundation
-status: planned
+status: complete
 summary: macOS 原生版诊断上报：设置窗口中配置 https 上报端点（默认未配置即零行为）、崩溃与错误态报告脱敏后原子落盘、有界队列与发送，报告不含 token、cookie、API 载荷与聊天内容，语义与 diagnostics-reporting 主规格的桌面要求一致
 details: 以 android/core 的 DiagStore、DiagReport 与 Electron 版 src/main/diagnostics*.ts 为参照：纯逻辑（报告结构、脱敏规则、队列上限与淘汰、端点校验）放 DshCore 并在 Linux 上测试；App 层负责未捕获异常与信号的崩溃捕获（NSSetUncaughtExceptionHandler 与信号处理，先原子写本地报告再按系统默认终止）、错误页出现时产生按原因分类的错误态报告、URLSession 发送与失败入队、启动与新错误时冲刷队列。设置窗口新增「诊断上报」条目：未配置显示未配置状态，地址实时校验仅合法 https 可保存，保存后原子持久化，可清除。Electron 版已配置的端点由 macos-setup-settings 迁移带入。改写 diagnostics-reporting 主规格，把桌面要求标注为适用于 Electron（Windows/Linux）与原生 macOS。验收：未配置时不产生任何文件与请求；配置后制造连接错误产生一份报告并送达端点，报告中无 token 与 cookie；人为崩溃后下次启动送出崩溃报告。
 depends_on:

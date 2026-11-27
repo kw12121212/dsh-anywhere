@@ -42,10 +42,10 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
     macos-ci-and-device-acceptance:
       text: macOS CI 编译与 Mac 真机验收：提交推送本变更触发 package-macos-native 作业通过后，用 CI 产物在 Mac 上核对——未配置端点：正常使用不产生任何诊断文件（数据目录无 reports 队列目录）也不发出任何上报请求；配置端点：设置窗口「诊断上报」条目显示未配置状态、粘贴 http 地址保存不可用并显示原因、粘贴合法 https 地址保存后持久化并开启，制造连接错误（如指向无服务端口）时主界面错误页出现且端点收到一份按原因分类的 kind=error 报告（报告中无 token、cookie、API 载荷与聊天内容，地址为脱敏形态），同会话同类错误不重复上报；人为崩溃（触发未捕获异常或致命信号）后进程按系统默认终止，下次启动后端点收到 kind=crash 报告；清除端点后配置与待发队列删除、条目回到未配置、此后不再有任何上报行为；pca platform 取值按开放问题裁决核对
-      status: pending
+      status: complete
     ready-verify:
       text: 运行 strict-spec-cli ready macos-diagnostics 与 strict-spec-cli verify macos-diagnostics 确认产物、场景覆盖与门禁全部通过
-      status: pending
+      status: complete
       command: strict-spec-cli ready macos-diagnostics && strict-spec-cli verify macos-diagnostics
 testing_gates:
   validation_task: macos-app-build
