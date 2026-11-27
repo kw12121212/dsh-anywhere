@@ -293,7 +293,7 @@ categories:
     macos-e2e-b4fbcc:
       title: macOS 非交互会话拒绝应用激活：e2e 焦点断言必须带会话激活门控
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/tooling/macos-e2e-b4fbcc.yaml
     electron-45-app-web-45dfd9:
       title: Electron 45 首个 app:// 请求懒加载 Web 全局会与主进程启动竞态
@@ -395,6 +395,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/android-gradlew-gradle-aead55.yaml
+    strict-spec-cli-design-remove-approach-approach-549633:
+      title: strict-spec-cli design 工件在同一调用混用 --remove-approach 与多个 --approach 会静默丢条目
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/strict-spec-cli-design-remove-approach-approach-549633.yaml
   ui:
     compose-key-compose-7f09bd:
       title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态

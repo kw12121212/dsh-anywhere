@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-10-29T06:33:54.070Z'
-updated_at: '2026-10-29T06:33:54.070Z'
+updated_at: '2026-11-27T16:06:08.882Z'
 context: 本变更完整回归在无人值守会话失败：单实例两处 focused===true 断言超时，基线 HEAD 同样失败（与变更无关）。
 observation: 锁屏/后台会话下窗口服务器拒绝给后台启动的应用激活，实测连 app.focus({steal:true}) 都无法让任何窗口成为 key window；交互会话下则正常。与 Linux WSLg 无窗口管理器（lesson wslg-weston-7217b7）同类的环境限制。
 takeaway: e2e 的窗口焦点类断言先用对照窗口探测 sessionGrantsActivation（新窗口 show+focus+app.focus steal 后 isFocused）：对照窗口也无法获焦即跳过 focused 断言并注记原因；对照窗口能获焦而目标窗口不能仍按失败处理，应用缺陷不会被掩盖。见 e2e/desktop-experience.spec.ts。
@@ -17,3 +17,6 @@ occurrences:
   - origin: version-management
     date: '2026-10-29'
     evidence: 2026-10-28 探针实测：second-instance 后 winFocused=false，app.focus({steal:true}) 后仍 false；加门控后同会话 41/41 通过。
+  - origin: macos-shell-window
+    date: '2026-11-27'
+    evidence: 2026-11-28 真机验收再次命中并扩展：锁屏期间 System Events 对一切应用（含 Finder/Chrome/TextEdit）窗口枚举一律返回 0、AppleEvents 直接 tell app 超时、screencapture 全黑、open 启动的应用看似「无窗口」，极易误判为应用缺陷（macos-shell-window 曾据 此误判 Window 场景不显示窗口）；验收前先用 lsappinfo info -only name "$(lsappinfo front)" 判定是否为 loginwindow，非 loginwindow 且 AX 窗口枚举恢复再下 UI 结论，并用 caffeinate -dis 防止验收中途息屏锁屏。

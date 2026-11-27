@@ -49,7 +49,7 @@ risks:
   - 协议逻辑在 Kotlin 与 Swift 各维护一份：行为漂移风险高；须共享测试向量与脱敏夹具（同一份 JSON 文件被两端测试读取），以 tech/dsbot-api 为唯一协议标准
   - dsh 共享 /api 通道按 Host 白名单与 Origin 校验：URLSession 不能带 Origin 与跨站标记，cookie 绑定 host:port 且为 SameSite=Strict、HttpOnly，需自管 cookie 存储而非依赖 HTTPCookieStorage 的默认策略
   - 原生版与 Electron 版共用 bundle id：两者同时存在于 /Applications 时 LaunchServices 可能混淆；原生版在切换前以 CI 产物形式分发，安装位置与名称须在验收说明中写清
-status: proposed
+status: complete
 notes:
   - 2026-11-22 用户确认：macOS 端改为 Swift + SwiftUI 原生应用（不复用 Kotlin/Compose），不内置 Tailscale（tailnet 地址依赖系统已运行的 Tailscale 客户端），排在 Android 三个 DS-Bot 里程碑之后，窗口为宽屏分栏，CI 构建未签名 dmg 并加自更新；Windows 与 Linux 继续使用 Electron 不变
   - 参照实现：android/core（HarnessUrl、DsbotApi、SseParser、FeedSync、DsbotVersions、DshMux、WsClient、Cards、ChatRender、MarkdownParse、TeamHome、RoomChat、SideChat、DiagStore、DiagReport）、specs/android-dsbot、specs/session-auth、specs/diagnostics-reporting 的桌面要求；Electron 版配置位于 ~/Library/Application Support/DSH Anywhere/

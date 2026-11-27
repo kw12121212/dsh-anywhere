@@ -178,3 +178,79 @@ requirements:
         - GIVEN: Electron 目录存在有效 config.json，但 diagnostics.json 内容损坏或为 http://insecure.test/
         - WHEN: 启动 macOS 原生客户端
         - THEN: 有效 harness URL 正常迁移并进入重新认证页，非法诊断端点被安全忽略且不写入原生 diagnostics.json
+  macos-shell-three-column:
+    strength: MUST
+    statement: 会话在线时主窗口内容区呈现三栏布局：左侧为团队侧栏（本阶段为占位）、中间为聊天内容区（占位）、右侧为可开合的详情检查器（占位）；顶部全局连接状态条与版本提示条常驻显示且不遮挡三栏内容；窗口收窄时侧栏按系统行为自动收起且可重新展开，检查器可独立开合，最小窗口尺寸下聊天内容区仍完整可用；首次设置、连接中、错误页、重新认证与 Host 未受信任界面保持全宽呈现，不被三栏挤压。
+    scenarios:
+      connected-shows-three-column-shell:
+        - GIVEN: macOS 原生客户端已建立会话进入在线状态
+        - WHEN: 查看主窗口
+        - THEN: 顶部连接状态条显示在线，内容区呈现团队侧栏、聊天内容与右侧检查器三栏占位，版本提示条（如有）不遮挡任何栏内容
+      narrow-window-collapses-sidebar:
+        - GIVEN: 主窗口三栏显示
+        - WHEN: 把窗口宽度逐渐收窄到最小窗口尺寸
+        - THEN: 侧栏按系统行为自动收起且可经菜单或界面重新展开，聊天内容区始终完整可用
+      inspector-toggles-independently:
+        - GIVEN: 主窗口三栏显示
+        - WHEN: 切换右侧检查器开合
+        - THEN: 检查器收起或展开，聊天内容区随之自适应宽度，顶部连接状态条显示不变
+      setup-and-error-pages-stay-full-width:
+        - GIVEN: 应用显示首次设置、连接中、错误页、重新认证或 Host 未受信任界面
+        - WHEN: 查看主窗口
+        - THEN: 这些界面保持全宽呈现不被三栏挤压，顶部连接状态条仍常驻
+  macos-app-menus-and-shortcuts:
+    strength: MUST
+    statement: 应用提供中文菜单与快捷键：应用菜单包含「关于 DSH Anywhere」（显示标准关于面板与应用版本）、「设置…」（⌘, 打开或聚焦标准设置窗口）与「退出」；「视图」菜单包含「重新加载」（⌘R：有已保存地址时重新执行连接流程——重新探测、重新拉取 state 并重订阅 feed，回到在线或对应的错误/重新认证界面；无有效配置时回到首次设置界面）、「显示/隐藏侧栏」与「显示/隐藏检查器」（与界面实际开合状态一致切换）；菜单命令不修改已保存的 harness 配置与诊断端点。
+    scenarios:
+      app-menu-about-settings-quit:
+        - GIVEN: 应用正在运行
+        - WHEN: 依次展开应用菜单并选择「关于 DSH Anywhere」与「设置…」
+        - THEN: 关于面板显示应用名称与版本，⌘, 与「设置…」打开（已打开则聚焦）标准设置窗口，「退出」结束应用
+      view-menu-reload-refetches-and-resubscribes:
+        - GIVEN: 主窗口在线，已保存 harness 地址且服务可达
+        - WHEN: 选择「视图 → 重新加载」或按 ⌘R
+        - THEN: 客户端重新探测并重新拉取 state、重订阅 feed 回到在线状态，已保存配置不变
+      view-menu-reload-without-config:
+        - GIVEN: 配置缺失或损坏
+        - WHEN: 按 ⌘R
+        - THEN: 主界面回到首次设置界面（损坏时带已有配置无效提示），不出现空白或假在线
+      view-menu-toggle-sidebar-and-inspector:
+        - GIVEN: 主窗口三栏显示
+        - WHEN: 依次选择「视图 → 显示/隐藏侧栏」与「显示/隐藏检查器」
+        - THEN: 侧栏与检查器各自开合，菜单项状态与界面实际开合一致
+  macos-window-state-memory:
+    strength: MUST
+    statement: 应用把主窗口位置、尺寸、侧栏与检查器开合及侧栏宽度保存到应用私有数据目录的独立状态文件（原子写入），再次启动时若保存的位置与当前任一显示器相交，则按保存的位置、尺寸、开合与侧栏宽度恢复主窗口；保存位置与所有显示器都不相交（例如保存后拔掉了外接显示器）时，以默认尺寸居中显示在主显示器，不出现在任何显示器之外；状态文件缺失、内容损坏或数值无效时按没有保存状态处理（以默认尺寸与位置启动），不影响已保存的 harness 地址与诊断端点，也不提示配置无效。
+    scenarios:
+      restart-restores-geometry-panels-and-sidebar-width:
+        - GIVEN: 用户把主窗口移到某位置并调整尺寸，展开侧栏并拖宽、收起检查器后退出应用
+        - WHEN: 重新启动应用
+        - THEN: 主窗口按保存的位置与尺寸恢复，侧栏展开且宽度、检查器收起状态一并恢复
+      offscreen-falls-back-to-main-screen:
+        - GIVEN: 主窗口状态保存在外接显示器上，随后拔掉外接显示器
+        - WHEN: 启动应用
+        - THEN: 主窗口以默认尺寸居中显示在当前主显示器的可见区域内，不出现在任何显示器之外
+      corrupt-state-uses-defaults:
+        - GIVEN: 状态文件内容损坏或尺寸数值无效，已保存有效的 harness 地址
+        - WHEN: 启动应用
+        - THEN: 主窗口以默认尺寸与位置启动并正常连接，不显示任何配置无效提示，harness 配置不受影响
+      saving-window-state-keeps-other-config:
+        - GIVEN: 已保存 harness 地址与诊断上报端点，窗口处于某位置与尺寸
+        - WHEN: 移动缩放窗口后退出并重新启动
+        - THEN: 窗口状态按新值恢复，config.json 与 diagnostics.json 内容不变
+  macos-single-window-lifecycle:
+    strength: MUST
+    statement: 应用只维护一个主窗口：不提供「新建窗口」入口；应用已运行时再次打开该应用不出现第二个主窗口，而是激活既有主窗口（处于最小化时先恢复并置前）；关闭最后一个主窗口不退出应用，从 Dock 点击应用图标重新打开主窗口并按记忆的窗口状态恢复；重复打开与关窗重开过程中，主窗口显示的界面与已保存配置保持不变。
+    scenarios:
+      second-launch-activates-existing-window:
+        - GIVEN: 应用已运行且主窗口可见
+        - WHEN: 在访达中再次打开该应用
+        - THEN: 不出现第二个主窗口，既有主窗口被带到前台获得焦点
+      close-last-window-keeps-app-running:
+        - GIVEN: 应用仅剩主窗口打开
+        - WHEN: 关闭主窗口后点击 Dock 图标
+        - THEN: 应用未退出，主窗口重新打开并恢复记忆的位置尺寸与开合状态
+      reopen-preserves-config-and-session:
+        - GIVEN: 应用在线且已保存 harness 地址
+        - WHEN: 关闭主窗口再从 Dock 重开
+        - THEN: 主窗口按记忆状态恢复，无需重新输入地址，已保存配置与当前会话状态保持一致

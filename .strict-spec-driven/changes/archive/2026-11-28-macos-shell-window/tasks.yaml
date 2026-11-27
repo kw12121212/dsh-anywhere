@@ -36,10 +36,10 @@ sections:
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
     macos-ci-and-device-acceptance:
       text: 按既有自动化授权（2026-11-27 用户确认全程自动完成）完成 macOS CI 编译与 Mac 真机核对：提交推送 dev 后经 workflow_dispatch 触发 package.yml 的 package-macos-native job，下载 CI 产物并以 vtool 核对 LC_BUILD_VERSION 与 CI 一致后在 Mac 上逐项核对——三栏占位与窄窗折叠、最小窗口尺寸下聊天区可用，顶部状态条与版本提示条不遮挡内容；菜单与快捷键（关于面板显示版本、⌘, 设置、⌘R 重新加载回到在线、显示/隐藏侧栏与检查器与界面开合一致；应用菜单「设置…」「退出」标签为中文，否则以 CommandGroup 固定中文标签；系统 View 菜单自动注入的切换侧栏命令与自定义「显示/隐藏侧栏」并存不造成混淆）；退出重开窗口位置尺寸、侧栏/检查器开合与侧栏宽度恢复（含拖宽侧栏→收起→退出→重启后宽度保留）；把窗口移到外接屏后拔掉外接屏再启动，窗口以默认尺寸出现在主屏可见区域居中；状态文件损坏时按默认启动且 harness 配置仍生效不提示无效；关闭最后一个窗口应用常驻、Dock 点击重开主窗口；重复打开应用激活既有窗口不出现第二个主窗口
-      status: pending
+      status: complete
     ready-verify:
       text: 运行 strict-spec-cli ready macos-shell-window 与 strict-spec-cli verify macos-shell-window 确认产物、场景覆盖与门禁全部通过
-      status: pending
+      status: complete
       command: strict-spec-cli ready macos-shell-window && strict-spec-cli verify macos-shell-window
 testing_gates:
   validation_task: macos-app-build

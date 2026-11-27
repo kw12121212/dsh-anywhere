@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: macos-client
+operations:
+  ADDED:
+    macos-single-main-window-scene:
+      strength: MUST
+      statement: 'macos/App 的主窗口场景必须用 WindowGroup 承载并经 CommandGroup(replacing: .newItem) 移除「文件 → 新建窗口」入口维持单主窗口语义；不得改用 SwiftUI Window 场景承载主窗口——2026-11-28 真机实测（CI 产物，macOS 27.2）Window 场景关闭主窗口即整个应用干净终止（无崩溃），违背 macos-app 规格 macos-single-window-lifecycle 的「关闭最后一个主窗口不退出应用」且无公开开关可改。'
+      rationale: WindowGroup 是既有已验收版本的窗口承载方式，关窗常驻、Dock 点击重开与几何恢复行为可靠；Window 场景虽然命名上更贴近单主窗口，其关窗即退出语义与桌面端窗口生命周期规格直接冲突，后续 macos-native-* 变更若误换场景类型会静默回归该行为。
+      enforcement:
+        method: review
+        detail: '评审检查 DshAnywhereApp.swift 的主窗口场景为 WindowGroup 且 .commands 内含 CommandGroup(replacing: .newItem){}；真机验收覆盖关窗常驻与 Dock 重开（macos-shell-window 验收 2026-11-28：Window 场景关窗即退出→回退 WindowGroup 后全部通过）'
+      examples:
+        good:
+          - 'WindowGroup(AppIdentity.displayName) { ContentView(...) } 配 CommandGroup(replacing: .newItem) {}，关窗后进程存活、Dock 重开按 window-state.json 恢复'
+        bad:
+          - 'Window("DSH Anywhere", id: "main") { ContentView(...) }——真机关窗即退出应用'
+  MODIFIED: {}
+  REMOVED: {}

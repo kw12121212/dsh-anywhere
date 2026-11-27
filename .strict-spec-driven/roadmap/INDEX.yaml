@@ -46,7 +46,7 @@ milestones:
   macos-native-foundation:
     title: macOS 原生：骨架、连接与会话
     path: roadmap/milestones/macos-native-foundation.yaml
-    status: proposed
+    status: complete
   macos-native-chat:
     title: macOS 原生：团队与对话
     path: roadmap/milestones/macos-native-chat.yaml

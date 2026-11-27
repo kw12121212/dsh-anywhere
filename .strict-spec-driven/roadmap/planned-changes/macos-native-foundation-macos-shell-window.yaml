@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-shell-window
   milestone: macos-native-foundation
-status: planned
+status: complete
 summary: 原生主窗口外壳：NavigationSplitView 三栏（团队侧栏、聊天、可开合的详情检查器）占位与窄窗口折叠、全局连接状态条、应用菜单（重新加载、设置、关于）与常用快捷键、窗口位置尺寸与侧栏宽度记忆、单实例行为
 details: 主窗口为 NavigationSplitView：侧栏（团队列表占位，后续 macos-team-sidebar 填充）、内容区（聊天占位）、右侧 inspector（详情与 Side chat 占位），窗口变窄时按 SwiftUI 默认行为折叠侧栏，最小窗口尺寸保证聊天可用。顶部连接状态条与版本提示条不遮挡内容。菜单：应用菜单含关于 DSH Anywhere（显示版本）、设置…（⌘,）、退出；视图菜单含重新加载（⌘R，重新取 state 并重订阅 feed）、显示/隐藏侧栏与检查器；关闭最后一个窗口不退出应用（macOS 惯例），从 Dock 点击重新打开主窗口。窗口状态：记忆位置、尺寸、侧栏与检查器开合，恢复时保证在当前可见屏幕内（与 window-state 主规格语义一致）。单实例：依赖 LaunchServices 默认单实例，重复打开时激活已有窗口。验收：菜单与快捷键可用；退出重开窗口位置尺寸恢复；把窗口移到外接屏后拔掉外接屏再启动，窗口出现在主屏可见区域。
 depends_on:
