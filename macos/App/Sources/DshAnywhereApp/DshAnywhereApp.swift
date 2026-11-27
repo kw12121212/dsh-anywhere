@@ -19,14 +19,17 @@ struct DshAnywhereApp: App {
     }
 
     var body: some Scene {
-        // 单主窗口场景（macos-shell-window）：无「新建窗口」入口，关闭最后一个窗口
-        // 应用保持运行，Dock 点击重开主窗口；单实例由 LaunchServices 对同 bundle id
-        // 的默认行为承担（重复打开只激活既有实例）。
-        Window(AppIdentity.displayName, id: "main") {
+        // 单主窗口（macos-shell-window）：真机实测 `Window` 场景关闭窗口即退出应用
+        //（单窗口工具语义，违背「关窗常驻」规格），故按 design 登记的回退方案用
+        // WindowGroup 保证启动显示与关窗常驻、Dock 点击重开，并移除「新建窗口」
+        // 入口维持单主窗口；单实例由 LaunchServices 对同 bundle id 的默认行为承担。
+        WindowGroup(AppIdentity.displayName) {
             ContentView(model: model, chrome: chrome)
         }
         .defaultSize(width: MacosWindowState.defaultWidth, height: MacosWindowState.defaultHeight)
         .commands {
+            // 单主窗口：移除「文件 → 新建窗口」（⌘N）入口。
+            CommandGroup(replacing: .newItem) {}
             // 应用菜单：固定中文标签的关于入口（标准关于面板，版本来自 Info.plist）。
             CommandGroup(replacing: .appInfo) {
                 Button("关于 \(AppIdentity.displayName)") {

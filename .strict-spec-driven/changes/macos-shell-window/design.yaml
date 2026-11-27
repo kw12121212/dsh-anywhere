@@ -5,9 +5,9 @@ schema_file: templates/strict-spec-driven/schemas/change-design.yaml
 change: macos-shell-window
 approach:
   - 1. 窗口状态纯逻辑下沉 DshCore：新增 WindowStateStore.swift——MacosWindowState（x、y、width、height、sidebarVisible、inspectorVisible、sidebarWidth）以内置 Json 编解码为独立 window-state.json；解码对几何字段缺失、类型不符、NaN/无穷、非正或超上限尺寸整体返回 nil（按无状态处理），侧栏/检查器开合与宽度缺失或类型不符时取默认值、宽度钳入合法范围；屏幕相交判定以注入的屏幕矩形列表纯函数计算；持久化用 0600 临时文件+重命名原子写，读取端任何失败按无状态处理；全部在 Linux swift test 覆盖。
-  - 2. 单主窗口场景与三栏外壳：DshAnywhereApp 以 SwiftUI Window 场景替换 WindowGroup（单主窗口、无 ⌘N 新建、关窗后应用常驻、Dock 点击重开）；ContentView 在 .connected 态呈现 NavigationSplitView（侧栏=团队占位、内容=聊天占位，columnVisibility 绑定侧栏开合）加 .inspector(isExpanded:) 详情检查器占位，其余界面保持全宽单页；顶部状态条与版本提示条在外壳之上常驻。
   - 3. 菜单与快捷键：.commands 注册——应用菜单「关于 DSH Anywhere」（标准关于面板，版本来自 Info.plist）与「退出」，Settings 场景自带「设置…」（⌘,）；「视图」菜单 CommandMenu：「重新加载」（⌘R，调 MacosSessionController.retry() 重新探测、重取 state 并重订阅 feed，无配置回首次设置）、「显示/隐藏侧栏」（绑定 columnVisibility）、「显示/隐藏检查器」（绑定 isExpanded）；标签全部中文。
   - 4. 窗口状态装配与持久化时机：App 层经窗口 accessor 拿到 NSWindow，主窗口关闭（willClose）与应用退出（willTerminate）时直接读取当前 window.frame 一次性原子写入（位置尺寸+开合+侧栏宽度），不跟踪拖动过程、不在每次移动时写盘；侧栏列宽经侧栏内容 background GeometryReader 观测（忽略低于最小列宽的观测值防止收起时清零）；窗口挂载时以保存值与当前 NSScreen.visibleFrame 列表相交判定，相交则 setFrame 恢复（侧栏宽度经 navigationSplitViewColumnWidth(min:ideal:max:) 以保存值为 ideal），不相交则以默认 960×640 居中主显示器。
+  - 2. 单主窗口与三栏外壳：DshAnywhereApp 以 WindowGroup 承载主窗口并移除「文件 → 新建窗口」入口（关窗常驻、Dock 点击重开；真机实测 Window 场景关窗即退出故弃用）；ContentView 在 .connected 态呈现 NavigationSplitView（侧栏=团队占位、内容=聊天占位，columnVisibility 绑定侧栏开合）加 .inspector(isExpanded:) 详情检查器占位，其余界面保持全宽单页；顶部状态条与版本提示条在外壳之上常驻。
 decisions:
   window-state-in-dshcore-config-dir-file:
     decision: 窗口状态模型、编解码、校验、屏幕相交判定与原子写/容错读全部下沉 DshCore（新 WindowStateStore.swift），状态为应用数据目录独立 window-state.json，不用 NSWindow frameAutosaveName。
@@ -16,8 +16,8 @@ decisions:
     decision: 三栏 NavigationSplitView 仅在 .connected 在线态呈现；首次设置、连接中、错误页、重认证与 403 页保持现有全宽单页，顶部状态条全局常驻。
     rationale: 团队/聊天/检查器占位只在已建立会话时有意义；错误与重认证页在窄窗口下仍需完整可读，且避免 error 与 connected 切换时三栏与单页布局来回跳变。
   single-window-scene-lifecycle:
-    decision: 用 SwiftUI Window 场景替换 WindowGroup 实现单主窗口：无「新建窗口」入口，关闭最后一个窗口应用保持运行，Dock 点击重开主窗口并按记忆状态恢复；单实例依赖 LaunchServices 对同 bundle id 的默认行为（重复打开只激活既有实例），不另写单实例锁。
-    rationale: WindowGroup 会提供 ⌘N 多主窗口，与「重复打开不出现第二个主窗口」语义冲突；macOS 惯例是关窗不退出；bundle id 已统一，LaunchServices 默认单实例无需额外代码，也避免与 Electron 版显式单实例锁方案重复。
+    decision: 单主窗口以 WindowGroup 加「移除文件菜单新建窗口（CommandGroup replacing .newItem）」实现：无「新建窗口」入口，关闭最后一个窗口应用保持运行，Dock 点击重开主窗口并按 window-state.json 恢复几何；单实例依赖 LaunchServices 对同 bundle id 的默认行为（重复打开只激活既有实例），不另写单实例锁。首选方案 SwiftUI Window 场景在 2026-11-28 真机验收中被否决：实测关闭主窗口即整应用退出（单窗口工具语义，无崩溃、正常终止），违背 macos-single-window-lifecycle「关窗常驻」，故按 design 预登记的回退路径改用 WindowGroup。
+    rationale: WindowGroup 是既有已验收版本的窗口承载方式，关窗常驻与 Dock 重开行为可靠；移除 newItem 后不存在任何新建主窗口入口，单主窗口语义由「无入口」而非「场景类型」保证；Window 场景虽然语义更贴近，但其关窗即退出的行为与规格冲突且无公开开关可改。
   swiftui-commands-menus:
     decision: 菜单全部经 SwiftUI .commands 实现：「关于 DSH Anywhere」用标准 about 面板；「设置…」由 Settings 场景自动提供 ⌘,；「视图」菜单「重新加载 ⌘R」调 controller.retry()，侧栏/检查器开合命令直接绑定 columnVisibility/isExpanded。
     rationale: 与桌面 main-window 规格 reload-menu 语义对齐，retry() 即重新探测+重取 state+重订阅 feed 的既有编排；开合命令复用界面同一绑定，避免菜单与界面状态分叉。
