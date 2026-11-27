@@ -12,7 +12,7 @@ decisions:
     decision: 将 DiagnosticsEndpointConfig、ElectronConfigMigrator 与 MacosSessionController.saveSettingsUrl 全部放入 DshCore 并通过目录/传输注入在 Linux 测试。
     rationale: 遵循 tech/macos-client 的 pure-logic-in-macos-core 与 dshcore-foundation-json-and-concurrency，使用内置 Json 而非 JSONSerialization。
   native-dir-isolation-and-dual-electron-candidates:
-    decision: 原生数据继续保存在 ~/Library/Application Support/DSH Anywhere Native/，首次启动缺失原生 config.json 时按 [DSH Anywhere, dsh-anywhere] 顺序只读探测 Electron 目录。
+    decision: 原生数据继续保存在 ~/Library/Application Support/DSH Anywhere Native/，缺失原生 config.json 时按 [DSH Anywhere, dsh-anywhere] 顺序只读探测 Electron 目录：harness 地址取自首个有效候选目录；诊断端点优先取自该目录，该目录没有合法端点时可取自其余候选目录（后续 Windows 原生端迁移需与此语义一致）。
     rationale: 遵循 tech/macos-client 的 macos-app-network-and-storage-boundary 与 tech/state-persistence 的 separate-state-files/atomic-tolerant-state-read，兼顾 electron-builder productName 与 package.json name 两种 userData 目录。
   migrate-only-when-native-config-missing:
     decision: 仅当原生 config.json 为 .missing 时执行迁移，原生 config.json 为 .ok 或 .invalid 时均跳过迁移，且 diagnostics.json 仅在本次迁移且原生尚无该文件时写入。
@@ -20,11 +20,23 @@ decisions:
   swiftui-settings-scene-with-isolated-draft:
     decision: 采用 SwiftUI 标准 Settings 场景与 @Environment(\.openSettings)，设置窗口维护独立草稿并按 saveSettingsUrl 返回的 SettingsSaveOutcome 决定关闭或保窗报错。
     rationale: 与 settings-window 规格的聚焦、取消无副作用、在线未改不重连、失败保窗不含 token 语义一致，且避免 SwiftUI 状态污染主窗口。
+  settings-window-layout-acceptance-fixes:
+    decision: 设置窗口「连接地址」以无标签的通栏行承载地址输入：标题只作输入框内的占位提示，不充当分组表单的行标签；「关于 DSH Anywhere…」入口放在固定不滚动的窗口底栏，「关于」分组只保留应用名称、版本与版权信息。
+    rationale: macOS 分组表单会为带标题的行保留标签列，长标题把地址输入框挤到右侧、左侧留出大块空白（Mac 验收的 d8deb8b 构建实测输入框起点 x=229、宽度仅 221）；默认窗口高度下表单内容超出可视区（文档高 501 对可视高 377），放在表单内的关于按钮会被裁掉，违背 macos-settings-window「打开即显示关于入口」。
+  settings-save-unchanged-offline-reconnects:
+    decision: 设置窗口保存时地址未改动且不带 token：在线则直接关窗不重连；非在线（连接错误页或重新认证页）则直接关窗并由主窗口重新连接，不等待探测结果，结果（在线、对应错误页或重新认证页）由主窗口显示。空输入只禁用保存、不显示实时校验原因，非法地址才显示原因。
+    rationale: 与主规格 settings-window 的 save-unchanged-from-local-page（关窗后主窗口重新打开，不承诺在线）及 empty-disables-save（清空只禁用）语义一致；增量规格原文曾把这两种情况写成「先探测再保存、失败保窗」与「空值展示原因」，与实现不符，独立评审 M2 后按「增量规格反映实际构建」对齐规格文字，并以 settings-save-unchanged-offline-reconnects 场景与 SetupSettingsMigrationTests 6b 固定该行为。
+  electron-diagnostics-endpoint-is-user-configured:
+    decision: 原生 config.json 缺失且原生 diagnostics.json 尚不存在时，从同机原版 Electron 客户端已保存的 diagnostics.json 只读迁移合法 https 诊断端点，视同用户此前的显式配置；只要原生 config.json 仍存在，用户在原生端清除的端点就不会被旧 Electron 文件回灌。
+    rationale: 路线里程碑 macos-native-foundation 的验收标准明确要求从已装 Electron 版的 Mac 首次启动时自动带入诊断端点，来源是同一用户在同一台机器上的显式配置；tech/diagnostics 的 diagnostics-endpoint-user-configured 字面只认「设置中的显式配置」，因此随本变更为该规则补充迁移例外（见 delta tech），避免归档后主规格 MUST 与技术标准 MUST 字面冲突。
 alternatives:
   - option: 在主窗口内用 sheet/内联覆盖表单充当设置界面
     reason: 无法提供标准 macOS ⌘, 独立设置窗口、打开设置会遮挡主窗口且不符合计划变更的 Settings 场景要求。
   - option: 同时迁移 Electron Chromium Cookie 数据库
     reason: Chromium cookie 使用平台加密存储且与原生 0600 私有存储格式不兼容，计划变更明确要求不迁移 cookie 并引导重新认证。
+  - option: 保留表单内的关于按钮，改为加大窗口最小高度以完整容纳「关于」分组
+    reason: 无已保存地址等内容较矮的状态下窗口底部会留出大片空白，错误提示换行后内容仍可能超出，关于入口是否可见继续取决于窗口高度
 risks:
   - Linux 环境无 Xcode/SwiftUI SDK，无法在本地编译运行 SettingsView、Settings 场景与 @Environment(\.openSettings)，必须严格遵守 macOS 14 / Swift 6.0 严格并发规则并通过 GitHub Actions package-macos-native 与真机核对验证。
   - 用户 Mac 上原版 Electron 的 userData 可能位于 DSH Anywhere 或 dsh-anywhere，已通过按序双候选只读探测降低漏迁风险。
+  - 本机 Xcode 27.2 构建的产物 LC_BUILD_VERSION sdk 为 14.0，CI（macos-latest，Xcode 26.5）产物为 26.5；macOS 27 按链接 SDK 版本切换 SwiftUI 布局度量与控件渲染（分组表单行高、按钮由 AppKit 还是 SwiftUI 绘制、设置窗口打开入口），仅在本机链接版本下渲染核对不能完全代表 CI 产物，Mac 真机最终验收以 CI 产物为准。

@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: state-persistence
+operations:
+  ADDED:
+    cross-client-config-migration-readonly:
+      strength: SHOULD
+      statement: 原生客户端（macOS 及后续 Windows）的跨客户端配置迁移应只读旧客户端目录：不修改、不覆盖、不删除旧文件；仅在原生 config.json 缺失时尝试（迁移成功后原生配置已存在，不再触发；原生配置有效或损坏都跳过）；只迁移去 token 的干净 harness 地址与合法 https 诊断端点（地址取自首个有效候选目录，该目录没有合法诊断端点时可取自其余候选目录），不迁移 cookie 等凭据并引导重新认证；原生配置存在期间，用户在原生端清除的状态不得被旧文件回灌。迁移逻辑下沉纯逻辑层，并以「源目录与文件只读权限加字节不变断言」和「已有原生配置（含损坏）不触发」的测试覆盖。
+      rationale: macos-setup-settings 首次落地该行为，路线中的 windows-setup-settings 要求完全一致的迁移语义；旧客户端与原生客户端并存且共用应用标识，任何对旧目录的写入都可能破坏用户仍在使用的 Electron 版配置，或把用户已清除的诊断端点重新带回。
+      enforcement:
+        method: test
+        detail: 纯逻辑层测试把旧客户端候选目录及其文件设为只读权限后执行迁移，断言源文件字节不变、原生目录只出现干净地址与合法端点且无 cookie 文件；再分别以已有有效与已有损坏的原生配置各验证一次不触发迁移，并验证原生端点被清除后重跑迁移不回灌。
+      examples:
+        good:
+          - macos/Core 的 SetupSettingsMigrationTests：源目录只读权限下迁移后逐字节比对 config.json、diagnostics.json 与 Cookies，清除原生 diagnostics.json 后重跑迁移并断言不回灌
+        bad:
+          - 迁移时在旧客户端目录写入标记文件，或原生配置损坏时直接用旧配置覆盖
+  MODIFIED: {}
+  REMOVED: {}

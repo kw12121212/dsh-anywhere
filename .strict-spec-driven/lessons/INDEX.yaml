@@ -234,6 +234,16 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/testing/must-mock-open-question-82a79a.yaml
+    bundle-id-859fd0:
+      title: 验收反馈的界面缺陷先核对用户跑的是哪个构建：同一 bundle id 的旧实例还在运行时，打开新副本只会激活旧实例
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/bundle-id-859fd0.yaml
+    token-1e3f57:
+      title: 失败路径测试只断言「有错误且不含 token」会假通过：更早一步的失败顶替了目标失败，必须断言具体失败原因文案
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/testing/token-1e3f57.yaml
   tooling:
     wails-v3-0-0-linux-init-c87c5b:
       title: Wails v3.0.0 的 Linux 依赖与 init 模板和文档假设不一致
@@ -370,6 +380,16 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/uiautomator-17642d.yaml
+    macos-xcode-27-sdk-14-0-ci-26-5-swiftui-vtool-8d38fc:
+      title: macOS 本机 Xcode 27 构建的产物链接 SDK 是 14.0，CI 产物是 26.5：SwiftUI 按链接版本分叉，本机验证先用 vtool 对齐
+      status: promoted
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/macos-xcode-27-sdk-14-0-ci-26-5-swiftui-vtool-8d38fc.yaml
+    mac-electron-gradle-gradle-0aa9c4:
+      title: 这台 Mac 跑完整回归的环境前提：Electron 与 Gradle 发行版的官方下载地址连不上，~/.gradle 还指向未挂载的移动硬盘
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/mac-electron-gradle-gradle-0aa9c4.yaml
   ui:
     compose-key-compose-7f09bd:
       title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态

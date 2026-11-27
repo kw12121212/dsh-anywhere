@@ -1,0 +1,22 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: macos-xcode-27-sdk-14-0-ci-26-5-swiftui-vtool-8d38fc
+  title: macOS 本机 Xcode 27 构建的产物链接 SDK 是 14.0，CI 产物是 26.5：SwiftUI 按链接版本分叉，本机验证先用 vtool 对齐
+category: tooling
+status: promoted
+created_at: '2026-11-26T16:47:07.991Z'
+updated_at: '2026-11-26T16:47:38.266Z'
+context: macos-setup-settings 的 Mac 验收反馈排查：用户报告「设置里的地址栏输入左边有一大块空白」，需要在本机 macOS 27.2.1 上把 SettingsView 真实渲染出来与 CI 产物对照。
+observation: CI（macos-latest，Xcode 26.5）构建的 DSH Anywhere 二进制 LC_BUILD_VERSION 为 minos 14.0 / sdk 26.5，本机 Xcode 27.2 的 swift build（debug 与 release）产物却是 sdk 14.0。同一台系统上两类产物的行为不同：分组表单行高 21 对 24 点、标题栏下的内容起点 28 对 32 点；按钮一类由 AppKit NSButton 承载、另一类是 SwiftUI 自绘的 KeyViewProxy（cacheDisplay 抓不到，只能在视图层级里读 frame）；NSApp.sendAction(showSettingsWindow:) 只在 sdk 14.0 类里建出设置窗口，新类要用 @Environment(\.openSettings)；CFFIXED_USER_HOME 在新类里也不再生效，隔离只能靠改写数据目录加 sandbox-exec 拒绝访问真实 DSH 目录。
+takeaway: 在 macOS 本机验证 macos/App 界面改动时，先 vtool -show-build 对比本机产物与 CI 产物的 sdk 字段；不一致就用 vtool -set-build-version macos 14.0 <CI 的 sdk 值> -replace 改写验证产物并 codesign --force --sign - 重签，两类版本各量取一遍。渲染探针要与真实 App 同构（WindowGroup 主窗口加 Settings 场景），经 @Environment(\.openSettings) 打开设置窗口；无人值守会话里窗口不会真正上屏，用 NSView.cacheDisplay 出图，按钮位置从视图层级的 frame 读取而不是依赖截图。
+applies_when: 在 macOS 本机用探针或本机构建验证 macos/App 的 SwiftUI/AppKit 界面，而发布给用户的是 GitHub Actions macos-latest 构建的产物时；或本机渲染结果与用户在 CI 产物上看到的不一致时。
+occurrences:
+  - origin: macos-setup-settings
+    date: '2026-11-27'
+    evidence: 2026-11-27 实测：vtool -show-build 对 ~/Downloads/dsh-macos-native/DSH Anywhere.app/Contents/MacOS/DSH Anywhere → sdk 26.5；对本机 dist/macos-native 产物与探针 → sdk 14.0。探针量得地址输入框 x=30→490（两类一致），关于入口按钮在 sdk 14.0 类为 NSButton x=13/top=413，在 sdk 26.5 类为 KeyViewProxy x=20/top=416；输出见 dist/macos-settings-evidence/*.geometry.txt。
+promoted_to:
+  standard: macos-client
+  rule: macos-ui-verification-matches-ci-link-sdk

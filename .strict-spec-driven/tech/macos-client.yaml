@@ -51,3 +51,31 @@ rules:
     enforcement:
       method: review
       detail: 评审检查 macos/App 数据目录名、ephemeral URLSession 配置（httpShouldSetCookies=false、禁用自动重定向）、不使用 AsyncBytes.lines、以及所有网络出口经 OriginScopedHttpTransport/OriginHeaderPolicy
+  macos-ui-verification-matches-ci-link-sdk:
+    strength: SHOULD
+    statement: 在 macOS 本机验证 macos/App 的界面改动时，应先用 vtool -show-build 对比验证产物与 CI 产物的 LC_BUILD_VERSION sdk 字段，确认两者属于同一链接 SDK 版本后再下结论：系统按该字段切换 SwiftUI 布局度量与控件渲染（2026-11-27 实测 CI macos-latest 产物为 26.5，本机 Xcode 27.2 的 swift build debug 与 release 产物均为部署目标 14.0，两者的分组表单行高与按钮渲染方式不同）；不一致时用 vtool -set-build-version macos 14.0 <CI 产物 sdk> -replace 改写验证产物并重新 ad-hoc 签名（codesign --force --sign -）后一并核对；Mac 真机最终验收仍以 CI 产物为准。
+    rationale: macos-setup-settings 的 Mac 验收反馈排查中实测（macOS 27.2.1，2026-11-27）：本机 Xcode 27.2 的 debug 与 release 产物 sdk 均为 14.0，CI 产物为 26.5；两类产物在同一系统上分组表单行高（21 对 24 点）、按钮渲染方式（AppKit NSButton 对 SwiftUI 自绘）与设置窗口的打开入口均不同，只看本机链接版本无法完全代表 CI 产物。
+    enforcement:
+      method: review
+      detail: 评审检查涉及 macos/App 界面的改动：验收证据注明所用产物的链接 SDK 版本（vtool -show-build）并与 CI 产物对比；不一致时是否对改写后的产物一并核对；Mac 真机验收是否使用 CI 产物。
+    examples:
+      good:
+        - 本机渲染探针构建后执行 vtool -set-build-version macos 14.0 26.5 -replace 与 codesign --force --sign -，再按 CI 链接版本复测设置窗口布局，并注明两类版本的量取结果
+      bad:
+        - 只用本机 swift build 产物渲染一次，未发现异常即判定 CI 产物的界面正确
+    exceptions:
+      - 仅改动 macos/Core 或不涉及 SwiftUI、AppKit 界面的文件时无需做此对比
+  macos-app-local-build-before-ci:
+    strength: SHOULD
+    statement: 涉及 macos/App 源码的改动，在 macOS 上应先执行 swift build --package-path macos/App 确认 SwiftUI 与 AppKit 代码可编译再推送触发 CI；该命令只在装有 Xcode 的 macOS 上可运行且不进 config.yaml 完整回归命令，在无 Xcode 的机器上无法执行时应把它登记为变更的 Testing 任务并在 macOS 上补跑，CI 的 package-macos-native 编译通过仍是 Mac 真机验收的前置。
+    rationale: 完整回归命令在 Linux 上不编译 macos/App，SwiftUI 代码的编译错误只能在 CI 暴露：macos-session-transport（8b589d1，Swift 6 sending 闭包并发检查）与 macos-setup-settings（e85578c，frame 多传 minHeight 实参）连续两次 CI 运行都在 Package (macOS native) 作业失败，各多耗一轮推送与等待。
+    enforcement:
+      method: review
+      detail: 评审检查涉及 macos/App 的变更是否带有 swift build --package-path macos/App 的 Testing 任务与 macOS 上的执行证据；开发机无 Xcode 时确认变更记录了只能依赖 CI 编译并在验收前核对 package-macos-native 作业通过。
+    examples:
+      good:
+        - macos/App 改动在变更的 Testing 任务登记 swift build --package-path macos/App，并在 macOS 上执行通过后再推送
+      bad:
+        - 只跑 Linux 完整回归就推送 macos/App 的 SwiftUI 改动，把 CI 当作第一次编译
+    exceptions:
+      - 仅改动 macos/Core、脚本、工作流或文档而不触及 macos/App 源码的变更

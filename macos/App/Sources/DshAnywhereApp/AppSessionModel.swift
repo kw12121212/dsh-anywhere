@@ -65,18 +65,6 @@ final class AppSessionModel {
         }
     }
 
-    func openEditAddress() {
-        Task {
-            await controller.openEditAddress()
-        }
-    }
-
-    func cancelEditAddress() {
-        Task {
-            await controller.cancelEditAddress()
-        }
-    }
-
     func dismissVersionBanner() {
         Task {
             await controller.dismissVersionBanner()

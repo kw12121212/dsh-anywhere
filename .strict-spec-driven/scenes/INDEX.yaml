@@ -54,6 +54,10 @@ areas:
       title: macOS 原生客户端连接、会话建立与断线恢复
       status: draft
       path: .strict-spec-driven/scenes/macos/macos-connect-and-session.yaml
+    macos-setup-and-settings:
+      title: macOS 原生客户端首次设置、标准设置窗口与 Electron 配置迁移
+      status: draft
+      path: .strict-spec-driven/scenes/macos/macos-setup-and-settings.yaml
   release:
     release-new-version:
       title: 发布新版本

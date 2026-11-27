@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: bundle-id-859fd0
+  title: 验收反馈的界面缺陷先核对用户跑的是哪个构建：同一 bundle id 的旧实例还在运行时，打开新副本只会激活旧实例
+category: testing
+status: active
+created_at: '2026-11-26T16:47:28.314Z'
+updated_at: '2026-11-26T16:47:28.314Z'
+context: macos-setup-settings：用户基于 CI 产物做 Mac 验收时报告「设置里的地址栏输入左边有一大块空白」。开发机是 Linux，上一轮已按同样的描述盲改过一次（e85578c 去掉行标签）并重新出了 CI 产物，用户又报了同一问题。
+observation: 空白只存在于首个 CI 构建 d8deb8b：地址输入框用长标题充当分组表单的行标签，输入框起点 x=229、宽 221，窗口 480×450。修复提交 e85578c/32ab9f9 之后的产物里输入框已通栏（x=30→490）。gh run list 显示修复后的产物 23:38 才构建成功、23:40 下载；而用户 App 偏好 work.keepwriting.dsh-anywhere.plist 里设置窗口的持久化尺寸仍是旧构建特征值「615 345 480 450」——修复后的构建一旦打开过设置窗口，这个值会被改写成 520 宽。据此推断用户看到的仍是旧实例（同 bundle id 的旧副本未退出时，再打开新副本只会把旧实例带到前台），尚待用户用新构建复核确认。
+takeaway: 收到基于 CI 产物或本机构建的界面缺陷反馈，先对齐三件事再动代码：gh run list 看用户下载的产物对应哪个提交；用 git show <提交>:<文件> 在隔离环境里渲染那个版本的界面，确认能复现描述的现象；再看用户偏好里持久化的窗口尺寸等构建特征值，判断实际运行的是哪个构建。当前 HEAD 已不含该缺陷时，结论是「请彻底退出旧实例后用新构建复核」，而不是继续盲改代码；修复界面缺陷后主动提醒用户退出旧实例。
+applies_when: 用户基于 CI 产物或本机构建报告界面缺陷，而当前 HEAD 的代码读起来或复现起来没有该缺陷时；尤其是同一 bundle id 存在新旧两份构建、或前一轮已经按同样描述修过一次时。
+occurrences:
+  - origin: macos-setup-settings
+    date: '2026-11-27'
+    evidence: 2026-11-27：plutil -p ~/Library/Preferences/work.keepwriting.dsh-anywhere.plist → NSWindow Frame com_apple_SwiftUI_Settings_window = "615 345 480 450 0 0 1710 1074 "；gh run list → d8deb8b 15:21:44Z 成功、e85578c 15:34:07Z 失败、32ab9f9 15:36:46Z 成功；~/Downloads/dsh-macos-native/DSH Anywhere.app 构建时间 23:38:21；隔离探针渲染 d8deb8b 的 SettingsView 得到相同的 480×450 与 x=229。

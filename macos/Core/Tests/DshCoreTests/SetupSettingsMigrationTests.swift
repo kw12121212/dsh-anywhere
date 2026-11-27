@@ -255,7 +255,8 @@ final class SetupSettingsMigrationTests: XCTestCase {
         XCTAssertFalse(corruptSnap.migratedFromElectron)
         await corruptCtrl.stop()
 
-        // 首次设置保存目录不可写时停留在 setup，且错误信息不含 token
+        // 首次设置保存目录不可写（以普通文件充当目录）：停留 setup 并给出固定文案。
+        // 必须不带 token 提交——带 token 时会先建立会话并落盘 cookie，流程到不了写 config.json 这一步。
         let fileAsDir = root.appendingPathComponent("blocked-file")
         try Data("blocker".utf8).write(to: fileAsDir)
         let blockedCtrl = MacosSessionController(
@@ -266,12 +267,39 @@ final class SetupSettingsMigrationTests: XCTestCase {
             sseStream: HoldingSseStream()
         )
         await blockedCtrl.start()
-        await blockedCtrl.submitUrl("http://127.0.0.1:13080/?token=tok_secret_write")
+        await blockedCtrl.submitUrl("http://127.0.0.1:13080/")
         let blockedSnap = await blockedCtrl.currentSnapshot()
         XCTAssertEqual(.setup(invalidConfig: false), blockedSnap.screen)
-        XCTAssertNotNil(blockedSnap.formError)
-        XCTAssertFalse(blockedSnap.formError?.contains("tok_secret_write") ?? false)
+        XCTAssertEqual("保存配置失败，请检查应用数据目录权限", blockedSnap.formError)
+        XCTAssertEqual(.missing, HarnessConfigStore(directory: fileAsDir).load())
         await blockedCtrl.stop()
+    }
+
+    func testFirstRunSubmitProbeFailureStaysOnSetupWithoutToken() async throws {
+        let nativeDir = makeTempDir("dsh-first-run-probe-")
+        defer { try? FileManager.default.removeItem(at: nativeDir) }
+
+        let probe = StubHttpTransport()
+        probe.handler = { _ in throw TransportError(.refused) }
+
+        let controller = MacosSessionController(
+            configStore: HarnessConfigStore(directory: nativeDir),
+            cookieStore: SessionCookieStore(directory: nativeDir),
+            probeTransport: probe,
+            apiTransport: StubHttpTransport(),
+            sseStream: HoldingSseStream()
+        )
+        await controller.start()
+        await controller.submitUrl("http://127.0.0.1:13081/?token=tok_probe_fail")
+
+        let snap = await controller.currentSnapshot()
+        XCTAssertEqual(.setup(invalidConfig: false), snap.screen)
+        XCTAssertEqual(
+            "\(ConnectionCopy.probeReasonTitle(.refused))：\(ConnectionCopy.probeHint(forCleanUrl: "http://127.0.0.1:13081/"))",
+            snap.formError
+        )
+        XCTAssertEqual(.missing, HarnessConfigStore(directory: nativeDir).load())
+        await controller.stop()
     }
 
     func testControllerSaveSettingsUrlPaths() async throws {
@@ -374,6 +402,8 @@ final class SetupSettingsMigrationTests: XCTestCase {
             return s.screen == .connected && s.status == .online && s.cleanUrl == "http://127.0.0.1:13080/"
         }
         XCTAssertEqual(.ok("http://127.0.0.1:13080/"), configStore.load())
+        let tokenHits = api.requests.filter { $0.url == "http://127.0.0.1:13080/?token=def456" }
+        XCTAssertEqual(1, tokenHits.count, "带 token 地址只能请求一次")
         await controller.stop()
 
         // 6. 非在线状态（如错误页）下不改地址直接保存 -> 触发重连并返回 .saved
@@ -406,22 +436,43 @@ final class SetupSettingsMigrationTests: XCTestCase {
         }
         await offlineCtrl.stop()
 
-        // 7. 设置保存写入失败（以普通文件充当目录）-> .failed 且不含 token
+        // 6b. 同一分支在目标仍不可达时同样返回 .saved（设置窗口照常关闭），由主窗口重新探测并落到错误页
+        let stillDownProbe = StubHttpTransport()
+        stillDownProbe.handler = { _ in throw TransportError(.refused) }
+        let stillDownCtrl = MacosSessionController(
+            configStore: offlineConfig,
+            cookieStore: offlineCookies,
+            probeTransport: stillDownProbe,
+            apiTransport: api,
+            sseStream: HoldingSseStream()
+        )
+        await stillDownCtrl.start()
+        try await waitUntil {
+            await stillDownCtrl.currentSnapshot().screen == .error(.refused)
+        }
+        let probesBeforeSave = stillDownProbe.requests.count
+        let stillDownRes = await stillDownCtrl.saveSettingsUrl("http://127.0.0.1:13080/")
+        XCTAssertEqual(.saved, stillDownRes)
+        try await waitUntil {
+            await stillDownCtrl.currentSnapshot().screen == .error(.refused) && stillDownProbe.requests.count > probesBeforeSave
+        }
+        XCTAssertEqual(.ok("http://127.0.0.1:13080/"), offlineConfig.load())
+        await stillDownCtrl.stop()
+
+        // 7. 设置保存写入失败（以普通文件充当目录，不带 token 以确保走到写 config.json）-> .failed 固定文案，配置不变
         let blockedFile = root.appendingPathComponent("settings-blocked")
         try Data("x".utf8).write(to: blockedFile)
+        let blockedStore = HarnessConfigStore(directory: blockedFile)
         let unwritableCtrl = MacosSessionController(
-            configStore: HarnessConfigStore(directory: blockedFile),
+            configStore: blockedStore,
             cookieStore: SessionCookieStore(directory: blockedFile),
             probeTransport: probe,
             apiTransport: api,
             sseStream: HoldingSseStream()
         )
-        let writeFailRes = await unwritableCtrl.saveSettingsUrl("http://127.0.0.1:13080/?token=tok_perm")
-        if case .failed(let msg) = writeFailRes {
-            XCTAssertFalse(msg.contains("tok_perm"))
-        } else {
-            XCTFail("期望写入失败返回 .failed，实际为 \(writeFailRes)")
-        }
+        let writeFailRes = await unwritableCtrl.saveSettingsUrl("http://127.0.0.1:13080/")
+        XCTAssertEqual(.failed("保存配置失败，请检查应用数据目录权限"), writeFailRes)
+        XCTAssertEqual(.missing, blockedStore.load())
     }
 
     private func waitUntil(timeoutSeconds: TimeInterval = 3.0, _ predicate: @escaping () async -> Bool) async throws {

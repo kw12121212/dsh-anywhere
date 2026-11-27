@@ -12,10 +12,13 @@ sections:
       text: 扩展 macos/Core/Sources/DshCore/MacosSessionController.swift：在 MacosSessionSnapshot 新增 migratedFromElectron/migratedDiagnosticsEndpoint；在 init 注入可选 electronConfigDirectories 并在 start() 触发一次性只读迁移；新增 SettingsSaveOutcome 与 saveSettingsUrl(_:) 实现设置窗口保存策略（在线且地址未变无 token 跳过重连、非在线未变触发重连、新地址或含 token 先探测/按需一次建会话再原子落盘并无需重启生效、失败不回显 token 且保留旧配置与原界面）
       status: complete
     core-setup-settings-migration-tests:
-      text: 在 macos/Core/Tests/DshCoreTests/ 新增 SetupSettingsMigrationTests.swift，覆盖 DiagnosticsEndpointConfig 校验/原子写/容错读、ElectronConfigMigrator 双候选目录优先级/剥离 token/只读不改源/不迁 cookie/损坏容错/已有原生配置（含损坏）不覆盖、控制器迁移后无 cookie 自动进带迁移提示重认证页、以及 saveSettingsUrl 全部路径
+      text: 在 macos/Core/Tests/DshCoreTests/ 新增 SetupSettingsMigrationTests.swift，覆盖 DiagnosticsEndpointConfig 校验/原子写/容错读、ElectronConfigMigrator 双候选目录优先级/剥离 token/只读不改源/不迁 cookie/损坏容错/已有原生配置（含损坏）不覆盖、控制器迁移后无 cookie 自动进带迁移提示重认证页、首次设置的探测失败与写入失败（精确断言失败文案），以及 saveSettingsUrl 的在线未改、非在线未改（目标可达与仍不可达）、非法地址、探测失败、建会话被拒、写入失败与新地址保存路径（带 token 地址只请求一次）
       status: complete
     macos-app-setup-settings-ui:
       text: 在 macos/App/Sources/DshAnywhereApp/ 新增 SettingsView.swift（独立草稿与实时校验、保存/取消、连接状态概要与关于 DSH Anywhere 入口/标准关于面板）；更新 DshAnywhereApp.swift 注册 Settings 场景（⌘,）；更新 AppSessionModel.swift 注入 Electron 候选目录并暴露 saveSettingsUrl；更新 ContentView.swift 完善首次设置页文案与实时校验、迁移后重认证提示，并将修改地址按钮统一接入 @Environment(\.openSettings)
+      status: complete
+    macos-settings-acceptance-layout-fixes:
+      text: Mac 验收反馈修正（macos/App/Sources/DshAnywhereApp/SettingsView.swift）：「连接地址」地址输入以无标签通栏行呈现（标题仅作输入框内占位提示，不再充当分组表单的行标签，输入框铺满分组宽度、左侧不留空白标签列）；「关于 DSH Anywhere…」入口从可滚动的「关于」分组移到窗口底栏，默认窗口高度下无需滚动即可见。在本机 macOS 用隔离渲染探针（数据目录重定向到临时目录并拒绝访问真实 DSH 目录）分别按 CI 链接 SDK 版本与本机链接版本量取输入框与按钮位置核对
       status: complete
   Testing:
     swift-core-tests:
@@ -26,17 +29,21 @@ sections:
       text: 运行 TypeScript 类型检查与打包/工作流脚本测试确认既有桌面与打包契约未受影响
       status: complete
       command: npm run typecheck && npx vitest run scripts/macos-package.test.mts scripts/workflows.test.mts
+    macos-app-build:
+      text: 在 macOS 上编译 macos/App（SwiftUI 目标不进完整回归命令，此前仅靠 CI 发现编译错误）确认 SettingsView 等 App 源码可编译
+      status: complete
+      command: swift build --package-path macos/App
   Verification:
     full-regression:
       text: 在本地运行 .strict-spec-driven/config.yaml 完整回归命令
       status: complete
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
     macos-ci-and-device-acceptance:
-      text: 按用户确认的 macos-app-acceptance-gate 方案完成 macOS CI 编译与 Mac 真机核对（全新 Mac 首次设置、已装 Electron 版的 Mac 自动带入地址并显示重认证页、设置窗口 ⌘, 修改地址无需重启生效）
-      status: pending
+      text: 按用户确认的 macos-app-acceptance-gate 方案完成 macOS CI 编译与 Mac 真机核对：先提交并推送本变更的全部改动（含工作区中未提交的设置窗口、测试与规格修正）触发 package-macos-native，再用该 CI 产物在 Mac 上逐项核对——首次设置：全新安装显示欢迎说明且无「配置无效」提示，空值禁用提交，非法地址禁用并显示原因，合法地址启用，提交后保存干净地址并进入在线，提交失败则停留并显示不含 token 的错误；原生配置损坏时显示「已有配置无效」且不被 Electron 配置覆盖；迁移：已装 Electron 版的 Mac 自动带入地址并显示带迁移提示的重认证页；设置窗口：⌘, 与应用菜单均可打开，显示已保存干净地址与连接状态，重复打开只聚焦已有窗口且主窗口不受影响，与主窗口草稿互不影响，地址输入框通栏且左侧无空白标签列，关于入口无需滚动可见并能打开标准关于面板，空值与非法地址禁用保存，在线未改保存直接关窗且连接不中断，非在线未改保存关窗后主窗口重新连接，修改地址保存后无需重启生效，保存失败时窗口保持打开且错误不含 token，取消或关闭不改变配置
+      status: complete
     ready-verify:
       text: 运行 strict-spec-cli ready macos-setup-settings && strict-spec-cli verify macos-setup-settings 确认产物、场景覆盖与门禁全部通过
-      status: pending
+      status: complete
       command: strict-spec-cli ready macos-setup-settings && strict-spec-cli verify macos-setup-settings
 testing_gates:
   validation_task: node-typecheck-and-package-tests

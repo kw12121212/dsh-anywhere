@@ -7,7 +7,7 @@ operations:
   ADDED:
     first-run-setup-and-live-validation:
       strength: MUST
-      statement: 首次启动且原生 config.json 缺失（且未命中可迁移的 Electron 配置）时，主窗口显示首次设置界面（含欢迎说明、粘贴提示、地址输入框与提交按钮，且不显示配置无效提示）；若原生 config.json 损坏或地址无效，则显示首次设置界面并提示已有配置无效（不得触发迁移）。用户输入时实时校验：空值或非法地址禁用提交并展示固定原因（不含输入原文或 token）；提交合法地址后剥离 token 原子保存干净地址并用原始输入建立会话进入主窗口；保存或探测失败时停留在首次设置界面并展示不含 token 的错误信息。
+      statement: 首次启动且原生 config.json 缺失（且未命中可迁移的 Electron 配置）时，主窗口显示首次设置界面（含欢迎说明、粘贴提示、地址输入框与提交按钮，且不显示配置无效提示）；若原生 config.json 损坏或地址无效，则显示首次设置界面并提示已有配置无效（不得触发迁移）。用户输入时实时校验：空值时禁用提交且不显示实时校验原因，非法地址禁用提交并展示固定原因（不含输入原文或 token）；提交合法地址后先探测可达，再剥离 token 原子保存干净地址（输入带 token 时先按原始输入建立一次会话），随后进入主窗口；探测、建会话或保存失败时停留在首次设置界面并展示不含 token 的错误信息。
       scenarios:
         fresh-launch-shows-setup-with-live-validation:
           - GIVEN: 原生数据目录与 Electron 目录均无已保存配置
@@ -27,16 +27,12 @@ operations:
           - THEN: 主窗口停留在首次设置界面并显示可读错误，错误信息中不含 abc123
     macos-settings-window:
       strength: MUST
-      statement: 应用提供标准 macOS Settings 窗口（⌘, 及应用菜单设置入口），与主窗口独立维护编辑草稿：打开时显示当前已保存干净地址、连接状态概要与关于 DSH Anywhere 入口，重复打开聚焦已有窗口且不影响主窗口；编辑时实时校验并禁用无效保存；点击保存时，若当前在线且地址未改动且未输入 token 则直接关闭设置窗口不重连，否则先探测（含 token 时按需一次建会话）再原子保存干净地址、关闭窗口并无需重启立即生效；取消或保存失败不修改已保存配置与主窗口，失败时设置窗口保持打开并显示不含 token 的错误信息。
+      statement: 应用提供标准 macOS Settings 窗口（⌘, 及应用菜单设置入口），与主窗口独立维护编辑草稿：打开时显示当前已保存干净地址、连接状态概要与无需滚动即可见的关于 DSH Anywhere 入口，重复打开聚焦已有窗口且不影响主窗口；编辑时实时校验：空值禁用保存且不显示实时校验原因，非法地址禁用保存并显示原因；点击保存时，若当前在线且地址未改动且未输入 token 则直接关闭设置窗口不重连；地址未改动且未输入 token 但当前不在线时直接关闭设置窗口并由主窗口无需重启重新连接，结果由主窗口按重新探测与会话检查显示；其余情况先探测（含 token 时按需一次建会话）成功后再原子保存干净地址、关闭窗口并无需重启立即生效；取消或保存失败不修改已保存配置与主窗口，探测、建会话或写入失败时设置窗口保持打开并显示不含 token 的错误信息。
       scenarios:
         open-settings-shows-clean-url-status-and-about:
           - GIVEN: 已保存 https://dsh.example.test/ 且主窗口正处于在线状态
           - WHEN: 用户按下 ⌘, 或选择设置入口，随后再次触发设置入口
           - THEN: 标准设置窗口打开并显示 https://dsh.example.test/、当前连接状态与关于入口；再次触发只聚焦已有设置窗口，主窗口保持在线不受影响
-        settings-live-validation-and-cancel-preserves-state:
-          - GIVEN: 设置窗口已打开并把地址改为空值或 ftp://dsh.example.test/
-          - WHEN: 查看保存按钮状态并最终点击取消或关闭窗口
-          - THEN: 非法输入期间保存按钮不可用且显示原因；取消或关闭后原配置与主窗口保持不变
         settings-save-new-url-reconnects-without-restart:
           - GIVEN: 当前已保存 https://a.example.test/，用户在设置窗口粘贴 http://127.0.0.1:13080/?token=def456
           - WHEN: 点击保存
@@ -49,6 +45,22 @@ operations:
           - GIVEN: 设置窗口已打开且目标地址探测失败或配置目录不可写
           - WHEN: 用户输入 http://127.0.0.1:13080/?token=abc123 并点击保存
           - THEN: 设置窗口保持打开并显示不含 abc123 的错误提示，原已保存配置与主窗口连接不受影响
+        settings-url-field-spans-group-width:
+          - GIVEN: 已保存 https://dsh.example.test/
+          - WHEN: 用户打开设置窗口查看「连接地址」分组
+          - THEN: 地址输入框横向铺满该分组的内容宽度，输入框左侧不出现空白或被长标题占用的标签列
+        settings-about-entry-visible-without-scrolling:
+          - GIVEN: 已保存 https://dsh.example.test/，设置窗口为默认打开尺寸
+          - WHEN: 用户打开设置窗口
+          - THEN: 「关于 DSH Anywhere…」入口无需滚动或拉高窗口即可见，点击后显示标准关于面板
+        settings-live-validation-and-cancel-preserves-state:
+          - GIVEN: 设置窗口已打开并把地址改为空值或 ftp://dsh.example.test/
+          - WHEN: 查看保存按钮状态并最终点击取消或关闭窗口
+          - THEN: 保存按钮不可用（ftp 地址显示原因，清空地址时不显示实时校验原因）；取消或关闭后原配置与主窗口保持不变
+        settings-save-unchanged-offline-reconnects:
+          - GIVEN: 已保存 https://dsh.example.test/，主窗口显示连接错误页或重新认证页
+          - WHEN: 用户在设置窗口不修改地址、不带 token 直接点击保存
+          - THEN: 设置窗口关闭，主窗口无需重启即重新连接，并按重新探测与会话检查的结果显示在线、对应错误页或重新认证页
     electron-config-migration:
       strength: MUST
       statement: 仅当原生 config.json 缺失时，客户端按只读方式扫描同机原版 Electron 配置目录（~/Library/Application Support/DSH Anywhere/ 与 ~/Library/Application Support/dsh-anywhere/），迁移其中有效的 harness URL（剥离可能残留的 token）至原生 config.json，并在原生 diagnostics.json 尚不存在时迁移合法的 https 诊断端点（非法或非 https 端点忽略且不阻断）；迁移过程中不修改、覆盖或删除 Electron 目录中的任何文件，也不迁移 Chromium cookie，随后自动进入带迁移提示的本地重新认证页引导重新认证；当原生 config.json 已存在（无论有效或损坏）时绝不触发迁移。

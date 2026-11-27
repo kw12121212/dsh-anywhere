@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: mac-electron-gradle-gradle-0aa9c4
+  title: 这台 Mac 跑完整回归的环境前提：Electron 与 Gradle 发行版的官方下载地址连不上，~/.gradle 还指向未挂载的移动硬盘
+category: tooling
+status: active
+created_at: '2026-11-26T16:47:28.422Z'
+updated_at: '2026-11-26T16:47:28.422Z'
+context: 在用户 Mac（macOS 27.2.1）上为 macos-setup-settings 跑 config.yaml 的完整回归命令（npm ci 起，含 android/gradlew -p android/core test）。
+observation: 'npm ci 重装 node_modules 后 postinstall 要从 GitHub Releases 下载 Electron 45.2.1 二进制，@electron/get 报 TypeError: fetch failed（github.com 直连超时，api.github.com 可达）；android/gradlew 报 Could not create parent directory for lock file …gradle-9.6.0-bin.zip.lck，因为 ~/.gradle 是指向 /Volumes/Samsung_T5/AndroidDev/gradle-home 的符号链接而硬盘没插；改用可写的 GRADLE_USER_HOME 后 wrapper 又因 services.gradle.org 跳转的 CDN 连接超时失败（SocketTimeoutException）。'
+takeaway: 不动用户的 ~/.gradle 符号链接：把 GRADLE_USER_HOME 指到临时目录；Electron 用 ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/，Gradle 发行版从 mirrors.cloud.tencent.com/gradle/ 下载后放进 GRADLE_USER_HOME 下的 wrapper/dists/gradle-9.6.0-bin/42k10rwplmzkhuboz9kdazi7s/。镜像只当下载通道，必须对照官方摘要校验后再用：Electron 的 SHASUMS256.txt 与 zip 对 api.github.com 发布资产的 digest，Gradle 的 zip 对 services.gradle.org/distributions/gradle-<版本>-bin.zip.sha256。回归命令本身逐字不改，只在环境变量里补这两个值，并在报告里说明。
+applies_when: 在这台 Mac 上首次运行或重跑完整回归命令，npm ci 的 postinstall 报 fetch failed、gradlew 报无法创建 lock file 目录或 wrapper 下载超时时。
+occurrences:
+  - origin: macos-setup-settings
+    date: '2026-11-27'
+    evidence: 2026-11-27：ls -lad ~/.gradle → /Volumes/Samsung_T5/AndroidDev/gradle-home，/Volumes 下只有 Macintosh HD 与 Recovery；校验结果：Electron zip sha256 a9a1a0a5b64df714957f83467c84823cb34792205922c6f136550b2403605922、SHASUMS256.txt 7ffbf4a406ba5df5bd97e8a549ed1042af209456f98cf041c4dfababdc2f9abb 与 api.github.com 一致，gradle-9.6.0-bin.zip sha256 bbaeb2fef8710818cf0e261201dab964c572f92b942812df0c3620d62a529a01 与 services.gradle.org 一致；补齐后 android core 660 个测试全部通过。

@@ -43,7 +43,6 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
     public var roomCount: Int
     public var isSubmitting: Bool
     public var formError: String?
-    public var editingAddress: Bool
     public var migratedFromElectron: Bool
     public var migratedDiagnosticsEndpoint: Bool
 
@@ -62,7 +61,6 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         roomCount: Int = 0,
         isSubmitting: Bool = false,
         formError: String? = nil,
-        editingAddress: Bool = false,
         migratedFromElectron: Bool = false,
         migratedDiagnosticsEndpoint: Bool = false
     ) {
@@ -80,7 +78,6 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         self.roomCount = roomCount
         self.isSubmitting = isSubmitting
         self.formError = formError
-        self.editingAddress = editingAddress
         self.migratedFromElectron = migratedFromElectron
         self.migratedDiagnosticsEndpoint = migratedDiagnosticsEndpoint
     }
@@ -253,7 +250,6 @@ public actor MacosSessionController {
                 return .unchanged
             }
             snapshot.formError = nil
-            snapshot.editingAddress = false
             launchConnect(cleanUrl: cleanUrl, preserveSyncCursor: false, skipInitialProbe: false)
             return .saved
         }
@@ -321,7 +317,6 @@ public actor MacosSessionController {
     private func applySavedConnection(cleanUrl: String, hasToken: Bool, probeStatusCode: Int) {
         resetSyncCursor()
         snapshot.cleanUrl = cleanUrl
-        snapshot.editingAddress = false
         snapshot.isSubmitting = false
         snapshot.formError = nil
         snapshot.versionBanner = nil
@@ -351,20 +346,7 @@ public actor MacosSessionController {
             return
         }
         snapshot.formError = nil
-        snapshot.editingAddress = false
         launchConnect(cleanUrl: cleanUrl, preserveSyncCursor: false, skipInitialProbe: false)
-    }
-
-    public func openEditAddress() {
-        snapshot.editingAddress = true
-        snapshot.formError = nil
-        emitSnapshot()
-    }
-
-    public func cancelEditAddress() {
-        snapshot.editingAddress = false
-        snapshot.formError = nil
-        emitSnapshot()
     }
 
     public func dismissVersionBanner() {

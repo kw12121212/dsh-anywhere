@@ -1,6 +1,9 @@
 import Foundation
 
-/// 诊断上报端点的校验、解析与序列化（仅接受无 query 与 userInfo 的 `https` 地址，语义对齐 `validateDiagnosticsEndpoint`）。
+/// 诊断上报端点的校验、解析与序列化：仅接受带主机名的 `https` 绝对地址且不含 query 与 userInfo。
+/// 规范化与桌面端 `validateDiagnosticsEndpoint` 一致（小写主机、去默认 443 端口、空路径补 `/`），并去掉 fragment。
+/// 与桌面端的差异：额外拒绝 userInfo、控制字符与非法百分号转义（更严）；主机名只排除 `[]:/?#@%` 等分隔符，
+/// 不做 punycode，也比 `new URL()` 的主机名校验宽松。后续在设置里校验用户输入时需沿用同一口径。
 public enum DiagnosticsEndpointConfig: Sendable {
     public enum Load: Equatable, Sendable {
         case missing

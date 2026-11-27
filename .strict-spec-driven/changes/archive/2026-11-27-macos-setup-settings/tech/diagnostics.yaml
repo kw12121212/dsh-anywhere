@@ -1,0 +1,17 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: diagnostics
+operations:
+  ADDED: {}
+  MODIFIED:
+    diagnostics-endpoint-user-configured:
+      strength: MUST
+      statement: 诊断类上报端点只能来自用户在设置中的显式配置:默认未配置即完全关闭(不采集、不落盘、不发送),仅接受 https 地址,提供清除(删除配置并清空待发队列);端点与任何凭据不得硬编码;报告、本地队列与日志中携带地址的文本必须经与 HarnessUrl.redact 同源的脱敏,token 查询参数的值绝不出现。
+      rationale: 仓库公开而端点位于私有 tailnet,地址即敏感信息;报告离开设备进入常驻服务,泄漏面大于本地日志(security-secrets/no-input-echo-errors 的延伸)。
+      enforcement:
+        method: test
+      exceptions:
+        - 原生 config.json 缺失且原生 diagnostics.json 尚不存在时，从同机原版 Electron 客户端已保存的 diagnostics.json 只读迁移而来的合法 https 端点，视同用户此前的显式配置；只要原生 config.json 仍存在，用户在原生端清除的端点不得被旧 Electron 文件回灌
+  REMOVED: {}

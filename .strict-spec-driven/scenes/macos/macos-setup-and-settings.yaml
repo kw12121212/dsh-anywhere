@@ -1,0 +1,68 @@
+schema: strict-spec-driven/scene/v1
+schema_version: 1
+artifact_type: scene
+schema_file: templates/strict-spec-driven/schemas/scene.yaml
+scene:
+  id: macos-setup-and-settings
+  title: macOS 原生客户端首次设置、标准设置窗口与 Electron 配置迁移
+area: macos
+status: draft
+actors:
+  - name: 用户
+    role: 粘贴 dsh-url 地址完成首次设置、通过设置窗口查看或修改 harness 地址、或从 Electron 版切换后完成重新认证
+  - name: DSH Anywhere (macOS)
+    role: 原生客户端，负责地址实时校验与原子持久化、标准设置窗口交互、Electron 只读迁移及无重启会话切换
+  - name: 旧版 Electron DSH Anywhere 配置目录
+    role: 提供已保存的 harness URL 与诊断端点配置供首次启动只读迁移
+preconditions:
+  - 用户已在 macOS 14+ 启动原生版 DSH Anywhere
+main_flow:
+  first-run-setup-live-validate:
+    action: 全新安装且无配置时主窗口显示首次设置页并实时校验用户输入：非法或空输入禁用提交并展示固定原因，合法输入启用提交
+    covered_by:
+      - spec_id: macos-app
+        requirement_id: first-run-setup-and-live-validation
+  first-run-setup-submit:
+    action: 用户提交合法地址后客户端保存去掉 token 的干净地址并用原始带 token 地址建连一次进入在线状态；保存失败时停留设置页且错误不含 token
+    covered_by:
+      - spec_id: macos-app
+        requirement_id: first-run-setup-and-live-validation
+      - spec_id: macos-app
+        requirement_id: session-establish-and-persist
+  open-settings-window:
+    action: 用户通过 Cmd+,、应用菜单或「修改地址」打开并聚焦独立标准设置窗口，查看当前干净地址、连接状态与关于入口，主窗口页面不受影响
+    covered_by:
+      - spec_id: macos-app
+        requirement_id: macos-settings-window
+  save-settings-url:
+    action: 用户在设置窗口修改并保存地址，客户端校验探测（含按需建会话）并原子持久化干净地址后关闭设置窗口、无需重启即切换连接；在线未改动时直接关闭且不重连
+    covered_by:
+      - spec_id: macos-app
+        requirement_id: macos-settings-window
+exception_flows:
+  invalid-native-config:
+    trigger: 原生 config.json 内容损坏或地址非法
+    steps:
+      show-invalid-setup:
+        action: 主窗口显示首次设置页并提示已有配置无效、需要重新填写，不覆盖原配置也不触发 Electron 迁移
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: first-run-setup-and-live-validation
+  electron-migration:
+    trigger: 原生 config.json 缺失但 Electron 配置目录存在有效配置
+    steps:
+      migrate-readonly-and-reauth:
+        action: 客户端只读带入干净 harness URL 与合法 https 诊断端点（不改 Electron 文件、不迁 cookie），因无原生会话直接显示带迁移提示的重新认证页
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: electron-config-migration
+          - spec_id: macos-app
+            requirement_id: session-expired-reauth
+  settings-cancel-or-failure:
+    trigger: 用户在设置窗口取消/关闭，或提交新地址验证/保存失败
+    steps:
+      keep-existing-config-and-main:
+        action: 取消或失败均不改变已保存配置与主窗口；失败时设置窗口保持打开并显示不含 token 的可读错误
+        covered_by:
+          - spec_id: macos-app
+            requirement_id: macos-settings-window

@@ -127,9 +127,6 @@ struct SettingsView: View {
                     Text(AppIdentity.copyright)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("关于 \(AppIdentity.displayName)…") {
-                        NSApplication.shared.orderFrontStandardAboutPanel(nil)
-                    }
                 }
             }
             .formStyle(.grouped)
@@ -137,6 +134,11 @@ struct SettingsView: View {
             Divider()
 
             HStack {
+                // 固定在底栏而不放进表单：窗口较矮时表单会滚动裁切，关于入口必须保持可见。
+                Button("关于 \(AppIdentity.displayName)…") {
+                    NSApplication.shared.orderFrontStandardAboutPanel(nil)
+                }
+
                 Spacer()
                 Button("取消") {
                     closeSettingsWindow()
@@ -175,6 +177,8 @@ struct SettingsView: View {
             isSaving = false
             switch outcome {
             case .saved, .unchanged:
+                // 草稿只留已保存的干净地址：窗口若未能关闭，带 token 的输入也不继续显示在界面上。
+                draftUrl = (try? HarnessUrl.normalize(candidate)) ?? ""
                 closeSettingsWindow()
             case .failed(let message):
                 saveError = message

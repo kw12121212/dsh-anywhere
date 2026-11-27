@@ -13,6 +13,8 @@ rules:
     rationale: 仓库公开而端点位于私有 tailnet,地址即敏感信息;报告离开设备进入常驻服务,泄漏面大于本地日志(security-secrets/no-input-echo-errors 的延伸)。
     enforcement:
       method: test
+    exceptions:
+      - 原生 config.json 缺失且原生 diagnostics.json 尚不存在时，从同机原版 Electron 客户端已保存的 diagnostics.json 只读迁移而来的合法 https 端点，视同用户此前的显式配置；只要原生 config.json 仍存在，用户在原生端清除的端点不得被旧 Electron 文件回灌
   passive-capability-nonblocking:
     strength: MUST
     statement: 被动辅助能力(诊断捕获、入队、发送)不得阻塞主线程或 UI、不得触发隧道或网络连接建立、不得弹任何提示;失败静默保留,重试只在启动与错误触发点,不做定时轮询;服务端 4xx 属永久拒绝,直接丢弃该批不再重试。

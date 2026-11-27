@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-setup-settings
   milestone: macos-native-foundation
-status: planned
+status: complete
 summary: 首次设置页与设置窗口：粘贴 harness 地址实时校验并保存、设置窗口（⌘,）查看与修改地址并显示连接状态、从 Electron 版迁移已保存的 harness URL 与诊断端点配置
 details: 首次启动且无有效配置时主窗口显示首次设置页：输入框实时校验（复用 Core 的 URL 校验与共用向量的错误文案），保存时去掉 token、建立会话并进入主窗口。设置窗口为标准 macOS Settings 场景（⌘, 打开）：显示与修改 harness URL（修改后重新建立会话）、连接状态、关于信息入口；诊断上报与更新源条目由各自变更加入。配置存于 ~/Library/Application Support/DSH Anywhere Native/（或与 Electron 版目录区分的路径，避免互相覆盖）的 JSON 文件，原子写入。迁移：首次启动时若无自身配置而存在 Electron 版配置（~/Library/Application Support/DSH Anywhere/ 下的配置文件，格式以 src/main/config.ts 与 diagnostics-store.ts 为准），读取 harness URL 与诊断端点带入并提示用户重新认证（cookie 不迁移）；迁移只读不改 Electron 文件。验收：全新 Mac 首次设置可完成；已装 Electron 版的 Mac 自动带入地址并显示重新认证页；修改地址后无需重启生效。
 depends_on:

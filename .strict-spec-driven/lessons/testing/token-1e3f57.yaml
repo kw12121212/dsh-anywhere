@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: token-1e3f57
+  title: 失败路径测试只断言「有错误且不含 token」会假通过：更早一步的失败顶替了目标失败，必须断言具体失败原因文案
+category: testing
+status: active
+created_at: '2026-11-26T17:01:47.504Z'
+updated_at: '2026-11-26T17:01:47.504Z'
+context: macos-setup-settings 的独立评审（M1）：SetupSettingsMigrationTests 里标注为「配置目录不可写」的两条用例（首次设置 submitUrl 与设置窗口 saveSettingsUrl）一直通过，但从未走到 configStore.save 失败分支。
+observation: 夹具用普通文件充当配置目录，却提交带 token 的地址：流程先探测成功，再建立会话——桩只对 fresh_tok 发 cookie，其它 token 返回 200 且无 Set-Cookie，于是以「未能建立会话」失败并提前返回；断言只有「停留在 setup、formError 非空、不含 token」，全部成立。两条用例因此对写入失败分支零覆盖，而回归全绿。
+takeaway: 失败路径测试要断言具体失败原因文案（精确等于目标分支的固定文案），并确认夹具真的让目标步骤失败：带 token 提交会先建会话并落盘 cookie，目录不可写类夹具必须用不带 token 的地址提交，否则失败会提前发生在建会话或 cookie 落盘；写完断言后做一次变异验证（临时改掉目标分支的文案，确认测试变红）。
+applies_when: 为多步骤流程（探测、建会话、写盘）中的某一步写失败测试，且断言里只有「返回失败 / 有错误信息 / 不含敏感值」这类弱条件时；尤其是夹具会让更早的步骤也失败的情况。
+occurrences:
+  - origin: macos-setup-settings
+    date: '2026-11-27'
+    evidence: 2026-11-27：修复前 SetupSettingsMigrationTests 用 tok_secret_write / tok_perm 提交并只断言 formError 非空且不含 token；改为不带 token 提交并断言 formError == "保存配置失败，请检查应用数据目录权限"、saveSettingsUrl == .failed(同文案) 后 swift test 56 个用例通过。
