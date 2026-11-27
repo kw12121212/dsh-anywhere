@@ -1,0 +1,28 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-team-sidebar
+approach:
+  - 侧栏 = TeamHome.assemble 快照镜像 + App 层已读协调：控制器在 state 全量/增量合并后把组装好的 TeamHome.Team 放进快照（Equatable Sendable，复用既有 emitSnapshot 镜像模式），App 层 TeamSidebarModel 持 ReadState 与选中态，选中即标记已读并作为当前聊天（读、未读抑制与提醒抑制共用）；提醒编排放控制器（Core 纯逻辑 NoticeCursor + notices POST），横幅作为快照字段由窗口顶部视图渲染
+decisions:
+  sidebar-from-assembled-team-snapshot:
+    decision: 侧栏数据 = MacosSessionController 在每次 state 全量或 delta 合并后以 TeamHome.assemble(state) 组装 TeamHome.Team 并写入 MacosSessionSnapshot（新增 team 字段，默认空 Team），不向 App 暴露原始 state；行内待办经 assemble 既有 applyPending 产出的 pendingKinds 呈现，不在 App 重复解析
+    rationale: TeamHome/TeamPreview/TeamSections 已在 foundation 里程碑移植并对齐 Kotlin；快照镜像模式是 ContentView 既有渲染通路，Team 为 Equatable Sendable 纯值，避免 App 侧自建第二套 state 缓存与解析
+  read-state-in-dshcore-with-shared-semantics:
+    decision: ReadState 纯逻辑与持久化存下沉 DshCore（mark 只前移、merge 取大、seed 仅未知主机、isUnread 需有效 lastAt 且非当前聊天、readAt 取 max(lastAt, 同聊天最新条目时间)、hostKey=scheme://host:port），语义与 Kotlin ReadState 逐条对齐并用同型用例覆盖；文件经目录注入的 ReadStateStore 存 ~/Library/Application Support/DSH Anywhere Native/read-state.json（容错读取、原子写），每次标记/播种即写盘（低频操作，无需 debounce）
+    rationale: tech/macos-client pure-logic-in-macos-core 要求协议/状态机逻辑下沉并进 Linux swift test；Kotlin 版语义是两端对等基准；已读写盘只在选中聊天与首次见到团队时发生，频率极低
+  notices-orchestrated-in-controller:
+    decision: 提醒链路整体放 MacosSessionController：feed hello 先经 NoticeCursor.onHello（Fill→capabilities 含 notices 时 POST /api/bot notices {boot,since}，Reset→重取 state，None→不动），feed notice 事件经 NoticeCursor.accept 去重后与补齐 fresh 一起按 Notices.pickBanner（白名单、跳过当前聊天）选一条写入快照 noticeBanner（id 递增用于重置 8 秒计时，text 不写日志）；App 只负责渲染横幅、8 秒自动收起（调 controller.dismissNotice(id)）与点按选中目标聊天；开关经注入的 noticesEnabled 闭包读取，关闭时控制器不发布横幅
+    rationale: 与 Android NativeShell 的 NoticeCursor 编排逐点对齐（应答在途远端重启时 boot 不匹配作废、reset 重取不补弹）；游标与网络编排在 Core 可用注入传输在 Linux 测试；UI 层无网络逻辑
+  needs-you-inline-following-current-android:
+    decision: 「需要你」按 Android 最新实现行内化：侧栏条目名称行显示待办标签（审批/提问/卡片，强调色），不建独立汇总页；android-dsbot 的 needs-you-summary 需求改写为「团队列表条目行内待办提示」的两端现状（该汇总页在 Android 侧已被行内提示取代，dsbot-pending-dock 归档决策已确认不恢复），本变更只修规格不恢复页面
+    rationale: 里程碑风险条要求以执行时最新 Android 实现与规格为准；恢复一个两端都没有的汇总页属范围外导航改动，行内标签与预览优先级（等你回答/等你审批）已覆盖跨聊天待办入口
+  search-and-sections-scope:
+    decision: 搜索放侧栏顶部搜索框（⌘K 经主窗口命令聚焦，视图菜单同时提供入口），过滤复用 TeamHome.search（名称/摘要/角色、结构不变、空结果显示无匹配提示）；分组头按 state 的 sections 渲染（折叠态原样显示、不可交互），分组创建/折叠写回/置顶/移组等管理操作不在本变更
+    rationale: 搜索是纯内存过滤已就绪；分组管理在 macos-native-manage 计划内，本变更把折叠写回做进来会引入 sections API 依赖与范围膨胀
+  banner-prefs-store:
+    decision: 「应用内提醒」开关等本机偏好存 ~/Library/Application Support/DSH Anywhere Native/prefs.json（DshCore 目录注入的键值存储：容错读取、0600 原子写，键 noticeBannerEnabled 默认 true），设置窗口 General 分区提供开关，跨启动保持；关闭时控制器不发布横幅、其余功能照常
+    rationale: tech/macos-client 存储边界要求全部私有数据入 NativeDataDirectory；后续外观/语言等偏好可复用同一文件避免碎片化
+alternatives: []
+risks: []

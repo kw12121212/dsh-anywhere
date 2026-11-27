@@ -625,7 +625,7 @@ private final class LockedBox<T>: @unchecked Sendable {
     }
 }
 
-private final class ScriptedHttpTransport: HttpTransport, @unchecked Sendable {
+final class ScriptedHttpTransport: HttpTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var queue: [@Sendable (HttpRequest) async throws -> HttpResponse] = []
     private var recorded: [HttpRequest] = []

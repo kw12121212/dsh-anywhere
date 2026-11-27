@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-team-sidebar
+open: []
+resolved:
+  - id: macos-app-acceptance-gate
+    question: macos/App 的侧栏、搜索与提醒横幅无法在 Linux 回归中验证，macOS CI 编译与 Mac 真机核对应作为本次归档前置门禁，还是推送后异步验证？
+    context: 影响范围：Verification 任务（macos-ci-and-device-acceptance 与 archive-merge-check）、android-dsbot 七条改写与 macos-app 新增需求的评审证据判定与归档时机。本机可运行 swift build --package-path macos/App 与完整本地回归，但侧栏排序/标签/未读点、⌘K 聚焦、横幅 8 秒收起与点按切换只能以 CI 产物在 Mac 上核对。选项 A：提交推送 dev 后经 workflow_dispatch 触发 package-macos-native，下载 CI 产物在 Mac 上逐项核对，全部通过后归档；选项 B：以 Core 单测+完整回归作为替代证据直接归档，CI 与真机核对异步进行。
+    answer: 沿用 2026-11-27 用户对同一自动流程的持续授权（macos-diagnostics 变更中「这一切你都可以自动完成」，macos-shell-window 变更同一问题已按此回答）：选择方案 A，由代理自动提交推送、workflow_dispatch 触发 CI、下载产物并以 vtool 核对链接 SDK 后在 Mac 上逐项核对（侧栏分组/排序/标签/预览/未读、⌘K 搜索、选中清未读跨重启、横幅出现/切换/当前聊天不弹/重启不重复、开关与不同主机隔离），全部通过后自动归档；仅当发现阻塞缺陷时停下来向用户报告
+    status: resolved
+    answered_by: human
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. What a sufficient answer contains: who is affected, what they do today instead, and how often.'
+    answer: macOS 原生端在线后侧栏仍是 macos-shell-window 留下的占位：看不到团队分组与条目，无法知道哪个 Bot 在工作、有无待办与新消息；没有搜索与未读，非当前聊天的提问/审批到达时毫无感知；用户今天只能回到网页端或 Android 端使用团队列表与提醒。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done.'
+    answer: 在线后侧栏显示与网页端一致的分组、排序（Main Bot 在前、置顶、最近活动）、工作状态点、预览优先级文案、Main/私有与待办标签和本机未读点；⌘K 聚焦搜索即时过滤；选中聊天未读点消失且跨重启保持、按主机隔离；停在 A 聊天时 B 的提问出现约 8 秒横幅、点按切到 B、当前聊天不弹、dsh 重启后不重复弹；设置窗口可关横幅且跨启动保持。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did.'
+    answer: 前置依赖 macos-shell-window 已于 2026-11-28 归档（三栏外壳就绪），macos-team-sidebar 是 macos-native-chat 里程碑按依赖顺序推荐的唯一就绪计划变更（其余五个变更全部依赖它或其后续）；Android 侧三个 DS-Bot 里程碑已完成，android-dsbot 规格成为两端对等基准的时机已到。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it.'
+    answer: Android 端已验收行为与代码不变（android-dsbot 改写仅把平台无关条目澄清为两端适用并修正 needs-you-summary 为行内待办现状）；聊天内容区渲染、发送箱、卡片、附件与 Side chat（后续变更）；分组创建/折叠写回/置顶/移组管理（macos-native-manage）；连接、错误页、重认证、设置窗口既有功能、窗口状态记忆、单实例与诊断上报不变；Electron 与 Windows/Linux 客户端不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is.'
+    answer: 按计划变更与最新 Android 实现的唯一解读：「需要你」不建汇总页，按 Android 现状行内化为条目标签；「本机已读」与 Kotlin ReadState 同语义（按主机、只前移、seed 打底、当前聊天不算未读）；notice 横幅只在主窗口内显示（非系统通知），约 8 秒、同批只显最新一条、白名单外忽略；侧栏分组只读显示，管理操作不在本变更；「打开聊天」在 macOS 端即侧栏选中条目（内容区占位），选中即标记已读并作为提醒抑制的当前聊天。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

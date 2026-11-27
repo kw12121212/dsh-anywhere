@@ -8,7 +8,7 @@ lesson:
 category: tooling
 status: active
 created_at: '2026-11-27T11:51:32.685Z'
-updated_at: '2026-11-27T11:51:32.685Z'
+updated_at: '2026-11-27T17:05:14.310Z'
 context: config.yaml 的完整回归命令尾部含 android/gradlew -p android/core test，Gradle wrapper 需在 ~/.gradle/wrapper/dists 下建锁文件。
 observation: 本机 ~/.gradle 是指向 /Volumes/Samsung_T5/AndroidDev/gradle-home 的符号链接；外置盘未挂载时 wrapper 报 Could not create parent directory for lock file，且 mkdir -p ~/.gradle/... 同样失败（报 No such file or directory，具误导性——真实原因是悬空符号链接）。
 takeaway: 先 ls -ld ~/.gradle 检查符号链接目标是否挂载；未挂载时用 GRADLE_USER_HOME 指向本地目录（如 ~/Library/Caches/dsh-anywhere-gradle）执行同一条回归命令，不改命令本身，并在证据中注明该环境重定向。
@@ -17,3 +17,6 @@ occurrences:
   - origin: macos-diagnostics
     date: '2026-11-27'
     evidence: 2026-11-27 macos-diagnostics 回归：android 步骤失败于 Could not create parent directory for lock file ~/.gradle/wrapper/dists/gradle-9.6.0-bin/...；GRADLE_USER_HOME=~/Library/Caches/dsh-anywhere-gradle 重定向后同一命令 BUILD SUCCESSFUL
+  - origin: macos-team-sidebar 完整回归（2026-11-28，Mac 本机）
+    date: '2026-11-27'
+    evidence: GRADLE_USER_HOME=~/Library/Caches/dsh-anywhere-gradle npm ci && … && android/gradlew test 的环境变量前缀只作用于链首 npm ci，gradlew 仍读 ~/.gradle（悬空符号链接）报 Could not create parent directory for lock file 而失败；改用 export GRADLE_USER_HOME=… 后整链通过。前缀赋值必须换成 export 才能覆盖 && 链上的后续命令

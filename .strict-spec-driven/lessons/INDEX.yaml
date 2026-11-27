@@ -393,7 +393,7 @@ categories:
     android-gradlew-gradle-aead55:
       title: 完整回归的 android/gradlew 步骤可能因 ~/.gradle 指向未挂载的外置盘而失败
       status: active
-      occurrences: 1
+      occurrences: 2
       path: .strict-spec-driven/lessons/tooling/android-gradlew-gradle-aead55.yaml
     strict-spec-cli-design-remove-approach-approach-549633:
       title: strict-spec-cli design 工件在同一调用混用 --remove-approach 与多个 --approach 会静默丢条目

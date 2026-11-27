@@ -123,6 +123,13 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("提醒") {
+                    Toggle("应用内提醒", isOn: $model.noticeBannerEnabled)
+                    Text("关闭后不再显示非当前聊天的应用内提醒横幅，其余功能不受影响；本机保存并跨启动保持。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("诊断上报") {
                     VStack(alignment: .leading, spacing: 8) {
                         if let endpoint = model.configuredDiagnosticsEndpoint {

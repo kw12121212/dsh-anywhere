@@ -170,33 +170,11 @@ public final class WindowStateStore: Sendable {
     }
 
     public func save(_ state: MacosWindowState) throws {
-        let fm = FileManager.default
-        try fm.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: NSNumber(value: 0o700)]
+        try AtomicFileWriter.write(
+            data: Data(state.encode().utf8),
+            to: fileURL,
+            in: directory,
+            tmpPrefix: MacosWindowState.tmpPrefix
         )
-        let suffix = String(UInt64.random(in: 0...UInt64.max), radix: 16)
-        let tmpURL = directory.appendingPathComponent("\(MacosWindowState.tmpPrefix)\(suffix).tmp")
-        defer {
-            try? fm.removeItem(at: tmpURL)
-        }
-        let payload = Data(state.encode().utf8)
-        let created = fm.createFile(
-            atPath: tmpURL.path,
-            contents: payload,
-            attributes: [.posixPermissions: NSNumber(value: 0o600)]
-        )
-        if !created {
-            try payload.write(to: tmpURL, options: .atomic)
-        }
-        try? fm.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: tmpURL.path)
-
-        if fm.fileExists(atPath: fileURL.path) {
-            _ = try fm.replaceItemAt(fileURL, withItemAt: tmpURL)
-        } else {
-            try fm.moveItem(at: tmpURL, to: fileURL)
-        }
-        try fm.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: fileURL.path)
     }
 }

@@ -61,6 +61,10 @@ struct ContentView: View {
         VStack(spacing: 0) {
             topStatusBar
             Divider()
+            if let banner = model.snapshot.noticeBanner {
+                noticeBannerView(banner)
+                Divider()
+            }
             if let banner = model.snapshot.versionBanner, !model.snapshot.versionBannerDismissed {
                 versionBannerView(banner)
                 Divider()
@@ -72,6 +76,19 @@ struct ContentView: View {
         .background(MainWindowAccessor(chrome: chrome))
         .task {
             model.startIfNeeded()
+        }
+    }
+
+    /// 应用内提醒横幅（in-app-notice-banner）：点按进入对应聊天，约 8 秒未点按自动收起
+    ///（新提醒换 id 重新计时）。
+    private func noticeBannerView(_ banner: NoticeBanner) -> some View {
+        NoticeBannerView(text: banner.text) {
+            model.selectChatById(banner.target)
+            model.dismissNotice(id: banner.id)
+        }
+        .task(id: banner.id) {
+            try? await Task.sleep(for: .seconds(8))
+            model.dismissNotice(id: banner.id)
         }
     }
 
@@ -152,7 +169,7 @@ struct ContentView: View {
 
     private var shellView: some View {
         NavigationSplitView(columnVisibility: $chrome.sidebarVisibility) {
-            teamSidebarPlaceholder
+            TeamSidebarView(model: model)
                 .navigationSplitViewColumnWidth(
                     min: MacosWindowState.minSidebarWidth,
                     ideal: chrome.restoredSidebarWidth,
@@ -171,36 +188,47 @@ struct ContentView: View {
         }
     }
 
-    /// 团队侧栏占位（内容由 macos-team-sidebar 填充）。
-    private var teamSidebarPlaceholder: some View {
-        List {
-            Section("团队") {
-                Label("团队列表将在后续版本提供", systemImage: "person.2")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .listStyle(.sidebar)
+    /// 当前选中的条目（侧栏选中后内容区占位显示其名称）。
+    private var selectedEntry: TeamHome.Entry? {
+        guard let team = model.snapshot.team, let id = model.sidebar.selection else { return nil }
+        return team.sections.flatMap(\.entries).first { $0.id == id }
     }
 
     /// 聊天内容区占位（内容由 macos-bot-chat / macos-group-chat 填充）。
+    @ViewBuilder
     private var chatContentPlaceholder: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(.green)
-            Text(AppIdentity.displayName)
-                .font(.title2.weight(.semibold))
-            if let cleanUrl = model.snapshot.cleanUrl {
-                Text(cleanUrl)
+        if let entry = selectedEntry {
+            VStack(spacing: 12) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.secondary)
+                Text(entry.name)
+                    .font(.title2.weight(.semibold))
+                Text("聊天内容将在后续版本提供")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            Text("会话已建立，SSE 实时同步在线（revision \(model.snapshot.stateRevision ?? "-") · Bot \(model.snapshot.botCount) · 群聊 \(model.snapshot.roomCount)）")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(32)
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.green)
+                Text(AppIdentity.displayName)
+                    .font(.title2.weight(.semibold))
+                if let cleanUrl = model.snapshot.cleanUrl {
+                    Text(cleanUrl)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Text("会话已建立，SSE 实时同步在线（revision \(model.snapshot.stateRevision ?? "-") · Bot \(model.snapshot.botCount) · 群聊 \(model.snapshot.roomCount)）")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(32)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(32)
     }
 
     /// 右侧检查器占位（详情与 Side chat，由 macos-side-chat 等填充）。

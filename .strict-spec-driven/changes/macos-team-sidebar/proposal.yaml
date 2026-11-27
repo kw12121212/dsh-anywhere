@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-team-sidebar
+  status: proposed
+summary:
+  what:
+    - macOS 三栏外壳的团队侧栏：以 DshCore 既有 TeamHome/TeamPreview/TeamSections 组装真实侧栏列表（分组、Main Bot 在前与置顶排序、工作状态点、预览优先级、Main/私有与行内待办标签、本机已读未读点），⌘K 聚焦的搜索过滤，选中条目标记已读并作为内容区占位与提醒抑制的当前聊天；新增 DshCore ReadState（按主机本机已读，与 Kotlin 版同夹具）与 Notices/NoticeCursor（feed notice 解码、(boot, seq) 游标、横幅文案与挑选，真实 0.3.10 夹具），控制器接入 notices 补齐并在快照发布窗口内横幅（约 8 秒、点按切换、当前聊天不弹、重启不重复），设置窗口提供「应用内提醒」开关（本机持久化）；同时把 android-dsbot 中 team-page-list、team-search、needs-you-summary、team-read-state、team-preview-priority、in-app-notice-banner、notice-banner-toggle 七条改写为 Android 与 macOS 两端适用（按最新 Android 实现修正 needs-you-summary 为行内待办提示），macOS 特有外壳行为入 macos-app 规格
+  why:
+    - macos-native-chat 里程碑的第一个变更：团队侧栏是私聊、群聊、卡片与 Side chat 的导航入口，也是 macos-shell-window 留下的侧栏占位的填充；Android 侧 dsbot 打磨完成后 android-dsbot 规格是两端对等基准，纯逻辑已在 foundation 里程碑移植（TeamHome/TeamPreview/TeamSections），本变更补齐已读与提醒两条纯逻辑并接到真实 UI
+scope:
+  in:
+    - macos/Core（DshCore 新增 ReadState.swift、Notices.swift、ReadStateStore/偏好存储与测试；MacosSessionController 快照增加 team 与 noticeBanner、feed notice/hello 游标接入、notices 补齐请求）；macos/App（侧栏视图、搜索、选中与已读协调、窗口内横幅、设置开关）；.strict-spec-driven/specs/android-dsbot.yaml 七条平台无关改写与 macos-app.yaml 新增 macOS 需求（经 delta-spec）
+  out:
+    - Android 端任何代码与规格行为变化（android-dsbot 改写仅澄清两端适用与行内待办现状，不改变 Android 已验收行为）；聊天内容区渲染、发送箱、卡片、附件、Side chat（后续变更承接）；分组创建/改名/折叠写回与置顶/移组管理（macos-native-manage 承接）；系统通知中心、Dock 角标（里程碑范围外）
+unchanged_behavior:
+  - 连接与错误界面、版本横幅、诊断上报、窗口状态记忆、单实例、设置窗口既有 harness 地址与诊断端点功能；Electron 与 Windows/Linux 客户端
+roadmap:
+  milestone: macos-native-chat
+  planned_change: macos-team-sidebar

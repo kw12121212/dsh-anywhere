@@ -48,6 +48,12 @@ struct DshAnywhereApp: App {
 
                 Divider()
 
+                // 团队侧栏搜索（macos-team-sidebar）：⌘K 聚焦侧栏搜索框。
+                Button("搜索聊天") {
+                    model.requestSidebarSearchFocus()
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
                 Button(chrome.sidebarVisibility == .detailOnly ? "显示侧栏" : "隐藏侧栏") {
                     chrome.sidebarVisibility = chrome.sidebarVisibility == .detailOnly ? .all : .detailOnly
                 }

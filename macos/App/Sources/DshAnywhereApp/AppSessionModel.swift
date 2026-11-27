@@ -11,11 +11,17 @@ final class AppSessionModel {
     var diagnosticsConfigured = false
     var configuredDiagnosticsEndpoint: String?
 
+    /// 团队侧栏装配状态（macos-team-sidebar）与 ⌘K 搜索聚焦请求计数。
+    let sidebar: TeamSidebarModel
+    private(set) var sidebarSearchFocusTick = 0
+
     private var controller: MacosSessionController!
     private var lifecycleMonitor: AppLifecycleMonitor?
     private var diagnosticsRuntime: DiagnosticsRuntime?
     private var diagnosticsStore: DiagnosticsEndpointStore?
     private var diagnosticsQueue: DiagnosticsQueue?
+    private let prefsStore: NativePrefsStore
+    private let noticePrefs: NoticePrefsBox
     private var started = false
 
     init() {
@@ -29,6 +35,13 @@ final class AppSessionModel {
         let apiTransport = UrlSessionHttpTransport(requestTimeout: 30, resourceTimeout: 60)
         let sseStream = UrlSessionSseStream()
 
+        // 本机偏好（应用内提醒开关，默认开）：横幅门控经线程安全闭包注入控制器。
+        let prefsStore = NativePrefsStore(directory: dataDir)
+        self.prefsStore = prefsStore
+        let noticePrefs = NoticePrefsBox((prefsStore.load() ?? NativePrefs()).noticeBannerEnabled)
+        self.noticePrefs = noticePrefs
+        self.sidebar = TeamSidebarModel(store: ReadStateStore(directory: dataDir))
+
         self.controller = MacosSessionController(
             configStore: configStore,
             cookieStore: cookieStore,
@@ -36,6 +49,7 @@ final class AppSessionModel {
             apiTransport: apiTransport,
             sseStream: sseStream,
             electronConfigDirectories: electronDirs,
+            noticesEnabled: { noticePrefs.value },
             onSnapshot: { [weak self] next in
                 Task { @MainActor [weak self] in
                     self?.applySnapshot(next)
@@ -137,6 +151,36 @@ final class AppSessionModel {
         }
     }
 
+    /// 「应用内提醒」开关（notice-banner-toggle）：本机持久化，关闭后控制器不再发布横幅。
+    var noticeBannerEnabled: Bool {
+        get { noticePrefs.value }
+        set {
+            noticePrefs.set(newValue)
+            try? prefsStore.save(NativePrefs(noticeBannerEnabled: newValue))
+        }
+    }
+
+    /// 视图菜单「搜索聊天」（⌘K）→ 聚焦侧栏搜索框。
+    func requestSidebarSearchFocus() {
+        sidebarSearchFocusTick &+= 1
+    }
+
+    /// 选中某聊天（侧栏点击或横幅点按）：标记已读并联动提醒抑制的当前聊天。
+    func selectChatById(_ id: String) {
+        sidebar.select(id: id, team: snapshot.team)
+        let selection = sidebar.selection
+        Task {
+            await controller.setCurrentTarget(selection)
+        }
+    }
+
+    /// 收起提醒横幅（8 秒自动收起或点按后调用）。
+    func dismissNotice(id: UInt64) {
+        Task {
+            await controller.dismissNotice(id: id)
+        }
+    }
+
     func saveSettingsUrl(_ raw: String) async -> SettingsSaveOutcome {
         await controller.saveSettingsUrl(raw)
     }
@@ -162,7 +206,20 @@ final class AppSessionModel {
     private func applySnapshot(_ next: MacosSessionSnapshot) {
         guard next != snapshot else { return }
         let previousScreen = snapshot.screen
+        let previousTeam = snapshot.team
         snapshot = next
+
+        // 侧栏联动（macos-team-sidebar）：主机标识跟随连接地址（换主机清空选中并解除
+        // 提醒抑制的当前聊天）；首次见到该主机的团队时打底已读，避免整页未读点。
+        let hostMayChange = snapshot.cleanUrl != nil || previousTeam != next.team
+        if hostMayChange, sidebar.updateHost(snapshot.cleanUrl) {
+            Task {
+                await controller.setCurrentTarget(nil)
+            }
+        }
+        if next.team != previousTeam, let team = next.team {
+            sidebar.teamDidUpdate(team)
+        }
 
         if next.screen == .authExpired && previousScreen != .authExpired {
             urlInput = ""
@@ -180,5 +237,23 @@ final class AppSessionModel {
                 await runtime?.recordLoadError(reason: reasonText, redactedUrl: cleanUrl)
             }
         }
+    }
+}
+
+/// 线程安全的布尔盒（应用内提醒开关）：控制器 actor 经闭包读取，设置窗口在主线程写入。
+final class NoticePrefsBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var enabled: Bool
+
+    init(_ enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    var value: Bool {
+        lock.withLock { enabled }
+    }
+
+    func set(_ newValue: Bool) {
+        lock.withLock { enabled = newValue }
     }
 }

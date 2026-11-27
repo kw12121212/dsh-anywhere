@@ -1,0 +1,51 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-team-sidebar
+sections:
+  Implementation:
+    dshcore-read-state:
+      text: DshCore 新增 ReadState.swift：与 Kotlin ReadState 逐条对齐的纯逻辑（mark 只前移、merge 逐项取大、seed 仅未知主机、knows、isUnread 需有效 lastAt 且非当前聊天、readAt 取 max(lastAt, 同 targetId 的最新条目时间)、hostKey=scheme://host:port 无显式端口补默认且无法解析为 nil、encode/decode 容错），及目录注入的 ReadStateStore（read-state.json，容错读取、0700 目录 0600 原子写，沿用 WindowStateStore 模式）
+      status: complete
+    dshcore-notices:
+      text: DshCore 新增 Notices.swift：Notices（KINDS 白名单 question/approval/message/group/done、decode/decodeBatch、banner 文案「[群名 · ]名称 · 类型：摘要」经 I18n.tr 与 I18n.clip（群名 24、摘要 80）、pickBanner 取白名单内非当前聊天的最后一条、target 群进 roomId 否则 botId）与 NoticeCursor（onHello 首次采用/同 boot 有新提醒 Fill/boot 变化 Reset/无 boot 清空、accept 按 seq 去重推进、onBatch reset 或 boot 不符重置并要求重取、否则按 seq 升序接收新提醒），形态以 testdata/dsbot 真实夹具为准，提醒文本只用于界面
+      status: complete
+    dshcore-app-prefs:
+      text: DshCore 新增目录注入的本机偏好存储（prefs.json 键值：容错读取、0700 目录 0600 原子写），先只含 noticeBannerEnabled（默认 true）；读取接口可注入 MacosSessionController 的 noticesEnabled 闭包
+      status: complete
+    controller-team-notice-wiring:
+      text: MacosSessionController：快照新增 team（state 全量或 delta 合并后 TeamHome.assemble 组装，默认空 Team）与 noticeBanner（id 递增、text、target）字段；feed hello 先经 NoticeCursor.onHello（Fill→capabilities 含 notices 时 POST /api/bot/notices {boot,since}，应答回到同代际且 boot 未变才 onBatch；Reset→fetchState 重取不补弹）、新增 notice 事件分支（accept 去重）；pickBanner 挑选后经注入的 noticesEnabled 闭包门控写入 noticeBanner；新增 setCurrentTarget（提醒抑制与 App 选中联动）与 dismissNotice(id)；resetSyncCursor 时重置游标与横幅；横幅文本不进日志
+      status: complete
+    app-sidebar-ui:
+      text: macos/App 新增 TeamSidebarModel（@MainActor @Observable：持 ReadState/ReadStateStore/hostKey、选中条目、搜索词；快照 team 到达时对未知主机 seed 并写盘，选中条目时按 readAt 标记已读写盘并联动 controller.setCurrentTarget）与侧栏视图（替换占位）：搜索框（⌘K 聚焦、即时过滤 TeamHome.search、无匹配提示）、分组头（state sections 原样显示不可交互）、行（头像颜色圈+工作状态点、名称截断、Main/私有/待办行内标签强调色、预览优先级一行且等你回答/审批强调、本机未读点）、空团队首次创建引导、加载中提示；选中后内容区占位显示所选聊天名称（聊天内容由后续变更填充）
+      status: complete
+    app-notice-banner-ui:
+      text: macos/App：主窗口内容顶部（连接状态条之下）渲染快照 noticeBanner 横幅（来源名称·类型：摘要，强调底色），出现即起 8 秒自动收起计时（新 id 重置），点按调用侧栏选中目标聊天并收起；设置窗口新增「应用内提醒」开关（默认开，prefs.json 持久化，跨启动保持），关闭后不再出现横幅、其余功能照常
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: DshCore XCTest：ReadStateTests 覆盖 Kotlin ReadStateTest 同型用例（前移/按主机/merge 取大/isUnread 边界/seed 未知主机/readAt 同聊天限定/编解码容错/单值非法跳过/hostKey 端口与非法输入）+ ReadStateStore 往返与容错；NoticesTests 以 testdata/dsbot/notices.json、notices-reset.json、feed-stream-0310.sse 真实夹具覆盖解码与 reset，内联样本覆盖群消息/群任务完成/群内审批横幅文案、pickBanner 跳过当前聊天、游标首次不补弹/同 boot 补齐/boot 变化重置/补齐与实时交错；prefs 存储往返与默认值；控制器测试覆盖 team 组装进快照、notice 事件去重与横幅门控、Fill 补齐与 Reset 重取、noticesEnabled 关闭不发布
+      status: complete
+      command: swift test --package-path macos/Core
+    macos-app-local-build:
+      text: macos/App 涉及 SwiftUI 改动，推送前在 macOS 本机执行 swift build --package-path macos/App 确认编译通过（tech/macos-client macos-app-local-build-before-ci）
+      status: complete
+      command: swift build --package-path macos/App
+    full-regression:
+      text: 完整项目回归（npm ci && typecheck && build && test:coverage && test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core），作为评审与归档证据
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+  Verification:
+    ready-verify-checks:
+      text: 实现与测试任务全部完成后运行 strict-spec-cli ready macos-team-sidebar 与 strict-spec-cli verify macos-team-sidebar，确认工件结构、任务完成、无未解决问题
+      status: complete
+    macos-ci-and-device-acceptance:
+      text: 沿用 2026-11-27 用户对同一自动流程的持续授权（「这一切你都可以自动完成」）：提交推送 dev 后 workflow_dispatch 触发 package-macos-native，下载 CI 产物并以 vtool 核对链接 SDK 后在 Mac 上逐项验收（侧栏分组/排序/标签/预览/未读点与网页端一致、⌘K 搜索、选中清未读且跨重启保持、停在 A 时 B 提问出横幅点按切换、当前聊天不弹、重启不重复、开关关闭生效且跨启动保持、不同主机已读隔离），全部通过后才归档；发现阻塞缺陷停下报告
+      status: pending
+    archive-merge-check:
+      text: 归档前核对 delta-spec 合并面：android-dsbot 七条 MODIFIED 逐条覆盖 team-page-list、team-search、needs-you-summary、team-read-state、team-preview-priority、in-app-notice-banner、notice-banner-toggle 且语句与实现一致；macos-app 新增需求语句与真机验收项一一对应；archive 后 specs/INDEX 与 android-dsbot 主规格合并结果无残留平台措辞（手机→客户端）
+      status: pending
+testing_gates:
+  validation_task: macos-app-local-build
+  unit_test_task: swift-core-tests

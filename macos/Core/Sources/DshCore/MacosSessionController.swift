@@ -27,6 +27,20 @@ public enum SettingsSaveOutcome: Equatable, Sendable {
     case failed(String)
 }
 
+/// 窗口内提醒横幅（in-app-notice-banner）：id 每次递增（界面据此重置 8 秒计时），
+/// text 为「[群名 · ]名称 · 类型：摘要」（只用于界面，不进日志），target 为点按进入的聊天。
+public struct NoticeBanner: Equatable, Sendable {
+    public let id: UInt64
+    public let text: String
+    public let target: String
+
+    public init(id: UInt64, text: String, target: String) {
+        self.id = id
+        self.text = text
+        self.target = target
+    }
+}
+
 /// macOS 原生会话可观察快照（供 SwiftUI 主线程视图镜像渲染）。
 public struct MacosSessionSnapshot: Equatable, Sendable {
     public var screen: MacosScreen
@@ -41,6 +55,10 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
     public var liveKey: String?
     public var botCount: Int
     public var roomCount: Int
+    /// 组装好的团队列表（macos-team-sidebar）：nil 表示尚未取到首份 state（侧栏显示加载提示）。
+    public var team: TeamHome.Team?
+    /// 当前显示的提醒横幅；nil 为无横幅。
+    public var noticeBanner: NoticeBanner?
     public var isSubmitting: Bool
     public var formError: String?
     public var migratedFromElectron: Bool
@@ -59,6 +77,8 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         liveKey: String? = nil,
         botCount: Int = 0,
         roomCount: Int = 0,
+        team: TeamHome.Team? = nil,
+        noticeBanner: NoticeBanner? = nil,
         isSubmitting: Bool = false,
         formError: String? = nil,
         migratedFromElectron: Bool = false,
@@ -76,6 +96,8 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         self.liveKey = liveKey
         self.botCount = botCount
         self.roomCount = roomCount
+        self.team = team
+        self.noticeBanner = noticeBanner
         self.isSubmitting = isSubmitting
         self.formError = formError
         self.migratedFromElectron = migratedFromElectron
@@ -116,6 +138,7 @@ public actor MacosSessionController {
     private let sseStream: any SseStream
     private let electronConfigDirectories: [URL]
     private let sleepMs: @Sendable (Int64) async throws -> Void
+    private let noticesEnabled: @Sendable () -> Bool
     private let onSnapshot: @Sendable (MacosSessionSnapshot) -> Void
 
     private var snapshot = MacosSessionSnapshot()
@@ -132,6 +155,11 @@ public actor MacosSessionController {
     private var capabilities: Capabilities = .legacy
     private var backoffAttempt: Int = 0
 
+    // 应用内提醒（in-app-notice-banner）：(boot, seq) 游标与横幅序号；当前聊天用于抑制。
+    private var noticeCursor = NoticeCursor()
+    private var noticeId: UInt64 = 0
+    private var currentTarget: String?
+
     public init(
         configStore: HarnessConfigStore,
         cookieStore: SessionCookieStore,
@@ -142,6 +170,7 @@ public actor MacosSessionController {
         sleepMs: @escaping @Sendable (Int64) async throws -> Void = { ms in
             try await Task.sleep(nanoseconds: UInt64(max(ms, 0)) * 1_000_000)
         },
+        noticesEnabled: @escaping @Sendable () -> Bool = { true },
         onSnapshot: @escaping @Sendable (MacosSessionSnapshot) -> Void = { _ in }
     ) {
         self.configStore = configStore
@@ -151,6 +180,7 @@ public actor MacosSessionController {
         self.sseStream = sseStream
         self.electronConfigDirectories = electronConfigDirectories
         self.sleepMs = sleepMs
+        self.noticesEnabled = noticesEnabled
         self.onSnapshot = onSnapshot
     }
 
@@ -354,6 +384,18 @@ public actor MacosSessionController {
         emitSnapshot()
     }
 
+    /// 侧栏当前选中的聊天（in-app-notice-banner 的当前聊天抑制；nil 为未选中）。
+    public func setCurrentTarget(_ target: String?) {
+        currentTarget = target
+    }
+
+    /// 收起指定横幅（8 秒自动收起或点按后调用）；id 不匹配时忽略。
+    public func dismissNotice(id: UInt64) {
+        guard snapshot.noticeBanner?.id == id else { return }
+        snapshot.noticeBanner = nil
+        emitSnapshot()
+    }
+
     public func setActive(_ active: Bool) {
         guard active != isActive else { return }
         isActive = active
@@ -395,6 +437,9 @@ public actor MacosSessionController {
         lastRemoteVersion = nil
         capabilities = .legacy
         backoffAttempt = 0
+        // 新的连接周期：游标从头采用 hello，旧横幅不再显示（重启不补弹）。
+        noticeCursor = NoticeCursor()
+        snapshot.noticeBanner = nil
     }
 
     private func launchConnect(cleanUrl: String, preserveSyncCursor: Bool, skipInitialProbe: Bool) {
@@ -613,8 +658,8 @@ public actor MacosSessionController {
 
         switch frame.event {
         case "hello":
-            if let feedHello = DsbotHello.decodeFeedHello(frame.data),
-               capabilities.shouldReread(feedHello) {
+            let feedHello = DsbotHello.decodeFeedHello(frame.data)
+            if let feedHello, capabilities.shouldReread(feedHello) {
                 if let abort = await refreshVersionAndCapabilities(client: client, gen: gen) {
                     switch abort {
                     case .authExpired: setAuthExpiredScreen()
@@ -622,6 +667,22 @@ public actor MacosSessionController {
                     }
                     return .stopLoop
                 }
+            }
+            // 提醒游标（in-app-notice-banner）：首次采用 hello 游标不补弹；同一 boot 断线
+            // 重连以 notices {boot, since} 补齐（远端声明 notices 能力时）；boot 变化重取
+            // 整体状态，不补弹旧提醒。
+            switch noticeCursor.onHello(feedHello?.boot, feedHello?.seq) {
+            case .fill(let boot, let since):
+                if capabilities.has("notices"),
+                   let stop = await fillNotices(boot: boot, since: since, client: client, gen: gen) {
+                    return stop
+                }
+            case .reset:
+                // dsh 重启：不带 since/live 重取整体状态（对齐 Android fetchStateOnce(null, null)，
+                // tech/dsbot-api notices-fields-0310：reset 或 boot 变化不得把新 delta 合并进旧状态）。
+                return await fetchState(client: client, gen: gen, fullRefetch: true)
+            case .none:
+                break
             }
             let remoteRev = Json.parse(frame.data)?.objectValue?.scalarString("revision")
             if remoteRev != localRevision || localRevision == nil {
@@ -638,16 +699,57 @@ public actor MacosSessionController {
             return await fetchState(client: client, gen: gen)
         case "live":
             return await fetchState(client: client, gen: gen)
+        case "notice":
+            // 实时提醒：能力门控 + 游标去重后按 pickBanner 挑选（当前聊天不弹）。
+            if capabilities.has("notices"),
+               let notice = Notices.decode(Json.parse(frame.data)),
+               noticeCursor.accept(notice) {
+                showNotices([notice])
+            }
+            markOnline()
+            return .continueLoop
         default:
             markOnline()
             return .continueLoop
         }
     }
 
-    private func fetchState(client: DsbotTransportClient, gen: UInt64) async -> LoopControl {
+    /// 同一 boot 断线重连：POST /api/bot/notices {boot, since} 补齐（应答回到同代际且游标
+    /// 仍在本 boot 时才生效），reset 或陌生 boot 时重取整体状态；返回 stopLoop 时中断循环。
+    private func fillNotices(
+        boot: String,
+        since: Int64,
+        client: DsbotTransportClient,
+        gen: UInt64
+    ) async -> LoopControl? {
+        let payload = "{\"boot\":\(JsonString.of(boot)),\"since\":\(since)}"
+        let res = await client.postBot(endpoint: "notices", payloadJson: payload)
+        guard !Task.isCancelled, generation == gen, isActive else { return .stopLoop }
+        // 请求在途期间远端已重启并 Reset 过：旧 boot 的应答作废，免得游标被改回旧 boot。
+        guard noticeCursor.boot == boot else { return nil }
+        guard case .ok(let value) = res, let batch = Notices.decodeBatch(value) else { return nil }
+        let outcome = noticeCursor.onBatch(batch)
+        if outcome.refetch {
+            return await fetchState(client: client, gen: gen)
+        }
+        showNotices(outcome.fresh)
+        return nil
+    }
+
+    /// 从一批新提醒中选出要显示的一条（白名单内、非当前聊天的最后一条）；开关关闭时
+    /// 不发布。新提醒替换旧横幅并换 id（界面据此重置 8 秒计时）。文本不写日志。
+    private func showNotices(_ fresh: [Notices.Notice]) {
+        guard noticesEnabled(), let pick = Notices.pickBanner(fresh, currentTarget: currentTarget) else { return }
+        noticeId &+= 1
+        snapshot.noticeBanner = NoticeBanner(id: noticeId, text: Notices.banner(pick), target: Notices.target(pick))
+        emitSnapshot()
+    }
+
+    /// `fullRefetch` 为 true 时不带 since/live 请求整体状态（boot 变化后的重取）。
+    private func fetchState(client: DsbotTransportClient, gen: UInt64, fullRefetch: Bool = false) async -> LoopControl {
         let payload = DsbotModels.statePayload(
-            since: localRevision,
-            live: liveKey,
+            since: fullRefetch ? nil : localRevision,
+            live: fullRefetch ? nil : liveKey,
             models: DsbotModels.modelsKey(lastState?.raw)
         )
         let res = await client.postBot(endpoint: "state", payloadJson: payload)
@@ -663,6 +765,7 @@ public actor MacosSessionController {
                 snapshot.liveKey = liveKey
                 snapshot.botCount = full.bots.count
                 snapshot.roomCount = full.rooms.count
+                snapshot.team = TeamHome.assemble(full)
                 markOnline()
             } else if let delta = DsbotModels.decodeStateDelta(value) {
                 if let rev = delta.revision { localRevision = rev }
@@ -672,6 +775,7 @@ public actor MacosSessionController {
                     lastState = merged
                     snapshot.botCount = merged.bots.count
                     snapshot.roomCount = merged.rooms.count
+                    snapshot.team = TeamHome.assemble(merged)
                 }
                 snapshot.stateRevision = localRevision
                 snapshot.liveKey = liveKey
