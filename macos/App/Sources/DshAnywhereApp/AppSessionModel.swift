@@ -19,10 +19,10 @@ final class AppSessionModel {
     private var started = false
 
     init() {
-        let baseSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
-        let dataDir = baseSupport.appendingPathComponent("DSH Anywhere Native", isDirectory: true)
-        let electronDirs = ElectronConfigMigrator.defaultElectronDirectories(applicationSupportDirectory: baseSupport)
+        let dataDir = NativeDataDirectory.url
+        let electronDirs = ElectronConfigMigrator.defaultElectronDirectories(
+            applicationSupportDirectory: dataDir.deletingLastPathComponent()
+        )
         let configStore = HarnessConfigStore(directory: dataDir)
         let cookieStore = SessionCookieStore(directory: dataDir)
         let probeTransport = UrlSessionHttpTransport(requestTimeout: 10, resourceTimeout: 10)

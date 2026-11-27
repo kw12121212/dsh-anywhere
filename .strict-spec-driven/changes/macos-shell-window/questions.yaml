@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-shell-window
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. What a sufficient answer contains: who is affected, what they do today instead, and how often.'
+    answer: macos/App 在线态仍是单页占位：没有可承载后续团队侧栏、聊天与详情检查器的三栏结构，没有中文应用/视图菜单与快捷键（重新加载、侧栏与检查器开合只能靠界面按钮或不可用），每次启动窗口都回到固定默认位置尺寸且侧栏宽度不记忆，多开应用也不会稳定激活既有窗口；macos-native-chat 里程碑的前置外壳缺口至今存在。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done.'
+    answer: 在线后主窗口呈现三栏占位（团队侧栏、聊天内容、可开合检查器），窄窗自动折叠且聊天区始终可用；应用/视图菜单与 ⌘R、⌘, 等快捷键可用且为中文标签；退出重开窗口位置尺寸、侧栏/检查器开合与侧栏宽度恢复，外接屏拔掉后启动窗口回到主屏可见区域；关闭最后一个窗口应用常驻、Dock 点击重开，重复打开激活既有窗口不出现第二个主窗口。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did.'
+    answer: 前置依赖 macos-setup-settings 已于 2026-11-27 归档，macos-shell-window 是 macos-native-foundation 里程碑按依赖顺序推荐的下一个就绪计划变更，也是该里程碑最后一项；完成后整个基础里程碑收官并解锁 macos-native-chat 六个计划变更。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it.'
+    answer: 不实现团队侧栏、聊天与检查器的真实内容（留给 macos-native-chat）、管理与设置页面（macos-native-manage）、Release 切换与自更新（macos-native-release）；不改 Electron 桌面端（含 main-window/window-state/single-instance 主规格与实现）与 Android 客户端；会话建立、错误页、重认证、设置窗口与诊断上报行为不变；首次设置与错误页保持全宽单页；窗口状态文件不含 harness 地址、token、cookie 或任何凭据，保存窗口状态不影响已保存配置。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is.'
+    answer: 按计划变更唯一解读：三栏占位仅在会话在线态呈现（首次设置/错误/重认证保持全宽）；「重新加载 ⌘R」即重新探测+重取 state+重订阅 feed 的既有重连编排；「侧栏宽度记忆」按 summary 纳入范围（经几何观测持久化，若真机不可靠降级为只记开合并记录）；窗口状态语义与桌面 window-state 主规格一致（原子写、容错读、可见屏幕内恢复）但文件与实现独立于 Electron；单实例依赖 LaunchServices 默认行为而非自写锁。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: macos-app-acceptance-gate
+    question: macos/App 的 Window 场景、菜单与三栏外壳无法在 Linux 回归中验证，macOS CI 编译与 Mac 真机核对应作为本次归档前置门禁，还是推送后异步验证？
+    context: 影响范围：Verification 任务（macos-ci-and-device-acceptance）、macos-app 主规格新增四条 MUST 需求的评审证据判定与归档时机。本机可运行 swift build --package-path macos/App 与完整本地回归，但 SwiftUI 窗口场景、菜单快捷键、窄窗折叠与窗口状态记忆只能以 CI 产物在 Mac 上核对。选项 A：提交推送 dev 后经 workflow_dispatch 触发 package-macos-native，下载 CI 产物在 Mac 上逐项核对，全部通过后归档；选项 B：以 Core 单测+完整回归作为替代证据直接归档，CI 与真机核对异步进行。
+    answer: 沿用 2026-11-27 用户对同一自动流程的持续授权（macos-diagnostics 变更中「这一切你都可以自动完成」）：选择方案 A，由代理自动提交推送、workflow_dispatch 触发 CI、下载产物并以 vtool 核对链接 SDK 后在 Mac 上逐项核对（菜单快捷键、三栏与窄窗折叠、窗口状态恢复、外接屏回退、关窗常驻与 Dock 重开、单实例激活），全部通过后自动归档；仅当发现阻塞缺陷时停下来向用户报告。
+    status: resolved
+    answered_by: human

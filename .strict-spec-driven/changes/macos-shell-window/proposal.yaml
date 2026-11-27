@@ -1,0 +1,30 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-shell-window
+  status: proposed
+summary:
+  what:
+    - 在 macOS 原生客户端落地主窗口外壳：会话在线后主内容区呈现三栏布局（左侧团队侧栏占位、中间聊天内容占位、右侧可开合的详情检查器占位），窗口收窄时侧栏自动折叠且最小窗口尺寸保证聊天区可用，顶部全局连接状态条与版本提示条常驻不遮挡内容；提供中文应用菜单与视图菜单及快捷键（关于 DSH Anywhere、设置…、退出；重新加载 ⌘R、显示/隐藏侧栏与检查器）；主窗口位置、尺寸、侧栏与检查器开合及侧栏宽度记忆到应用私有数据目录独立状态文件（原子写、容错读、恢复时保证在当前可见屏幕内）；单主窗口生命周期：关闭最后一个窗口不退出应用、Dock 点击重开、重复启动激活既有窗口；窗口状态纯逻辑下沉 macos/Core 并在 Linux 覆盖测试，同步新增 macos-app 主规格四条需求
+  why:
+    - macos-setup-settings 与 macos-diagnostics 归档后，macos/App 在线态仍是单页占位，缺少后续 macos-native-chat 里程碑可直接填充的三栏外壳、中文菜单快捷键与窗口状态记忆；完成 macos-shell-window 即完成 macos-native-foundation 里程碑最后一个计划变更，使原生端具备与桌面端 window-state、single-instance 语义对齐的完整外壳基础
+scope:
+  in:
+    - macos/Core（DshCore）：新增窗口状态纯逻辑 WindowStateStore（MacosWindowState 模型与内置 Json 编解码、尺寸/位置数值校验、对注入屏幕矩形列表的相交判定、0600 临时文件+重命名原子写独立 window-state.json、缺失/损坏/数值无效一律回退默认的容错读）及 XCTest 覆盖
+    - macos/App：ContentView 在线态呈现 NavigationSplitView 三栏占位（columnVisibility 与 inspector isExpanded 绑定、窄窗折叠、最小窗口尺寸保证聊天区可用），其余页面保持全宽单页；DshAnywhereApp 以单主窗口场景替换 WindowGroup 并经 .commands 注册中文菜单（应用菜单关于/设置/退出，视图菜单重新加载 ⌘R、显示/隐藏侧栏与检查器）；装配窗口状态采集与恢复（NSScreen 矩形采集、几何恢复或主屏居中回退、侧栏宽度经几何观测、关窗与退出时原子持久化）
+    - .strict-spec-driven/changes/macos-shell-window/specs/macos-app.yaml：新增三栏外壳、菜单与快捷键、窗口状态记忆、单主窗口生命周期四条 MUST 需求及场景
+  out:
+    - 团队侧栏、聊天内容与详情检查器的真实功能内容（由 macos-native-chat 里程碑的 macos-team-sidebar、macos-bot-chat、macos-side-chat 等承接，本变更只交付占位）
+    - DS-Bot 管理与设置页面（macos-native-manage 里程碑）、Release 切换与自更新（macos-native-release 里程碑）
+    - Electron 桌面端（含 main-window、window-state、single-instance 主规格与实现）、Android 客户端的任何改动；内置 Tailscale/tsnet/SOCKS5 分流
+    - 多窗口（如独立查看器窗口）与跨窗口拖放等编辑器形态能力
+unchanged_behavior:
+  - 会话建立、401/403/错误页、重新认证、SSE 退避补齐、版本提示条、设置窗口（⌘,）与诊断上报行为保持不变（macos-app 既有需求不动）
+  - 首次设置、连接中、错误页、重新认证与 Host 未受信任界面保持全宽呈现，顶部连接状态条语义不变
+  - macos/Core 保持纯 Foundation 零第三方依赖、Swift 6 Sendable、无直接网络 IO 且 Linux swift test 直接通过；完整回归命令与 Node 覆盖率门禁范围不变
+  - 窗口状态文件不含 harness 地址、token、cookie 或任何凭据；保存窗口状态不影响已保存的 harness 地址与诊断端点
+roadmap:
+  milestone: macos-native-foundation
+  planned_change: macos-shell-window

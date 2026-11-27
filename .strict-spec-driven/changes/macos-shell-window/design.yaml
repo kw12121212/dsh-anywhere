@@ -1,0 +1,43 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-shell-window
+approach:
+  - 1. 窗口状态纯逻辑下沉 DshCore：新增 WindowStateStore.swift——MacosWindowState（x、y、width、height、sidebarVisible、inspectorVisible、sidebarWidth）以内置 Json 编解码为独立 window-state.json；解码对几何字段缺失、类型不符、NaN/无穷、非正或超上限尺寸整体返回 nil（按无状态处理），侧栏/检查器开合与宽度缺失或类型不符时取默认值、宽度钳入合法范围；屏幕相交判定以注入的屏幕矩形列表纯函数计算；持久化用 0600 临时文件+重命名原子写，读取端任何失败按无状态处理；全部在 Linux swift test 覆盖。
+  - 2. 单主窗口场景与三栏外壳：DshAnywhereApp 以 SwiftUI Window 场景替换 WindowGroup（单主窗口、无 ⌘N 新建、关窗后应用常驻、Dock 点击重开）；ContentView 在 .connected 态呈现 NavigationSplitView（侧栏=团队占位、内容=聊天占位，columnVisibility 绑定侧栏开合）加 .inspector(isExpanded:) 详情检查器占位，其余界面保持全宽单页；顶部状态条与版本提示条在外壳之上常驻。
+  - 3. 菜单与快捷键：.commands 注册——应用菜单「关于 DSH Anywhere」（标准关于面板，版本来自 Info.plist）与「退出」，Settings 场景自带「设置…」（⌘,）；「视图」菜单 CommandMenu：「重新加载」（⌘R，调 MacosSessionController.retry() 重新探测、重取 state 并重订阅 feed，无配置回首次设置）、「显示/隐藏侧栏」（绑定 columnVisibility）、「显示/隐藏检查器」（绑定 isExpanded）；标签全部中文。
+  - 4. 窗口状态装配与持久化时机：App 层经窗口 accessor 拿到 NSWindow，主窗口关闭（willClose）与应用退出（willTerminate）时直接读取当前 window.frame 一次性原子写入（位置尺寸+开合+侧栏宽度），不跟踪拖动过程、不在每次移动时写盘；侧栏列宽经侧栏内容 background GeometryReader 观测（忽略低于最小列宽的观测值防止收起时清零）；窗口挂载时以保存值与当前 NSScreen.visibleFrame 列表相交判定，相交则 setFrame 恢复（侧栏宽度经 navigationSplitViewColumnWidth(min:ideal:max:) 以保存值为 ideal），不相交则以默认 960×640 居中主显示器。
+decisions:
+  window-state-in-dshcore-config-dir-file:
+    decision: 窗口状态模型、编解码、校验、屏幕相交判定与原子写/容错读全部下沉 DshCore（新 WindowStateStore.swift），状态为应用数据目录独立 window-state.json，不用 NSWindow frameAutosaveName。
+    rationale: 遵循 tech/macos-client 的 pure-logic-in-macos-core（Linux 回归可覆盖）与 tech/state-persistence 的 atomic-tolerant-state-read/separate-state-files；frameAutosaveName 写入用户 defaults 域、只覆盖位置尺寸、无容错语义，也无法纳入侧栏/检查器开合与宽度。
+  connected-only-three-column-shell:
+    decision: 三栏 NavigationSplitView 仅在 .connected 在线态呈现；首次设置、连接中、错误页、重认证与 403 页保持现有全宽单页，顶部状态条全局常驻。
+    rationale: 团队/聊天/检查器占位只在已建立会话时有意义；错误与重认证页在窄窗口下仍需完整可读，且避免 error 与 connected 切换时三栏与单页布局来回跳变。
+  single-window-scene-lifecycle:
+    decision: 用 SwiftUI Window 场景替换 WindowGroup 实现单主窗口：无「新建窗口」入口，关闭最后一个窗口应用保持运行，Dock 点击重开主窗口并按记忆状态恢复；单实例依赖 LaunchServices 对同 bundle id 的默认行为（重复打开只激活既有实例），不另写单实例锁。
+    rationale: WindowGroup 会提供 ⌘N 多主窗口，与「重复打开不出现第二个主窗口」语义冲突；macOS 惯例是关窗不退出；bundle id 已统一，LaunchServices 默认单实例无需额外代码，也避免与 Electron 版显式单实例锁方案重复。
+  swiftui-commands-menus:
+    decision: 菜单全部经 SwiftUI .commands 实现：「关于 DSH Anywhere」用标准 about 面板；「设置…」由 Settings 场景自动提供 ⌘,；「视图」菜单「重新加载 ⌘R」调 controller.retry()，侧栏/检查器开合命令直接绑定 columnVisibility/isExpanded。
+    rationale: 与桌面 main-window 规格 reload-menu 语义对齐，retry() 即重新探测+重取 state+重订阅 feed 的既有编排；开合命令复用界面同一绑定，避免菜单与界面状态分叉。
+  sidebar-width-geometry-observation:
+    decision: NavigationSplitView 无公开列宽读取 API，侧栏宽度经侧栏内容 background GeometryReader 观测实际列宽，随关窗/退出与位置尺寸、开合一并持久化；恢复时经 navigationSplitViewColumnWidth(min:ideal:max:) 把保存宽度设为 ideal；若真机验收发现观测或恢复不可靠，降级为只记忆开合并在验收任务记录。
+    rationale: 计划变更 summary 明确要求侧栏宽度记忆；GeometryReader 观测列内容宽是公开 API 下唯一可行读取方式，纯 App 层实现不影响 Core 可测性与回归门禁。
+  persist-on-close-and-quit:
+    decision: 窗口状态在主窗口关闭与应用退出时一次性原子写入，不在每次拖动/缩放时写盘；崩溃或强退丢失最后一次几何变化按可接受降级处理。
+    rationale: 与桌面 window-state 的 persist-on-exit 语义一致，避免拖动期间高频写盘；状态文件缺失或损坏已按容错读回退默认，不影响其他配置。
+alternatives:
+  - option: NSWindow frameAutosaveName 自动记忆窗口几何
+    reason: 只覆盖位置尺寸且写入 ~/Library/Preferences defaults 域，无开合/宽度语义、无容错读与配置目录隔离，违背 tech/state-persistence 的独立文件与原子写规则。
+  - option: 保留 WindowGroup 并禁用新建窗口菜单
+    reason: 需拦截系统 ⌘N 与 Dock 新建行为，hack 面大且随系统版本不稳定，不如单 Window 场景原生表达单主窗口语义。
+  - option: 三栏外壳常显（含首次设置与错误页）
+    reason: 占位栏在无会话数据时无意义，错误页在窄窗口被侧栏挤压降低可读性，页面切换时三栏与单页布局来回跳变。
+  - option: 每次窗口几何变化即写盘
+    reason: 拖动窗口期间高频写盘无必要，且与桌面端退出时持久化语义不一致。
+risks:
+  - Linux 无 Xcode/SwiftUI，macos/App 改动只能经本机 swift build --package-path macos/App 加 CI package-macos-native 加真机验收闭环，界面回归反馈回路慢。
+  - NavigationSplitView 窄窗折叠与 .inspector 的实际行为、列宽观测精度随 SwiftUI 版本变化，须以 CI 产物真机核对（本机与 CI 链接 SDK 版本差异遵循 tech/macos-client 的 macos-ui-verification-matches-ci-link-sdk）。
+  - Window 场景与 Settings 场景并存时 Dock 重开主窗口、关窗后 ⌘, 的行为需真机验证；如 Window 场景无法满足验收，退回 WindowGroup 并禁用新建入口，同时在验收任务记录差异。
+  - LaunchServices 单实例对未签名 CI 产物（ad-hoc，首次绕过 Gatekeeper 打开）在重复打开时的激活行为需真机核对。

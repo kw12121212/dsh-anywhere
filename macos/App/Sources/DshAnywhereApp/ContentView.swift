@@ -1,8 +1,56 @@
+import AppKit
 import DshCore
 import SwiftUI
 
+@MainActor
+private final class MainWindowTrackingView: NSView {
+    var onWindowChange: (@MainActor (NSWindow?) -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        onWindowChange?(window)
+    }
+}
+
+/// 把主窗口的 NSWindow 挂载事件接到 `WindowChromeModel`（几何恢复与持久化）。
+private struct MainWindowAccessor: NSViewRepresentable {
+    let chrome: WindowChromeModel
+
+    func makeNSView(context: Context) -> MainWindowTrackingView {
+        let view = MainWindowTrackingView()
+        view.onWindowChange = { [chrome] win in
+            chrome.windowDidChange(win)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: MainWindowTrackingView, context: Context) {
+        nsView.onWindowChange = { [chrome] win in
+            chrome.windowDidChange(win)
+        }
+        if let win = nsView.window {
+            chrome.windowDidChange(win)
+        }
+    }
+}
+
+/// 侧栏列宽观测：NavigationSplitView 无公开列宽读取 API，经侧栏内容的实际布局宽度
+/// 观测（背景 GeometryReader），只更新 `liveSidebarWidth` 供下次持久化使用。
+private struct SidebarWidthReader: View {
+    let onWidthChange: (Double) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear.onChange(of: geo.size.width) { _, newWidth in
+                onWidthChange(newWidth)
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @Bindable var model: AppSessionModel
+    @Bindable var chrome: WindowChromeModel
     @Environment(\.openSettings) private var openSettings
 
     private var appVersion: String {
@@ -21,6 +69,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 560, minHeight: 380)
+        .background(MainWindowAccessor(chrome: chrome))
         .task {
             model.startIfNeeded()
         }
@@ -87,22 +136,9 @@ struct ContentView: View {
             }
             .padding(32)
         case .connected:
-            VStack(spacing: 12) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.green)
-                Text(AppIdentity.displayName)
-                    .font(.title2.weight(.semibold))
-                if let cleanUrl = model.snapshot.cleanUrl {
-                    Text(cleanUrl)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                Text("会话已建立，SSE 实时同步在线（revision \(model.snapshot.stateRevision ?? "-") · Bot \(model.snapshot.botCount) · 群聊 \(model.snapshot.roomCount)）")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(32)
+            // 三栏外壳（macos-shell-window）：侧栏与检查器为占位，内容区由
+            // macos-native-chat 填充；其余界面保持全宽单页。
+            shellView
         case .error(let reason):
             errorView(reason: reason)
         case .authExpired:
@@ -110,6 +146,75 @@ struct ContentView: View {
         case .forbiddenHost:
             forbiddenHostView
         }
+    }
+
+    // MARK: - 三栏外壳（macos-shell-window）
+
+    private var shellView: some View {
+        NavigationSplitView(columnVisibility: $chrome.sidebarVisibility) {
+            teamSidebarPlaceholder
+                .navigationSplitViewColumnWidth(
+                    min: MacosWindowState.minSidebarWidth,
+                    ideal: chrome.restoredSidebarWidth,
+                    max: MacosWindowState.maxSidebarWidth
+                )
+                .background(
+                    SidebarWidthReader { newWidth in
+                        chrome.updateLiveSidebarWidth(newWidth)
+                    }
+                )
+        } detail: {
+            chatContentPlaceholder
+        }
+        .inspector(isPresented: $chrome.inspectorVisible) {
+            inspectorPlaceholder
+        }
+    }
+
+    /// 团队侧栏占位（内容由 macos-team-sidebar 填充）。
+    private var teamSidebarPlaceholder: some View {
+        List {
+            Section("团队") {
+                Label("团队列表将在后续版本提供", systemImage: "person.2")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    /// 聊天内容区占位（内容由 macos-bot-chat / macos-group-chat 填充）。
+    private var chatContentPlaceholder: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(.green)
+            Text(AppIdentity.displayName)
+                .font(.title2.weight(.semibold))
+            if let cleanUrl = model.snapshot.cleanUrl {
+                Text(cleanUrl)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Text("会话已建立，SSE 实时同步在线（revision \(model.snapshot.stateRevision ?? "-") · Bot \(model.snapshot.botCount) · 群聊 \(model.snapshot.roomCount)）")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+
+    /// 右侧检查器占位（详情与 Side chat，由 macos-side-chat 等填充）。
+    private var inspectorPlaceholder: some View {
+        VStack(spacing: 10) {
+            Text("详情")
+                .font(.headline)
+            Text("详情与 Side chat 将在后续版本提供")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(20)
     }
 
     private func firstRunSetupView(invalidConfig: Bool) -> some View {

@@ -1,0 +1,46 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-shell-window
+sections:
+  Implementation:
+    core-window-state-store:
+      text: 在 macos/Core/Sources/DshCore/ 新增 WindowStateStore.swift：MacosWindowState（x、y、width、height、sidebarVisible、inspectorVisible、sidebarWidth）与内置 Json 编解码（不依赖 JSONSerialization）；解码对几何字段缺失、类型不符、NaN/无穷、非正或超上限尺寸整体返回 nil（按无状态处理），侧栏/检查器开合与宽度缺失或类型不符时取默认值、宽度钳入合法范围；对注入屏幕矩形列表的相交判定；0600 临时文件+重命名原子写独立 window-state.json（遵循 tech/state-persistence 的 atomic-tolerant-state-read 与 separate-state-files）
+      status: complete
+    core-window-state-tests:
+      text: 在 macos/Core/Tests/DshCoreTests/ 新增 WindowStateTests.swift，覆盖编解码往返与字段校验、损坏/缺失/数值无效回退默认、原子写与 0600 权限、屏幕相交判定（相交恢复、不相交回退、部分相交保留）、侧栏宽度钳制与开合字段缺省语义
+      status: complete
+    app-shell-split-view-and-inspector:
+      text: 更新 macos/App/Sources/DshAnywhereApp/ContentView.swift：.connected 态呈现 NavigationSplitView 三栏占位（团队侧栏占位、聊天内容占位、.inspector 详情与 Side chat 占位），columnVisibility 与 isExpanded 绑定并与菜单开合命令共用状态、窄窗按系统行为折叠侧栏、最小窗口尺寸保证聊天区完整可用；首次设置、连接中、错误页、重认证与 403 页保持全宽单页，顶部状态条与版本提示条常驻不遮挡内容
+      status: complete
+    app-window-scene-and-menus:
+      text: 更新 macos/App/Sources/DshAnywhereApp/DshAnywhereApp.swift：以 Window 单主窗口场景替换 WindowGroup（关窗应用常驻、Dock 点击重开、无新建窗口入口）；经 .commands 注册中文菜单——应用菜单「关于 DSH Anywhere」（标准关于面板）与「退出」、Settings 场景自带「设置…」（⌘,）、「视图」菜单「重新加载」（⌘R 调 controller.retry()，重新探测、重取 state 并重订阅 feed，无配置回首次设置）、「显示/隐藏侧栏」「显示/隐藏检查器」
+      status: complete
+    app-window-state-assembly:
+      text: 在 macos/App 装配窗口状态：NSScreen.visibleFrame 矩形采集传入 DshCore 相交判定、启动按保存几何恢复或默认 960×640 主显示器居中回退、侧栏列宽经侧栏内容 background GeometryReader 观测、主窗口关闭与应用退出时经 WindowStateStore 一次性原子写入（位置尺寸+侧栏/检查器开合+侧栏宽度）
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: 运行 macos/Core Swift 单元测试确认窗口状态逻辑与既有测试全部通过
+      status: complete
+      command: swift test --package-path macos/Core
+    macos-app-build:
+      text: 在 macOS 上编译 macos/App 确认 Window 场景、菜单 commands 与三栏外壳 SwiftUI 代码可编译（App 构建不进完整回归命令，遵循 tech/macos-client 的 macos-app-local-build-before-ci）
+      status: complete
+      command: swift build --package-path macos/App
+  Verification:
+    full-regression:
+      text: 在本地运行 .strict-spec-driven/config.yaml 完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+    macos-ci-and-device-acceptance:
+      text: 按既有自动化授权（2026-11-27 用户确认全程自动完成）完成 macOS CI 编译与 Mac 真机核对：提交推送 dev 后经 workflow_dispatch 触发 package.yml 的 package-macos-native job，下载 CI 产物并以 vtool 核对 LC_BUILD_VERSION 与 CI 一致后在 Mac 上逐项核对——三栏占位与窄窗折叠、最小窗口尺寸下聊天区可用，顶部状态条与版本提示条不遮挡内容；菜单与快捷键（关于面板显示版本、⌘, 设置、⌘R 重新加载回到在线、显示/隐藏侧栏与检查器与界面开合一致；应用菜单「设置…」「退出」标签为中文，否则以 CommandGroup 固定中文标签；系统 View 菜单自动注入的切换侧栏命令与自定义「显示/隐藏侧栏」并存不造成混淆）；退出重开窗口位置尺寸、侧栏/检查器开合与侧栏宽度恢复（含拖宽侧栏→收起→退出→重启后宽度保留）；把窗口移到外接屏后拔掉外接屏再启动，窗口以默认尺寸出现在主屏可见区域居中；状态文件损坏时按默认启动且 harness 配置仍生效不提示无效；关闭最后一个窗口应用常驻、Dock 点击重开主窗口；重复打开应用激活既有窗口不出现第二个主窗口
+      status: pending
+    ready-verify:
+      text: 运行 strict-spec-cli ready macos-shell-window 与 strict-spec-cli verify macos-shell-window 确认产物、场景覆盖与门禁全部通过
+      status: pending
+      command: strict-spec-cli ready macos-shell-window && strict-spec-cli verify macos-shell-window
+testing_gates:
+  validation_task: macos-app-build
+  unit_test_task: swift-core-tests

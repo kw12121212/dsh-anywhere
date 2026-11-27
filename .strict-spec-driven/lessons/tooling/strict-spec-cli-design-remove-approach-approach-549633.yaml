@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: strict-spec-cli-design-remove-approach-approach-549633
+  title: strict-spec-cli design 工件在同一调用混用 --remove-approach 与多个 --approach 会静默丢条目
+category: tooling
+status: active
+created_at: '2026-11-27T15:23:00.503Z'
+updated_at: '2026-11-27T15:23:00.503Z'
+context: 用 strict-spec-cli generate <change> design 批量编辑 approach 列表（移除旧条目并追加新条目）时。
+observation: 2026-11-27 macos-shell-window 评审 NIT1 修复实测：同一调用传 4 个 --remove-approach + 4 个 --approach（其中 3 条追加文本与被删条目同文），CLI 返回 valid:true，但 design.yaml 最终只剩 1 条 approach——与移除模式文本重名的追加条目被连带清掉（帮助文档声称多个匹配应非零退出，实际未退出）。同场还发现 approach 4 写的 didMove/didResize 通知跟踪与实现（关窗/退出时直读 window.frame）不符，直到独立评审才暴露。
+takeaway: design/tasks 的列表字段一条一调用（一次只 remove 或只 append 一条）；任何多 flag 列表编辑后立即用条目计数核对（如 sed 区间内 grep -c "^  - "）；approach 里的机制级描述（如何采集/何时写盘）在实现定型后要回读比对，避免方案文本停留在提案时的设想。
+applies_when: 用 strict-spec-cli generate 编辑 change 的 design approach / tasks 等 YAML 列表字段，尤其是同一调用里同时出现移除类与追加类 flag，或追加文本与既有条目相同/相似时。
+occurrences:
+  - origin: macos-shell-window
+    date: '2026-11-27'
+    evidence: 2026-11-27 macos-shell-window：一条调用后 design.yaml 的 approach 从 4 条变为 1 条（macos-shell-window/design.yaml 当时仅存修正后的第 1 条），改为逐条单调用追加并核对计数=4 恢复；approach 4 措辞同场按实现改写
