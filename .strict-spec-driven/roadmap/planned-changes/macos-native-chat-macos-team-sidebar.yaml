@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-team-sidebar
   milestone: macos-native-chat
-status: planned
+status: complete
 summary: 团队侧栏：Bot 与群分组列表、Main Bot 在前与置顶、工作状态、本机已读未读、预览优先级、搜索（⌘K）、需要你汇总、非当前聊天的 notice 横幅，并把 android-dsbot 规格中平台无关条目改写为两端适用
 details: 侧栏按 state 渲染分组与条目（头像颜色圈、名称、工作/等待状态、预览、未读点、置顶标记），排序与 Android 当时实现一致；已读状态用 DshCore 的已读合并逻辑（与 Kotlin 版同一夹具），存 Application Support；预览优先级与摘要清洗复用 Core。搜索框（⌘K 聚焦）按名称与预览过滤。需要你：侧栏顶部入口带计数，点开在内容区显示按类型分节的汇总，点条目切到对应聊天。notice：DshCore 的 (boot, seq) 游标与 notices 补齐，非当前聊天的提醒以窗口内横幅显示约 8 秒，点按切换，设置窗口可关闭。规格：把 android-dsbot 中 team-page-list、team-search、needs-you-summary 及打磨里程碑新增的已读/提醒条目改写为平台无关并标注平台差异（或抽为共享规格）。验收：按里程碑完成标准第 1 条。
 depends_on:

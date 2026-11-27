@@ -254,3 +254,39 @@ requirements:
         - GIVEN: 应用在线且已保存 harness 地址
         - WHEN: 关闭主窗口再从 Dock 重开
         - THEN: 主窗口按记忆状态恢复，无需重新输入地址，已保存配置与当前会话状态保持一致
+  macos-team-sidebar-shell:
+    strength: MUST
+    statement: macOS 主窗口在线后团队侧栏按 android-dsbot 平台无关需求渲染团队列表：侧栏顶部搜索框（⌘K 聚焦，视图菜单提供「搜索聊天」同一入口），其下按分组显示条目（分组头按远端 sections 原样显示、不可交互）；条目行含头像颜色圈与工作状态点、名称（超长截断）、Main/私有/待办标签、预览优先级一行与本机未读点；点击条目选中该聊天：侧栏高亮、内容区显示所选聊天名称占位（聊天内容由后续版本提供）、按 team-read-state 标记已读并作为提醒抑制的当前聊天；再次点击同一条目不重复标记；断开连接后侧栏保持最后列表，重连成功后自动刷新；正在连接尚无数据时侧栏显示加载提示。
+    scenarios:
+      sidebar-connected-list:
+        - GIVEN: 已连接且远端 state 含分组、Bot 与群
+        - WHEN: 主窗口在线态渲染侧栏
+        - THEN: 侧栏显示与网页端一致的分组结构、排序与条目行（颜色圈、状态点、名称、标签、预览、未读点），远端缺字段时对应元素降级不显示且不崩溃
+      cmdk-focuses-search:
+        - GIVEN: 主窗口在线且侧栏可见
+        - WHEN: 按下 ⌘K 或点选视图菜单「搜索聊天」
+        - THEN: 侧栏搜索框获得焦点，输入即时过滤（名称/摘要/角色），清空恢复完整列表，无结果显示无匹配提示
+      select-entry-clears-unread:
+        - GIVEN: 某条目有未读点
+        - WHEN: 点击该条目
+        - THEN: 侧栏高亮该条目，内容区显示所选聊天名称占位，未读点消失并按本机已读持久化；重启后仍为已读
+      empty-team-guide-shown:
+        - GIVEN: 远端团队为全新空团队
+        - WHEN: 主窗口在线态渲染侧栏
+        - THEN: 侧栏显示首次创建引导（创建第一个 Chief），不显示空白列表
+  macos-notice-banner-window:
+    strength: MUST
+    statement: macOS 应用内提醒横幅显示在主窗口内容顶部（连接状态条之下）：远端声明 notices 能力且未关闭「应用内提醒」时，非当前选中聊天的提醒以约 8 秒横幅显示（来源名称、类型与摘要，强调底色），新提醒替换旧横幅并重新计时，点按横幅选中对应聊天并收起，8 秒内未点按自动收起；远端未声明 notices 能力、或设置窗口已关闭「应用内提醒」时不显示横幅、其余功能照常；「应用内提醒」开关位于设置窗口、默认开启、本机保存并跨启动保持；横幅文本不写入日志与诊断上报。
+    scenarios:
+      banner-tap-switches-chat:
+        - GIVEN: 侧栏选中 Bot A，远端声明 notices
+        - WHEN: Bot B 发起提问
+        - THEN: 主窗口顶部出现约 8 秒横幅显示 B 与提问摘要；点按后选中 B 的聊天并收起；不点按 8 秒后自动收起
+      current-selection-no-banner:
+        - GIVEN: 侧栏选中 Bot A
+        - WHEN: Bot A 回复或提问
+        - THEN: 不显示横幅
+      banner-toggle-persists:
+        - GIVEN: 设置窗口关闭「应用内提醒」
+        - WHEN: 非当前聊天的 Bot 发起提问，随后退出重开应用
+        - THEN: 不显示横幅且其余功能照常；重开后开关仍为关闭；重新开启后横幅恢复

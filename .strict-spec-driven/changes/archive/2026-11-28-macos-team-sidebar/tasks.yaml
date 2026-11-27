@@ -42,10 +42,10 @@ sections:
       status: complete
     macos-ci-and-device-acceptance:
       text: 沿用 2026-11-27 用户对同一自动流程的持续授权（「这一切你都可以自动完成」）：提交推送 dev 后 workflow_dispatch 触发 package-macos-native，下载 CI 产物并以 vtool 核对链接 SDK 后在 Mac 上逐项验收（侧栏分组/排序/标签/预览/未读点与网页端一致、⌘K 搜索、选中清未读且跨重启保持、停在 A 时 B 提问出横幅点按切换、当前聊天不弹、重启不重复、开关关闭生效且跨启动保持、不同主机已读隔离），全部通过后才归档；发现阻塞缺陷停下报告
-      status: pending
+      status: complete
     archive-merge-check:
       text: 归档前核对 delta-spec 合并面：android-dsbot 七条 MODIFIED 逐条覆盖 team-page-list、team-search、needs-you-summary、team-read-state、team-preview-priority、in-app-notice-banner、notice-banner-toggle 且语句与实现一致；macos-app 新增需求语句与真机验收项一一对应；archive 后 specs/INDEX 与 android-dsbot 主规格合并结果无残留平台措辞（手机→客户端）
-      status: pending
+      status: complete
 testing_gates:
   validation_task: macos-app-local-build
   unit_test_task: swift-core-tests
