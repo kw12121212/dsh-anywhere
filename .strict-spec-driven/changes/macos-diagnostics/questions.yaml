@@ -1,0 +1,49 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-diagnostics
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: 原生 macOS 客户端目前没有任何诊断采集与上报能力：用户 Mac 上运行的 CI 产物崩溃或显示连接错误页时，开发者无法获得任何崩溃或错误态报告（Electron 版与 Android 版均已具备），原生版问题只能靠用户口述复现。来源：roadmap planned change macos-diagnostics 的 summary/details 与 macos-native-foundation 里程碑 goal（诊断上报列为基础能力之一）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 规划明细的验收即成功判据（可外部观察）：未配置端点时数据目录不产生任何诊断文件、不发出任何上报请求；配置后制造连接错误产生一份按原因分类的报告并送达端点，报告中无 token 与 cookie；人为崩溃后下次启动送出崩溃报告。已落为 delta spec 的 macOS 场景与 Mac 真机验收任务（macos-ci-and-device-acceptance）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: macos-diagnostics 声明的依赖 macos-setup-settings 已于 2026-11-27 归档（端点配置、原子存储与 Electron 迁移就绪），roadmap 推荐引擎随即把本 planned change 判为合格候选并选中；macos-native-foundation 里程碑 done_criteria 要求诊断上报开启时错误页产生脱敏报告且不含 token 与 API 载荷，本变更是该里程碑基础能力的收尾项。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: Electron 三平台与 Android 客户端的诊断行为保持现状；首次设置页与设置窗口既有地址编辑、连接状态与关于交互不变（仅新增「诊断上报」条目）；macos-setup-settings 已落地的 Electron 只读迁移与 DiagnosticsEndpointStore 语义不变；未配置端点时原生客户端零行为（不产生、不保存、不发送）；不内置 Tailscale、不做定时轮询上报、不触碰 Electron 目录。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 「桌面要求」的读法：把 diagnostics-reporting 主规格的桌面端要求扩展为同时适用于 Electron（Windows/Linux）与原生 macOS 两端（本变更已按此改写五条需求），语义一致——仅 https 端点、原子持久化、崩溃先落盘下次启动补报、错误态按原因分类且同会话同类至多一次、报告经脱敏不含 token/cookie/API 载荷与聊天内容；不存在为 macOS 另立一套诊断规格的读法（来源：planned change summary『语义与 diagnostics-reporting 主规格的桌面要求一致』）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: pca-platform-for-macos
+    question: 原生 macOS 客户端上报 pca 的 platform 字段取值：复用 dsh_desktop 还是新增 dsh_macos 专用枚举？
+    context: pca 的 POST /api/diagnostics/reports 在服务端校验 platform 枚举，枚举外的值返回 400 invalid_input（2026-11-06 diagnostics-reporting 变更的 platform-enum-strategy 问题已确认该机制，dsh_android 与 dsh_desktop 均为 pca 先行加枚举并部署后才生效）；issue 指纹为 Fingerprint(platform, kind, message, stack_trace)，列表按 platform 筛选。影响：proposal 范围内 DshCore 报告编码器的 platform 常量、Mac 真机验收的送达核对（若 pca 未加枚举则全部报告被 4xx 整批静默丢弃）、以及 pca 仓库是否需要先行变更与部署的时序依赖；不影响 spec delta 与其余实现。推荐：复用 dsh_desktop（pca 零改动零部署依赖，原生 macOS 与 Electron 同属 dsh 桌面客户端分组，指纹含 message 与 stack_trace 仍能自然区分 Swift 与 Electron 崩溃）；备选：新增 dsh_macos（需 pca 仓库先行在 validPlatform 加枚举并部署到常驻服务，否则按规格 4xx 行为全部报告被丢弃——仅在明确需要按平台单独筛选排查时值得）。
+    answer: 用户确认（2026-11-27）：复用 dsh_desktop——原生 macOS 报告与 Electron 同用 dsh_desktop 枚举，pca 零改动零部署依赖；指纹含 message 与 stack_trace 仍能自然区分 Swift 与 Electron 崩溃。DshCore 报告编码器 platform 常量取 dsh_desktop，Mac 真机验收按该枚举核对送达。
+    status: resolved
+    kind: requirement
+    answered_by: human

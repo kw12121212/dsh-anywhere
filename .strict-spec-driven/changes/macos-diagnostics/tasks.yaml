@@ -1,0 +1,52 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-diagnostics
+sections:
+  Implementation:
+    core-diag-report-logic:
+      text: 在 macos/Core/Sources/DshCore/ 新增 DiagnosticsReport.swift：报告结构（与 pca 封闭字段集一致：id/kind/occurred_at/app_version_name/app_version_code/device/os_version/thread/message/stack_trace/breadcrumbs）、截断上限（消息 4 KiB、堆栈 64 KiB、breadcrumb ≤200 行且单行 ≤1 KiB、每批 ≤20 份、请求体 ≤1 MiB、队列容量 50）、DiagText 脱敏移植（URL 形态经 HarnessUrl.redact、残余 token= 值、JSON 密钥/口令字段、secret-set value、键值与环境变量形态、Authorization 头、dsb_ 前缀令牌一律替换 ***，正则清单以 android/core DiagText.sanitize 为基准）、JSON 编解码（编码含 platform 常量、解码任何字段缺失/类型不符返回 nil）与 epoch 毫秒→RFC3339 UTC 时间戳（移植 android/core DiagReport.kt 语义，纯 Foundation、Linux 可运行）
+      status: complete
+    core-diag-queue-and-batching:
+      text: 在 macos/Core/Sources/DshCore/ 新增 DiagnosticsQueue.swift：有界待发队列（目录 URL 注入，每份报告一独立文件、文件名 epochMillis-id.json 字典序即时间序、0600 临时文件+重命名原子落盘、超上限删最旧、读取时损坏/无法解析文件删除并跳过、按名删除已发送、clear 清空、可注入时间源）与批量组包（每批 ≤20 份且编码后 ≤1 MiB、保持时间序）及同会话错误态去重器；端点配置复用既有 DiagnosticsEndpointConfig/DiagnosticsEndpointStore 不改其行为（移植 android/core DiagStore.kt 语义）
+      status: complete
+    core-diagnostics-runtime:
+      text: 在 macos/Core/Sources/DshCore/ 新增 DiagnosticsRuntime（注入式纯编排，与 Electron diagnostics-runtime 同形）：注入端点读取（未配置即全部采集路径零行为）、队列与发送依赖；崩溃类报告同步原子落盘不做网络发送；错误态按分类键同会话去重后入队并触发一轮发送；flush 单轮在役复用、分批发送直到排空或失败，网络失败静默保留剩余结束本轮，4xx 丢弃该批不再重试；无直接网络 IO（发送经注入闭包），目标地址为端点+/api/diagnostics/reports
+      status: complete
+    core-diagnostics-tests:
+      text: 在 macos/Core/Tests/DshCoreTests/ 新增 DiagnosticsTests.swift（Linux 可运行 XCTest）：覆盖脱敏正反例（URL token、JSON 凭据键、secret-set value、键值/环境变量无引号及单双引号、Authorization 头、dsb_ 令牌，断言原值不出现且非敏感上下文保留）、多字节安全截断、报告编解码字段缺失丢弃、时间戳格式、队列原子写/超限丢最旧/损坏文件跳过删除/按名删除/清空、批量组包上限与时间序、错误态去重、运行时未配置零行为（不落盘不调用 send）、崩溃同步落盘不发网络、flush 失败保留/4xx 丢弃/排空后停止
+      status: complete
+    macos-app-crash-capture:
+      text: 在 macos/App/Sources/DshAnywhereApp/ 新增崩溃捕获装配：应用启动时安装 NSSetUncaughtExceptionHandler 与 signal() 注册 SIGABRT/SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGTRAP（未配置端点时不落盘直接交还默认行为），安装时预热 DiagText 脱敏正则避免信号上下文惰性编译；处理路径仅同步组装脱敏崩溃报告（线程、消息、调用栈符号、appVersion 与设备信息）原子写入队列目录后恢复默认处置 re-raise；报告骨架与队列目录在安装前预解析，崩溃路径不做网络发送
+      status: complete
+    macos-app-error-state-and-send:
+      text: 在 macos/App 接线错误态报告与发送：AppSessionModel 组装 DiagnosticsRuntime（端点经 DiagnosticsEndpointStore、队列目录为应用私有数据目录下独立子目录、发送经禁用系统 cookie 的 ephemeral URLSession 直连 POST <端点>/api/diagnostics/reports，2xx 视为送达、4xx 视为拒绝丢弃、其余保留入队），applySnapshot 检测 screen 进入 .error(reason)（含 reason 变化）时记录按 ProbeFailureReason 分类的错误态报告（地址经 HarnessUrl.redact），startIfNeeded 启动时冲刷待发队列；未配置端点时全部路径零行为、不创建队列目录
+      status: complete
+    macos-settings-diagnostics-entry:
+      text: 在 macos/App/Sources/DshAnywhereApp/SettingsView.swift 新增「诊断上报」条目：未配置时显示未配置状态说明；粘贴地址实时校验（复用 DiagnosticsEndpointConfig 口径，仅合法 https 地址可保存，非法显示固定原因）；保存后经 DiagnosticsEndpointStore 原子持久化并开启上报；提供清除，清除时删除端点配置与本地待发队列回到未配置；条目交互不影响连接地址草稿与主窗口
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: 运行 macos/Core Swift 单元测试确认诊断报告、队列、运行时及既有 DshCore 测试全部通过
+      status: complete
+      command: swift test --package-path macos/Core
+    macos-app-build:
+      text: 在 macOS 上编译 macos/App（SwiftUI 目标不进完整回归命令）确认崩溃捕获、错误态接线与设置窗口条目等 App 源码可编译
+      status: complete
+      command: swift build --package-path macos/App
+  Verification:
+    full-regression:
+      text: 在本地运行 .strict-spec-driven/config.yaml 完整回归命令
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+    macos-ci-and-device-acceptance:
+      text: macOS CI 编译与 Mac 真机验收：提交推送本变更触发 package-macos-native 作业通过后，用 CI 产物在 Mac 上核对——未配置端点：正常使用不产生任何诊断文件（数据目录无 reports 队列目录）也不发出任何上报请求；配置端点：设置窗口「诊断上报」条目显示未配置状态、粘贴 http 地址保存不可用并显示原因、粘贴合法 https 地址保存后持久化并开启，制造连接错误（如指向无服务端口）时主界面错误页出现且端点收到一份按原因分类的 kind=error 报告（报告中无 token、cookie、API 载荷与聊天内容，地址为脱敏形态），同会话同类错误不重复上报；人为崩溃（触发未捕获异常或致命信号）后进程按系统默认终止，下次启动后端点收到 kind=crash 报告；清除端点后配置与待发队列删除、条目回到未配置、此后不再有任何上报行为；pca platform 取值按开放问题裁决核对
+      status: pending
+    ready-verify:
+      text: 运行 strict-spec-cli ready macos-diagnostics 与 strict-spec-cli verify macos-diagnostics 确认产物、场景覆盖与门禁全部通过
+      status: pending
+      command: strict-spec-cli ready macos-diagnostics && strict-spec-cli verify macos-diagnostics
+testing_gates:
+  validation_task: macos-app-build
+  unit_test_task: swift-core-tests

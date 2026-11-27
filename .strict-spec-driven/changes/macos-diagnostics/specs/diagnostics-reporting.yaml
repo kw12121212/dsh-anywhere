@@ -1,0 +1,117 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: diagnostics-reporting
+operations:
+  ADDED: {}
+  MODIFIED:
+    endpoint-config-desktop:
+      strength: MUST
+      statement: 桌面设置窗口(Electron 于 Windows/Linux 与原生 macOS)提供「诊断上报」条目,语义与 Android 侧一致:默认未配置即应用零行为变化(不产生、不保存、不发送任何报告);实时校验,仅合法 https 地址可保存,保存后原子持久化到配置目录的独立文件并开启;可清除,清除时删除配置与本地待发队列并回到未配置;设置窗口的打开、聚焦、取消与保存交互不影响主窗口显示。
+      scenarios:
+        unconfigured-zero-behavior-desktop:
+          - GIVEN: 诊断上报从未配置
+          - WHEN: 启动应用并正常使用
+          - THEN: 不产生任何报告或上报请求,行为与无此功能时一致
+        save-valid-url-desktop:
+          - GIVEN: 设置窗口已打开「诊断上报」条目
+          - WHEN: 粘贴合法 https 地址并保存
+          - THEN: 配置目录独立文件保存该地址,诊断上报开启,主窗口不受影响
+        invalid-rejected-desktop:
+          - GIVEN: 「诊断上报」条目已打开
+          - WHEN: 输入 http://clear.example/
+          - THEN: 保存不可用并显示原因(仅接受 https),配置不变
+        clear-desktop:
+          - GIVEN: 已配置端点
+          - WHEN: 清除配置
+          - THEN: 回到未配置,待发队列清空,不再上报
+        macos-settings-entry-validation:
+          - GIVEN: 原生 macOS 客户端设置窗口已打开且诊断上报未配置
+          - WHEN: 查看「诊断上报」条目,分别输入 http://insecure.test/ 与 https://diag.example.ts.net:18790 并尝试保存
+          - THEN: 未配置状态可见;http 地址保存不可用并显示仅接受 https 的原因;合法地址保存后原生数据目录独立文件持久化该端点、上报开启且主窗口不受影响
+    crash-persist-next-launch:
+      strength: MUST
+      statement: 崩溃类事件发生时,客户端先把脱敏后的报告原子写入本地(写入中断不留半份文件),安卓未捕获异常、Electron 主进程未捕获异常与原生 macOS 未捕获异常/致命信号随后按系统默认行为终止进程,进程本次不尝试网络发送;下次启动发现未发送报告时连同待发队列批量补报;桌面渲染进程崩溃时进程仍存活,报告落盘后进入待发队列即时尝试。
+      scenarios:
+        crash-then-restart-reports:
+          - GIVEN: 已配置端点
+          - WHEN: App 发生未捕获异常崩溃后重新启动
+          - THEN: 崩溃报告被补报,pca 收到该报告
+        interrupted-write-tolerated:
+          - GIVEN: 崩溃报告写入被中断,文件损坏或不完整
+          - WHEN: 下次启动读取
+          - THEN: 该文件按没有报告处理,不阻断启动、不影响其他诊断状态
+        desktop-render-crash:
+          - GIVEN: 已配置端点,桌面渲染进程崩溃
+          - WHEN: 崩溃事件发生
+          - THEN: 报告落盘进入待发队列并被尝试发送,应用不因此退出
+        macos-crash-then-restart-reports:
+          - GIVEN: 原生 macOS 客户端已配置端点
+          - WHEN: 应用发生未捕获异常或致命信号崩溃,随后重新启动
+          - THEN: 进程按系统默认行为终止且本次不发送网络请求,下次启动时崩溃报告连同待发队列被补报,端点收到该报告且不含 token 与 cookie
+    error-state-capture:
+      strength: MUST
+      statement: 诊断上报开启时:主窗口或主页面显示本地错误页的同时产生一份按原因分类的错误态报告;桌面(Electron 与原生 macOS)在主界面显示本地连接错误页时同样产生一份按原因分类(如无法解析主机名、连接被拒绝、超时、TLS 失败)的报告;安卓隧道卡片进入失败状态时同样产生一份;安卓检查更新失败(自托管源或 GitHub 查询失败,含隧道未就绪)时同样产生一份含失败原因(如 HTTP 状态码)的报告;安卓私聊或群聊聊天页加载失败(打开/重取聊天内容失败,网络失败或 bot 错误码)时同样产生一份含目标类型与原因代码的报告;同一会话内同类错误态至多上报一次;没有任何错误态时不产生任何报告。诊断上报未配置时,错误页与隧道卡片的既有行为不变,不产生报告。
+      scenarios:
+        chat-load-error-one-report:
+          - GIVEN: 已配置端点,聊天页打开或重取失败(网络断开或服务端返回 bot 错误码)
+          - WHEN: 聊天页显示失败 notice
+          - THEN: 产生一份含目标类型(私聊/群聊)与原因代码的错误态报告,同会话同类至多一份;报告不含地址、token、API 载荷与聊天内容
+        macos-error-page-one-report:
+          - GIVEN: 原生 macOS 客户端已配置端点,已保存地址连接被拒绝
+          - WHEN: 主界面显示按原因分类的本地错误页
+          - THEN: 产生一份按原因分类(连接被拒绝)的 kind=error 报告,同会话同类至多一份;报告不含 token、cookie、API 载荷与聊天内容,地址为脱敏形态
+    send-path-and-queue:
+      strength: MUST
+      statement: 上报发送与队列:安卓端点为 tailnet 目标时经内嵌节点转发(隧道已连接),其余目标与桌面端点(Electron 与原生 macOS)经系统网络直连;发送失败静默进入有界本地队列(超限丢弃最旧),仅在启动与新的错误触发点重试,不做定时轮询;pca 返回 4xx 时该批丢弃不再重试;发送与重试在任何情况下不阻塞界面与主流程、不弹出提示;上报不触发隧道启动。上报请求只针对已配置的诊断端点发出。
+      scenarios:
+        tailnet-via-node:
+          - GIVEN: 已配置 ts.net 端点,隧道已连接
+          - WHEN: 发送报告
+          - THEN: 请求经内嵌节点转发到达,不走手机网络直连
+        unreachable-queued:
+          - GIVEN: 已配置端点当前不可达
+          - WHEN: 发送尝试失败
+          - THEN: 报告留在有界队列,界面与主流程不受影响,下次启动重试
+        four-xx-dropped:
+          - GIVEN: pca 对某批报告返回 400
+          - WHEN: 响应到达
+          - THEN: 该批从队列删除,不再重试,应用其余功能不受影响
+        no-tunnel-not-started:
+          - GIVEN: 已配置 tailnet 端点,隧道未配置
+          - WHEN: 发送失败入队
+          - THEN: 隧道不被启动,下次启动仍按未连接处理
+        macos-flush-on-launch-and-error:
+          - GIVEN: 原生 macOS 客户端已配置端点,待发队列有上次会话发送失败保留的报告
+          - WHEN: 应用启动,或新的错误态报告产生
+          - THEN: 队列按批重试发送直至排空或再次失败,全程不弹提示、不阻塞主界面与连接流程
+        4xx-dropped:
+          - GIVEN: pca 对某批报告返回 400
+          - WHEN: 响应到达
+          - THEN: 该批从队列删除,不再重试,应用其余功能不受影响
+    report-content-redaction:
+      strength: MUST
+      statement: 报告内容与脱敏:崩溃类报告包含线程、消息与堆栈——安卓 kind=crash 取未捕获异常堆栈,kind=anr 取判定时主线程的当前堆栈,Electron 桌面 kind=crash 的主进程未捕获异常取异常堆栈,渲染进程崩溃在主进程侧无法取得渲染进程堆栈,消息含崩溃原因与退出码;原生 macOS kind=crash 的未捕获异常与致命信号取崩溃线程、异常或信号名与可用调用栈;错误态报告 kind=error,安卓按 harness 加载失败原因与隧道失败原因分类,桌面(Electron 与原生 macOS)按加载失败原因分类;报告附带应用版本与设备信息;任何字段中出现的地址一律经过脱敏,token 查询参数的值绝不出现在报告、本地队列或日志中;无法解析的地址不回显原文。
+      scenarios:
+        crash-report-fields:
+          - GIVEN: 已配置端点,安卓发生未捕获异常
+          - WHEN: 崩溃报告产生
+          - THEN: 报告 kind=crash,含线程、消息、堆栈、应用版本与设备信息
+        anr-report-include-main-stack:
+          - GIVEN: 已配置端点,主线程无响应超过宽限期
+          - WHEN: 看门狗判定成立
+          - THEN: 报告 kind=anr,堆栈含判定时主线程的当前调用栈
+        error-state-classified:
+          - GIVEN: 已配置端点,已保存地址连接被拒绝
+          - WHEN: 主页面显示本地错误页
+          - THEN: 产生 kind=error 的报告,失败原因分类为连接被拒绝
+        token-never-reported:
+          - GIVEN: 已配置端点,harness 地址曾带 token 保存
+          - WHEN: 任何报告产生并被发送
+          - THEN: 上报载荷中不出现 token 值,载荷中的地址均为脱敏后的干净地址
+        macos-crash-report-fields:
+          - GIVEN: 原生 macOS 客户端已配置端点
+          - WHEN: 发生未捕获异常或致命信号崩溃
+          - THEN: 崩溃报告 kind=crash,含线程、消息、可用调用栈、应用版本与设备信息,任何字段不含 token 与 cookie
+  REMOVED: {}

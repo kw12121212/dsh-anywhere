@@ -1,0 +1,23 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-diagnostics
+approach:
+  - 分层移植 android/core 的 DiagReport/DiagStore 与 Electron 的 diagnostics-runtime 语义：纯逻辑全部下沉 macos/Core（DshCore）并经目录 URL 注入存储位置（沿用 DiagnosticsEndpointStore 先例）、经闭包/协议注入发送依赖，Linux swift test 覆盖；macos/App 只保留崩溃捕获（NSSetUncaughtExceptionHandler + 致命信号处理，仅同步原子写报告后交还系统默认终止）、错误态观察（AppSessionModel 检测快照进入 .error(reason) 时按 ProbeFailureReason 分类记录，复用 session 内去重）、URLSession 直连发送与设置窗口「诊断上报」条目。端点读写复用 macos-setup-settings 已落地的 DiagnosticsEndpointConfig/DiagnosticsEndpointStore；未配置端点时全部采集路径零行为。报告脱敏以 android/core DiagText.sanitize 的正则清单为基准移植（URL 经 HarnessUrl.redact、残余 token= 值、JSON 密钥/口令字段、secret-set value、键值与环境变量形态、Authorization 头、dsb_ 前缀令牌一律替换 ***），高于桌面基线且与既有共享向量语义一致。
+decisions:
+  diag-report-core-split:
+    decision: 报告模型/脱敏/编解码/队列/组包/去重全部放 DshCore（DiagnosticsReport.swift + DiagnosticsQueue.swift），运行时编排放 DshCore 的 DiagnosticsRuntime（注入端点读取、队列与 send 闭包，与 Electron diagnostics-runtime 同形的纯编排），崩溃捕获与 URLSession 发送装配放 macos/App；队列与端点文件位于 ~/Library/Application Support/DSH Anywhere Native/ 下独立子目录（队列 reports/ 子目录，0600/0700 权限，每份报告一文件、文件名 epochMillis-id.json 字典序即时间序）。
+    rationale: macos-client/pure-logic-in-macos-core 与 dshcore-foundation-json-and-concurrency 要求不依赖 Apple 框架的逻辑下沉并在 Linux 回归；DiagnosticsEndpointStore 已确立『目录注入的文件存储可在 Core』先例，仅网络 IO 被禁止——发送经注入依赖即可让运行时编排留在 Core 并被 Linux 测试覆盖（与 Electron 版把 runtime 做成注入式纯逻辑、测试注入假 send 的结构同形）；每份报告一文件的队列与原子临时文件+重命名写法直接移植 android/core 已实证语义，避免 Electron 单文件队列与崩溃写入竞争的差异化设计。
+  crash-capture-signal-and-exception:
+    decision: 崩溃捕获按两级装配（macos/App）：NSSetUncaughtExceptionHandler 捕获 NSException（名称、原因与调用栈符号），signal() 注册 SIGABRT/SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGTRAP 兜底 Swift 运行时崩溃（Darwin 上对致命信号与 sigaction 等价：处理器在触发线程执行，SIG_DFL+re-raise 按默认终止）；安装时预热 DiagText 脱敏正则（静态正则为惰性初始化，避免首次报告落在信号处理器内才触发编译）；处理路径只做同步原子落盘（0600 临时文件 + rename），随后恢复系统默认处置并 re-raise 交还默认终止；不在崩溃路径发起任何网络发送。未配置端点时不落盘，进程零额外可观察差异。
+    rationale: 规划明细明确要求「先原子写本地报告再按系统默认终止」；Swift 多数崩溃（强制解包失败、越界、整数溢出）不走 NSException 而直接触发信号，信号级兜底不可省；tech/diagnostics 的 crash-report-atomic-persist 已锁定崩溃路径只同步原子落盘、由下次启动补报；正则预热消除信号上下文惰性编译的分配器挂起风险（评审发现 SHOULD FIX 3）。
+  error-state-hook-snapshot-transition:
+    decision: 错误态报告由 AppSessionModel 在 applySnapshot 检测 screen 进入 .error(reason)（含 reason 变化）时调用 DiagnosticsRuntime 的错误态记录（按 ProbeFailureReason 分类，消息中地址经 HarnessUrl.redact 脱敏），同会话同类错误经运行时内去重至多一份；401 重认证页与 403 trusted-host 提示页不产生错误态报告。
+    rationale: 复用既有 onSnapshot 快照流即可挂接，无需扩大 MacosSessionController 的事件面；与桌面 Electron 版一致——只按连接/加载失败原因上报，401/403 属会话与配置状态而非连接错误态，且规格 error-state-capture 的桌面口径即按加载失败原因分类。
+alternatives:
+  - option: 队列采用 Electron diagnostics-store.ts 形态的单文件 JSON 队列
+    reason: 崩溃时刻的写入与运行中写入共享单文件需要锁与整文件重写，崩溃时的部分写坏会损失整个待发队列；android/core 实证的每份报告一独立文件（文件名 epochMillis-id.json、字典序即时间序、超限删最旧、损坏单份丢弃）在 Foundation 上同样简单且损毁面最小，也与 crash-persist-next-launch 的『写入中断不留半份文件、损坏按没有报告处理』场景直接对应。
+risks:
+  - 信号处理器内调用 Foundation/FileManager API 并非严格 async-signal-safe，极端情况下可能卡在崩溃路径：缓解为崩溃路径只写小体积预组装 tmp 文件并立即 rename，写失败静默放弃该份报告（不阻断终止），并以 Mac 真机人为崩溃验收覆盖。
+  - pca POST /api/diagnostics/reports 服务端校验 platform 枚举、枚举外返回 400（invalid_input）并按规格 4xx 整批丢弃：若原生 macOS 采用新枚举值而 pca 未先行部署，全部报告将被静默丢弃——platform 取值以开放问题 pca-platform-for-macos 的裁决为准，默认按推荐复用 dsh_desktop（pca 零改动）。

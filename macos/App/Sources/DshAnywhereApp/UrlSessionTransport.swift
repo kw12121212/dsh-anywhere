@@ -1,8 +1,9 @@
 import DshCore
 import Foundation
 
-/// 禁用 `URLSession` 自动重定向，由 `DshCore` 的 `SessionEstablisher` 显式控制同源重定向。
-private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+/// 禁用 `URLSession` 自动重定向（API 传输由 `SessionEstablisher` 显式控制同源重定向；
+/// 诊断发送则拒绝跟随，3xx 视为失败保留队列——端点必须是用户配置的最终目标）。
+final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -14,7 +15,9 @@ private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unche
     }
 }
 
-private func makeEphemeralConfiguration(requestTimeout: TimeInterval, resourceTimeout: TimeInterval) -> URLSessionConfiguration {
+/// 禁用系统 cookie 与缓存的 ephemeral 会话配置（诊断发送与 API 传输共用；
+/// 自动重定向的禁用由各会话挂载的 `NoRedirectDelegate` 承担，非配置项）。
+func makeEphemeralConfiguration(requestTimeout: TimeInterval, resourceTimeout: TimeInterval) -> URLSessionConfiguration {
     let config = URLSessionConfiguration.ephemeral
     config.httpShouldSetCookies = false
     config.httpCookieStorage = nil

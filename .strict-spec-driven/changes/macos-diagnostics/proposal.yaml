@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-diagnostics
+  status: proposed
+summary:
+  what:
+    - 在 macOS 原生客户端补齐诊断上报闭环：macos/Core（DshCore）下沉报告模型、脱敏、截断、JSON 编解码、有界待发队列（每份一文件、原子落盘、超限丢最旧、损坏丢弃）、批量组包（≤20 份/≤1 MiB）与同会话错误态去重等纯逻辑并在 Linux 以 XCTest 覆盖（复用 macos-setup-settings 已建立的 DiagnosticsEndpointConfig/DiagnosticsEndpointStore）；macos/App 负责未捕获异常与致命信号的崩溃捕获（NSSetUncaughtExceptionHandler 与信号处理：先同步原子写本地报告再按系统默认终止）、主界面出现按原因分类错误页时产生错误态报告（同会话同类至多一次）、URLSession 直连发送与失败静默入队、启动与新错误时冲刷队列；设置窗口新增「诊断上报」条目（未配置显示未配置状态、实时校验仅合法 https 可保存、原子持久化、可清除且清除删除配置与待发队列）；改写 diagnostics-reporting 主规格，把桌面要求标注为适用于 Electron（Windows/Linux）与原生 macOS 并追加 macOS 场景。
+  why:
+    - macos-setup-settings 已完成端点配置与 Electron 只读迁移，但原生 macOS 端尚无任何诊断采集、落盘与上报能力：macos-native-foundation 里程碑的目标要求原生客户端满足 diagnostics-reporting 的桌面要求（默认未配置零行为、崩溃先落盘下次启动补报、错误态按原因分类且不含 token/cookie/API 载荷与聊天内容），完成本变更后基础里程碑的最后一块基础能力闭环，后续 macos-native-chat/manage 的界面错误态可直接复用同一上报通道。
+scope:
+  in:
+    - macos/Core（DshCore）：新增诊断报告纯逻辑（报告结构与 pca 封闭字段集、截断上限、脱敏移植、JSON 编解码、RFC3339 时间戳、批量组包、错误态去重、有界待发队列文件语义，目录经注入、无网络 IO）及 Linux XCTest 覆盖；macos/App：崩溃捕获装配（未捕获异常与 SIGABRT/SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGTRAP 等致命信号）、AppSessionModel 观察快照进入错误页时记录按 ProbeFailureReason 分类的错误态报告、URLSession 直连 POST <端点>/api/diagnostics/reports、启动与新错误冲刷队列、SettingsView 新增「诊断上报」条目与保存/清除交互；.strict-spec-driven/changes/macos-diagnostics/specs/diagnostics-reporting.yaml：把 endpoint-config-desktop、crash-persist-next-launch、error-state-capture、send-path-and-queue、report-content-redaction 五条需求的桌面口径改写为 Electron（Windows/Linux）+ 原生 macOS 并追加 macOS 场景。
+  out:
+    - Electron 三平台客户端与 Android 客户端的任何行为改动（两端诊断实现保持现状）；首次设置页与设置窗口既有地址编辑、连接状态与关于交互（仅新增「诊断上报」条目）；macos-setup-settings 已建立的 Electron 只读迁移与 DiagnosticsEndpointStore 语义（本变更复用不改其行为）；NavigationSplitView 主窗口外壳与窗口记忆（macos-shell-window 承接）；DS-Bot 团队/聊天/管理界面的错误态上报扩展（后续里程碑按同一通道接入）；CI 工作流与 config.yaml 完整回归命令口径（Core 新测试随既有 swift test 进入）。
+unchanged_behavior:
+  - 未配置诊断端点时原生 macOS 客户端不产生、不保存、不发送任何诊断报告，全部既有功能与现状完全一致；崩溃捕获只在已配置端点时落盘报告，处理器最终交还系统默认行为终止进程，不改变崩溃本身的表现；错误页、重认证页、403 提示页与版本提示条的既有显示逻辑不受诊断接入影响；报告、本地队列与日志中不出现 token、cookie、API 载荷与聊天内容，地址一律经脱敏；macos/Core 保持纯 Foundation 零第三方依赖、无直接网络 IO、Swift 6 Sendable，Linux swift test 直接通过；Electron 目录绝对只读不被触碰。
+roadmap:
+  milestone: macos-native-foundation
+  planned_change: macos-diagnostics

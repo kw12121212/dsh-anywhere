@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: android-gradlew-gradle-aead55
+  title: 完整回归的 android/gradlew 步骤可能因 ~/.gradle 指向未挂载的外置盘而失败
+category: tooling
+status: active
+created_at: '2026-11-27T11:51:32.685Z'
+updated_at: '2026-11-27T11:51:32.685Z'
+context: config.yaml 的完整回归命令尾部含 android/gradlew -p android/core test，Gradle wrapper 需在 ~/.gradle/wrapper/dists 下建锁文件。
+observation: 本机 ~/.gradle 是指向 /Volumes/Samsung_T5/AndroidDev/gradle-home 的符号链接；外置盘未挂载时 wrapper 报 Could not create parent directory for lock file，且 mkdir -p ~/.gradle/... 同样失败（报 No such file or directory，具误导性——真实原因是悬空符号链接）。
+takeaway: 先 ls -ld ~/.gradle 检查符号链接目标是否挂载；未挂载时用 GRADLE_USER_HOME 指向本地目录（如 ~/Library/Caches/dsh-anywhere-gradle）执行同一条回归命令，不改命令本身，并在证据中注明该环境重定向。
+applies_when: 在本机执行完整回归命令、android/gradlew 步骤失败于 wrapper 锁文件目录创建时
+occurrences:
+  - origin: macos-diagnostics
+    date: '2026-11-27'
+    evidence: 2026-11-27 macos-diagnostics 回归：android 步骤失败于 Could not create parent directory for lock file ~/.gradle/wrapper/dists/gradle-9.6.0-bin/...；GRADLE_USER_HOME=~/Library/Caches/dsh-anywhere-gradle 重定向后同一命令 BUILD SUCCESSFUL

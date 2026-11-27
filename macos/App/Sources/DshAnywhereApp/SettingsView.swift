@@ -46,6 +46,8 @@ struct SettingsView: View {
     @State private var draftUrl: String = ""
     @State private var saveError: String?
     @State private var isSaving: Bool = false
+    @State private var diagDraft: String = ""
+    @State private var diagSaveError: String?
     @State private var windowBox = WeakWindowBox()
 
     private var appVersion: String {
@@ -121,6 +123,63 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("诊断上报") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let endpoint = model.configuredDiagnosticsEndpoint {
+                            LabeledContent("上报端点") {
+                                Text(endpoint)
+                                    .textSelection(.enabled)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            // 未配置即零行为：不产生、不保存、不发送任何诊断报告。
+                            Text("未配置：应用不产生、不保存、不发送任何诊断报告。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        TextField(
+                            "",
+                            text: $diagDraft,
+                            prompt: Text("https://…（可选诊断上报端点）")
+                        )
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+
+                        if !diagDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let diagLiveError {
+                            Text(diagLiveError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        if let diagSaveError {
+                            Text(diagSaveError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+
+                        HStack {
+                            Button("保存") {
+                                saveDiagnostics()
+                            }
+                            .disabled(!diagDraftIsValid)
+
+                            if model.diagnosticsConfigured {
+                                Button("清除", role: .destructive) {
+                                    model.clearDiagnosticsEndpoint()
+                                    diagDraft = ""
+                                    diagSaveError = nil
+                                }
+                            }
+                        }
+
+                        Text("报告经脱敏且不含 token、cookie、API 载荷与聊天内容。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 Section("关于") {
                     LabeledContent("应用名称", value: AppIdentity.displayName)
                     LabeledContent("版本", value: appVersion)
@@ -161,9 +220,34 @@ struct SettingsView: View {
         .onAppear {
             draftUrl = model.snapshot.cleanUrl ?? ""
             saveError = nil
+            diagDraft = model.configuredDiagnosticsEndpoint ?? ""
+            diagSaveError = nil
         }
         .onChange(of: draftUrl) { _, _ in
             saveError = nil
+        }
+        .onChange(of: diagDraft) { _, _ in
+            diagSaveError = nil
+        }
+    }
+
+    /// 诊断端点草稿实时校验：与存储层同一校验口径，仅合法 https 地址可保存；空值不显示原因。
+    private var diagDraftIsValid: Bool {
+        DiagnosticsEndpointConfig.validate(diagDraft) != nil
+    }
+
+    private var diagLiveError: String? {
+        guard !diagDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !diagDraftIsValid else { return nil }
+        return "诊断上报端点仅接受合法 https 地址"
+    }
+
+    private func saveDiagnostics() {
+        guard diagDraftIsValid else { return }
+        if let saved = model.saveDiagnosticsEndpoint(diagDraft) {
+            diagDraft = saved
+            diagSaveError = nil
+        } else {
+            diagSaveError = "诊断端点保存失败，请检查地址后重试"
         }
     }
 

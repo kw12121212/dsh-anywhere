@@ -1,0 +1,16 @@
+schema: strict-spec-driven/delta-tech/v1
+schema_version: 1
+artifact_type: delta_tech
+schema_file: templates/strict-spec-driven/schemas/delta-tech.yaml
+target_standard: diagnostics
+operations:
+  ADDED: {}
+  MODIFIED:
+    diag-sanitize-secret-fields:
+      strength: SHOULD
+      statement: android/core 与 macos/Core 的 DiagText.sanitize 维护同一份敏感值正则清单（URL token、JSON 密钥/口令字段、secret-set value、键值与环境变量形态、Authorization 头、dsb_ 前缀令牌），任何一端新增敏感请求字段名或凭据前缀时必须同步另一端，并在两端各自的正反例测试中断言原值不出现且非敏感上下文保留（如密钥名）；Electron 桌面基线（地址脱敏 + token 不出现）不因此抬高。
+      rationale: 同一脱敏清单自 macos-diagnostics 起存在 Kotlin 与 Swift 两份实现，单端补字段而另一端遗漏会造成跨端泄漏面不一致；把同步义务收口进规则并以两端正反例测试锁定，延续 android/electron 双实现时代以测试向量防漂移的做法。
+      enforcement:
+        method: test
+        detail: 两端测试各自覆盖：android/core 的 DiagReportingTest 与 macos/Core 的 DiagnosticsTests 均断言 URL token、JSON 凭据键、secret-set value、键值/环境变量（无引号及单/双引号包裹）与 Authorization 头脱敏后原值不出现且非敏感上下文保留。
+  REMOVED: {}

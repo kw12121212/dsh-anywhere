@@ -390,6 +390,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/tooling/mac-electron-gradle-gradle-0aa9c4.yaml
+    android-gradlew-gradle-aead55:
+      title: 完整回归的 android/gradlew 步骤可能因 ~/.gradle 指向未挂载的外置盘而失败
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/tooling/android-gradlew-gradle-aead55.yaml
   ui:
     compose-key-compose-7f09bd:
       title: Compose 语言切换别用 key 整体重建，让非 Compose 文案经注入来源读快照状态
