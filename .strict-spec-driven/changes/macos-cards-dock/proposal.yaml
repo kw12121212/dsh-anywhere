@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-cards-dock
+  status: proposed
+summary:
+  what:
+    - macOS 交互卡片与停靠区：私聊输入框上方停靠区汇集当前会话待处理卡（审批、提问、show_view 文本/指标/表格/公式/进度/选择/确认/表单/滑块/数字/开关/来源/Swift Charts 图表（折线/面积/柱/横柱/环形，畸形超限未知段降级只读文本）、密钥卡（SecureField 值不回显不进日志）、学习审批差异、连接器请求、浏览器交接（dsh Web 宿主按 Android 降级规则提示到桌面操作）、btw 卡、沙箱 HTML 卡（独立 WKWebView：非持久化存储、无脚本桥接、拦截全部导航与子子资源、不访问本地文件））；解码/上限校验/作答参数/停靠排序与展开选择全部复用 DshCore（与 Kotlin 同夹具）；一次只展开一张、作答成功消隐并经 feed 刷新
+  why:
+    - macos-native-chat 里程碑第 4 项：Bot 的审批/提问/图表等交互是桌面端与 Bot 协作的核心；DshCore Cards（解码/上限/只读降级/作答构造）已在 foundation 就绪且有夹具测试，本变更接 UI 与作答端点
+scope:
+  in:
+    - macos/App（卡片视图族（含 Swift Charts 与 WKWebView 沙箱）、停靠区视图与一次展开状态、作答动作接线经控制器 chatAction）；控制器无改动（chatAction 已有）；.strict-spec-driven/specs/android-dsbot.yaml 卡片相关条目平台无关改写与 macos-app 新增（经 delta-spec）
+  out:
+    - 群聊停靠区（macos-group-chat 复用组件）；Side chat（macos-side-chat）；附件；Android/Electron 端
+unchanged_behavior:
+  - 私聊渲染/流式/分页/发送箱/缓存、侧栏、提醒、设置、窗口行为；Cards 解码与作答参数语义（既有夹具测试）；Android 已验收行为
+roadmap:
+  milestone: macos-native-chat
+  planned_change: macos-cards-dock

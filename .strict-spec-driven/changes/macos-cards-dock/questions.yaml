@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-cards-dock
+open: []
+resolved:
+  - id: macos-app-acceptance-gate
+    question: 卡片/图表/沙箱 WebKit 无法在 Linux 回归验证，CI+真机核对应作为归档前置还是异步？
+    context: 影响 Verification 任务与 delta-spec 证据判定。选项 A：推送→CI→产物真机逐项核对（含沙箱零网络验证）后归档；选项 B：单测+回归直接归档、真机异步。
+    answer: 沿用 2026-11-27 持续授权（历次 macOS 变更均按方案 A）：方案 A 自动执行，全部通过后归档；阻塞缺陷停下报告；锁屏等环境阻塞等待恢复
+    status: resolved
+    answered_by: human
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''''''''s why, and it decides whether the change is worth making.'
+    answer: macOS 私聊里 Bot 的审批、提问、图表与各类交互卡完全不显示：用户看不到等待自己处理的事项、无法作答，Bot 卡在等待；今天只能去网页端处理。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''''''''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''''''''s scenarios and the acceptance evidence at review time.'
+    answer: Bot 发起审批/提问/图表时私聊停靠区出现卡片且一次只展开一张；作答后卡片消隐、网页端同步；图表按数据绘制（畸形降级只读）；密钥输入不回显；沙箱 HTML 卡无任何网络请求；停靠区高度有上限可滚动。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置 macos-bot-chat 已归档（依赖解锁），macos-cards-dock 是依赖顺序推荐的就绪变更；里程碑完成标准第 4 条由本变更承载。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按计划变更唯一解读：卡片解码/作答构造/上限降级复用 DshCore 既有实现（夹具锁定）；图表用 Swift Charts 按段类型绘制、畸形超限未知整体降级只读；沙箱 HTML 卡双保险（导航拦截+规则表阻断网络）且验收含零网络请求验证；浏览器交接在 dsh Web 宿主场景按 Android 降级规则提示到桌面操作；触感不做。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''''''''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 群聊停靠区（macos-group-chat 复用）；Side chat；附件；管理页连接器详情导航（macos-native-manage）；Android/Electron 端；触感反馈。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED: {}
+  MODIFIED:
+    pending-dock:
+      strength: MUST
+      statement: 私聊与群聊在输入框上方提供待处理停靠区：汇集当前会话等待用户处理的学习审批、工具审批、提问、密钥请求、连接器请求、邮件发送确认、浏览器交接与交互卡片，按「学习/审批 → 提问 → 密钥/连接器/邮件 → 交接 → 卡片」排序；同一时刻只展开一项，首次显示时展开第一项，新出现的项不打断正在填写的那项，展开项作答成功移出后自动展开下一项，点按已展开项可收起；停靠区高度不超过可用高度的约一半，内容多时可滚动；没有待处理项时不显示停靠区；提问单选点按即提交、多选与自填用提交按钮并可忽略，密钥输入不回显，交互卡片在停靠区原生绘制并作答，可关闭；作答语义与网页端一致。平台差异：Android 高度按键盘外可用空间计并给触感反馈；macOS 高度按窗口内容计、不做触感。
+      scenarios:
+        dock-one-at-a-time:
+          - GIVEN: 聊天中同时有一个工具审批、一个提问和一张卡片待处理
+          - WHEN: 打开该聊天
+          - THEN: 停靠区只展开审批，提问与卡片收起；同意审批后审批移出、提问自动展开，网页端同步
+        question-tap-submits:
+          - GIVEN: 停靠区展开一个单选提问
+          - WHEN: 点按其中一个选项
+          - THEN: 该选项立即作为回答提交，提问移出停靠区，Bot 收到回答
+    interactive-cards:
+      strength: MUST
+      statement: 审批、提问、show_view 卡片与密钥卡可在客户端作答且与网页端同步：show_view 的文本、指标、表格、公式、进度、选择、确认、表单、滑块、数字、开关与来源段原生绘制（macOS 图表用系统图表框架按数据绘制折线/面积/柱/横柱/环形），含图表的卡片按数据绘制，畸形、超限或未知段降级为只读文本不崩溃；密钥卡输入不回显（Android 密码框 / macOS SecureField）；作答经对应端点提交（构造复用各端共享的纯逻辑），成功后卡片消隐并经 feed 刷新，失败显示可读原因可重试；已作答的记录卡以只读形式显示。平台差异：Android 长按卡片弹菜单；macOS 右键菜单。
+      scenarios:
+        cards-answer-sync:
+          - GIVEN: Bot 发起一个带选择的 show_view 卡
+          - WHEN: 在停靠区作答并提交
+          - THEN: 卡片移出停靠区、网页端同步显示已作答；已作答记录以只读显示
+        cards-degrade-sandbox:
+          - GIVEN: 一张 show_view 卡含畸形图表数据段，另有沙箱 HTML 卡
+          - WHEN: 渲染停靠区
+          - THEN: 畸形段降级为只读文本不崩溃；沙箱 HTML 卡在与系统隔离的 WebView 中显示（非持久化存储、无脚本桥接、拦截全部导航与网络子资源请求、不访问本地文件），不发出任何网络请求
+  REMOVED: {}
