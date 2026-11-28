@@ -246,6 +246,8 @@ struct ContentView: View {
                         model.chat.dismissExchanges()
                     }
                 }
+        } else if let entry = selectedEntry, entry.kind == .room, model.roomChat.roomId == entry.id {
+            RoomChatView(model: model, entry: entry)
         } else if let entry = selectedEntry {
             VStack(spacing: 12) {
                 Image(systemName: "bubble.left.and.bubble.right")
@@ -253,9 +255,6 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                 Text(entry.name)
                     .font(.title2.weight(.semibold))
-                Text("群聊内容将在后续版本提供")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(32)

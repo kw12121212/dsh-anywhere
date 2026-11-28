@@ -15,6 +15,29 @@ struct ChatView: View {
 
     private var chat: BotChatModel { model.chat }
 
+    /// 私聊聊天条族（macos-group-chat，dsbot-chat-bars-0310）：远端未返回对应字段时整块不渲染。
+    @ViewBuilder
+    private var privateBars: some View {
+        let state = model.snapshot.stateRaw
+        let botId = chat.botId ?? entry.id
+        if let repair = ChatBars.repair(state, botId) {
+            RepairCardView(repair: repair, actions: model.barActions, botId: botId)
+                .padding(.vertical, 4)
+        }
+        let asks = ChatBars.computerAsks(state, botId: botId)
+        if !asks.isEmpty {
+            ComputerAskCardsView(asks: asks, actions: model.barActions)
+                .padding(.vertical, 4)
+        }
+        if ChatBars.computerBusy(state, botId) {
+            ComputerStopBarView(actions: model.barActions, botId: botId)
+        }
+        let tasks = ChatBars.tasks(state, botId)
+        if !tasks.isEmpty {
+            TaskBarView(tasks: tasks, actions: model.barActions, botId: botId)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -22,6 +45,7 @@ struct ChatView: View {
             GeometryReader { geo in
                 VStack(spacing: 0) {
                     messageList
+                    privateBars
                     CardsDockView(model: model, entry: entry, availableHeight: geo.size.height)
                 }
             }
@@ -52,6 +76,17 @@ struct ChatView: View {
                 .font(.headline)
                 .lineLimit(1)
             if entry.working {
+                // 工作短语（work-phrase）：自述优先，否则按工具；远端未返回工作详情时不显示短语
+                //（只保留原指示）；工作详情带 roomId 时注明「群聊中」。
+                if let work = ChatBars.botWork(model.snapshot.stateRaw, entry.id) {
+                    let phrase = work.string("roomId") != nil
+                        ? WorkPhrase.phrase(work) + I18n.tr("（群聊中）", " (in a group)")
+                        : WorkPhrase.phrase(work)
+                    Text(phrase)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Button("停止") { chat.stop() }
             } else if entryInterrupted {
                 Button("恢复") { chat.resume() }
@@ -327,27 +362,61 @@ private struct ChatBottomOffsetKey: PreferenceKey {
     static func reduce(value: inout Double, nextValue: () -> Double) { value = min(value, nextValue()) }
 }
 
-/// 多行输入（NSTextView）：Enter 行为按 enterToSend（开：Enter 发送 ⌥Enter 换行；关反之）。
+/// 输入框插入句柄（@ 名册鼠标点选与引用入口共用，macos-group-chat）。
+struct ComposerInsertHandles {
+    let insertAtCursor: (String) -> Void
+    let insertMention: (String) -> Void
+}
+
+/// 多行输入（NSTextView）：Enter 行为按 enterToSend（开：Enter 发送 ⌥Enter 换行；关反之）；
+/// @ 补全闭包可选（群聊启用，macos-group-chat）。
 struct ComposerTextEditor: NSViewRepresentable {
     let enterToSend: Bool
     let onSend: (String) -> String
+    var mentionQuery: ((String?) -> Void)? = nil
+    var mentionMove: ((Int) -> Void)? = nil
+    var mentionPick: (() -> String?)? = nil
+    var mentionClose: (() -> Void)? = nil
+    var mentionActive: (() -> Bool)? = nil
+    /// 文本视图就绪后回传插入句柄（@ 名册替换当前 @ 词 / 引用入口光标处插入文本）。
+    var onHandlesReady: ((ComposerInsertHandles) -> Void)? = nil
 
     func makeNSView(context: Context) -> ComposerTextView {
         let view = ComposerTextView()
         view.enterToSend = enterToSend
         view.onSend = onSend
+        view.mentionQuery = mentionQuery
+        view.mentionMove = mentionMove
+        view.mentionPick = mentionPick
+        view.mentionClose = mentionClose
+        view.mentionActive = mentionActive
         view.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
         view.isRichText = false
         view.allowsUndo = true
         view.textContainerInset = NSSize(width: 6, height: 8)
         view.backgroundColor = .controlBackgroundColor
         context.coordinator.observeSend(view)
+        if let onHandlesReady {
+            onHandlesReady(ComposerInsertHandles(
+                insertAtCursor: { [weak view] text in
+                    view?.insertText(text, replacementRange: view?.selectedRange() ?? NSRange())
+                },
+                insertMention: { [weak view] name in
+                    view?.insertMention(name)
+                }
+            ))
+        }
         return view
     }
 
     func updateNSView(_ nsView: ComposerTextView, context: Context) {
         nsView.enterToSend = enterToSend
         if nsView.onSend == nil { nsView.onSend = onSend }
+        nsView.mentionQuery = mentionQuery
+        nsView.mentionMove = mentionMove
+        nsView.mentionPick = mentionPick
+        nsView.mentionClose = mentionClose
+        nsView.mentionActive = mentionActive
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -371,10 +440,17 @@ struct ComposerTextEditor: NSViewRepresentable {
     }
 }
 
-/// 发送键拦截的 NSTextView。
+/// 发送键拦截的 NSTextView（@ 补全事件经可选闭包外抛，macos-group-chat）。
 final class ComposerTextView: NSTextView, NSTextViewDelegate {
     var enterToSend = true
     var onSend: ((String) -> String)?
+    /// @ 补全：当前 @ 词变化（nil 关闭）；↑↓（-1/+1）；Enter 取选中（nil 无浮层走原逻辑）；Esc 关闭；
+    /// active 报告浮层是否显示（未显示时不拦截 ↑↓/Esc，保持多行编辑的键盘行为）。
+    var mentionQuery: ((String?) -> Void)?
+    var mentionMove: ((Int) -> Void)?
+    var mentionPick: (() -> String?)?
+    var mentionClose: (() -> Void)?
+    var mentionActive: (() -> Bool)?
 
     override func awakeFromNib() {
         super.awakeFromNib()
@@ -395,6 +471,26 @@ final class ComposerTextView: NSTextView, NSTextViewDelegate {
             super.keyDown(with: event)
             return
         }
+        // @ 补全浮层激活时：↑↓ 换选、Enter 插入、Esc 关闭（消费事件不走发送）；
+        // 浮层未显示时 ↑↓/Esc 交回文本编辑（多行光标移动不被吞）。
+        if let mentionMove, let mentionPick, mentionActive?() == true {
+            switch event.keyCode {
+            case 125, 126:
+                mentionMove(event.keyCode == 126 ? -1 : 1)
+                return
+            case 36, 76:
+                if let name = mentionPick() {
+                    insertMention(name)
+                    return
+                }
+            case 53:
+                mentionQuery?(nil)
+                mentionClose?()
+                return
+            default:
+                break
+            }
+        }
         // Enter / ⌥Enter：按偏好一个发送一个换行；⌘Enter 恒为发送；小键盘 Enter 同主键。
         if event.keyCode == 36 || event.keyCode == 76, !event.modifierFlags.contains(.shift) {
             let option = event.modifierFlags.contains(.option)
@@ -407,6 +503,46 @@ final class ComposerTextView: NSTextView, NSTextViewDelegate {
         }
         super.keyDown(with: event)
     }
+
+    override func didChangeText() {
+        super.didChangeText()
+        mentionQuery?(currentMentionQuery())
+    }
+
+    /// 光标前紧邻的 @ 词（遇到空白/行首停止；不含 @ 前缀触发字符之外的内容）。
+    func currentMentionQuery() -> String? {
+        let s = string as NSString
+        let loc = selectedRange().location
+        var i = loc - 1
+        while i >= 0 {
+            let c = s.character(at: i)
+            if c == 0x40 { // '@'
+                return s.substring(with: NSRange(location: i, length: loc - i))
+            }
+            if c == 0x20 || c == 0x0A || c == 0x09 { return nil }
+            i -= 1
+        }
+        return nil
+    }
+
+    /// 把当前 @ 词替换为 "@名称 "（光标落在名称后）。
+    func insertMention(_ name: String) {
+        let s = string as NSString
+        let loc = selectedRange().location
+        var i = loc - 1
+        while i >= 0 {
+            let c = s.character(at: i)
+            if c == 0x40 {
+                let range = NSRange(location: i, length: loc - i)
+                insertText("@\(name) ", replacementRange: range)
+                mentionQuery?(nil)
+                needsDisplay = true
+                return
+            }
+            if c == 0x20 || c == 0x0A || c == 0x09 { break }
+            i -= 1
+        }
+    }
 }
 
 /// 单条聊天条目。
@@ -417,9 +553,15 @@ struct ChatItemView: View {
     var body: some View {
         switch item {
         case .message(let m):
-            BubbleView(markdown: m.markdown, fromUser: m.fromUser, onReadFull: m.wholeFileJson != nil ? {
-                model.chat.readFullText(fileJson: m.wholeFileJson)
-            } : nil)
+            BubbleView(
+                markdown: m.markdown,
+                fromUser: m.fromUser,
+                speakerName: m.speakerName,
+                speakerColor: m.speakerColor,
+                onReadFull: m.wholeFileJson != nil ? {
+                    model.chat.readFullText(fileJson: m.wholeFileJson)
+                } : nil
+            )
         case .toolCard(let name, let summary):
             ToolCardView(name: name, summary: summary)
         case .image(let image):
@@ -470,14 +612,27 @@ struct ChatItemView: View {
     }
 }
 
-/// 消息气泡：Markdown 自绘 + 右键菜单（复制整条/选择文字就地）+ textSelection。
+/// 消息气泡：Markdown 自绘 + 右键菜单（复制整条/选择文字就地）+ textSelection；
+/// 群消息带说话人名与颜色标识（macos-group-chat）。
 struct BubbleView: View {
     let markdown: String
     let fromUser: Bool
+    var speakerName: String? = nil
+    var speakerColor: String? = nil
     var onReadFull: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if !fromUser, let speakerName {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(speakerDotColor)
+                        .frame(width: 7, height: 7)
+                    Text(speakerName)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
             MarkdownView(markdown: markdown)
         }
         .padding(.horizontal, 12)
@@ -496,6 +651,21 @@ struct BubbleView: View {
             if let onReadFull {
                 Button("阅读全文", action: onReadFull)
             }
+        }
+    }
+
+    /// 成员颜色（state 的 color 名 → SwiftUI 色；未知给中性色）。
+    private var speakerDotColor: Color {
+        switch speakerColor {
+        case "blue": return .blue
+        case "green": return .green
+        case "orange": return .orange
+        case "red": return .red
+        case "teal": return .teal
+        case "violet": return .purple
+        case "pink": return .pink
+        case "yellow": return .yellow
+        default: return .secondary
         }
     }
 }
@@ -696,7 +866,21 @@ struct FileLikeEntryView: View {
 /// 发送箱行：发送中/已发送等待确认/未发送（重试一次与删除）。
 struct OutboxRowView: View {
     let row: Outbox.Entry
-    let chat: BotChatModel
+    var onRetry: ((Int64) -> Void)? = nil
+    var onDelete: ((Int64) -> Void)? = nil
+
+    /// 私聊便捷构造（沿用 chat 模型）。
+    init(row: Outbox.Entry, chat: BotChatModel) {
+        self.row = row
+        self.onRetry = { chat.retryOutbox($0) }
+        self.onDelete = { chat.deleteOutbox($0) }
+    }
+
+    init(row: Outbox.Entry, onRetry: @escaping (Int64) -> Void, onDelete: @escaping (Int64) -> Void) {
+        self.row = row
+        self.onRetry = onRetry
+        self.onDelete = onDelete
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -716,16 +900,16 @@ struct OutboxRowView: View {
                 Text("已发送，等待确认")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("删除") { chat.deleteOutbox(row.id) }
+                Button("删除") { onDelete?(row.id) }
                     .controlSize(.small)
             case .failed:
-                Button("重试") { chat.retryOutbox(row.id) }
+                Button("重试") { onRetry?(row.id) }
                     .controlSize(.small)
                     .buttonStyle(.link)
                 Text("未发送")
                     .font(.caption)
                     .foregroundStyle(.red)
-                Button("删除") { chat.deleteOutbox(row.id) }
+                Button("删除") { onDelete?(row.id) }
                     .controlSize(.small)
             }
         }

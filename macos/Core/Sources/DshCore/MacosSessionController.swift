@@ -449,6 +449,16 @@ public actor MacosSessionController {
         return nil
     }
 
+    /// 群聊首页或翻页（room-chat {roomId, cursor?}，macos-group-chat）；失败返回 nil。
+    public func fetchRoomChatPage(roomId: String, cursor: JsonValue? = nil) async -> RoomChat.RoomPage? {
+        let cursorJson = cursor.map { Json.encode($0) }
+        let result = await chatPost(endpoint: "room-chat", payloadJson: RoomChat.roomChatRequest(roomId: roomId, cursorJson: cursorJson))
+        if case .ok(let value) = result {
+            return RoomChat.decodeRoomPage(value)
+        }
+        return nil
+    }
+
     /// 发送纯文本（send）：ok 即请求成功（等待服务端用户行确认），失败由发送箱置 FAILED。
     public func sendChatMessage(sessionId: String, text: String) async -> Bool {
         if case .ok = await chatPost(endpoint: "send", payloadJson: BotChatApi.sendPayload(sessionId: sessionId, text: text)) {

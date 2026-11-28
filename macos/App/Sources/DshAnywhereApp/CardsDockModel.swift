@@ -58,6 +58,32 @@ final class CardsDockModel {
         return collected
     }
 
+    /// 群聊停靠区（macos-group-chat）：sessionIds = 群会话+roomId+成员群内分段（rooms[].parts），
+    /// botId=nil、roomId=群 id（审批按 roomId 归属；学习/交接为 Bot 私属不进群）。
+    func itemsRoom(entry: TeamHome.Entry) -> [PendingDock.Item] {
+        guard let session else { return [] }
+        guard let room = (session.snapshot.stateRaw?.array("rooms") ?? [])
+            .first(where: { $0.objectValue?.string("id") == entry.id })?.objectValue
+        else { return [] }
+        let key = "room|\(entry.id)|\(session.snapshot.stateRevision ?? "")|\(answered.count)|\(answering.count)"
+        if key == cacheKey, let cached = cachedItems {
+            return cached
+        }
+        var sessionIds: Set<String> = [entry.id]
+        if let sid = room.string("sessionId") { sessionIds.insert(sid) }
+        for part in room.stringList("parts") { sessionIds.insert(part) }
+        let collected = PendingDock.collect(
+            session.snapshot.stateRaw,
+            sessionIds: sessionIds,
+            botId: nil,
+            roomId: entry.id,
+            answered: answered
+        )
+        cacheKey = key
+        cachedItems = collected
+        return collected
+    }
+
     private var cacheKey: String?
     private var cachedItems: [PendingDock.Item]?
 

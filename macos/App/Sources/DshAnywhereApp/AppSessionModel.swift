@@ -21,6 +21,12 @@ final class AppSessionModel {
     /// 待处理停靠区编排（macos-cards-dock）。
     let dock: CardsDockModel
 
+    /// 群聊编排（macos-group-chat）。
+    let roomChat: RoomChatModel
+
+    /// 聊天条动作盒（私聊与群共用；init 末尾组装，经闭包持有本模型动作）。
+    private(set) var barActions: ChatBarActions!
+
     private var controller: MacosSessionController!
     private var lifecycleMonitor: AppLifecycleMonitor?
     private var diagnosticsRuntime: DiagnosticsRuntime?
@@ -49,6 +55,7 @@ final class AppSessionModel {
         self.sidebar = TeamSidebarModel(store: ReadStateStore(directory: dataDir))
         self.chat = BotChatModel()
         self.dock = CardsDockModel()
+        self.roomChat = RoomChatModel()
 
         let pendingSelf = PendingChatRouter()
         self.controller = MacosSessionController(
@@ -128,7 +135,21 @@ final class AppSessionModel {
         // 全部存储属性初始化完成后绑定聊天模型与事件路由（模型持弱引用）。
         chat.bind(self)
         dock.bind(self)
-        pendingSelf.attach(chat)
+        roomChat.bind(self)
+        pendingSelf.attach(chat, roomChat: roomChat)
+        barActions = ChatBarActions(
+            notify: { [weak self] text in
+                self?.chat.postNotice(text)
+                self?.roomChat.postNotice(text)
+            },
+            perform: { [weak self] endpoint, payload in
+                await self?.chatAction(endpoint: endpoint, payloadJson: payload)
+                    ?? .failure(status: nil, reason: .network)
+            },
+            refreshState: { [weak self] in
+                await self?.refreshState()
+            }
+        )
         attachAssembly()
     }
 
@@ -191,10 +212,15 @@ final class AppSessionModel {
         let selection = sidebar.selection
         if let selection,
            snapshot.screen == .connected,
-           let entry = snapshot.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }),
-           entry.kind == .bot {
-            chat.open(botId: entry.id)
-            dock.rebindChat(botId: entry.id)
+           let entry = snapshot.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }) {
+            switch entry.kind {
+            case .bot:
+                chat.open(botId: entry.id)
+                dock.rebindChat(botId: entry.id)
+            case .room:
+                roomChat.open(roomId: entry.id, sessionId: entry.sessionId)
+                dock.rebindChat(botId: entry.id)
+            }
         }
         Task {
             await controller.setCurrentTarget(selection)
@@ -217,6 +243,11 @@ final class AppSessionModel {
 
     func chatAction(endpoint: String, payloadJson: String) async -> DsbotApi.Result {
         await controller.chatAction(endpoint: endpoint, payloadJson: payloadJson)
+    }
+
+    /// 群聊分页读取（macos-group-chat）。
+    func fetchRoomChatPage(roomId: String, cursor: JsonValue?) async -> RoomChat.RoomPage? {
+        await controller.fetchRoomChatPage(roomId: roomId, cursor: cursor)
     }
 
     func refreshState() async {
@@ -320,13 +351,18 @@ final class AppSessionModel {
         if next.screen == .connected && previousScreen != .connected {
             prefetchLastChat()
         }
-        // 侧栏选中变化 → 打开/关闭对应私聊（群聊由后续变更承接）。
+        // 侧栏选中变化 → 打开/关闭对应聊天（群聊 macos-group-chat 承接）。
         if let selection = sidebar.selection,
            next.screen == .connected,
-           let entry = next.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }),
-           entry.kind == .bot {
-            chat.open(botId: entry.id)
-            dock.rebindChat(botId: entry.id)
+           let entry = next.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }) {
+            switch entry.kind {
+            case .bot:
+                chat.open(botId: entry.id)
+                dock.rebindChat(botId: entry.id)
+            case .room:
+                roomChat.open(roomId: entry.id, sessionId: entry.sessionId)
+                dock.rebindChat(botId: entry.id)
+            }
         }
 
         if next.screen == .authExpired && previousScreen != .authExpired {
@@ -366,21 +402,26 @@ final class NoticePrefsBox: @unchecked Sendable {
     }
 }
 
-/// 控制器创建先于 BotChatModel（模型需引用 self）期间的聊天事件路由盒：
-/// attach 前丢弃事件（尚未打开任何聊天），attach 后转发主线程模型。
+/// 控制器创建先于聊天模型（模型需引用 self）期间的聊天事件路由盒：
+/// attach 前丢弃事件（尚未打开任何聊天），attach 后转发主线程模型（私聊与群聊各自过滤）。
 final class PendingChatRouter: @unchecked Sendable {
     private let lock = NSLock()
     private weak var chat: BotChatModel?
+    private weak var roomChat: RoomChatModel?
 
-    func attach(_ chat: BotChatModel) {
-        lock.withLock { self.chat = chat }
+    func attach(_ chat: BotChatModel, roomChat: RoomChatModel) {
+        lock.withLock {
+            self.chat = chat
+            self.roomChat = roomChat
+        }
     }
 
     func route(_ event: ChatFeedEvent) {
-        let target = lock.withLock { chat }
-        guard let target else { return }
+        let targets = lock.withLock { (chat, roomChat) }
+        guard targets.0 != nil || targets.1 != nil else { return }
         Task { @MainActor in
-            target.handleChatEvent(event)
+            targets.0?.handleChatEvent(event)
+            targets.1?.handleChatEvent(event)
         }
     }
 }

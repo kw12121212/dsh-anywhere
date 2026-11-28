@@ -9,9 +9,13 @@ struct CardsDockView: View {
     let entry: TeamHome.Entry
     /// 聊天内容区可用高度（ChatView 外层量取），停靠区上限取其约一半。
     var availableHeight: CGFloat = 360
+    /// 群模式（macos-group-chat）：按 roomId/群会话汇集，不取 Bot 私属项。
+    var roomMode = false
 
     private var dock: CardsDockModel { model.dock }
-    private var items: [PendingDock.Item] { dock.items(entry: entry, chat: model.chat) }
+    private var items: [PendingDock.Item] {
+        roomMode ? dock.itemsRoom(entry: entry) : dock.items(entry: entry, chat: model.chat)
+    }
 
     private var dockMaxHeight: CGFloat {
         min(max(availableHeight / 2, 120), 480)

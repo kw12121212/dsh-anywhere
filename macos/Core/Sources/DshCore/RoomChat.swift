@@ -8,19 +8,23 @@ public enum RoomChat: Sendable {
         public let running: [String]
         public let speaking: [String]
         public let cursor: JsonValue?
+        /// 群公告（group-chat：room-chat 应答的 announcement；缺省为 nil 不显示）。
+        public let announcement: String?
 
         public init(
             roomId: String?,
             items: [DsbotModels.ChatItem],
             running: [String],
             speaking: [String],
-            cursor: JsonValue?
+            cursor: JsonValue?,
+            announcement: String? = nil
         ) {
             self.roomId = roomId
             self.items = items
             self.running = running
             self.speaking = speaking
             self.cursor = cursor
+            self.announcement = announcement
         }
     }
 
@@ -56,7 +60,8 @@ public enum RoomChat: Sendable {
             items: items,
             running: runningOf(obj),
             speaking: idsOf(obj?["speaking"]),
-            cursor: cursor
+            cursor: cursor,
+            announcement: obj?.nonEmptyString("announcement")
         )
     }
 
