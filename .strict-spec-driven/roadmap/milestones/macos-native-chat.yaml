@@ -36,7 +36,7 @@ risks:
   - Android 侧行为在本里程碑执行前可能已多次演进：须在每个变更提案时重新对照 android-dsbot 规格与 android/core 的最新实现，而不是本路线图写下时的状态
   - SwiftUI 的长列表（聊天记录、流式追加、反向分页）性能与滚动定位不如 Compose 成熟：大聊天须验证 LazyVStack/List 在流式追加时不跳动，必要时局部用 AppKit NSTableView 包装
   - 沙箱 HTML 卡在 WKWebView 中须禁网络、禁导航、无脚本桥接，配置不当会让不可信 Bot 内容访问网络或本地文件
-status: proposed
+status: complete
 notes:
   - 2026-11-22 用户确认：SwiftUI 原生、宽屏分栏、排在 Android 三个 DS-Bot 里程碑之后；macOS 端不内置 Tailscale
   - 规格归属：在本里程碑的首个变更中把 android-dsbot 规格里平台无关的界面行为改写为同时适用 Android 与 macOS（或新建 dsbot-client 共享规格并让两端引用），平台差异（返回键/菜单、底部抽屉/检查器、相册/打开面板）分别标注

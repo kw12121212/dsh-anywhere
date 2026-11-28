@@ -19,18 +19,18 @@ sections:
       command: swift build --package-path macos/App
     full-regression:
       text: 完整项目回归
-      status: pending
+      status: complete
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
   Verification:
     ready-verify-checks:
       text: ready 与 verify 检查
-      status: pending
+      status: complete
     macos-ci-and-device-acceptance:
       text: 沿用持续授权：推送→CI→产物真机验收（mock side 端点：新建/提问快照/取消/关闭/进行中保留/无附件提示、/side 入口；真实团队只读核对），通过后归档；阻塞缺陷停下报告
-      status: pending
+      status: complete
     archive-merge-check:
       text: 归档前核对 delta-spec 与实现一致、平台差异标注、合并无残留；roadmap 里程碑 complete 核对
-      status: pending
+      status: complete
 testing_gates:
   validation_task: macos-app-local-build
   unit_test_task: swift-core-tests

@@ -50,7 +50,7 @@ milestones:
   macos-native-chat:
     title: macOS 原生：团队与对话
     path: roadmap/milestones/macos-native-chat.yaml
-    status: proposed
+    status: complete
   macos-native-manage:
     title: macOS 原生：管理、集成与设置
     path: roadmap/milestones/macos-native-manage.yaml
