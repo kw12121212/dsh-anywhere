@@ -42,10 +42,10 @@ sections:
       status: complete
     macos-ci-and-device-acceptance:
       text: 沿用 2026-11-27 持续授权：提交推送 dev、workflow_dispatch 触发 CI、下载产物 vtool 核对后 Mac 真机逐项验收（渲染与网页端一致、链接/文件链接打开、分页到最早、流式追加不跳动、发送箱失败重试一次、停止/恢复/分段、统计与记录、缓存切换立即显示与滚动恢复、回到最新、Enter 偏好、上次聊天预取），全部通过后归档；发现阻塞缺陷停下报告；屏幕锁定时等待解锁后继续
-      status: pending
+      status: complete
     archive-merge-check:
       text: 归档前核对：android-dsbot 七条聊天相关需求 MODIFIED 语句与实现一致且平台差异标注（长按→右键、触感→无、阅读器→就地选择、返回→关窗），macos-app 新增需求与真机验收项对应，合并后无 Android-only 残留措辞
-      status: pending
+      status: complete
 testing_gates:
   validation_task: macos-app-local-build
   unit_test_task: swift-core-tests

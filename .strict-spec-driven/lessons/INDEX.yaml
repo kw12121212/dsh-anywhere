@@ -293,7 +293,7 @@ categories:
     macos-e2e-b4fbcc:
       title: macOS 非交互会话拒绝应用激活：e2e 焦点断言必须带会话激活门控
       status: active
-      occurrences: 3
+      occurrences: 4
       path: .strict-spec-driven/lessons/tooling/macos-e2e-b4fbcc.yaml
     electron-45-app-web-45dfd9:
       title: Electron 45 首个 app:// 请求懒加载 Web 全局会与主进程启动竞态

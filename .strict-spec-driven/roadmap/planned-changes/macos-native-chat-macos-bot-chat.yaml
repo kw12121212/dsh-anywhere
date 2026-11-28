@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-bot-chat
   milestone: macos-native-chat
-status: planned
+status: complete
 summary: 私聊：聊天条目渲染（Markdown、代码复制、链接与服务器文件链接、工具步骤折叠）、更早记录分页、流式回复、发送与发送箱重试、停止/恢复/分段、运行统计与 Bot 间消息记录、聊天缓存与滚动位置、回到最新
 details: 以 android-dsbot 的 bot-chat-render、bot-chat-send-stream、bot-chat-work-control 及打磨里程碑的缓存/发送箱条目为准。Markdown 用 DshCore 的解析结果自绘（AttributedString/Text 组合、代码块等宽带复制按钮、表格横向滚动），文字可选择复制；http(s) 链接用系统浏览器打开，服务器本地文件链接经 file-download/readAttachment 取回后用默认应用打开。流式：feed stream 事件追加到正在写的气泡，message 定格。发送箱：DshCore 状态机，失败行点按重试只发一次；Enter 行为遵循团队偏好。停止（stop-chat）、恢复、新分段与旧分段、run-stats、exchange 入口放在聊天头部工具栏。缓存：DshCore LRU，切回聊天立即显示并恢复滚动位置，离底部较远时显示回到最新/N 条新消息。验收：按里程碑完成标准第 2 条，并验证长聊天流式追加时滚动不跳动。
 depends_on:
