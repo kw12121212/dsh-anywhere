@@ -1,0 +1,10 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-group-chat
+approach:
+  - 群聊内容区复用 macos-bot-chat 的消息渲染（MarkdownView/BubbleView 系）与 macos-cards-dock 的停靠区（PendingDock.collect 群模式 sessionIds=群会话+成员群内分段、roomId 归属），新增 RoomChatModel/RoomChatView 编排 room-chat 分页与 feed 实时。@ 补全在 ComposerTextEditor 层做：监听 @ 触发、输入框上方浮出成员名册（键盘上下/Enter/Esc），插入 @名称 并允许多次。聊天条族（任务条/电脑请求/失败修复）从 Kotlin ChatBars 移植纯逻辑到 DshCore（同夹具测试），视图按平台注记渲染（私聊只显示私聊任务、群页显示群内任务与请求）。群目标条读 state.rooms[].goal，操作经 goal-draft/goal-control；room-progress 应答可读降级呈现
+decisions: {}
+alternatives: []
+risks: []

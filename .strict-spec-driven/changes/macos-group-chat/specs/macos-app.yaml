@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: macos-app
+operations:
+  ADDED:
+    macos-group-chat-shell:
+      strength: MUST
+      statement: 群聊内容区（macOS 原生）：侧栏选中群后内容区显示群聊——头部（群名、运行中成员各带工作短语与逐成员停止、停止全部、群目标条）、消息列表（成员名称与颜色、群公告、轮次事件系统行、[PASS] 不可见、分页与回到最新）、输入框上方停靠区（群归属待处理项）与聊天条（群内后台任务、电脑操作请求、成员失败修复）、输入框支持 @ 成员补全（名册浮层键盘操作、多提及）；群聊作答与操作（停止、目标、任务停止、电脑请求作答）经 /api/bot 提交并经 feed 同步；私聊不显示群里接的任务；群聊占位（「群聊内容将在后续版本提供」）移除
+      scenarios:
+        group-chat-open:
+          - GIVEN: 侧栏选中一个群且群内有轮次与待处理项
+          - WHEN: 打开群聊
+          - THEN: 内容区渲染群轮次与停靠区，头部显示运行成员与目标条，无占位文案
+        mention-multi:
+          - GIVEN: 群聊输入框聚焦且群有多名成员
+          - WHEN: 输入 @ 选择两名成员再发送
+          - THEN: 两条 @提及 随消息提交，被提及成员并行开工，回复实时呈现不重复
+  MODIFIED: {}
+  REMOVED: {}

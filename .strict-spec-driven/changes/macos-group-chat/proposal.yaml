@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-group-chat
+  status: proposed
+summary:
+  what:
+    - 群聊内容区（macOS 原生）：room-chat 轮次渲染（成员名称与颜色、群公告、[PASS] 事件不可见、轮次事件系统行）、@ 成员补全（输入 @ 弹名册键盘选择、同一消息多提及）、引用另一聊天（文本标注）、停止群内全部或单个成员工作（stop-room-work/stop-member-work）、群目标条（阶段进度+目标草稿提交与控制操作+room-progress 成员进度）、聊天条族（后台任务条逐任务停止 bot-stop-task、电脑操作请求卡 computer-app-answer 拒绝/本次/总是与 computer-stop、模型失败修复卡）
+  why:
+    - macos-native-chat 里程碑第 5 个计划变更：群聊是团队协作的核心界面，私聊里程碑（macos-bot-chat/macOS cards-dock）已就绪渲染组件与停靠区，群聊补齐后团队对话视图完整
+scope:
+  in:
+    - macos/App 群聊内容区与头部（复用 ChatView 渲染组件与停靠区模式）；DshCore 群聊天条纯逻辑（任务/电脑请求/失败修复的汇集与请求体，与 Kotlin ChatBars 同夹具）；RoomChat 既有解码扩展（群内任务条/电脑卡数据）；@ 补全交互；目标条与目标操作
+  out:
+    - 群管理（建群/改群/删群/成员管理，macos-native-manage 承接）；Side chat（macos-side-chat 承接）；系统通知与 Touch ID（里程碑不做）；电脑操作的手动接管页面（无桌面浏览器通道）
+unchanged_behavior:
+  - 私聊渲染、停靠区交互、附件、通知条、侧栏与搜索等既有行为不变；私聊不显示群里接的任务
+roadmap:
+  milestone: macos-native-chat
+  planned_change: macos-group-chat

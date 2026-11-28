@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-group-chat
+open: []
+resolved:
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''s why, and it decides whether the change is worth making.'
+    answer: macOS 原生客户端用户在侧栏选中群后只看到占位「群聊内容将在后续版本提供」，一切群协作（看成员轮次、@成员、停止群/成员工作、处理群内审批与目标）都得切回网页端，每次群内互动都要换工具
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''s scenarios and the acceptance evidence at review time.'
+    answer: 侧栏选中群即进入原生群聊：成员消息带名称颜色、群公告可见、[PASS] 不渲染；@ 弹名册可多提及；可停止群或单个成员；群目标条显示阶段进度并可操作；群内后台任务条逐个可停、电脑操作请求三选作答、成员失败修复卡可重试——全部与网页端同步
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 'macos-native-chat 里程碑按依赖顺序推进：team-sidebar/bot-chat/attachments-files/cards-dock 四个计划变更已归档，群聊（depends_on: macos-bot-chat 已满足）是第 5 个，私聊渲染与停靠区管线就绪后群聊是下一个缺口'
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 私聊既有渲染、停靠区交互、附件、通知条、侧栏与搜索行为不变；私聊不显示群里接的任务；群管理（建/改/删群与成员）与模型服务商页由 macos-native-manage 承接；Side chat 由 macos-side-chat 承接；系统通知与 Touch ID 里程碑不做
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 群聊按 android-dsbot 的 group-chat/group-goal-bar/chat-task-bar/computer-use-request/work-phrase 规格在 macOS 复刻，复用私聊渲染与停靠区管线（里程碑 details 的交互映射：右键菜单、检查器、Enter/⌘K 等键盘约定）；「引用另一个聊天」按规格登记以文本标注近似，管理员/回复模式标识暂缺（移交后续实测）
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: macos-app-acceptance-gate
+    question: macos-group-chat 真机验收沿用电是否继续适用？（CI 产物安装、mock --group-rounds/--chat-bars 构造群轮次/任务条/电脑卡验收、真实团队群聊只读核对、完成后自动归档）
+    context: 沿用 2026-11-27「这一切你都可以自动完成」持续授权：推送→CI（workflow_dispatch）→产物 vtool 核对→Mac 真机逐项验收（群消息渲染、@ 补全、停止群/成员、目标条、任务条、电脑卡、修复卡、回到最新）→通过后自动归档；仅发现阻塞缺陷时停下报告；mock 构造数据不触碰真实团队写端点。回答影响验收执行方式与归档时机（verification 范围）。
+    answer: 继续适用：沿用 2026-11-27 用户持续授权「这一切你都可以自动完成」——代理自动提交推送、workflow_dispatch 触发 CI、下载产物 vtool 核对后在 Mac 真机逐项验收（群消息渲染/[PASS] 隐藏、@ 补全多提及、停止群与成员、目标条与目标操作、room-progress、任务条逐任务停止与群/私过滤、电脑请求三作答与停止操作、修复卡重试、回到最新；验收用 mock 构造数据并辅以真实团队只读核对，不触碰真实团队写端点），通过后自动归档；仅发现阻塞缺陷时停下报告
+    status: resolved
+    answered_by: human

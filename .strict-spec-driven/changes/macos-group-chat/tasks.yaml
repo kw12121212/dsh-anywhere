@@ -1,0 +1,45 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-group-chat
+sections:
+  Implementation:
+    core-chat-bars:
+      text: DshCore 移植 ChatBars（与 Kotlin ChatBars.kt 同夹具）：Bot 后台任务条（bots[].tasks[] 汇集、活动态过滤、私聊不含群任务、等待审批优先+按更新时间排序、逐任务停止 bot-stop-task 请求体）、电脑操作（computerLive.asks 请求卡 deny/once/always、computer-app-answer/computer-stop 请求体）、模型失败修复（bots[].blocked 解码与 resume 重试）；工作短语（工具→短语映射、said 自述、· 对象、思考中）
+      status: pending
+    app-room-chat-view:
+      text: macos/App 群聊内容区：RoomChatModel（room-chat 分页/缓存/feed 实时落定、回到最新）+ RoomChatView（复用私聊渲染组件；成员名称与颜色、群公告、轮次事件系统行、[PASS] 不可见）；头部：运行中成员（各带工作短语与逐成员停止 stop-member-work）、停止全部（stop-room-work）、群目标条（阶段进度；点开目标操作对话框 goal-draft/goal-control）、room-progress（应答可读降级显示）
+      status: pending
+    app-chat-bars:
+      text: 聊天条视图族：私聊与群聊的后台任务条（输入框上方、数量、展开限高滚动、逐任务停止、群页显示群内任务、私聊不含群任务）、电脑操作请求卡（拒绝/本次/总是、多卡最多展开两张其余计数、作答后补位、停止操作电脑入口）、模型失败修复卡（原因可读+重试 resume；服务商页未上线时指引网页端）
+      status: pending
+    app-room-dock:
+      text: 群聊停靠区接线：PendingDock.collect 群模式（sessionIds=群会话+成员群内分段、botId=nil、roomId）接入群页（审批按 roomId 归属、学习/交接仅当前分段），作答链路复用 CardsDockModel
+      status: pending
+  Testing:
+    swift-core-tests:
+      text: swift test --package-path macos/Core：ChatBars/RoomChat 移植夹具测试（任务过滤排序、电脑请求体、blocked 解码、工作短语、群轮次事件文案）全绿；既有测试维持绿
+      status: pending
+      command: swift test --package-path macos/Core
+    macos-app-local-build:
+      text: 推送前本机 swift build --package-path macos/App
+      status: pending
+      command: swift build --package-path macos/App
+    full-regression:
+      text: 完整项目回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+  Verification:
+    ready-verify-checks:
+      text: ready 与 verify 检查
+      status: pending
+    macos-ci-and-device-acceptance:
+      text: 沿用持续授权：推送→CI→产物真机验收（群消息渲染与 [PASS] 隐藏、@ 补全多提及、停止群/成员、目标条与目标操作、room-progress、任务条逐任务停止与群/私过滤、电脑请求三作答与停止、修复卡重试、回到最新；mock 构造数据+真实团队只读核对），通过后归档；阻塞缺陷停下报告
+      status: pending
+    archive-merge-check:
+      text: 归档前核对 delta-spec 与实现一致、平台差异标注、合并无残留
+      status: pending
+testing_gates:
+  validation_task: macos-app-local-build
+  unit_test_task: swift-core-tests
