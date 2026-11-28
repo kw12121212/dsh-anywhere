@@ -86,7 +86,7 @@ struct SandboxHtmlView: NSViewRepresentable {
         }
     }
 
-    /// 阻断一切网络请求。不带 resource-type（合法值集合里没有 xhr/websocket/other，
-    /// 写错会导致整条规则编译失败、零阻断），省略即匹配全部资源类型。
-    private static let blockRuleJson = #"{"trigger":{"url-filter":".*"},"action":{"type":"block"}}"#
+    /// 阻断一切网络请求。顶层数组（WebKit 要求）；不带 resource-type（合法值集合里没有
+    /// xhr/websocket/other，写错会导致整条规则编译失败、零阻断），省略即匹配全部资源类型。
+    private static let blockRuleJson = #"[{"trigger":{"url-filter":".*"},"action":{"type":"block"}}]"#
 }
