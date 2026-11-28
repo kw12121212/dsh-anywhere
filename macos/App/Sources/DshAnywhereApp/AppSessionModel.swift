@@ -178,10 +178,17 @@ final class AppSessionModel {
         sidebarSearchFocusTick &+= 1
     }
 
-    /// 选中某聊天（侧栏点击或横幅点按）：标记已读并联动提醒抑制的当前聊天。
+    /// 选中某聊天（侧栏点击或横幅点按）：标记已读、联动提醒抑制并立即打开聊天视图
+    ///（Bot 条目；群聊由后续变更承接——保持占位）。
     func selectChatById(_ id: String) {
         sidebar.select(id: id, team: snapshot.team)
         let selection = sidebar.selection
+        if let selection,
+           snapshot.screen == .connected,
+           let entry = snapshot.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }),
+           entry.kind == .bot {
+            chat.open(botId: entry.id)
+        }
         Task {
             await controller.setCurrentTarget(selection)
         }
