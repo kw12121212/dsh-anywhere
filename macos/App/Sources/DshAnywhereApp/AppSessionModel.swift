@@ -18,6 +18,9 @@ final class AppSessionModel {
     /// 私聊编排（macos-bot-chat）。
     let chat: BotChatModel
 
+    /// 待处理停靠区编排（macos-cards-dock）。
+    let dock: CardsDockModel
+
     private var controller: MacosSessionController!
     private var lifecycleMonitor: AppLifecycleMonitor?
     private var diagnosticsRuntime: DiagnosticsRuntime?
@@ -45,6 +48,7 @@ final class AppSessionModel {
         self.noticePrefs = noticePrefs
         self.sidebar = TeamSidebarModel(store: ReadStateStore(directory: dataDir))
         self.chat = BotChatModel()
+        self.dock = CardsDockModel()
 
         let pendingSelf = PendingChatRouter()
         self.controller = MacosSessionController(
@@ -123,6 +127,7 @@ final class AppSessionModel {
 
         // 全部存储属性初始化完成后绑定聊天模型与事件路由（模型持弱引用）。
         chat.bind(self)
+        dock.bind(self)
         pendingSelf.attach(chat)
         attachAssembly()
     }
@@ -189,6 +194,7 @@ final class AppSessionModel {
            let entry = snapshot.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }),
            entry.kind == .bot {
             chat.open(botId: entry.id)
+            dock.rebindChat(botId: entry.id)
         }
         Task {
             await controller.setCurrentTarget(selection)
@@ -320,6 +326,7 @@ final class AppSessionModel {
            let entry = next.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }),
            entry.kind == .bot {
             chat.open(botId: entry.id)
+            dock.rebindChat(botId: entry.id)
         }
 
         if next.screen == .authExpired && previousScreen != .authExpired {

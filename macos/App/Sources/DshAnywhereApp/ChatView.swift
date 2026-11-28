@@ -19,7 +19,12 @@ struct ChatView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            messageList
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    messageList
+                    CardsDockView(model: model, entry: entry, availableHeight: geo.size.height)
+                }
+            }
             if let notice = chat.notice {
                 noticeBar(notice)
             }
@@ -446,11 +451,21 @@ struct ChatItemView: View {
                 FileLikeEntryView(systemImage: "doc", name: name ?? "文件", subtitle: "点击取回 / 打开")
             }
             .buttonStyle(.plain)
-        case .interactiveCard:
-            // 交互卡由 macos-cards-dock 渲染。
-            EmptyView()
+        case .interactiveCard(let card):
+            // 0.3.10 待处理项在停靠区作答；聊天流里的交互卡条目按只读记录呈现
+            //（kind=answer 是用户已给出的回复记录）。
+            if case .readOnly(let title, let body) = Cards.asReadOnly(card) {
+                ReadOnlyRecordView(title: title, text: body)
+            }
         case .btw(let id, let text, let from):
-            BtwRowView(id: id, text: text, from: from)
+            BtwRowView(id: id, text: text, from: from) { cardId, done in
+                model.dock.answer(
+                    itemId: "btw:\(cardId)",
+                    endpoint: "btw-delete",
+                    payloadJson: PendingDock.Requests.btwDelete(sessionId: model.chat.sessionId ?? "", cardId: cardId),
+                    onDone: done
+                )
+            }
         }
     }
 }
@@ -749,26 +764,68 @@ struct StatsSheet: View {
 }
 
 
-/// btw 行（浅色提示行）。
+/// 已作答记录卡（macos-cards-dock）：只读标题与正文（作答已在停靠区完成，或历史记录）。
+struct ReadOnlyRecordView: View {
+    let title: String?
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let title {
+                Text(title).font(.callout.weight(.medium))
+            }
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
+    }
+}
+
+/// btw 插话卡（macos-cards-dock）：显示插话文本与来源，带 id 时可删除（btw-delete，成功后本地隐藏）。
 struct BtwRowView: View {
     let id: String?
     let text: String
     let from: String?
+    var delete: ((String, @escaping @MainActor (Bool) -> Void) -> Void)? = nil
+
+    @State private var deleted = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "bubble.left")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 1) {
-                if let from {
-                    Text(from).font(.caption2).foregroundStyle(.secondary)
+        if deleted {
+            EmptyView()
+        } else {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "bubble.left")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    if let from {
+                        Text(from).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Text(text).font(.caption).textSelection(.enabled)
                 }
-                Text(text).font(.caption).textSelection(.enabled)
+                Spacer()
+                if let id, let delete {
+                    Button {
+                        delete(id) { ok in
+                            if ok { deleted = true }
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("删除插话")
+                }
             }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
         }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
     }
 }
 

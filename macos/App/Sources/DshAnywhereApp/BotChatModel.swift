@@ -21,6 +21,11 @@ final class BotChatModel {
     /// 正在流式写入的气泡文本；nil 为无流式。
     private(set) var streamingText: String?
     private(set) var notice: String?
+
+    /// 展示一条通知（停靠区作答失败、连接器提示等外部来源复用通知条）。
+    func postNotice(_ text: String) {
+        notice = text
+    }
     private(set) var statsText: String?
     private(set) var exchangesText: String?
 

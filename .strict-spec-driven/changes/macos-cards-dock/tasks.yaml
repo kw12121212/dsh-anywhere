@@ -7,30 +7,30 @@ sections:
   Implementation:
     app-card-views:
       text: macos/App 卡片视图族：审批（同意/拒绝）、提问（单选即交/多选与自填提交/可忽略）、show_view 各段（文本/指标/表格/公式/进度/选择/确认/表单/滑块/数字/开关/来源）与 Swift Charts 图表（畸形超限未知降级只读）、密钥卡（SecureField 不回显）、学习审批差异（逐行差异折叠）、连接器请求（取消/去连接提示）、浏览器交接（dsh 宿主降级提示）、btw 卡、作答动作经 chatAction（构造复用 DshCore）
-      status: pending
+      status: complete
     app-dock-view:
       text: 停靠区视图：按排序汇集当前会话待处理卡（复用 state 装配），一次展开一张（默认首张、新卡不打断、作答移出展开下一张、可收起）、高度上限可滚动、空时不显示；作答成功本地消隐并触发 state 刷新
-      status: pending
+      status: complete
     app-sandbox-html:
       text: 沙箱 HTML 卡：独立 WKWebView（非持久化 dataStore、无脚本桥接、导航全拦截、WKContentRuleList 阻断网络子资源、不授权本地文件），加载卡片 HTML；以含外链图片与 fetch 的构造卡验证零网络请求
-      status: pending
+      status: complete
   Testing:
     swift-core-tests:
-      text: DshCore 既有 Cards 夹具测试维持绿；本变更纯 UI 无新增 Core 逻辑（若下沉停靠排序纯逻辑则补测试）
-      status: pending
+      text: DshCore 停靠区纯逻辑移植与测试：ViewFormula/ViewCard（deep-view 0.1.2 公式与组件树校验/图表数据/作答构造）、PendingDock+LineDiff（汇集/排序/作答请求体/学习差异）与 Kotlin 同夹具；既有 Cards 夹具测试维持绿
+      status: complete
       command: swift test --package-path macos/Core
     macos-app-local-build:
       text: 推送前本机 swift build --package-path macos/App
-      status: pending
+      status: complete
       command: swift build --package-path macos/App
     full-regression:
       text: 完整项目回归
-      status: pending
+      status: complete
       command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
   Verification:
     ready-verify-checks:
       text: ready 与 verify 检查
-      status: pending
+      status: complete
     macos-ci-and-device-acceptance:
       text: 沿用持续授权：推送→CI→产物真机验收（卡片渲染与作答同步、停靠一次展开、图表按数据绘制与畸形降级、密钥不回显、沙箱 HTML 零网络请求验证），通过后归档；阻塞缺陷停下报告
       status: pending

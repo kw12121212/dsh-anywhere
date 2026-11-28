@@ -70,6 +70,8 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
     public var roomCount: Int
     /// 组装好的团队列表（macos-team-sidebar）：nil 表示尚未取到首份 state（侧栏显示加载提示）。
     public var team: TeamHome.Team?
+    /// 最近一份 state 原文（含 live 合并字段；macos-cards-dock 停靠区汇集用）。
+    public var stateRaw: JsonObject?
     /// 团队偏好 enterToSend（缺省 true；state.prefs 只存与默认不同的键）。
     public var enterToSend: Bool
     /// 当前显示的提醒横幅；nil 为无横幅。
@@ -93,6 +95,7 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         botCount: Int = 0,
         roomCount: Int = 0,
         team: TeamHome.Team? = nil,
+        stateRaw: JsonObject? = nil,
         enterToSend: Bool = true,
         noticeBanner: NoticeBanner? = nil,
         isSubmitting: Bool = false,
@@ -113,6 +116,7 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         self.botCount = botCount
         self.roomCount = roomCount
         self.team = team
+        self.stateRaw = stateRaw
         self.enterToSend = enterToSend
         self.noticeBanner = noticeBanner
         self.isSubmitting = isSubmitting
@@ -902,6 +906,7 @@ public actor MacosSessionController {
                 snapshot.botCount = full.bots.count
                 snapshot.roomCount = full.rooms.count
                 snapshot.team = TeamHome.assemble(full)
+                snapshot.stateRaw = full.raw
                 snapshot.enterToSend = full.raw.object("prefs")?.bool("enterToSend") ?? true
                 markOnline()
             } else if let delta = DsbotModels.decodeStateDelta(value) {
@@ -913,6 +918,7 @@ public actor MacosSessionController {
                     snapshot.botCount = merged.bots.count
                     snapshot.roomCount = merged.rooms.count
                     snapshot.team = TeamHome.assemble(merged)
+                    snapshot.stateRaw = merged.raw
                     snapshot.enterToSend = merged.raw.object("prefs")?.bool("enterToSend") ?? true
                 }
                 snapshot.stateRevision = localRevision
