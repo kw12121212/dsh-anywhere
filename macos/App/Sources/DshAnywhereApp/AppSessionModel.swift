@@ -124,6 +124,7 @@ final class AppSessionModel {
         // 全部存储属性初始化完成后绑定聊天模型与事件路由（模型持弱引用）。
         chat.bind(self)
         pendingSelf.attach(chat)
+        attachAssembly()
     }
 
     func startIfNeeded() {
@@ -214,6 +215,36 @@ final class AppSessionModel {
 
     func refreshState() async {
         await controller.refreshState()
+    }
+
+    // MARK: - 附件透传（macos-attachments-files）
+
+    func uploadAttachment(sessionId: String, name: String, mediaType: String?, data: Data) async throws -> String {
+        try await controller.uploadAttachment(sessionId: sessionId, name: name, mediaType: mediaType, data: data)
+    }
+
+    func submitAttachmentMessage(endpoint: String, requestJson: String) async throws -> String {
+        try await controller.submitAttachmentMessage(endpoint: endpoint, requestJson: requestJson)
+    }
+
+    func muxCall(endpoint: String, requestJson: String) async throws -> String {
+        try await controller.muxCall(endpoint: endpoint, requestJson: requestJson)
+    }
+
+    /// 附件装配注入（控制器 attach：上传执行器 + session 族 HTTP unary 调用器）。
+    /// base/cookie 由控制器在 actor 内按当前连接组装 AttachmentCallContext 传参，
+    /// 闭包不捕获任何会随设置变化的值。
+    private func attachAssembly() {
+        Task { @MainActor in
+            await self.controller.attach(
+                uploader: { sessionId, name, mediaType, data, context in
+                    try await AttachmentAssembly.makeUploader()(sessionId, name, mediaType, data, context)
+                },
+                mux: { endpoint, requestJson, context in
+                    try await AttachmentAssembly.makeMuxCaller()(endpoint, requestJson, context)
+                }
+            )
+        }
     }
 
     /// 上次聊天记忆（last-chat-prefetch，只记标识）。

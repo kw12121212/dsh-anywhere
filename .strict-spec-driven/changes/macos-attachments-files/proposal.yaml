@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-attachments-files
+  status: proposed
+summary:
+  what:
+    - macOS 附件与文件：发送侧（打开面板/拖放/粘贴选取图片与文件、uploadFileBinary 流式上传带进度与失败单件重试、图片长边 2048/JPEG≈0.82 压缩、receipt 齐备后经 dsh mux session/prompt 提交带附件消息、纯文本仍走 send、附件栏与上传状态 UI）；查看侧（readAttachment 与 image 先 preview 后原图取回字节、应用内图片查看器左右切换、文件 Quick Look 预览、NSSavePanel 保存、file-download 分块拼接落地后 Finder 显示/默认应用打开、链接右键打开方式）；长消息右键「阅读全文」（file-text）独立 sheet 阅读与 bot-chat-render 遗留的文件链接打开接入；附件与下载内容不写日志
+  why:
+    - macos-native-chat 里程碑第 5 项前半：私聊已就绪（macos-bot-chat 归档），附件是用户与 Bot 交换产物的通道；DshCore 已有 DshMux 帧编解码、AttachmentMessages 上传应答解码与 FileDownload 分块拼接，本变更接到 UI 与传输
+scope:
+  in:
+    - macos/Core（新增 AttachmentUpload 请求/应答与 ImageSizing 移植、长消息 file-text 解码；控制器上传与 mux 提交 API）；macos/App（附件栏与选取器、NSOpenPanel/拖放/粘贴、图片压缩（App 层 CGImageSource）、上传进度与重试、图片查看器与 Quick Look 与保存面板、文件链接打开与阅读全文 sheet）；.strict-spec-driven/specs/android-dsbot.yaml 附件相关条目平台无关改写与 macos-app 新增（经 delta-spec）
+  out:
+    - 群聊附件（macos-group-chat 复用本组件）；交互卡片与停靠区（macos-cards-dock）；Side chat（macos-side-chat）；Android/Electron 端变化；exchange-text 深读（后续按需）
+unchanged_behavior:
+  - 私聊纯文本发送/流式/分页/缓存/发送箱、侧栏、提醒、设置、窗口行为；file-download 拼接校验语义（已实现）；聊天内容仍只在内存；Android 已验收行为
+roadmap:
+  milestone: macos-native-chat
+  planned_change: macos-attachments-files

@@ -297,3 +297,44 @@ final class BotChatCoreTests: XCTestCase {
         XCTAssertTrue(long.hasSuffix(".md"))
     }
 }
+
+// MARK: - 附件逻辑（macos-attachments-files）
+
+final class AttachmentLogicTests: XCTestCase {
+    func testImageSizingScalesLongEdge() {
+        XCTAssertEqual(2048, ImageSizing.target(width: 4000, height: 3000)?.width)
+        XCTAssertEqual(1536, ImageSizing.target(width: 4000, height: 3000)?.height) // 宽为长边
+        XCTAssertEqual(1536, ImageSizing.target(width: 3000, height: 4000)?.width) // 高为长边
+        XCTAssertNil(ImageSizing.target(width: 2048, height: 1000)) // 恰好上限不缩
+        XCTAssertNil(ImageSizing.target(width: 800, height: 600)) // 过小不放大
+        XCTAssertNil(ImageSizing.target(width: 0, height: 600))
+    }
+
+    func testUploadUrlQuery() {
+        let url = AttachmentUpload.urlQuery(baseUrl: "http://h.test:13080/", sessionId: "s 1", name: "图.png", mediaType: "image/png")
+        XCTAssertTrue(url.contains("http://h.test:13080/api/session/uploadFileBinary?"))
+        XCTAssertTrue(url.contains("name="))
+        XCTAssertTrue(url.contains("mediaType="))
+        let noMedia = AttachmentUpload.urlQuery(baseUrl: "http://h.test:13080", sessionId: "s", name: "a.txt", mediaType: nil)
+        XCTAssertFalse(noMedia.contains("mediaType"))
+    }
+
+    func testPromptRequestVerifiedForm() {
+        // 用 Kotlin 实测形态（mode=queue、附件块在前、文本块在后）。
+        let json = AttachmentMessages.promptRequest(requestId: "req-1", sessionId: "s1", receiptIds: ["r1", "r2"], text: "你好")
+        XCTAssertTrue(json.contains(#""requestId":"req-1""#))
+        XCTAssertTrue(json.contains(#""sessionId":"s1""#))
+        XCTAssertTrue(json.contains(#""mode":"queue""#))
+        XCTAssertTrue(json.contains("r1"))
+        XCTAssertTrue(json.contains("你好"))
+    }
+
+    func testFileTextDecode() {
+        let ok = FileText.decode(Json.parse(#"{"text":"全文","whole":true}"#))
+        XCTAssertEqual(FileText.Result(text: "全文", whole: true), ok)
+        let partial = FileText.decode(Json.parse(#"{"text":"前半","whole":false}"#))
+        XCTAssertEqual(false, partial?.whole)
+        XCTAssertNil(FileText.decode(Json.parse(#"{"whole":true}"#)))
+        XCTAssertTrue(FileText.request(fileJson: #"{"path":"/x.md"}"#).contains("file"))
+    }
+}

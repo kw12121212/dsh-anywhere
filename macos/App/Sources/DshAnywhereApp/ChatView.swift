@@ -1,5 +1,6 @@
 import DshCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 私聊内容区（macos-bot-chat）：头部工具栏（停止/恢复/分段/统计/记录）、消息列表、
 /// 发送箱行、流式气泡、输入框（Enter 按团队偏好）与回到最新按钮。
@@ -23,6 +24,18 @@ struct ChatView: View {
                 noticeBar(notice)
             }
             composer
+        }
+        .sheet(item: Binding<BotChatModel.OpenedAttachment?>(
+            get: { chat.openedAttachment },
+            set: { _, _ in chat.dismissAttachment() }
+        )) { opened in
+            AttachmentSheet(opened: opened, chat: chat)
+        }
+        .sheet(item: Binding<ChatFullTextShown?>(
+            get: { chat.fullText.map { ChatFullTextShown(text: $0) } },
+            set: { _, _ in chat.dismissFullText() }
+        )) { shown in
+            FullTextSheet(text: shown.text) { chat.dismissFullText() }
         }
     }
 
@@ -122,6 +135,24 @@ struct ChatView: View {
                     .padding(12)
                 }
                 .coordinateSpace(name: "chatScroll")
+                .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                    var accepted = false
+                    for provider in providers {
+                        _ = provider.loadDataRepresentation(for: .fileURL) { data, _ in
+                            guard let data,
+                                  let path = String(data: data, encoding: .utf8),
+                                  let url = URL(string: path.replacingOccurrences(of: "file://", with: "")),
+                                  let fileData = try? Data(contentsOf: url)
+                            else { return }
+                            let media = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+                            Task { @MainActor in
+                                chat.addAttachment(name: url.lastPathComponent, mediaType: media, data: fileData)
+                            }
+                        }
+                        accepted = true
+                    }
+                    return accepted
+                }
                 .onPreferenceChange(ChatTopVisibleKey.self) { visible in
                     if visible, !chat.loading, !chat.loadingEarlier, !chat.atEarliest {
                         chat.loadEarlier()
@@ -196,21 +227,82 @@ struct ChatView: View {
     // MARK: - 输入框
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            ComposerTextEditor(
-                enterToSend: model.snapshot.enterToSend,
-                onSend: { text in
-                    chat.send(text) ? "" : text
-                }
-            )
-            .frame(minHeight: 52, maxHeight: 120)
-            Button("发送") {
-                NotificationCenter.default.post(name: .composerSendNow, object: nil)
+        VStack(spacing: 6) {
+            if !chat.pendingAttachments.isEmpty {
+                attachmentBar
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(chat.sessionId == nil)
+            HStack(alignment: .bottom, spacing: 8) {
+                Button(action: chooseAttachment) { Image(systemName: "paperclip") }
+                    .buttonStyle(.borderless)
+                    .help("添加附件")
+                ComposerTextEditor(
+                    enterToSend: model.snapshot.enterToSend,
+                    onSend: { text in
+                        chat.send(text) ? "" : text
+                    }
+                )
+                .frame(minHeight: 52, maxHeight: 120)
+                .onPasteCommand(of: [.image]) { providers in
+                    for provider in providers {
+                        provider.loadDataRepresentation(for: UTType.image) { data, _ in
+                            guard let data else { return }
+                            let name = "clipboard.png"
+                            Task { @MainActor in
+                                chat.addAttachment(name: name, mediaType: "image/png", data: data)
+                            }
+                        }
+                    }
+                }
+                Button("发送") {
+                    NotificationCenter.default.post(name: .composerSendNow, object: nil)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(chat.sessionId == nil)
+            }
         }
         .padding(12)
+    }
+
+    /// 附件栏：上传中、失败单件重试、就绪与移除。
+    private var attachmentBar: some View {
+        HStack(spacing: 8) {
+            ForEach(chat.pendingAttachments) { att in
+                HStack(spacing: 4) {
+                    Image(systemName: att.isImage ? "photo" : "doc")
+                    Text(att.name).lineLimit(1).frame(maxWidth: 110)
+                    switch att.state {
+                    case .idle, .uploading:
+                        ProgressView().controlSize(.mini)
+                    case .ready:
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    case .failed:
+                        Button("重试") { chat.uploadPending(att.id) }
+                            .controlSize(.mini)
+                            .buttonStyle(.link)
+                    }
+                    Button(action: { chat.removeAttachment(att.id) }) {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.1)))
+            }
+        }
+    }
+
+    private func chooseAttachment() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                guard let data = try? Data(contentsOf: url) else { continue }
+                let media = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+                chat.addAttachment(name: url.lastPathComponent, mediaType: media, data: data)
+            }
+        }
     }
 }
 
@@ -320,11 +412,19 @@ struct ChatItemView: View {
     var body: some View {
         switch item {
         case .message(let m):
-            BubbleView(markdown: m.markdown, fromUser: m.fromUser)
+            BubbleView(markdown: m.markdown, fromUser: m.fromUser, onReadFull: m.wholeFileJson != nil ? {
+                model.chat.readFullText(fileJson: m.wholeFileJson)
+            } : nil)
         case .toolCard(let name, let summary):
             ToolCardView(name: name, summary: summary)
         case .image(let image):
-            FileLikeEntryView(systemImage: "photo", name: image.name ?? image.ref ?? "图片", subtitle: "图片条目（内容显示由附件里程碑提供）")
+            Button {
+                model.chat.openAttachment(name: image.name ?? "图片.png", attachmentRefJson: image.attachmentRefJson, presentedFile: nil, isImage: true)
+            } label: {
+                FileLikeEntryView(systemImage: "photo", name: image.name ?? image.ref ?? "图片", subtitle: image.attachmentRefJson != nil ? "点击查看" : "图片条目")
+            }
+            .buttonStyle(.plain)
+            .disabled(image.attachmentRefJson == nil)
         case .systemLine(let text):
             if let text {
                 Text(text)
@@ -332,10 +432,20 @@ struct ChatItemView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
             }
-        case .fileAttachment(let name, _):
-            FileLikeEntryView(systemImage: "doc", name: name ?? "文件", subtitle: "文件条目（打开由附件里程碑提供）")
-        case .presentedFile(let name, _, _, _):
-            FileLikeEntryView(systemImage: "doc", name: name ?? "文件", subtitle: "文件条目（打开由附件里程碑提供）")
+        case .fileAttachment(let name, let refJson):
+            Button {
+                model.chat.openAttachment(name: name ?? "文件", attachmentRefJson: refJson, presentedFile: nil, isImage: false)
+            } label: {
+                FileLikeEntryView(systemImage: "doc", name: name ?? "文件", subtitle: "点击预览 / 保存")
+            }
+            .buttonStyle(.plain)
+        case .presentedFile(let name, let sessionId, let seq, let index):
+            Button {
+                model.chat.openPresented(name: name ?? "文件", sessionId: sessionId, seq: seq, index: index)
+            } label: {
+                FileLikeEntryView(systemImage: "doc", name: name ?? "文件", subtitle: "点击取回 / 打开")
+            }
+            .buttonStyle(.plain)
         case .interactiveCard:
             // 交互卡由 macos-cards-dock 渲染。
             EmptyView()
@@ -349,6 +459,7 @@ struct ChatItemView: View {
 struct BubbleView: View {
     let markdown: String
     let fromUser: Bool
+    var onReadFull: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -366,6 +477,9 @@ struct BubbleView: View {
             Button("复制整条消息") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(markdown, forType: .string)
+            }
+            if let onReadFull {
+                Button("阅读全文", action: onReadFull)
             }
         }
     }
@@ -656,4 +770,82 @@ struct BtwRowView: View {
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
     }
+}
+
+
+/// 附件查看 sheet：预览（图片直接显示 / 文件交系统打开）+ 保存面板。
+struct AttachmentSheet: View {
+    let opened: BotChatModel.OpenedAttachment
+    let chat: BotChatModel
+    @State private var image: NSImage?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(opened.name).font(.headline)
+                Spacer()
+                Button("保存…") { save() }
+                Button("打开") { NSWorkspace.shared.open(opened.url) }
+                Button("关闭") { chat.dismissAttachment() }
+            }
+            if let image {
+                ScrollView([.horizontal, .vertical]) {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                }
+            } else {
+                Text("文件已取回到本地，可预览或保存。")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .padding(14)
+        .frame(width: 560, height: 420)
+        .onAppear {
+            if opened.isImage {
+                image = NSImage(contentsOf: opened.url)
+            }
+        }
+    }
+
+    private func save() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = opened.name
+        if panel.runModal() == .OK, let url = panel.url {
+            chat.saveOpenedAttachment(to: url)
+        }
+    }
+}
+
+/// 阅读全文 sheet：可选择文字的全文显示。
+struct FullTextSheet: View {
+    let text: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("阅读全文").font(.headline)
+                Spacer()
+                Button("复制全文") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+                Button("关闭", action: onClose)
+            }
+            ScrollView {
+                Text(text)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(14)
+        .frame(width: 560, height: 480)
+    }
+}
+
+/// 阅读全文 sheet 的可识别载荷。
+struct ChatFullTextShown: Identifiable {
+    let id = UUID()
+    let text: String
 }

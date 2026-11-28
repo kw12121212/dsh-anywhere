@@ -1,0 +1,57 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED: {}
+  MODIFIED:
+    attachments-send:
+      strength: MUST
+      statement: 客户端发送带附件的消息：经系统选取器（Android 打开文件选择器 / macOS 打开面板）、聊天区拖放（macOS/桌面）或在输入框粘贴图片加入附件栏，附件先上传（进度可见、失败显示原因且可单件重试、不自动重发），齐备后随文字一起提交（Android/iOS 经 multipart、macOS 经 uploadFileBinary + dsh 会话提交），Bot 能读取附件内容；输入框在提交后立即清空，本地行按 chat-outbox 语义（含附件名与回执，重试原样重发）；纯文本消息仍走各自文本通道。平台差异：Android 图片选取受相册/相机入口限制，macOS 额外支持拖放与剪贴板粘贴。
+      scenarios:
+        attach-send-works:
+          - GIVEN: 已在私聊附件栏加入一张图片并输入文字
+          - WHEN: 提交消息
+          - THEN: 附件先上传（进度可见），齐备后随文字提交；Bot 读取图片并在回复中体现；输入框与附件栏清空，本地行按发送箱语义确认后移除
+        attach-upload-fails:
+          - GIVEN: 网络中断时上传一张图片
+          - WHEN: 上传失败
+          - THEN: 该附件显示失败原因并可单件重试；重试成功后随下次提交发送；其他附件与文字不受影响
+    attachments-view:
+      strength: MUST
+      statement: 客户端可查看聊天中的附件：图片在应用内查看器中打开（Android 相册式多图左右切换；macOS 查看面板显示图片，多图左右切换浏览由后续打磨补齐）；文件经系统默认应用打开/预览（Android 系统查看器 / macOS 系统打开）并另存（Android 系统分享/保存 / macOS 保存面板）；服务器本地文件路径链接与 Bot 交付文件条目由应用取回（file-download 分块拼接，版本变化中止、文件名清洗；取回中显示状态、失败给可读原因）后交系统打开或在文件管理器中显示，可经「打开方式」另选应用（Android 长按选择器 / macOS 右键打开方式）；长消息（Bot 交付的长文与文本文件）可「阅读全文」（file-text），在可选择文字的界面显示全文，服务端 whole=false 时提示截断。
+      scenarios:
+        attach-view-open:
+          - GIVEN: 聊天中有 Bot 交付的文件条目（含定位信息）
+          - WHEN: 点击该条目
+          - THEN: 文件经 file-download 分块取回拼接后交系统默认应用打开；取回中显示状态，失败显示可读原因，中途文件被替换时中止
+        attach-save:
+          - GIVEN: 已打开某附件预览
+          - WHEN: 选择保存
+          - THEN: 保存面板选位后写入文件，Finder/文件管理器中可打开；重复保存互不覆盖
+    photo-compress:
+      strength: SHOULD
+      statement: 选择或粘贴的图片作为附件上传前，长边超过 2048 像素时等比缩小并以适中质量重新压缩（JPEG 约 0.82），方向按照片的拍摄方向校正；长边不超过 2048 的照片、PNG 截图与 GIF 动图以及非图片文件原样上传。
+      scenarios:
+        large-photo-shrinks:
+          - GIVEN: 拖放一张 4000×3000 的相机照片到聊天
+          - WHEN: 加入附件栏并上传
+          - THEN: 上传的图片长边为 2048、方向正确、体积明显小于原图；小于阈值的截图与 GIF 原样上传
+    read-full-text:
+      strength: MUST
+      statement: 长消息（Bot 交付的长文、报告或文本文件）提供「阅读全文」入口（Android 全屏阅读器 / macOS 独立 sheet，均可选择并复制文字）：经 file-text 取回全文显示，超长时按服务端 whole 标记提示是否完整；文本文件（md/txt/log 等常见扩展或 text/*）同样适用。
+      scenarios:
+        long-post-read-full:
+          - GIVEN: 某 Bot 消息含超长报告文本
+          - WHEN: 右键选择「阅读全文」
+          - THEN: 全文在可选择的界面中显示，可复制；服务端 whole=false 时提示内容被截断
+    delivered-file-share:
+      strength: MUST
+      statement: Bot 汇报交付的大文件（如打包产物）可经消息中的文件链接或文件条目取回：客户端以 file-download 分块下载（512KiB 块、版本一致、总量校验、文件名清洗，取回中显示状态），完成后交系统应用打开或在文件管理器中显示；服务器文件变化（版本变化）时中止并提示重试，不交付半成品。
+      scenarios:
+        large-file-share:
+          - GIVEN: Bot 交付了一个 5MB 的打包文件条目
+          - WHEN: 点击取回
+          - THEN: 分块下载拼接（取回中状态可见）后用默认应用打开或 Finder 显示；中途文件被替换时中止并提示，不打开不完整文件
+  REMOVED: {}

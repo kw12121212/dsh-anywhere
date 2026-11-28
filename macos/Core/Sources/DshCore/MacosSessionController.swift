@@ -464,6 +464,62 @@ public actor MacosSessionController {
         _ = await fetchState(client: client, gen: generation)
     }
 
+    // MARK: - 附件 API（macos-attachments-files）
+
+    /// 附件调用上下文：控制器在 actor 内按当前连接组装（base + cookie），调用时传参，
+    /// 避免闭包捕获陈旧值（凭据不经日志）。
+    public struct AttachmentCallContext: Equatable, Sendable {
+        public let base: String
+        public let cookieHeader: String?
+
+        public init(base: String, cookieHeader: String?) {
+            self.base = base
+            self.cookieHeader = cookieHeader
+        }
+    }
+
+    /// 上传执行器：App 层注入（URLSession octet-stream 直传），返回 uploadFileBinary 应答文本。
+    public typealias AttachmentUploader = @Sendable (_ sessionId: String, _ name: String, _ mediaType: String?, _ data: Data, _ context: AttachmentCallContext?) async throws -> String
+
+    /// session 族 HTTP unary 调用器（上下文由控制器在 actor 内组装传入）。
+    public typealias MuxCaller = @Sendable (_ endpoint: String, _ requestJson: String, _ context: AttachmentCallContext?) async throws -> String
+
+    private var attachmentUploader: AttachmentUploader?
+    private var muxCaller: MuxCaller?
+
+    /// 注入附件装配（App 启动后调用；重复注入覆盖）。
+    public func attach(uploader: AttachmentUploader?, mux: MuxCaller?) {
+        attachmentUploader = uploader
+        muxCaller = mux
+    }
+
+    /// 上传一个附件（receipt 应答文本原样返回，App 侧经 AttachmentMessages.decodeUpload 解析）。
+    public func uploadAttachment(sessionId: String, name: String, mediaType: String?, data: Data) async throws -> String {
+        guard let uploader = attachmentUploader else {
+            throw TransportError(.other)
+        }
+        return try await uploader(sessionId, name, mediaType, data, callContext())
+    }
+
+    /// 当前连接周期的附件调用上下文（actor 内组装）。
+    private func callContext() -> AttachmentCallContext? {
+        guard let base = snapshot.cleanUrl else { return nil }
+        return AttachmentCallContext(base: base, cookieHeader: cookieStore.cookieHeader(forUrl: base))
+    }
+
+    /// 经 dsh mux 提交带附件消息（session/prompt）；应答文本原样返回。
+    public func submitAttachmentMessage(endpoint: String, requestJson: String) async throws -> String {
+        try await muxCall(endpoint: endpoint, requestJson: requestJson)
+    }
+
+    /// file-text / image / readAttachment 等附件读取共用：经 mux 调用。
+    public func muxCall(endpoint: String, requestJson: String) async throws -> String {
+        guard let mux = muxCaller else {
+            throw TransportError(.other)
+        }
+        return try await mux(endpoint, requestJson, callContext())
+    }
+
     public func setActive(_ active: Bool) {
         guard active != isActive else { return }
         isActive = active

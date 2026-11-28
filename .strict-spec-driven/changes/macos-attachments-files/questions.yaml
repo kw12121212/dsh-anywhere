@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-attachments-files
+open: []
+resolved:
+  - id: macos-app-acceptance-gate
+    question: 附件/Quick Look/保存面板无法在 Linux 回归验证，CI+真机核对应作为归档前置还是异步？
+    context: 影响 Verification 任务与 delta-spec 证据判定。选项 A：推送→CI→产物真机逐项核对后归档；选项 B：单测+回归直接归档、真机异步。
+    answer: 沿用 2026-11-27 持续授权（「这一切你都可以自动完成」，历次 macOS 变更均按方案 A）：方案 A 自动执行，全部通过后归档；阻塞缺陷停下报告；锁屏等环境阻塞等待恢复
+    status: resolved
+    answered_by: human
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''''''''s why, and it decides whether the change is worth making.'
+    answer: macOS 私聊只能纯文本：无法发图片/文件给 Bot（无选取/拖放/粘贴与上传），Bot 交付的文件与图片只能看到条目不能查看/保存，服务器文件链接不打开，长消息没有全文阅读；附件通道整体缺失。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''''''''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''''''''s scenarios and the acceptance evidence at review time.'
+    answer: 拖一张图进聊天即出现附件栏并显示上传进度，随文字发送后 Bot 能读到附件并回应；聊天中的图片可点开左右浏览、文件可 Quick Look 预览并可保存面板另存；链接可取回打开；长消息右键可全文阅读；附件内容不出现在日志。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置 macos-bot-chat 已于 2026-11-28 归档（依赖解锁），macos-attachments-files 是依赖顺序推荐的就绪变更；里程碑完成标准第 5 条前半由本变更承载。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is. Worked example: "export means the version sent to the manager, not the one I read myself". What it changes: this fixes the scope boundary before any code is written, and settles disputes about what was asked for.'
+    answer: 按计划变更唯一解读：发送链路（选取→压缩→uploadFileBinary→mux 提交）与查看链路（readAttachment/image→查看器/Quick Look/保存；file-download 拼接→打开/Finder；file-text→阅读全文）在本变更完成；「选择打开方式」映射为 macOS 右键服务/打开方式菜单；图片压缩参数与 Android 一致（长边 2048、JPEG≈0.82）；附件失败单件重试不自动重发。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''''''''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 群聊附件（macos-group-chat 复用组件）；交互卡片与停靠区（macos-cards-dock）；Side chat；Android/Electron 端；exchange-text 深读；聊天内容仍只存内存（下载的附件文件属用户主动保存例外，落系统临时/下载目录）。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap

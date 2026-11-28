@@ -1,0 +1,19 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-attachments-files
+approach:
+  - 上传走 App 层（URLSession 流式 multipart 直传 uploadFileBinary + CGImageSource 压缩），纯逻辑（receipt 解码、ImageSizing、消息提交帧、file-text/阅读全文解码、file-download 复用）在 DshCore；控制器暴露 upload/submitAttachment API（mux 经 DshMux over WsTextSession？—— mux 是 dsh websocket，App 已有 URLSession：App 层 WsTextSession 适配器 + 控制器传参注入）
+decisions:
+  upload-in-app-with-core-payloads:
+    decision: 上传与压缩在 App 层：URLSession.uploadTask 流式直传（进度回调整流），图片经 CGImageSource/ImageIO 长边 2048 等比 + JPEG 0.82 重编码（Android 同规则）；DshCore 提供 ImageSizing 尺寸换算（自 Kotlin Outbox.kt ImageSizing 移植）、上传应答 receipt 解码（AttachmentMessages 已有）与 submit 消息帧构造
+    rationale: tech/macos-client 网络与存储边界：上传是 Apple 框架依赖的装配（App 层），纯计算下沉；压缩用系统 ImageIO 与 Android 质量对齐
+  mux-submit-over-ws-adapter:
+    decision: '带附件消息提交经 dsh websocket mux：App 层 URLSessionWebSocketTask 适配 MuxTextSession，DshMux.encodeOpen/call 构造 session/prompt client-request（content: [text|file|image blocks]）；控制器提交入口注入会话工厂，纯文本仍走 send 端点'
+    rationale: DshMux/WsFrameCodec 已在 Core 且有测试（帧编解码与多路复用语义与 0.3.x 实测登记一致）；websocket 传输是 Apple 框架，适配器在 App 层
+  viewers-quicklook-and-gallery:
+    decision: 查看：readAttachment/image 取回字节后，图片进应用内查看器（键盘左右切换、gallery 由 ChatRender.gallery 已有分组）；任意文件经 QLPreviewPanel 预览、NSSavePanel 保存（默认目录下载）；file-download 分块拼接（复用 Assembler）落地临时文件后 NSWorkspace 打开/Finder 显示；消息链接右键「打开方式/取回打开」接入 bot-chat-render 遗留路径；长消息右键「阅读全文」file-text 在 sheet 中可选择文字显示
+    rationale: Quick Look/NSSavePanel/NSWorkspace 是桌面习惯映射（里程碑 details：相册→应用内查看器、分享→保存面板）；file-download/FileText 解码与拼接已在 Core 有测试
+alternatives: []
+risks: []

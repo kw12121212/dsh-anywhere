@@ -1,0 +1,45 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-attachments-files
+sections:
+  Implementation:
+    dshcore-attachment-logic:
+      text: DshCore：ImageSizing 移植（target/sampleSize，与 Kotlin 对齐）、AttachmentUpload 请求构造（uploadFileBinary URL 查询参数）与应答 receipt 解码复用 AttachmentMessages、带附件消息 content blocks 构造（text|file|image + receipts）、FileText 解码（file-text 应答 text/whole）、ImageSizing/Upload/FileText 测试
+      status: complete
+    controller-attachment-apis:
+      text: MacosSessionController：uploadAttachment（App 注入上传执行器回调）、submitAttachmentMessage（注入 mux 会话工厂，DshMux session/prompt 提交）、fetchAttachment（readAttachment 经 mux）与 fetchImage（image 端点 preview/原图）、fileText（file-text）API；附件内容不进日志
+      status: complete
+    app-attachment-send:
+      text: macos/App：附件栏 UI（待上传/上传中进度/失败重试单件/就绪）、选取（NSOpenPanel、聊天区拖放、输入框粘贴图片）、压缩（CGImageSource 长边 2048/JPEG 0.82）、上传执行器（URLSession 流式+进度）、receipt 齐备后随文本经 mux 提交、发送箱 receipts 随重试重发（Outbox 已支持）
+      status: complete
+    app-attachment-view:
+      text: macos/App：图片查看器（gallery 左右切换）、文件 Quick Look（QLPreviewPanel）、NSSavePanel 保存、file-download 拼接落地（复用 FileDownload.Assembler）后 NSWorkspace 打开/Finder 显示、消息链接右键取回打开与打开方式、长消息右键阅读全文 sheet（file-text，可选择文字）
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: DshCore XCTest：ImageSizing/Upload 构造/FileText/content blocks 与 Kotlin 对齐用例 + 控制器附件 API 注入替身测试
+      status: complete
+      command: swift test --package-path macos/Core
+    macos-app-local-build:
+      text: 推送前本机 swift build --package-path macos/App
+      status: complete
+      command: swift build --package-path macos/App
+    full-regression:
+      text: 完整项目回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+  Verification:
+    ready-verify-checks:
+      text: ready 与 verify 检查
+      status: pending
+    macos-ci-and-device-acceptance:
+      text: 沿用持续授权：提交推送、CI、下载产物 vtool 核对后真机验收（打开面板/拖放/粘贴选取、压缩生效、上传进度与失败重试、随消息发送 Bot 可读、Quick Look/保存/Finder、链接取回打开、阅读全文、不写日志），通过后归档；阻塞缺陷停下报告
+      status: pending
+    archive-merge-check:
+      text: 归档前核对 delta-spec 与实现一致、平台差异标注完整、合并无 Android-only 残留
+      status: pending
+testing_gates:
+  validation_task: macos-app-local-build
+  unit_test_task: swift-core-tests

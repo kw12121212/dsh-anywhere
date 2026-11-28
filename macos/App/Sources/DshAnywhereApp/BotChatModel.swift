@@ -27,6 +27,9 @@ final class BotChatModel {
     /// 发送箱行（按当前聊天过滤后的展示序）。
     var outboxRows: [Outbox.Entry] { botId.map { outbox.entries(chatKey($0)) } ?? [] }
 
+    /// 待发送附件栏（attachments-send）。
+    var pendingAttachments: [PendingAttachment] = []
+
     // MARK: - 纯逻辑件
 
     private let outbox = Outbox()
@@ -151,7 +154,13 @@ final class BotChatModel {
             earlierCursor = page.cursor
             atEarliest = page.cursor == nil
         }
-        sessionId = page.sessionId ?? sessionId
+        if page.sessionId != nil, sessionId != page.sessionId {
+            sessionId = page.sessionId
+            // 会话确认前加入的 idle 附件在此补传（避免永久卡住）。
+            for att in pendingAttachments where att.state == .idle {
+                uploadPending(att.id)
+            }
+        }
         loading = false
         reconcileOutbox()
         cache.put(key, .init(items: items, cursor: earlierCursor, sessionId: sessionId))
@@ -212,14 +221,114 @@ final class BotChatModel {
 
     // MARK: - 发送与发送箱（chat-outbox）
 
+    /// 加入附件（选取/拖放/粘贴；图片按压缩规则处理名字/mediaType/字节）。
+    func addAttachment(name: String, mediaType: String?, data: Data) {
+        let compressed = ImageCompressor.process(name: name, mediaType: mediaType, data: data)
+        let att = PendingAttachment(name: compressed.name, mediaType: compressed.mediaType, data: compressed.data)
+        pendingAttachments.append(att)
+        uploadPending(att.id)
+    }
+
+    /// 上传一个待发附件（失败单件重试）。
+    func uploadPending(_ id: UUID) {
+        guard let sid = sessionId,
+              let idx = pendingAttachments.firstIndex(where: { $0.id == id })
+        else {
+            if sessionId == nil { notice = "正在确认会话，请稍候…" }
+            return
+        }
+        pendingAttachments[idx].state = .uploading
+        let att = pendingAttachments[idx]
+        Task {
+            do {
+                let body = try await session?.uploadAttachment(sessionId: sid, name: att.name, mediaType: att.mediaType, data: att.data)
+                guard let body else {
+                    if let i = pendingAttachments.firstIndex(where: { $0.id == id }) {
+                        pendingAttachments[i].state = .failed(reason: "上传失败，点按重试")
+                    }
+                    return
+                }
+                // ok:false 的应答读取服务端原因（不透传凭据，仅错误文本）。
+                if case .err(_, let message)? = AttachmentMessages.parseServerResponse(body) {
+                    if let i = pendingAttachments.firstIndex(where: { $0.id == id }) {
+                        pendingAttachments[i].state = .failed(reason: message.isEmpty ? "上传被拒绝" : message)
+                    }
+                    return
+                }
+                guard let value = Json.parse(body)?.objectValue,
+                      let upload = AttachmentMessages.decodeUpload(value["value"] ?? JsonValue.object(value))
+                else {
+                    if let i = pendingAttachments.firstIndex(where: { $0.id == id }) {
+                        pendingAttachments[i].state = .failed(reason: "上传应答无法解析")
+                    }
+                    return
+                }
+                if let i = pendingAttachments.firstIndex(where: { $0.id == id }) {
+                    pendingAttachments[i].state = .ready(receiptId: upload.receiptId, attachmentId: upload.attachmentId)
+                }
+            } catch {
+                if let i = pendingAttachments.firstIndex(where: { $0.id == id }) {
+                    pendingAttachments[i].state = .failed(reason: "上传失败，点按重试")
+                }
+            }
+        }
+    }
+
+    func removeAttachment(_ id: UUID) {
+        pendingAttachments.removeAll { $0.id == id }
+    }
+
+    /// 附件是否齐备（全部 Ready）。
+    var attachmentsReady: Bool {
+        pendingAttachments.allSatisfy {
+            if case .ready = $0.state { return true }
+            return false
+        }
+    }
+
     @discardableResult
     func send(_ raw: String) -> Bool {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let botId else { return false }
+        guard !text.isEmpty || !pendingAttachments.isEmpty else { return false }
+        guard let botId else { return false }
         guard let sid = sessionId else {
             // 会话确认前提示稍候，不发往可能已过期的会话。
             notice = "正在确认会话，请稍候…"
             return false
+        }
+        // 带附件：receipt 齐备后经 mux session/prompt 提交；纯文本仍走 send。
+        if !pendingAttachments.isEmpty {
+            guard attachmentsReady else {
+                notice = "附件还在上传，稍候再发送"
+                return false
+            }
+            let receipts = pendingAttachments.compactMap { att -> AttachmentMessages.UploadResult? in
+                if case .ready(let receiptId, let attachmentId) = att.state {
+                    return AttachmentMessages.UploadResult(receiptId: receiptId, attachmentId: attachmentId, name: att.name, bytes: Int64(att.data.count))
+                }
+                return nil
+            }
+            let display = pendingAttachments.map { "[附件] \($0.name)" }.joined(separator: " ")
+            let window = maxSeq()
+            let entry = outbox.add(chatKey(botId), text: text, display: display.isEmpty ? text : "\(text) \(display)", receipts: receipts.map(\.receiptId), window: window)
+            // 请求形态用 Kotlin 已实测的 AttachmentMessages.promptRequest（mode=queue、附件块在前）。
+            let requestJson = AttachmentMessages.promptRequest(
+                requestId: "req-\(UUID().uuidString)",
+                sessionId: sid,
+                receiptIds: receipts.map(\.receiptId),
+                text: text
+            )
+            pendingAttachments.removeAll()
+            Task {
+                var ok = false
+                if let body = try? await session?.submitAttachmentMessage(endpoint: "session/prompt", requestJson: requestJson),
+                   case .ok = AttachmentMessages.parseServerResponse(body) {
+                    ok = true
+                }
+                _ = outbox.setState(entry.id, ok ? .sent : .failed)
+                if !ok { notice = "发送失败，可在下方未发送行点按重试" }
+            }
+            return true
         }
         let window = maxSeq()
         let entry = outbox.add(chatKey(botId), text: text, display: text, window: window)
@@ -233,12 +342,27 @@ final class BotChatModel {
         return true
     }
 
-    /// 重试：只发一次（进行中该行状态为 SENDING，按钮禁用）。
+    /// 重试：只发一次（进行中该行状态为 SENDING，按钮禁用）；带附件的行经 session/prompt
+    /// 按 receipts 原样重发（chat-outbox：含附件消息重试原样重发），纯文本仍走 send。
     func retryOutbox(_ id: Int64) {
         guard let entry = outbox.get(id), entry.state == .failed, let sid = sessionId else { return }
         _ = outbox.setState(id, .sending)
         Task {
-            let ok = await session?.sendChatMessage(sessionId: sid, text: entry.text) ?? false
+            var ok = false
+            if entry.receipts.isEmpty {
+                ok = await session?.sendChatMessage(sessionId: sid, text: entry.text) ?? false
+            } else {
+                let requestJson = AttachmentMessages.promptRequest(
+                    requestId: "req-\(UUID().uuidString)",
+                    sessionId: sid,
+                    receiptIds: entry.receipts,
+                    text: entry.text
+                )
+                if let body = try? await session?.submitAttachmentMessage(endpoint: "session/prompt", requestJson: requestJson),
+                   case .ok = AttachmentMessages.parseServerResponse(body) {
+                    ok = true
+                }
+            }
             _ = outbox.setState(id, ok ? .sent : .failed)
         }
     }
@@ -507,6 +631,156 @@ final class BotChatModel {
     func restoreScroll() -> ScrollMemory.Position? {
         guard let botId else { return nil }
         return scrollMemory.position(chatKey(botId))
+    }
+
+    // MARK: - 附件查看与阅读全文（macos-attachments-files）
+
+    /// 打开中的附件（查看 sheet/Quick Look 载荷）。
+    struct OpenedAttachment: Identifiable, Equatable {
+        let id = UUID()
+        let url: URL
+        let name: String
+        let isImage: Bool
+    }
+
+    private(set) var openedAttachment: OpenedAttachment?
+    /// 阅读全文（file-text 或超长消息）。
+    private(set) var fullText: String?
+
+    /// 打开附件条目：经 session/attachment（attachmentRefJson / refJson 指明附件）取回字节，
+    /// 落系统临时目录（文件名经 FileDownload.safeName 清洗），交系统打开（图片/Quick Look）。
+    func openAttachment(name: String, attachmentRefJson: String?, presentedFile: DsbotModels.ChatItem?, isImage: Bool) {
+        guard let session else {
+            notice = "附件打开需要已连接的会话"
+            return
+        }
+        // 引用来源：消息附件（attachmentRefJson / fileRefJson）。
+        guard let sid = sessionId, let refJson = attachmentRefJson else {
+            notice = "该附件缺少引用，暂不能打开"
+            return
+        }
+        let requestJson = AttachmentMessages.attachmentRequest(sessionId: sid, attachmentJson: refJson)
+        notice = "正在取回附件…"
+        Task {
+            do {
+                let body = try await session.muxCall(endpoint: "session/attachment", requestJson: requestJson)
+                guard case .ok(let valueJson)? = AttachmentMessages.parseServerResponse(body),
+                      let value = valueJson.flatMap({ Json.parse($0) }),
+                      // FINDINGS：value={attachment, data:base64}（data 在顶层）。
+                      let b64 = value.objectValue?.string("data"),
+                      let data = Data(base64Encoded: b64)
+                else { throw TransportError(.other) }
+                let safe = FileDownload.safeName(name)
+                Self.clearAttachmentTempFiles()
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("dsh-\(safe)")
+                try data.write(to: url, options: .atomic)
+                openedAttachment = OpenedAttachment(url: url, name: safe, isImage: isImage)
+                notice = nil
+            } catch {
+                notice = "附件取回失败，稍后重试"
+            }
+        }
+    }
+
+    /// Bot 交付文件（presented）：file-download 分块取回拼接（Assembler 校验）后打开。
+    func openPresented(name: String, sessionId itemSid: String?, seq: Int64?, index: Int?) {
+        guard let session else {
+            notice = "文件打开需要已连接的会话"
+            return
+        }
+        guard let itemSid, let seq, let index else {
+            notice = "该文件条目缺少定位信息，暂不能打开"
+            return
+        }
+        notice = "正在取回文件…"
+        Task {
+            await downloadPresented(session: session, itemSid: itemSid, seq: seq, index: index, name: name)
+        }
+    }
+
+    private func downloadPresented(session: AppSessionModel, itemSid: String, seq: Int64, index: Int, name: String) async {
+        do {
+            let assembler = FileDownload.Assembler()
+            var offset: Int64 = 0
+            var version: String? = nil
+            let safe = FileDownload.safeName(name)
+            Self.clearAttachmentTempFiles()
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("dsh-\(safe)")
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            let handle = try FileHandle(forWritingTo: url)
+            defer { try? handle.close() }
+            while true {
+                let payload = FileDownload.presented(sessionId: itemSid, seq: seq, index: index, offset: offset, version: version)
+                let body = try await session.muxCall(endpoint: "file-download", requestJson: payload)
+                guard case .ok(let valueJson)? = AttachmentMessages.parseServerResponse(body),
+                      let chunk = FileDownload.decode(valueJson.flatMap({ Json.parse($0) }))
+                else { throw TransportError(.other) }
+                switch assembler.accept(chunk) {
+                case .done:
+                    try handle.write(contentsOf: chunk.bytes)
+                    openedAttachment = OpenedAttachment(url: url, name: safe, isImage: false)
+                    notice = nil
+                    return
+                case .next(let nextOffset, let nextVersion):
+                    try handle.write(contentsOf: chunk.bytes)
+                    offset = nextOffset
+                    version = nextVersion
+                case .fail:
+                    notice = "文件在取回途中发生变化，已中止；请重试"
+                    try? FileManager.default.removeItem(at: url)
+                    return
+                }
+            }
+        } catch {
+            notice = "文件取回失败，稍后重试"
+        }
+    }
+
+    /// 保存打开中的附件（NSSavePanel）。
+    func saveOpenedAttachment(to target: URL) {
+        guard let opened = openedAttachment,
+              let data = try? Data(contentsOf: opened.url)
+        else { return }
+        try? data.write(to: target, options: .atomic)
+    }
+
+    /// 阅读全文（read-full-text）：入口仅对服务端标记 whole.file 的消息显示（视图按
+    /// wholeFileJson 传参）；经 file-text 取回全文（whole=false 时提示截断）。
+    func readFullText(fileJson: String?) {
+        guard let session else {
+            notice = "阅读全文需要已连接的会话"
+            return
+        }
+        guard let fileJson else {
+            notice = "该消息没有可阅读的全文"
+            return
+        }
+        Task {
+            do {
+                let body = try await session.muxCall(endpoint: "file-text", requestJson: FileText.request(fileJson: fileJson))
+                guard case .ok(let valueJson)? = AttachmentMessages.parseServerResponse(body),
+                      let result = FileText.decode(valueJson.flatMap({ Json.parse($0) }))
+                else { throw TransportError(.other) }
+                fullText = result.whole ? result.text : result.text + "\n\n（内容较长，服务端已截断）"
+            } catch {
+                notice = "全文取回失败，稍后重试"
+            }
+        }
+    }
+
+    func dismissAttachment() { openedAttachment = nil }
+    func dismissFullText() { fullText = nil }
+
+    /// 清理附件临时文件（打开新附件前复用单槽位，不留堆积）。
+    static func clearAttachmentTempFiles() {
+        let fm = FileManager.default
+        if let files = try? fm.contentsOfDirectory(atPath: fm.temporaryDirectory.path) {
+            for f in files where f.hasPrefix("dsh-") {
+                try? fm.removeItem(at: fm.temporaryDirectory.appendingPathComponent(f))
+            }
+        }
     }
 
     func dismissStats() { statsText = nil }
