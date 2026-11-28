@@ -1,0 +1,51 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-bot-chat
+sections:
+  Implementation:
+    dshcore-outbox:
+      text: DshCore 新增 Outbox.swift：与 Kotlin Outbox.kt 逐条对齐的发送箱状态机（SENDING/SENT/FAILED 三态与 Entry/UserRow、add 后按文本与近邻次序 confirm、等待确认可删、失败重试置 SENDING 且进行中不可再点、删除丢弃、同文本不误确认、纯内存按聊天保留）
+      status: complete
+    dshcore-chat-cache:
+      text: DshCore 新增 ChatCache.swift：与 Kotlin ChatCache.kt 对齐（最近 16 聊天 LRU、缓存页与滚动锚点、进入即回缓存并后台刷新、同聊天单飞去重、离开后迟到的旧读取结果不覆盖、刷新无变化不动列表/有变化只更新不闪动、已翻更早记录保留、最新页无法衔接才重置、切换分段失效并作废在途读、纯内存）
+      status: complete
+    dshcore-bot-chat-api:
+      text: DshCore 新增 BotChatApi：chat {botId, cursor?} 与 earlier {sessionId, cursor} 应答解码（DsbotModels.ChatPage 既有）、send {sessionId, text}、stop-chat、resume、bot-new-part、bot-open-part、run-stats、exchange 的请求构造与应答/错误解码（形态以 tech/dsbot-api 登记与 testdata 夹具为准）
+      status: complete
+    controller-chat-apis:
+      text: MacosSessionController：新增 fetchChat/earlier/send/stopChat/resume/newPart/openPart/runStats/exchange actor 方法（经既有 DsbotTransportClient 与代际防护）、init 注入 onChatEvent 回调（feed message/stream 事件带 sessionId/data 转发）、快照新增 enterToSend（state.prefs.enterToSend 缺省 true）与分段会话变化后的缓存失效信号
+      status: complete
+    app-chat-model:
+      text: macos/App 新增 BotChatModel（@MainActor @Observable）：进入聊天即回缓存+后台刷新（ChatCache）、更早分页（earlier 游标+已到最早提示）、流式 StreamBuffer 追加与 message 定格、贴底跟随与回到最新/N 条新消息、Outbox 接线（发送/重试一次/删除/等待确认）、动作（停止/恢复/新分段/旧分段/统计/记录）、Enter 按 enterToSend、上次聊天 id 记忆（prefs）与启动预取、切换聊天读侧栏 selection
+      status: complete
+    app-chat-views:
+      text: macos/App 新增 ChatView 家族：消息列表（LazyVStack、气泡、右键菜单复制整条/选择文字、textSelection）、Markdown 自绘（标题/列表/表格横滚/代码块复制按钮/链接分流：http(s) 系统浏览器、服务器文件链接经 file-download 取回临时落盘默认应用打开、失败可读原因）、工具步骤折叠卡、图片引用条目与点击查看、交付文件条目、发送箱行（发送中/等待确认/未发送重试/删除）、输入框（Enter/⌥Enter 按偏好）、头部工具栏（停止/恢复/分段/统计/记录）、回到最新按钮、流式不跳动（贴底跟随）
+      status: complete
+  Testing:
+    swift-core-tests:
+      text: DshCore XCTest：OutboxTests 与 Kotlin OutboxTest 同型（三态/confirm 对上/等待确认删除/重试一次/同文本不误确认）、ChatCacheTests 与 ChatCacheTest 同型（LRU/单飞/迟到丢弃/保留更早/无法衔接重置/分段失效）、BotChatApiTests 以 testdata 夹具（chat-page.json 等）覆盖解码与请求体字面值、控制器测试覆盖 fetchChat/send/onChatEvent 转发与 enterToSend
+      status: complete
+      command: swift test --package-path macos/Core
+    macos-app-local-build:
+      text: macos/App 涉及 SwiftUI 改动，推送前本机 swift build --package-path macos/App 确认编译
+      status: complete
+      command: swift build --package-path macos/App
+    full-regression:
+      text: 完整项目回归作为评审与归档证据
+      status: complete
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+  Verification:
+    ready-verify-checks:
+      text: 实现与测试完成后运行 ready 与 verify 确认工件与任务状态
+      status: complete
+    macos-ci-and-device-acceptance:
+      text: 沿用 2026-11-27 持续授权：提交推送 dev、workflow_dispatch 触发 CI、下载产物 vtool 核对后 Mac 真机逐项验收（渲染与网页端一致、链接/文件链接打开、分页到最早、流式追加不跳动、发送箱失败重试一次、停止/恢复/分段、统计与记录、缓存切换立即显示与滚动恢复、回到最新、Enter 偏好、上次聊天预取），全部通过后归档；发现阻塞缺陷停下报告；屏幕锁定时等待解锁后继续
+      status: pending
+    archive-merge-check:
+      text: 归档前核对：android-dsbot 七条聊天相关需求 MODIFIED 语句与实现一致且平台差异标注（长按→右键、触感→无、阅读器→就地选择、返回→关窗），macos-app 新增需求与真机验收项对应，合并后无 Android-only 残留措辞
+      status: pending
+testing_gates:
+  validation_task: macos-app-local-build
+  unit_test_task: swift-core-tests

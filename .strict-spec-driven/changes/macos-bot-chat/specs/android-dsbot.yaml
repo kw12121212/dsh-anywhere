@@ -1,0 +1,97 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED: {}
+  MODIFIED:
+    bot-chat-render:
+      strength: MUST
+      statement: 客户端私聊界面按 DS-Bot 网页端语义渲染聊天条目（群聊消息经共用渲染组件同样适用）：用户与 Bot 消息气泡、Markdown（标题、列表、表格、代码块可复制）、链接在段落、列表与标题行中均可点击——http(s) 链接交给系统浏览器；服务器本地文件路径链接的取回打开、打开失败原因与链接右键「打开方式」由附件里程碑（macos-attachments-files）接入，本阶段此类链接显示但不承诺打开；整条消息可一键复制、也可只选择并复制部分内容；工具调用以折叠卡显示、分段边界与 checkpoint 不产生可见分隔（显示为一条连续聊天）；消息中的图片引用（含用户消息的 imageRefs）与 Bot 交付的文件（files）显示为图片/文件条目（内容点开查看由附件里程碑提供）；未知语法或字段降级为纯文本不崩溃；向上滚动加载更早记录（分页），历史不足时提示已到最早。平台差异：Android 长按气泡弹「复制整条/选择文字」菜单且选择文字进全屏阅读器、点按气泡复制整条、长按链接经「选择打开方式」选择器；macOS 以右键菜单承载复制整条/选择文字（链接「打开方式」由附件里程碑接入）、部分内容选择就地完成（无需阅读器）、点按气泡不触发复制（遵循桌面选择习惯）。
+      scenarios:
+        link-chooser-open:
+          - GIVEN: 客户端已支持链接打开（http(s) 或附件里程碑接入的文件链接）
+          - WHEN: 选择用其他应用打开该链接后
+          - THEN: 该链接内容由所选应用打开，失败时显示可读原因
+        text-select-copy:
+          - GIVEN: 已打开某条包含长文本的 Bot 消息
+          - WHEN: 选择其中一段文字并复制
+          - THEN: 剪贴板只含所选文字，可粘贴到其他应用
+        whole-message-copy:
+          - GIVEN: 已打开某条 Bot 消息
+          - WHEN: 选择「复制整条消息」（Android 长按菜单 / macOS 右键菜单）
+          - THEN: 整条消息纯文本进入剪贴板
+        earlier-pagination:
+          - GIVEN: 某聊天历史超过一页
+          - WHEN: 向上滚动到列表顶部
+          - THEN: 自动加载更早记录并保持滚动位置；历史加载完毕后显示已到最早，继续上滚不再请求
+    bot-chat-send-stream:
+      strength: MUST
+      statement: 私聊底部输入框发送文字消息（send 端点，纯文本；Enter 行为遵循团队偏好）：Bot 回复经 feed 的 stream 事件逐字追加到正在写的气泡，stream end 后由 message 事件定格为完整条目，与 DS-Bot 网页端同一会话显示的内容一致；发送失败不自动重试（不重复发送），消息保留为「未发送，点按重试」，由用户手动重试或删除（见 chat-outbox）。平台差异：Android 的 Enter/换行由软键盘与偏好决定；macOS Enter 发送（⌥Enter 换行）或反之，同样按团队偏好 enterToSend。
+      scenarios:
+        send-streams-reply:
+          - GIVEN: 已在某 Bot 私聊输入框输入文字并按团队偏好的发送键发送
+          - WHEN: Bot 开始回复
+          - THEN: 回复文字经 stream 事件逐字出现在聊天末尾正在写的气泡中，完成后定格为完整消息，与网页端同一会话一致
+        send-fail-no-auto-retry:
+          - GIVEN: 网络中断时发送一条消息
+          - WHEN: 发送请求失败
+          - THEN: 消息显示「未发送，点按重试」，应用不自动重发；恢复网络后用户点按重试且只发送一次
+    bot-chat-work-control:
+      strength: MUST
+      statement: 私聊界面提供停止 Bot 当前工作的入口（stop/abandon 语义）：停止后网页端同步显示已停止；中断的 Bot 可从私聊界面恢复（resume）；提供新开分段（bot-new-part）与打开旧分段（bot-open-part）入口，分段切换后聊天显示对应分段条目；私聊界面可查看运行统计（run-stats）与 Bot 之间的消息记录（exchange）。消息引用的文件文本（file-text）与记录文本详情（exchange-text）在 0.3.x 未观测到实样本，移交附件里程碑实测后接入。平台差异：Android 的入口在聊天页顶部栏与菜单；macOS 在聊天头部工具栏（按钮与菜单一致可达）。
+      scenarios:
+        stop-syncs:
+          - GIVEN: 某 Bot 正在工作
+          - WHEN: 在其私聊点按停止
+          - THEN: 该 Bot 停止工作，网页端同步显示已停止
+        resume-and-parts:
+          - GIVEN: 某 Bot 曾被中断且存在旧分段
+          - WHEN: 在其私聊点按恢复，随后新开分段再切回旧分段
+          - THEN: 恢复后 Bot 继续工作；分段切换后聊天分别显示对应分段条目，网页端同步
+    chat-cache-fast-switch:
+      strength: MUST
+      statement: 进入最近打开过的私聊或群聊（最近 16 个，包括刚离开又回到同一个聊天）时立即显示上次离开时的内容与滚动位置，同时在后台刷新：刷新结果没有变化时列表保持不动，有变化时更新列表且未变的消息不闪动；已加载的更早记录在刷新与新消息到达后仍保留，只有新的最新一页与当前列表无法衔接时才重置为最新一页（需要时重新上翻）；刷新期间不清空正在流式输出的回复；同一聊天的重复刷新不并发；一个聊天的慢读取不阻塞进入其他聊天时的缓存显示，离开后才到达的旧读取结果不会覆盖当前聊天；会话确认前发送提示稍候，不会发到可能已过期的会话；切换分段后该 Bot 的缓存失效、旧分段的在途读取作废并按新分段重新加载（新分段为空时显示为空）；聊天内容只保存在内存，退出聊天界面（Android 返回键 / macOS 关闭窗口或切走）或进程结束后不保留（下次启动只预取上次打开的聊天）；首次进入（无缓存）时加载完成后显示最新消息。
+      scenarios:
+        switch-back-instant:
+          - GIVEN: 刚从聊天 A 切到 B 又切回 A
+          - WHEN: 进入 A
+          - THEN: 立即显示上次内容与滚动位置，后台刷新无变化时列表不动、有变化时未变消息不闪动
+        stale-result-dropped:
+          - GIVEN: 聊天 A 的慢读取在途
+          - WHEN: 先切到 B 再回到 A，A 的旧读取结果随后到达
+          - THEN: 旧结果不覆盖当前显示；已加载的更早记录保留，最新页无法衔接时才重置
+        part-switch-invalidates:
+          - GIVEN: 某 Bot 已加载缓存且旧分段读取在途
+          - WHEN: 切换到新分段
+          - THEN: 缓存失效、在途读取作废并按新分段重新加载，新分段为空时显示为空
+    chat-outbox:
+      strength: MUST
+      statement: 私聊与群聊（含带附件的消息）发送后输入框立即清空，消息以「发送中」出现在聊天末尾；服务端出现对应的用户消息后该本地行由正式消息取代、不重复显示；请求已成功但服务端消息尚未对上时显示「已发送，等待确认」并可删除；发送失败的消息显示「未发送，点按重试」与「删除」，点按重试只重新发送一次（重试进行中不能再次点按），删除即丢弃；未送达与等待确认的消息按聊天保留，切换到其他聊天再回来仍在；失败的消息若实际已送达，服务端消息出现后本地行同样消失，不会因重试产生重复；聊天里早前已有的相同文字不会被误当成新消息的确认；应用从不自动重发；网页端等其他设备在私聊中发出的消息也实时出现。平台差异：Android 发送成功给一次轻触感反馈；macOS 不做触感。
+      scenarios:
+        offline-retry-once:
+          - GIVEN: 断网后在私聊发送一条消息
+          - WHEN: 消息显示「未发送，点按重试」后切到别的聊天再回来，恢复网络后点按重试
+          - THEN: 该消息仍在，重试只发出一次，网页端同一会话只出现一条该消息，本地行随服务端消息出现而消失
+        unconfirmed-delete:
+          - GIVEN: 消息已发出但服务端消息迟迟没有对上
+          - WHEN: 查看该消息
+          - THEN: 显示「已发送，等待确认」并可删除，应用不自动重发
+    new-messages-jump:
+      strength: MUST
+      statement: 在私聊与群聊中离最新消息较远（约 600 密度无关像素以上）时，消息列表角落显示「回到最新」按钮；此期间有新消息到达时按钮显示「N 条新消息」（N 为离开底部后新到的条数）；点按后滚动到最新并清零；停在底部附近时不显示按钮，新消息照常显示。平台差异：Android 按钮悬浮于列表右下；macOS 显示在消息列表右下角。
+      scenarios:
+        count-new-while-away:
+          - GIVEN: 正停留在某聊天历史较上方（离底部较远）
+          - WHEN: 该聊天陆续到达 3 条新消息
+          - THEN: 右下按钮显示「3 条新消息」，点按后滚动到最新并清零；回到底部附近后按钮消失
+    last-chat-prefetch:
+      strength: SHOULD
+      statement: 客户端记住上次打开的聊天（只保存聊天标识，不保存内容）；下次启动连接成功后在后台预先读取该聊天首页，启动仍停在团队列表（Android 团队页 / macOS 侧栏，不自动跳转），进入该聊天时立即显示预取内容并在后台刷新。
+      scenarios:
+        prefetch-on-launch:
+          - GIVEN: 上次退出前停留在聊天 A
+          - WHEN: 重新启动应用并连接成功
+          - THEN: 停在团队列表不自动跳转；此时进入 A 立即显示预取的首页内容并后台刷新
+  REMOVED: {}

@@ -1,0 +1,33 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: macos-app
+operations:
+  ADDED:
+    macos-bot-chat-shell:
+      strength: MUST
+      statement: macOS 主窗口内容区呈现当前选中聊天的私聊界面：顶部工具栏（停止、恢复、新分段/旧分段、运行统计、Bot 间消息记录入口）与消息列表、底部输入框；消息列表按 android-dsbot 平台无关需求渲染（Markdown 自绘、链接分流、工具折叠卡、图片与文件条目、分页与已到最早提示、右键菜单复制整条/选择文字、代码块复制按钮）；流式回复贴底跟随不跳动，离底时计数并显示回到最新；发送箱行（发送中/已发送等待确认/未发送点按重试与删除）按 chat-outbox 语义交互；Enter/⌥Enter 行为按团队偏好 enterToSend 即时生效；首次进入无缓存时显示加载，空聊天显示为空；会话过期时发送提示稍候不发往旧会话。
+      scenarios:
+        chat-selected-shows-history:
+          - GIVEN: 侧栏选中某 Bot 且该聊天有历史
+          - WHEN: 内容区渲染
+          - THEN: 显示该聊天最新一页消息与输入框；向上滚动分页加载更早并在到最早时提示；选中别的聊天再回来时立即恢复内容与滚动位置
+        stream-follows-bottom:
+          - GIVEN: 停留在某 Bot 聊天底部
+          - WHEN: 发送消息且 Bot 流式回复
+          - THEN: 正在写的气泡逐字追加且列表贴底跟随不跳动；向上翻离底部后新消息只累计计数，回到最新按钮可跳底
+        outbox-retry-once-ui:
+          - GIVEN: 断网时在某私聊发送消息
+          - WHEN: 消息转「未发送，点按重试」后点按重试，随后再快速连点
+          - THEN: 重试进行中按钮不可再点；网络恢复后重试只发出一次，服务端消息出现后本地行消失
+        parts-and-stats:
+          - GIVEN: 某 Bot 有多段会话与运行记录
+          - WHEN: 从头部工具栏新开分段、切回旧分段、打开运行统计与 Bot 间消息记录
+          - THEN: 分段切换后聊天按对应分段显示（缓存失效重载，空段显示为空）；统计与记录以可读面板呈现且与网页端一致
+        enter-pref-applies:
+          - GIVEN: 团队偏好 enterToSend 分别为默认与关闭
+          - WHEN: 在输入框按 Enter 与 ⌥Enter
+          - THEN: 偏好开启时 Enter 发送、⌥Enter 换行；偏好关闭时 Enter 换行、⌥Enter 发送；偏好变化即时生效
+  MODIFIED: {}
+  REMOVED: {}

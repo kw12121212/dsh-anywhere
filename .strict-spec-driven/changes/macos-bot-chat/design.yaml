@@ -1,0 +1,26 @@
+schema: strict-spec-driven/change-design/v1
+schema_version: 1
+artifact_type: change_design
+schema_file: templates/strict-spec-driven/schemas/change-design.yaml
+change: macos-bot-chat
+approach:
+  - 聊天编排放 App 层 BotChatModel（@MainActor @Observable）+ Core 纯逻辑件：Outbox/ChatCache 与 Kotlin 版逐条对齐（同型用例），端点请求/应答解码在 Core（BotChatApi），MacosSessionController 暴露聊天 API（fetchChat/earlier/send/stop/resume/parts/runStats/exchange）并经注入的 onChatEvent 回调把 feed message/stream 事件按 sessionId 转发给 App；渲染用 ChatRender.Item + MarkdownParse 自绘 SwiftUI，流式经 StreamBuffer 追加、message 定格；聊天状态只在内存（ChatCache），上次聊天只记 id（prefs）
+  - 聊天编排放 App 层 BotChatModel（@MainActor @Observable）+ Core 纯逻辑件：Outbox/ChatCache 与 Kotlin 版逐条对齐（同型用例），端点请求/应答解码在 Core（BotChatApi），MacosSessionController 暴露聊天 API（fetchChat/earlier/send/stop/resume/parts/runStats/exchange）并经注入的 onChatEvent 回调把 feed message/stream 事件转发给 App；渲染用 ChatRender.Item + MarkdownParse 自绘 SwiftUI，流式经 StreamBuffer 追加、message 定格；聊天状态只在内存（ChatCache），上次聊天只记 id（prefs）
+decisions:
+  chat-orchestration-in-app-model-with-core-endpoints:
+    decision: BotChatModel 在 App 层编排单聊状态（分页条目、发送箱、流式气泡、回到最新计数、滚动锚点、缓存读写、动作调用）；Core 提供 Outbox（SENDING/SENT/FAILED、confirm 按文本与次序对上、重试只一次、删除）、ChatCache（LRU16、in-flight 单飞、迟到旧读丢弃、分段失效）与 BotChatApi 请求构造/应答解码；控制器新增对应 actor 方法（POST 经既有 DsbotTransportClient）与 onChatEvent 回调（message/stream 事件带 sessionId 转发，App 按 sessionId 过滤）
+    rationale: 与 Android NativeShell 分层一致（:app 编排 + core 纯逻辑）；控制器已独占 transport 与 feed 帧，聊天动作经它保持同源与代际防护；纯逻辑下沉保 Linux 回归
+  markdown-self-draw-from-core-parser:
+    decision: 消息气泡按 MarkdownParse.parseBlocks 自绘：标题/段落/列表用 Text+AttributedString（http(s) 链接交系统浏览器；服务器本地文件链接的取回打开与右键「打开方式」、图片/文件条目的内容点开查看由附件里程碑 macos-attachments-files 接入，本阶段渲染为条目不承诺打开）；表格横向 ScrollView；代码块深色块+右上复制按钮；文字可选择（textSelection），整条复制走右键菜单；工具步骤折叠卡；未知块降级纯文本
+    rationale: tech/macos-client pure-logic-in-macos-core：解析已在 Core 且有夹具测试；自绘避免第三方依赖；附件打开链路（file-download 取回、session/attachment RPC、Quick Look）按里程碑归属在 macos-attachments-files 统一实现，避免本变更范围膨胀
+  stream-and-settle-via-streambuffer:
+    decision: feed stream 事件（text 追加、start/end 阶段）经 onChatEvent 进 BotChatModel，用 ChatRender.StreamBuffer 维护正在写的气泡文本，message 事件到达即 settle 定格为完整条目并按 appendBotMessage 决策去重；流式追加时列表只在贴底时跟随滚动（不跳动），离底时累计 N 条新消息显示回到最新
+    rationale: StreamBuffer/appendBotMessage 已在 Core 且有测试（流式缓冲与定格去重语义与网页端一致）；里程碑风险条要求验证流式不跳动——贴底跟随是桌面惯例
+  outbox-and-cache-kotlin-parity:
+    decision: Outbox 移植 Kotlin Outbox.kt 全语义（三态、confirm 由服务端用户消息按文本+近邻次序对上、等待确认可删除、重试进行中不可再点、从不自动重发、同文本不误确认）；ChatCache 移植 ChatCache.kt（最近 16、缓存页+滚动、单飞去重、旧结果丢弃、保留已翻更早记录、无法衔接才重置、分段切换失效、仅内存）；测试与 Kotlin 版同型
+    rationale: 发送箱与缓存是跨端对等的关键纯逻辑（chat-outbox/chat-cache-fast-switch 规格），Kotlin 版语义即规格实现基准；下沉 Core 后 Linux swift test 可拦回归
+  enter-behavior-and-prefetch:
+    decision: Enter 行为按团队偏好 state.prefs.enterToSend（缺省 true：Enter 发送、⌥Enter 换行；false 反之），快照新增 enterToSend 字段随 state 更新；上次打开的聊天只记 id（prefs.json 键 lastChatId，退出/切换时写），启动连接成功后后台预取该聊天首页，不自动跳转
+    rationale: bot-chat-send-stream 与 last-chat-prefetch 规格要求；偏好随 state 同步两端一致；内容不落盘只记 id 符合 chat-cache-fast-switch 的存储边界
+alternatives: []
+risks: []

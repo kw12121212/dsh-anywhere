@@ -27,6 +27,19 @@ public enum SettingsSaveOutcome: Equatable, Sendable {
     case failed(String)
 }
 
+/// feed 聊天事件（message/stream）向 App 聊天编排的转发载荷：sessionId 过滤用，data 为原始 JSON。
+public struct ChatFeedEvent: Equatable, Sendable {
+    public let sessionId: String?
+    public let event: String
+    public let data: String
+
+    public init(sessionId: String?, event: String, data: String) {
+        self.sessionId = sessionId
+        self.event = event
+        self.data = data
+    }
+}
+
 /// 窗口内提醒横幅（in-app-notice-banner）：id 每次递增（界面据此重置 8 秒计时），
 /// text 为「[群名 · ]名称 · 类型：摘要」（只用于界面，不进日志），target 为点按进入的聊天。
 public struct NoticeBanner: Equatable, Sendable {
@@ -57,6 +70,8 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
     public var roomCount: Int
     /// 组装好的团队列表（macos-team-sidebar）：nil 表示尚未取到首份 state（侧栏显示加载提示）。
     public var team: TeamHome.Team?
+    /// 团队偏好 enterToSend（缺省 true；state.prefs 只存与默认不同的键）。
+    public var enterToSend: Bool
     /// 当前显示的提醒横幅；nil 为无横幅。
     public var noticeBanner: NoticeBanner?
     public var isSubmitting: Bool
@@ -78,6 +93,7 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         botCount: Int = 0,
         roomCount: Int = 0,
         team: TeamHome.Team? = nil,
+        enterToSend: Bool = true,
         noticeBanner: NoticeBanner? = nil,
         isSubmitting: Bool = false,
         formError: String? = nil,
@@ -97,6 +113,7 @@ public struct MacosSessionSnapshot: Equatable, Sendable {
         self.botCount = botCount
         self.roomCount = roomCount
         self.team = team
+        self.enterToSend = enterToSend
         self.noticeBanner = noticeBanner
         self.isSubmitting = isSubmitting
         self.formError = formError
@@ -139,6 +156,7 @@ public actor MacosSessionController {
     private let electronConfigDirectories: [URL]
     private let sleepMs: @Sendable (Int64) async throws -> Void
     private let noticesEnabled: @Sendable () -> Bool
+    private let onChatEvent: @Sendable (ChatFeedEvent) -> Void
     private let onSnapshot: @Sendable (MacosSessionSnapshot) -> Void
 
     private var snapshot = MacosSessionSnapshot()
@@ -160,6 +178,9 @@ public actor MacosSessionController {
     private var noticeId: UInt64 = 0
     private var currentTarget: String?
 
+    /// 当前连接周期的聊天用传输客户端（feed 循环创建，聊天 API 复用同源）。
+    private var chatClient: DsbotTransportClient?
+
     public init(
         configStore: HarnessConfigStore,
         cookieStore: SessionCookieStore,
@@ -171,6 +192,7 @@ public actor MacosSessionController {
             try await Task.sleep(nanoseconds: UInt64(max(ms, 0)) * 1_000_000)
         },
         noticesEnabled: @escaping @Sendable () -> Bool = { true },
+        onChatEvent: @escaping @Sendable (ChatFeedEvent) -> Void = { _ in },
         onSnapshot: @escaping @Sendable (MacosSessionSnapshot) -> Void = { _ in }
     ) {
         self.configStore = configStore
@@ -181,6 +203,7 @@ public actor MacosSessionController {
         self.electronConfigDirectories = electronConfigDirectories
         self.sleepMs = sleepMs
         self.noticesEnabled = noticesEnabled
+        self.onChatEvent = onChatEvent
         self.onSnapshot = onSnapshot
     }
 
@@ -396,6 +419,51 @@ public actor MacosSessionController {
         emitSnapshot()
     }
 
+    // MARK: - 聊天 API（macos-bot-chat）
+
+    /// 在线时复用当前连接周期的聊天客户端执行 POST；离线返回网络失败。
+    private func chatPost(endpoint: String, payloadJson: String) async -> DsbotApi.Result {
+        guard snapshot.screen == .connected, let client = chatClient else {
+            return .failure(status: nil, reason: .network)
+        }
+        return await client.postBot(endpoint: endpoint, payloadJson: payloadJson)
+    }
+
+    /// 首页或预取聊天（chat {botId, cursor?}）；失败返回 nil（App 保留现状并提示）。
+    public func fetchChatPage(botId: String, cursor: JsonValue? = nil) async -> DsbotModels.ChatPage? {
+        if case .ok(let value) = await chatPost(endpoint: "chat", payloadJson: BotChatApi.chatPayload(botId: botId, cursor: cursor)) {
+            return DsbotModels.decodeChatPage(value)
+        }
+        return nil
+    }
+
+    /// 向上翻页（earlier {sessionId, cursor}）；失败返回 nil。
+    public func fetchEarlier(sessionId: String, cursor: JsonValue) async -> DsbotModels.ChatPage? {
+        if case .ok(let value) = await chatPost(endpoint: "earlier", payloadJson: BotChatApi.earlierPayload(sessionId: sessionId, cursor: cursor)) {
+            return DsbotModels.decodeChatPage(value)
+        }
+        return nil
+    }
+
+    /// 发送纯文本（send）：ok 即请求成功（等待服务端用户行确认），失败由发送箱置 FAILED。
+    public func sendChatMessage(sessionId: String, text: String) async -> Bool {
+        if case .ok = await chatPost(endpoint: "send", payloadJson: BotChatApi.sendPayload(sessionId: sessionId, text: text)) {
+            return true
+        }
+        return false
+    }
+
+    /// 聊天动作端点共用（stop-member-work / resume / bot-new-part / bot-open-part / run-stats / exchange）。
+    public func chatAction(endpoint: String, payloadJson: String) async -> DsbotApi.Result {
+        await chatPost(endpoint: endpoint, payloadJson: payloadJson)
+    }
+
+    /// 动作后重取整体 state（在线时；不做完整重连，避免拆掉界面）。
+    public func refreshState() async {
+        guard snapshot.screen == .connected, let client = chatClient else { return }
+        _ = await fetchState(client: client, gen: generation)
+    }
+
     public func setActive(_ active: Bool) {
         guard active != isActive else { return }
         isActive = active
@@ -501,6 +569,7 @@ public actor MacosSessionController {
         }
 
         let client = DsbotTransportClient(baseUrl: cleanUrl, transport: scopedApi)
+        chatClient = client
         if let gateAbort = await refreshVersionAndCapabilities(client: client, gen: gen) {
             guard !Task.isCancelled, generation == gen, isActive else { return }
             switch gateAbort {
@@ -699,6 +768,17 @@ public actor MacosSessionController {
             return await fetchState(client: client, gen: gen)
         case "live":
             return await fetchState(client: client, gen: gen)
+        case "message", "stream":
+            // 聊天事件（bot-chat-send-stream）：按 sessionId 转发给 App 编排，界面自行过滤。
+            if let obj = Json.parse(frame.data)?.objectValue {
+                onChatEvent(ChatFeedEvent(
+                    sessionId: obj.nonEmptyString("sessionId"),
+                    event: frame.event,
+                    data: frame.data
+                ))
+            }
+            markOnline()
+            return .continueLoop
         case "notice":
             // 实时提醒：能力门控 + 游标去重后按 pickBanner 挑选（当前聊天不弹）。
             if capabilities.has("notices"),
@@ -766,6 +846,7 @@ public actor MacosSessionController {
                 snapshot.botCount = full.bots.count
                 snapshot.roomCount = full.rooms.count
                 snapshot.team = TeamHome.assemble(full)
+                snapshot.enterToSend = full.raw.object("prefs")?.bool("enterToSend") ?? true
                 markOnline()
             } else if let delta = DsbotModels.decodeStateDelta(value) {
                 if let rev = delta.revision { localRevision = rev }
@@ -776,6 +857,7 @@ public actor MacosSessionController {
                     snapshot.botCount = merged.bots.count
                     snapshot.roomCount = merged.rooms.count
                     snapshot.team = TeamHome.assemble(merged)
+                    snapshot.enterToSend = merged.raw.object("prefs")?.bool("enterToSend") ?? true
                 }
                 snapshot.stateRevision = localRevision
                 snapshot.liveKey = liveKey

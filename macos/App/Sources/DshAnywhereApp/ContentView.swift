@@ -188,23 +188,72 @@ struct ContentView: View {
         }
     }
 
+    private enum StatsShown: Identifiable {
+        case stats(String)
+        case exchanges(String)
+
+        var id: String {
+            switch self {
+            case .stats: return "stats"
+            case .exchanges: return "exchanges"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .stats: return "运行统计"
+            case .exchanges: return "Bot 间消息记录"
+            }
+        }
+
+        var text: String {
+            switch self {
+            case .stats(let t): return t
+            case .exchanges(let t): return t
+            }
+        }
+    }
+
+    private var statsSheetPresented: StatsShown? {
+        if let t = model.chat.statsText { return .stats(t) }
+        if let t = model.chat.exchangesText { return .exchanges(t) }
+        return nil
+    }
+
     /// 当前选中的条目（侧栏选中后内容区占位显示其名称）。
     private var selectedEntry: TeamHome.Entry? {
         guard let team = model.snapshot.team, let id = model.sidebar.selection else { return nil }
         return team.sections.flatMap(\.entries).first { $0.id == id }
     }
 
-    /// 聊天内容区占位（内容由 macos-bot-chat / macos-group-chat 填充）。
+    /// 聊天内容区（macos-bot-chat 已填私聊；群聊由 macos-group-chat 承接）。
     @ViewBuilder
     private var chatContentPlaceholder: some View {
-        if let entry = selectedEntry {
+        if let entry = selectedEntry, entry.kind == .bot, model.chat.botId == entry.id {
+            ChatView(model: model, entry: entry)
+                .sheet(item: Binding(
+                    get: { statsSheetPresented },
+                    set: { newValue in
+                        // 关闭（含 Esc/系统手势）时清模型状态，保证可再次打开。
+                        if newValue == nil {
+                            model.chat.dismissStats()
+                            model.chat.dismissExchanges()
+                        }
+                    }
+                )) { shown in
+                    StatsSheet(title: shown.title, text: shown.text) {
+                        model.chat.dismissStats()
+                        model.chat.dismissExchanges()
+                    }
+                }
+        } else if let entry = selectedEntry {
             VStack(spacing: 12) {
                 Image(systemName: "bubble.left.and.bubble.right")
                     .font(.system(size: 32))
                     .foregroundStyle(.secondary)
                 Text(entry.name)
                     .font(.title2.weight(.semibold))
-                Text("聊天内容将在后续版本提供")
+                Text("群聊内容将在后续版本提供")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

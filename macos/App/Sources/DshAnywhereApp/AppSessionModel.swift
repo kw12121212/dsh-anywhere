@@ -15,6 +15,9 @@ final class AppSessionModel {
     let sidebar: TeamSidebarModel
     private(set) var sidebarSearchFocusTick = 0
 
+    /// 私聊编排（macos-bot-chat）。
+    let chat: BotChatModel
+
     private var controller: MacosSessionController!
     private var lifecycleMonitor: AppLifecycleMonitor?
     private var diagnosticsRuntime: DiagnosticsRuntime?
@@ -41,7 +44,9 @@ final class AppSessionModel {
         let noticePrefs = NoticePrefsBox((prefsStore.load() ?? NativePrefs()).noticeBannerEnabled)
         self.noticePrefs = noticePrefs
         self.sidebar = TeamSidebarModel(store: ReadStateStore(directory: dataDir))
+        self.chat = BotChatModel()
 
+        let pendingSelf = PendingChatRouter()
         self.controller = MacosSessionController(
             configStore: configStore,
             cookieStore: cookieStore,
@@ -50,13 +55,15 @@ final class AppSessionModel {
             sseStream: sseStream,
             electronConfigDirectories: electronDirs,
             noticesEnabled: { noticePrefs.value },
+            onChatEvent: { event in
+                pendingSelf.route(event)
+            },
             onSnapshot: { [weak self] next in
                 Task { @MainActor [weak self] in
                     self?.applySnapshot(next)
                 }
             }
         )
-
         // 诊断上报装配（macos-diagnostics）：端点经 DiagnosticsEndpointStore、队列在数据目录
         // 独立子目录、发送经禁用系统 cookie 的 ephemeral URLSession 直连（2xx 送达、4xx 拒绝
         // 丢弃、其余失败保留）；未配置端点时全部采集路径零行为。
@@ -113,6 +120,10 @@ final class AppSessionModel {
             configuredDiagnosticsEndpoint = endpoint
         }
         CrashReporter.install(runtime: runtime)
+
+        // 全部存储属性初始化完成后绑定聊天模型与事件路由（模型持弱引用）。
+        chat.bind(self)
+        pendingSelf.attach(chat)
     }
 
     func startIfNeeded() {
@@ -156,7 +167,9 @@ final class AppSessionModel {
         get { noticePrefs.value }
         set {
             noticePrefs.set(newValue)
-            try? prefsStore.save(NativePrefs(noticeBannerEnabled: newValue))
+            var prefs = prefsStore.load() ?? NativePrefs()
+            prefs.noticeBannerEnabled = newValue
+            try? prefsStore.save(prefs)
         }
     }
 
@@ -171,6 +184,45 @@ final class AppSessionModel {
         let selection = sidebar.selection
         Task {
             await controller.setCurrentTarget(selection)
+        }
+    }
+
+    // MARK: - 私聊透传（macos-bot-chat）
+
+    func fetchChatPage(botId: String) async -> DsbotModels.ChatPage? {
+        await controller.fetchChatPage(botId: botId)
+    }
+
+    func fetchEarlier(sessionId: String, cursor: JsonValue) async -> DsbotModels.ChatPage? {
+        await controller.fetchEarlier(sessionId: sessionId, cursor: cursor)
+    }
+
+    func sendChatMessage(sessionId: String, text: String) async -> Bool {
+        await controller.sendChatMessage(sessionId: sessionId, text: text)
+    }
+
+    func chatAction(endpoint: String, payloadJson: String) async -> DsbotApi.Result {
+        await controller.chatAction(endpoint: endpoint, payloadJson: payloadJson)
+    }
+
+    func refreshState() async {
+        await controller.refreshState()
+    }
+
+    /// 上次聊天记忆（last-chat-prefetch，只记标识）。
+    func rememberLastChat(_ id: String?) {
+        var prefs = prefsStore.load() ?? NativePrefs()
+        guard prefs.lastChatId != id else { return }
+        prefs.lastChatId = id
+        try? prefsStore.save(prefs)
+    }
+
+    /// 启动连接成功后预取上次聊天首页（不自动跳转）。
+    private func prefetchLastChat() {
+        guard let id = (prefsStore.load() ?? NativePrefs()).lastChatId,
+              snapshot.screen == .connected else { return }
+        Task { [weak self] in
+            await self?.chat.prefetch(botId: id)
         }
     }
 
@@ -220,6 +272,17 @@ final class AppSessionModel {
         if next.team != previousTeam, let team = next.team {
             sidebar.teamDidUpdate(team)
         }
+        // 上次聊天预取：首次进入在线态时后台读一次（不自动跳转）。
+        if next.screen == .connected && previousScreen != .connected {
+            prefetchLastChat()
+        }
+        // 侧栏选中变化 → 打开/关闭对应私聊（群聊由后续变更承接）。
+        if let selection = sidebar.selection,
+           next.screen == .connected,
+           let entry = next.team?.sections.flatMap(\.entries).first(where: { $0.id == selection }),
+           entry.kind == .bot {
+            chat.open(botId: entry.id)
+        }
 
         if next.screen == .authExpired && previousScreen != .authExpired {
             urlInput = ""
@@ -255,5 +318,24 @@ final class NoticePrefsBox: @unchecked Sendable {
 
     func set(_ newValue: Bool) {
         lock.withLock { enabled = newValue }
+    }
+}
+
+/// 控制器创建先于 BotChatModel（模型需引用 self）期间的聊天事件路由盒：
+/// attach 前丢弃事件（尚未打开任何聊天），attach 后转发主线程模型。
+final class PendingChatRouter: @unchecked Sendable {
+    private let lock = NSLock()
+    private weak var chat: BotChatModel?
+
+    func attach(_ chat: BotChatModel) {
+        lock.withLock { self.chat = chat }
+    }
+
+    func route(_ event: ChatFeedEvent) {
+        let target = lock.withLock { chat }
+        guard let target else { return }
+        Task { @MainActor in
+            target.handleChatEvent(event)
+        }
     }
 }

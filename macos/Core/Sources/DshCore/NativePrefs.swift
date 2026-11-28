@@ -4,9 +4,12 @@ import Foundation
 ///（notice-banner-toggle，默认开启）。解码端把文件缺失、损坏与未知键一律按默认处理。
 public struct NativePrefs: Equatable, Sendable {
     public var noticeBannerEnabled: Bool
+    /// 上次打开的聊天标识（last-chat-prefetch，只记 id 不存内容；nil 为未记）。
+    public var lastChatId: String?
 
-    public init(noticeBannerEnabled: Bool = true) {
+    public init(noticeBannerEnabled: Bool = true, lastChatId: String? = nil) {
         self.noticeBannerEnabled = noticeBannerEnabled
+        self.lastChatId = lastChatId
     }
 
     static let fileName = "prefs.json"
@@ -19,11 +22,18 @@ public struct NativePrefs: Equatable, Sendable {
         else {
             return NativePrefs()
         }
-        return NativePrefs(noticeBannerEnabled: root.bool("noticeBannerEnabled") ?? true)
+        return NativePrefs(
+            noticeBannerEnabled: root.bool("noticeBannerEnabled") ?? true,
+            lastChatId: root.nonEmptyString("lastChatId")
+        )
     }
 
     public func encode() -> String {
-        "{\n  \"noticeBannerEnabled\": \(noticeBannerEnabled)\n}\n"
+        var out = "{\n  \"noticeBannerEnabled\": \(noticeBannerEnabled)"
+        if let lastChatId {
+            out += ",\n  \"lastChatId\": \(JsonString.of(lastChatId))"
+        }
+        return out + "\n}\n"
     }
 }
 

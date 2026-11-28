@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-bot-chat
+  status: proposed
+summary:
+  what:
+    - macOS 私聊完整实现：聊天条目渲染（DshCore Markdown 解析自绘：标题/列表/表格横滚/代码块带复制、链接点击 http(s) 走系统浏览器与服务器文件链接取回后默认应用打开、右键菜单复制整条/选择文字、工具步骤折叠卡、图片引用与交付文件条目、未知降级）、更早记录分页（earlier 游标）、feed stream 流式追加与 message 定格、发送与发送箱（DshCore Outbox 状态机移植：发送中/等待确认/未发送点按重试一次/删除、从不自动重发、Enter 行为按团队偏好 enterToSend）、停止/恢复/新分段/旧分段（stop/resume/bot-new-part/bot-open-part）、运行统计与 Bot 间消息记录（run-stats/exchange）入口在聊天头部、聊天缓存（DshCore ChatCache LRU16 移植：立即显示恢复滚动、后台刷新不闪动、分页保留、慢读不阻塞、分段切换失效）与回到最新/N 条新消息、上次聊天记忆与启动预取（prefs 记 id）；并把 android-dsbot 的 bot-chat-render、bot-chat-send-stream、bot-chat-work-control、chat-cache-fast-switch、chat-outbox、new-messages-jump、last-chat-prefetch 七条改写为两端适用（平台差异标注：长按→右键、触感→无、全屏阅读器→就地选择、返回退出→窗口关闭），macOS 特有外壳行为入 macos-app 规格
+  why:
+    - macos-native-chat 里程碑核心变更：团队侧栏已就绪（macos-team-sidebar 归档），私聊是用户与 Bot 协作的主界面；Android 侧对等基准（android-dsbot 规格）与 DshCore 既有 ChatRender/MarkdownParse/StreamBuffer 解析层齐备，本变更补齐 Outbox/ChatCache 两条纯逻辑并把聊天编排与 UI 接到三栏外壳的内容区
+scope:
+  in:
+    - macos/Core（新增 Outbox.swift、ChatCache.swift、聊天端点请求构造与应答解码、控制器 chat API 与 feed 聊天事件回调、快照 enterToSend）；macos/App（BotChatModel 编排与缓存/发送箱接线、ChatView 消息列表与气泡/Markdown 自绘/链接与文件链接/工具卡/图片/分页、输入框与头部工具栏（停止/恢复/分段/统计/记录）、回到最新、上次聊天记忆与预取）；.strict-spec-driven/specs/android-dsbot.yaml 七条平台无关改写与 macos-app.yaml 新增（经 delta-spec）
+  out:
+    - 群聊（macos-group-chat 承接，渲染组件复用）；交互卡片与停靠区（macos-cards-dock）；附件发送与查看、file-text/exchange-text（macos-attachments-files）；Side chat（macos-side-chat）；Android 端与 Electron 端任何变化；系统通知
+unchanged_behavior:
+  - 团队侧栏、提醒横幅、连接/错误/重认证界面、设置窗口、窗口状态记忆、单实例、诊断上报；发送端点纯文本语义与失败不自动重试；聊天内容只存内存不落盘（重启只预取上次聊天标识）；Android 已验收行为
+roadmap:
+  milestone: macos-native-chat
+  planned_change: macos-bot-chat

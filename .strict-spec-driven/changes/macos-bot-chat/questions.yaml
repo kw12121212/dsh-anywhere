@@ -1,0 +1,48 @@
+schema: strict-spec-driven/question-list/v1
+schema_version: 1
+artifact_type: question_list
+schema_file: templates/strict-spec-driven/schemas/question-list.yaml
+change: macos-bot-chat
+open: []
+resolved:
+  - id: macos-app-acceptance-gate
+    question: macos/App 聊天渲染/流式/发送箱无法在 Linux 回归验证，CI 编译与 Mac 真机核对应作为归档前置门禁还是异步进行？
+    context: 影响 Verification 任务与 android-dsbot 聊天七条改写、macos-app 新增需求的证据判定与归档时机。本机可跑 swift build 与完整回归；流式追加、右键菜单、链接分流、发送箱交互只能以 CI 产物在 Mac 上核对。选项 A：推送后 workflow_dispatch 触发 CI、下载产物逐项核对后归档；选项 B：以单测+回归为证据直接归档、真机异步。
+    answer: 沿用 2026-11-27 用户对同一自动流程的持续授权（「这一切你都可以自动完成」，前两个 macOS 变更均按方案 A 执行）：方案 A，自动提交推送、触发 CI、下载产物并以 vtool 核对后在 Mac 上逐项验收（渲染一致性、链接/文件链接、分页、流式不跳动、发送箱、停止/恢复/分段、统计/记录、缓存与回到最新、Enter 偏好、预取），全部通过后自动归档；仅发现阻塞缺陷时停下报告；屏幕锁定等环境阻塞时等待恢复后继续
+    status: resolved
+    answered_by: human
+  - id: requirement-interpretation
+    question: Which reading of the request is intended, where more than one is possible?
+    context: 'Why this is asked: a short request usually admits several readings, and building the wrong one is indistinguishable from building nothing. What a sufficient answer contains: the reading that is meant, stated plainly enough to rule the others out — or a statement that only one reading exists and what it is.'
+    answer: 按计划变更唯一解读：私聊在本变更内完成到 android-dsbot 最新规格对等（渲染/流式/分页/发送箱/停止恢复分段/统计记录/缓存/回到最新/预取）；群聊复用渲染组件由 macos-group-chat 承接；file-text/exchange-text 无实测样本按 bot-chat-work-control 原文移交附件里程碑；「长按」交互在 macOS 映射为右键菜单与 ⌘C/⌘A 等键盘习惯、「选择打开方式」映射为系统打开方式选择器；触感反馈不做；聊天内容只存内存。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-problem
+    question: What is concretely going wrong today, and for whom?
+    context: 'Why this is asked: the change is planned against a need, and the need lives only with the requester. A "problem" here means what someone does or suffers today — not a feature that is missing. If the answer names a button, a field, a page, or an endpoint, it is a solution, and the underlying problem is still unstated. What a sufficient answer contains: who is affected, what they do today instead, and how often. Worked example: "every Monday one person spends forty minutes copying order rows into a spreadsheet to send the weekly report". What it changes: this becomes the proposal''''s why, and it decides whether the change is worth making.'
+    answer: macOS 端选中侧栏条目后内容区仍只有占位：看不到与 Bot 的对话历史、无法发送消息与看到流式回复、无法停止/恢复工作或切换分段、离开再回来要重新加载且滚动位置丢失、没有回到最新；用户今天只能回网页端或 Android 端聊天。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-outcome
+    question: What observable difference proves the problem is solved?
+    context: 'Why this is asked: without a success condition, nobody can tell afterwards whether the change worked. "Observable" means someone outside the system can check it without reading the code. What a sufficient answer contains: what a person will see, or no longer have to do, once this is done. Worked example: "the report is in the manager''''s inbox on Monday morning without anyone assembling it". What it changes: this becomes the delta spec''''s scenarios and the acceptance evidence at review time.'
+    answer: 选中 Bot 即见最新一页历史与输入框；发送后回复流式出现且与网页端一致；断网发送显示未发送、点按重试只发一次且网页端无重复；上滚加载更早到最早；停止/恢复/分段/统计/记录入口可用且网页端同步；切换聊天立即恢复内容与滚动位置；离底时回到最新/N 条新消息；Enter 行为按团队偏好；重启后预取上次聊天。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-trigger
+    question: Why now — what forced this?
+    context: 'Why this is asked: work that nothing forced is the work most often thrown away later. This question catches a request that sounds reasonable but has no real driver behind it. What a sufficient answer contains: the concrete event, deadline, incident, or cost that made this surface now, or an honest statement that nothing did. Worked example: "the report was missed last month and it was raised with the team". What it changes: a change with no trigger is a candidate for deferral, and the answer is weighed at review before archive.'
+    answer: 前置 macos-team-sidebar 已于 2026-11-28 归档（侧栏就绪且依赖解锁），macos-bot-chat 是 macos-native-chat 依赖顺序推荐的下一个就绪变更；里程碑完成标准第 2 条（私聊发送/流式/分页/停止恢复分段/发送箱）全部由本变更承载。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
+  - id: requirement-non-goals
+    question: What must explicitly not change?
+    context: 'Why this is asked: the requester knows which nearby behavior other people depend on, and the agent does not. A "non-goal" is something the change must leave alone even though it sits close to the work. What a sufficient answer contains: the behavior, setting, or output that must survive untouched, and who relies on it. Worked example: "do not change the saved filters — several people rely on their own". What it changes: these become the proposal''''s unchanged_behavior items, which review checks the finished result against.'
+    answer: 群聊、交互卡片与停靠区、附件发送与查看、file-text/exchange-text、Side chat（各自后续变更承接）；Android 与 Electron 端不变；聊天内容不落盘（只记上次聊天 id）；系统通知与触感不做；连接/错误/重认证/侧栏/横幅/设置行为不变。
+    status: resolved
+    kind: requirement
+    answered_by: roadmap
