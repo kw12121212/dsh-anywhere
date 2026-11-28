@@ -5,7 +5,7 @@ schema_file: ../../templates/strict-spec-driven/schemas/planned-change.yaml
 planned_change:
   id: macos-cards-dock
   milestone: macos-native-chat
-status: planned
+status: complete
 summary: 交互卡片与停靠区：审批、提问、show_view（文本、指标、表格、公式、进度、选择、确认、表单、滑块、数字、开关、来源与 Swift Charts 图表）、密钥卡、学习审批差异、连接器请求、浏览器交接、btw 卡、沙箱 HTML 卡，输入框上方停靠区一次展开一张
 details: 解码、上限校验、作答参数构造、停靠区排序与展开选择全部复用 DshCore（与 Kotlin 版同一夹具）。图表用 Swift Charts 绘制折线、面积、柱、横柱、环形；畸形、超限或未知段降级为只读文本。密钥卡用 SecureField，值不回显、不进日志与诊断。沙箱 HTML 卡用独立 WKWebView：非持久化数据存储、禁用 JavaScript 以外的一切桥接（无 WKScriptMessageHandler）、拦截所有导航与子资源请求（WKContentRuleList 阻断网络）、不访问本地文件。浏览器交接卡的接管按 Android 当时的降级规则处理（dsh Web 宿主上提示在桌面应用中操作）。作答成功后本地卡片消隐并以 feed 刷新。验收：按里程碑完成标准第 4 条，另以构造的含外链图片与 fetch 调用的 HTML 卡验证无网络请求发出。
 depends_on:

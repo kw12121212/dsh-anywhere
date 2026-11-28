@@ -131,6 +131,11 @@ categories:
       status: active
       occurrences: 1
       path: .strict-spec-driven/lessons/coding/lesson-93ea7d.yaml
+    wkcontentrulelist-json-fail-closed-08b625:
+      title: WKContentRuleList 规则 JSON 顶层必须是数组，且编译失败必须 fail-closed
+      status: active
+      occurrences: 1
+      path: .strict-spec-driven/lessons/coding/wkcontentrulelist-json-fail-closed-08b625.yaml
   performance:
     http-chunked-27be03:
       title: 手写 HTTP 客户端的 chunked 正文必须批量搬运

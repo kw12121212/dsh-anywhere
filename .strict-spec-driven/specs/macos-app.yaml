@@ -314,3 +314,19 @@ requirements:
         - GIVEN: 团队偏好 enterToSend 分别为默认与关闭
         - WHEN: 在输入框按 Enter 与 ⌥Enter
         - THEN: 偏好开启时 Enter 发送、⌥Enter 换行；偏好关闭时 Enter 换行、⌥Enter 发送；偏好变化即时生效
+  macos-cards-dock-shell:
+    strength: MUST
+    statement: macOS 私聊停靠区按 android-dsbot 平台无关需求渲染与交互（一次展开、排序、高度上限、作答同步、图表按数据绘制与降级、密钥不回显、沙箱 HTML 卡禁网隔离）；卡片视图族覆盖审批/提问/show_view 全段/密钥/学习差异/连接器/浏览器交接/btw；学习差异逐行双色折叠、浏览器交接在 dsh Web 宿主场景提示到桌面操作。
+    scenarios:
+      dock-renders-and-answers:
+        - GIVEN: 当前会话有待处理卡（如提问）
+        - WHEN: 停靠区渲染并作答
+        - THEN: 卡片按排序显示且只展开一张；作答提交后本地消隐、state 刷新后网页端同步；无待处理时停靠区不显示
+      sandbox-html-no-network:
+        - GIVEN: 构造一张含外链图片与 fetch 调用的沙箱 HTML 卡
+        - WHEN: 在停靠区展开渲染
+        - THEN: 内容显示但无任何网络请求发出（外链资源被阻断）；WebView 无持久化存储与脚本桥接，导航全部被拦截
+      charts-drawn-and-degrade:
+        - GIVEN: show_view 卡含折线图表段与一张畸形数据段
+        - WHEN: 渲染
+        - THEN: 折线按数据以系统图表绘制；畸形段显示为只读文本，不崩溃不空白

@@ -1,0 +1,19 @@
+schema: strict-spec-driven/lesson/v1
+schema_version: 1
+artifact_type: lesson
+schema_file: templates/strict-spec-driven/schemas/lesson.yaml
+lesson:
+  id: wkcontentrulelist-json-fail-closed-08b625
+  title: WKContentRuleList 规则 JSON 顶层必须是数组，且编译失败必须 fail-closed
+category: coding
+status: active
+created_at: '2026-11-28T07:48:35.303Z'
+updated_at: '2026-11-28T07:48:35.303Z'
+context: macos-cards-dock 沙箱 HTML 卡用 WKContentRuleList 阻断网络子资源
+observation: '写成单个对象 {"trigger":…,"action":…} 时 compileContentRuleList 直接失败（Rule list compilation failed: Invalid input, the top level structure is not an array），返回 nil；若回调里仍然 loadHTMLString，则零规则生效——端到端实测 img/style/fetch/XHR 全部到达本地服务器。另注：resource-type 合法值没有 xhr/websocket/other（xhr 覆盖 fetch），写错同样整条规则编译失败。'
+takeaway: WebKit content rule 顶层数组包裹 [{...}]；resource-type 用合法集合（style-sheet/raw 等）或省略以匹配全部类型；编译失败时不得加载内容（fail-closed 重试），加载动作放在规则编译回调内统一执行
+applies_when: 在 Swift/AppKit 用 WKContentRuleList 做内容阻断或写 content blocker JSON 时
+occurrences:
+  - origin: macos-cards-dock
+    date: '2026-11-28'
+    evidence: 本机探针：旧规则编译回 error=Invalid input, the top level structure is not an array；改为数组后 compiled=true、rendered、server.log 零请求（对照模式 4 请求）
