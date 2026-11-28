@@ -298,3 +298,27 @@ extension ChatBarsTests {
         XCTAssertEqual(0, ChatBars.roomTasks(nil, roomId: "room-1").count)
     }
 }
+
+extension ChatBarsTests {
+    /// Side chat 条目级解码（tech dsbot-api 实证形态 {id, question, answer, status}；kind/text 降级）。
+    func testSideChatDecodeQAEntriesForm() throws {
+        let sessions = (try obj(#"""
+        {"list":[
+          {"id":"s1","question":"今天进度如何","answer":"已完成 80%","status":"done","entries":[]},
+          {"id":"s2","question":"还有多久","answer":null,"status":"working","entries":[]},
+          {"id":"s3","entries":[{"kind":"user","text":"旧形态问"},{"kind":"bot","text":"旧形态答"}],"status":"done"},
+          {"id":"s4","entries":[]}
+        ]}
+        """#).array("list") ?? [])
+        let qa = SideChat.decodeQA(sessions)
+        XCTAssertEqual(3, qa.count) // s4 两形态都无问文本：跳过
+        XCTAssertEqual("s1", qa[0].id)
+        XCTAssertEqual("今天进度如何", qa[0].question)
+        XCTAssertEqual("已完成 80%", qa[0].answer)
+        XCTAssertFalse(qa[0].working)
+        XCTAssertTrue(qa[1].working)
+        XCTAssertNil(qa[1].answer)
+        XCTAssertEqual("旧形态问", qa[2].question)
+        XCTAssertEqual("旧形态答", qa[2].answer)
+    }
+}

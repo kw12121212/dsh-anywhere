@@ -239,6 +239,9 @@ let stateLiveProbeSent = false
 let cardAnswered = false
 let btwDeleted = new Set()
 let lastSideId = ''
+// side 会话落 state（tech dsbot-api 实证形态：sideChats[botId] = [{id, question, answer, status, createdAt, finishedAt, entries[]}]）
+const sideChatsState = {}
+let stateRevision = 20
 const sideSessions = new Map()
 const uploads = new Map()
 // 预置 1x1 PNG（dsbot-attachments 验收：聊天附件引用条目 → mux 读取字节）
@@ -712,7 +715,7 @@ const server = createServer((req, res) => {
         res.end(JSON.stringify({
           ok: true,
           value: {
-            revision: 7, liveKey: 'mock-live', mainBotIds: ['bot-1'],
+            revision: stateRevision, liveKey: 'mock-live', mainBotIds: ['bot-1'],
             bots: [
               { id: 'bot-1', name: '研究主管', color: 'blue', role: '研究', sessionId: 's-bot-1', pinned: true, preview: '关于市场数据的最新分析', unread: 3, parts: ['part-0', 'part-1'] },
               { id: 'bot-2', name: '运维值班', color: 'green', role: '运维', sessionId: 's-bot-2', preview: '磁盘告警已处理', parts: ['part-0', 'part-1', 'part-2'] },
@@ -721,6 +724,7 @@ const server = createServer((req, res) => {
             sections: [{ id: 'sec-1', name: '常用', itemIds: ['bot-1'] }],
             questions: cardAnswered ? {} : { 's-bot-2': { question: '选哪个维护窗口？' } },
             work: { approvals: cardAnswered ? [] : [{ sessionId: 's-bot-1', botId: 'bot-1', title: '部署审批' }], bots: { 'bot-2': { turn: 1 } } },
+            sideChats: Object.keys(sideChatsState).length ? sideChatsState : undefined,
           },
         }))
         return
@@ -906,18 +910,33 @@ const server = createServer((req, res) => {
             res.end(JSON.stringify({ ok: false, error: { code: 'bot/invalid', message: 'Write a question.' } }))
             return
           }
-          // 回答经 feed 推流式+消息（side sessionId 归属）
+          // 回答落 state.sideChats（tech dsbot-api 实证：side 回答不走 feed，条目级
+          // {id, question, answer, status: done|working}）；数秒后置 done 填 answer，
+          // 供「进行中→完成」「跨聊天保留」「取消后停止」验收。feed 事件保留兼容旧路径。
+          const question = /"text":"((?:[^"\\]|\\.)*)"/.exec(body)?.[1] ?? ''
+          const botId = /"sessionId":"s-bot-1"/.test(body) ? 'bot-1' : 'bot-1'
+          const askChatId = 'side-ask-' + Math.random().toString(36).slice(2, 10)
+          sideChatsState[botId] = sideChatsState[botId] || []
+          sideChatsState[botId].push({ id: askChatId, question, answer: null, status: 'working', createdAt: Date.now(), entries: [] })
+          stateRevision++
+          setTimeout(() => {
+            const entry = sideChatsState[botId]?.find((e) => e.id === askChatId)
+            if (entry && entry.status === 'working') {
+              entry.status = 'done'
+              entry.answer = '旁路回答：不影响主工作'
+              entry.finishedAt = Date.now()
+              stateRevision++
+              feedClients.forEach((write) => {
+                write('event: revision' + String.fromCharCode(10) + 'data: {"revision":"' + stateRevision + '"}' + String.fromCharCode(10, 10))
+              })
+            }
+          }, 6000)
           setTimeout(() => {
             feedClients.forEach((write) => {
-              const N = 10
-              write('event: stream' + String.fromCharCode(10) + 'data: {"botId":"bot-1","sessionId":"' + lastSideId + '","attemptId":"sa1","phase":"start"}' + String.fromCharCode(10, 10))
-              write('event: stream' + String.fromCharCode(10) + 'data: {"botId":"bot-1","sessionId":"' + lastSideId + '","attemptId":"sa1","text":"旁路回答：不影响主工作"}' + String.fromCharCode(10, 10))
-              write('event: stream' + String.fromCharCode(10) + 'data: {"botId":"bot-1","sessionId":"' + lastSideId + '","attemptId":"sa1","phase":"end"}' + String.fromCharCode(10, 10))
-              write('event: message' + String.fromCharCode(10) + 'data: {"botId":"bot-1","sessionId":"' + lastSideId + '","item":{"kind":"bot","text":"旁路回答：不影响主工作","seq":200}}' + String.fromCharCode(10, 10))
+              write('event: stream' + String.fromCharCode(10) + 'data: {"botId":"bot-1","sessionId":"' + askChatId + '","attemptId":"sa1","phase":"start"}' + String.fromCharCode(10, 10))
+              write('event: message' + String.fromCharCode(10) + 'data: {"botId":"bot-1","sessionId":"' + askChatId + '","item":{"kind":"bot","text":"旁路回答：不影响主工作","seq":200}}' + String.fromCharCode(10, 10))
             })
           }, 300)
-          // 应答回新 chatId（与真实 0.3.5 形态对齐——App 据此归属 feed 事件与轮询）
-          const askChatId = 'side-ask-' + Math.random().toString(36).slice(2, 10)
           lastSideId = askChatId
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ ok: true, value: { chatId: askChatId } }))
@@ -931,6 +950,21 @@ const server = createServer((req, res) => {
           }
           const m = /"sideId":"([^"]+)"/.exec(body)
           if (m) lastSideId = m[1] // close 后保留 id 供取消路径测试
+          // 取消/关闭落 state（sideChats：cancel 停止进行中回答，close 移除会话）
+          for (const botId of Object.keys(sideChatsState)) {
+            if (endpoint === 'side-cancel') {
+              const entry = sideChatsState[botId].find((e) => e.id === m?.[1] && e.status === 'working')
+              if (entry) {
+                entry.status = 'done'
+                entry.answer = null
+                entry.finishedAt = Date.now()
+                stateRevision++
+              }
+            } else {
+              sideChatsState[botId] = sideChatsState[botId].filter((e) => e.id !== m?.[1])
+              stateRevision++
+            }
+          }
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ ok: true, value: true }))
           return

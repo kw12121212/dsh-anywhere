@@ -6,14 +6,27 @@ import UniformTypeIdentifiers
 /// 发送箱行、流式气泡、输入框（Enter 按团队偏好）与回到最新按钮。
 struct ChatView: View {
     @Bindable var model: AppSessionModel
+    let chrome: WindowChromeModel
     private let entry: TeamHome.Entry
 
-    init(model: AppSessionModel, entry: TeamHome.Entry) {
+    init(model: AppSessionModel, chrome: WindowChromeModel, entry: TeamHome.Entry) {
         self.model = model
+        self.chrome = chrome
         self.entry = entry
     }
 
     private var chat: BotChatModel { model.chat }
+
+    /// 旁路提问的最近消息快照（私聊当前已加载行尾部 5 条）。
+    private func recentMessagesSnapshot() -> [(fromUser: Bool, text: String)] {
+        var recent: [(fromUser: Bool, text: String)] = []
+        for item in chat.items.suffix(5) {
+            if case .message(let m) = item {
+                recent.append((m.fromUser, m.markdown))
+            }
+        }
+        return recent
+    }
 
     /// 私聊聊天条族（macos-group-chat，dsbot-chat-bars-0310）：远端未返回对应字段时整块不渲染。
     @ViewBuilder
@@ -105,6 +118,14 @@ struct ChatView: View {
             .disabled(entry.isMain)
             Spacer()
             Button("统计") { chat.showStats() }
+            Button(I18n.tr("旁路提问", "Side chat")) {
+                chrome.inspectorVisible = true
+                model.sideChat.open(botId: entry.id)
+                if model.sideChat.sideChatId == nil {
+                    model.sideChat.newSide()
+                }
+            }
+            .help(I18n.tr("不打断 Bot 工作的旁路提问（也可输入 /side 问题）", "Ask on the side without interrupting work (or type /side <question>)"))
             Button("记录") { chat.showExchanges() }
         }
         .padding(.horizontal, 12)
@@ -278,7 +299,20 @@ struct ChatView: View {
                 ComposerTextEditor(
                     enterToSend: model.snapshot.enterToSend,
                     onSend: { text in
-                        chat.send(text) ? "" : text
+                        // /side 命令（macos-side-chat）：不进主聊天，转旁路提问（带空格前缀匹配，
+                        // 保证 /side今天 不吞首字）。
+                        if text.hasPrefix("/side ") {
+                            let question = String(text.dropFirst("/side ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !question.isEmpty {
+                                Task { @MainActor in
+                                    chrome.inspectorVisible = true
+                                    model.sideChat.open(botId: entry.id)
+                                    model.sideChat.ask(question, recentMessages: recentMessagesSnapshot())
+                                }
+                                return ""
+                            }
+                        }
+                        return chat.send(text) ? "" : text
                     }
                 )
                 .frame(minHeight: 52, maxHeight: 120)

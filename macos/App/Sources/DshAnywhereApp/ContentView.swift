@@ -230,7 +230,7 @@ struct ContentView: View {
     @ViewBuilder
     private var chatContentPlaceholder: some View {
         if let entry = selectedEntry, entry.kind == .bot, model.chat.botId == entry.id {
-            ChatView(model: model, entry: entry)
+            ChatView(model: model, chrome: chrome, entry: entry)
                 .sheet(item: Binding(
                     get: { statsSheetPresented },
                     set: { newValue in
@@ -279,18 +279,23 @@ struct ContentView: View {
         }
     }
 
-    /// 右侧检查器占位（详情与 Side chat，由 macos-side-chat 等填充）。
+    /// 右侧检查器：Side chat 面板（macos-side-chat；私聊选中时可用，否则提示）。
+    @ViewBuilder
     private var inspectorPlaceholder: some View {
-        VStack(spacing: 10) {
-            Text("详情")
-                .font(.headline)
-            Text("详情与 Side chat 将在后续版本提供")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        if let entry = selectedEntry, entry.kind == .bot {
+            SideChatPanelView(model: model, botId: entry.id)
+        } else {
+            VStack(spacing: 10) {
+                Text("详情")
+                    .font(.headline)
+                Text(I18n.tr("选中一个 Bot 的私聊后可在此旁路提问", "Select a Bot chat to ask on the side here"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(20)
     }
 
     private func firstRunSetupView(invalidConfig: Bool) -> some View {

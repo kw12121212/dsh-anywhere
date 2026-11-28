@@ -24,6 +24,9 @@ final class AppSessionModel {
     /// 群聊编排（macos-group-chat）。
     let roomChat: RoomChatModel
 
+    /// Side chat 编排（macos-side-chat）。
+    let sideChat: SideChatModel
+
     /// 聊天条动作盒（私聊与群共用；init 末尾组装，经闭包持有本模型动作）。
     private(set) var barActions: ChatBarActions!
 
@@ -56,6 +59,7 @@ final class AppSessionModel {
         self.chat = BotChatModel()
         self.dock = CardsDockModel()
         self.roomChat = RoomChatModel()
+        self.sideChat = SideChatModel()
 
         let pendingSelf = PendingChatRouter()
         self.controller = MacosSessionController(
@@ -136,7 +140,8 @@ final class AppSessionModel {
         chat.bind(self)
         dock.bind(self)
         roomChat.bind(self)
-        pendingSelf.attach(chat, roomChat: roomChat)
+        sideChat.bind(self)
+        pendingSelf.attach(chat, roomChat: roomChat, sideChat: sideChat)
         barActions = ChatBarActions(
             notify: { [weak self] text in
                 self?.chat.postNotice(text)
@@ -403,25 +408,28 @@ final class NoticePrefsBox: @unchecked Sendable {
 }
 
 /// 控制器创建先于聊天模型（模型需引用 self）期间的聊天事件路由盒：
-/// attach 前丢弃事件（尚未打开任何聊天），attach 后转发主线程模型（私聊与群聊各自过滤）。
+/// attach 前丢弃事件（尚未打开任何聊天），attach 后转发主线程模型（私聊/群聊/Side 各自过滤）。
 final class PendingChatRouter: @unchecked Sendable {
     private let lock = NSLock()
     private weak var chat: BotChatModel?
     private weak var roomChat: RoomChatModel?
+    private weak var sideChat: SideChatModel?
 
-    func attach(_ chat: BotChatModel, roomChat: RoomChatModel) {
+    func attach(_ chat: BotChatModel, roomChat: RoomChatModel, sideChat: SideChatModel) {
         lock.withLock {
             self.chat = chat
             self.roomChat = roomChat
+            self.sideChat = sideChat
         }
     }
 
     func route(_ event: ChatFeedEvent) {
-        let targets = lock.withLock { (chat, roomChat) }
-        guard targets.0 != nil || targets.1 != nil else { return }
+        let targets = lock.withLock { (chat, roomChat, sideChat) }
+        guard targets.0 != nil || targets.1 != nil || targets.2 != nil else { return }
         Task { @MainActor in
             targets.0?.handleChatEvent(event)
             targets.1?.handleChatEvent(event)
+            targets.2?.handleChatEvent(event)
         }
     }
 }
