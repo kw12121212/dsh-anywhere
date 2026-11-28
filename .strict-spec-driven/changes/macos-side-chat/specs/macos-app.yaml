@@ -1,0 +1,21 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: macos-app
+operations:
+  ADDED:
+    macos-side-chat-shell:
+      strength: MUST
+      statement: 右侧检查器 Side chat 面板（macOS 原生）：私聊选中时检查器显示该 Bot 的旁路会话——新建（side-new）、提问（side-ask recent:true，不运行工具不打断工作）、取消（side-cancel）、关闭（side-close）；回答条目经 state.sideChats 刷新取回（不走 feed），进行中状态跨聊天切换与后台返回保留；回答区标注「基于目前进度回答，未运行任何工具」；不接受附件（提示与网页端一致）；入口为聊天头部「旁路提问」按钮与输入 /side；「详情与 Side chat 将在后续版本提供」占位移除（详情页由后续里程碑承接时检查器承载）
+      scenarios:
+        sidechat-ask-keeps-working:
+          - GIVEN: Bot 正在工作中，私聊已选中
+          - WHEN: 在检查器旁路提问（附最近消息快照）
+          - THEN: 旁路回答显示且不打断 Bot 主工作流，切换聊天再回来进行中状态仍可见，取消后回答停止
+        side-command-route:
+          - GIVEN: 私聊输入框输入 /side 今天进度如何 并发送
+          - WHEN: 命令被识别
+          - THEN: 不发送到主聊天，Side chat 面板打开并以此文本提问
+  MODIFIED: {}
+  REMOVED: {}

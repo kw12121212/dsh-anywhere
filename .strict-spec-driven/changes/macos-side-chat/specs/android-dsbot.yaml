@@ -1,0 +1,17 @@
+schema: strict-spec-driven/delta-spec/v1
+schema_version: 1
+artifact_type: delta_spec
+schema_file: templates/strict-spec-driven/schemas/delta-spec.yaml
+target_spec: android-dsbot
+operations:
+  ADDED: {}
+  MODIFIED:
+    side-chat:
+      strength: MUST
+      statement: 私聊页提供 Side chat 旁路提问：从更多入口或 /side 输入打开侧问面板（底部抽屉或独立页）——side-new 新建旁路会话、side-ask 提问（可附最近消息快照，不运行工具不打断 Bot 工作）、side-cancel 取消进行中回答、side-close 关闭；Side chat 不接受附件（与网页端提示一致）；回答流式显示，切换聊天或进入后台再回来仍可见进行中回答状态；btw 卡片（插话引用）在聊天中显示并可删除（btw-delete），删除后与网页端同步消失。平台差异：Android 侧问为底部抽屉（Sheet）、更多菜单入口；macOS 侧问在右侧检查器面板、聊天头部按钮与 /side 命令入口、btw 删除经消息行内按钮（cards-dock 已接）。
+      scenarios:
+        side-inspector-entry:
+          - GIVEN: 私聊页已打开
+          - WHEN: 点头部「旁路提问」或输入 /side
+          - THEN: 右侧检查器打开 Side chat 面板并新建旁路会话，主聊天不受影响
+  REMOVED: {}

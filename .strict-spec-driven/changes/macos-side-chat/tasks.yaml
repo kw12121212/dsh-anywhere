@@ -1,0 +1,36 @@
+schema: strict-spec-driven/task-list/v2
+schema_version: 2
+artifact_type: task_list
+schema_file: templates/strict-spec-driven/schemas/task-list.yaml
+change: macos-side-chat
+sections:
+  Implementation:
+    app-sidechat-panel:
+      text: macos/App 右侧检查器 Side chat 面板：SideChatModel（side-new/side-ask recent:true/side-cancel/side-close、回答经 state.sideChats 刷新取回、进行中跨聊天保留、chatId 归属）+ SideChatView（会话列表与条目、流式/进行中提示、「基于目前进度回答，未运行任何工具」标注、无附件提示）；入口：聊天头部「旁路提问」按钮 + 私聊 composer /side 命令；检查器占位文案移除
+      status: pending
+  Testing:
+    swift-core-tests:
+      text: swift test --package-path macos/Core：SideChat 请求体/解码既有测试维持绿（btw-delete 双形态不回退）
+      status: pending
+      command: swift test --package-path macos/Core
+    macos-app-local-build:
+      text: 推送前本机 swift build --package-path macos/App
+      status: pending
+      command: swift build --package-path macos/App
+    full-regression:
+      text: 完整项目回归
+      status: pending
+      command: npm ci && npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e && android/gradlew -p android/core test && swift test --package-path macos/Core
+  Verification:
+    ready-verify-checks:
+      text: ready 与 verify 检查
+      status: pending
+    macos-ci-and-device-acceptance:
+      text: 沿用持续授权：推送→CI→产物真机验收（mock side 端点：新建/提问快照/取消/关闭/进行中保留/无附件提示、/side 入口；真实团队只读核对），通过后归档；阻塞缺陷停下报告
+      status: pending
+    archive-merge-check:
+      text: 归档前核对 delta-spec 与实现一致、平台差异标注、合并无残留；roadmap 里程碑 complete 核对
+      status: pending
+testing_gates:
+  validation_task: macos-app-local-build
+  unit_test_task: swift-core-tests

@@ -1,0 +1,22 @@
+schema: strict-spec-driven/change-proposal/v1
+schema_version: 1
+artifact_type: change_proposal
+schema_file: templates/strict-spec-driven/schemas/change-proposal.yaml
+change:
+  id: macos-side-chat
+  status: proposed
+summary:
+  what:
+    - Side chat 与 btw 卡（macOS 原生）：右侧检查器承载旁路会话——side-new 新建、side-ask 提问（附最近消息快照 recent，不运行工具不打断 Bot 工作）、side-cancel 取消、side-close 关闭；回答流式显示并标注「基于目前进度回答，未运行任何工具」；切换聊天后进行中状态保留（回答落 state 经刷新取回）；不接受附件（与网页端提示一致）；入口为聊天头部工具栏按钮与输入 /side；btw 插话卡查看与删除（btw-delete 新形态，cards-dock 已接，本变更补检查器视图）
+  why:
+    - macos-native-chat 里程碑第 6 个（最后一个）计划变更：旁路提问是团队协作里不打断主工作流的提问通道，检查器占位（「详情与 Side chat 将在后续版本提供」）由此移除，里程碑完成
+scope:
+  in:
+    - macos/App 右侧检查器（SideChatModel/View：会话列表、流式回答、取消关闭、/side 命令路由、无附件提示）；DshCore SideChat 既有请求体与解码复用
+  out:
+    - Electron 版检查器的其他标签（若网页端有）；系统通知与 Touch ID（里程碑不做）；群聊内 side（规格为私聊）
+unchanged_behavior:
+  - 私聊/群聊主视图、停靠区、附件、通知条等既有行为不变；/side 之外的斜杠命令不拦截
+roadmap:
+  milestone: macos-native-chat
+  planned_change: macos-side-chat
